@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<h1>Wanas staff</h1>
+{% if error %}<div class="msg err">Wrong username or password.</div>{% endif %}
+{% if not has_staff %}
+<div class="msg">
+  No staff account exists yet. Create one on the server — there is deliberately
+  no default login:
+  <br><code>python -m backend.cli create-staff &lt;username&gt;</code>
+</div>
+{% endif %}
+<form method="post" action="/dashboard/login" class="card" style="max-width:22rem">
+  <p><label>Username<br><input name="username" autofocus required></label></p>
+  <p><label>Password<br><input name="password" type="password" required></label></p>
+  <button type="submit">Log in</button>
+</form>
+{% endblock %}

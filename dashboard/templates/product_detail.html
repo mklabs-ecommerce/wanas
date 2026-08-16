@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block content %}
+<h1>{{ product.name }}</h1>
+<p class="muted">
+  <code>{{ product.product_id }}</code> · {{ product.category }} · {{ product.department }}
+  {% if product.collection %} · {{ product.collection }}{% endif %}
+  · styles: {{ product.style|join(', ') }}
+</p>
+<p>{{ product.description }}</p>
+
+<h2>Variant grid</h2>
+<p class="muted">
+  One row per colour{% if product.lengths %} and length{% endif %}, one column per size. Edit a single
+  row without a form per variant — a variant at zero is what stops the bot offering it.
+</p>
+
+<table>
+  <tr>
+    <th>Colour{% if product.lengths %} / length{% endif %}</th>
+    {% for size in sizes %}<th>{{ size }}</th>{% endfor %}
+  </tr>
+  {% for key, by_size in rows %}
+  <tr>
+    <td><strong>{{ key[0] or '—' }}</strong>{% if key[1] %}<br><span class="muted">{{ key[1] }}</span>{% endif %}</td>
+    {% for size in sizes %}
+      {% set v = by_size.get(size) %}
+      <td>
+        {% if v %}
+          <span class="pill {{ v.status }}">{{ v.stock_qty }}</span>
+          <span class="muted">{{ v.price|money }}</span>
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Edit variants</h2>
+<table>
+  <tr><th>Variant</th><th>Colour</th><th>Size</th><th>Length</th><th>Stock</th><th>Threshold</th><th>Price</th><th>Was</th><th></th></tr>
+  {% for v in product.variants|sort(attribute='variant_id') %}
+  <tr>
+    <form method="post" action="/dashboard/products/{{ product.product_id }}/variant">
+      <input type="hidden" name="{{ csrf_field }}" value="{{ csrf }}">
+      <input type="hidden" name="variant_id" value="{{ v.variant_id }}">
+      <td><code>{{ v.variant_id }}</code></td>
+      <td>{{ v.color or '—' }}</td>
+      <td>{{ v.size }}</td>
+      <td>{{ v.length or '—' }}</td>
+      <td><input type="number" name="stock_qty" min="0" value="{{ v.stock_qty }}"></td>
+      <td><input type="number" name="low_stock_threshold" min="0" value="{{ v.low_stock_threshold }}"></td>
+      <td><input type="number" name="price" min="0" step="0.01" value="{{ v.price|money }}"></td>
+      <td class="muted">{{ v.original_price|money }}</td>
+      <td><button type="submit">Save</button></td>
+    </form>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Size chart</h2>
+<form method="post" action="/dashboard/products/{{ product.product_id }}/size-chart" class="card">
+  <input type="hidden" name="{{ csrf_field }}" value="{{ csrf }}">
+  <select name="size_chart">
+    <option value="">— no chart —</option>
+    {% for chart in charts %}
+    <option value="{{ chart }}" {% if product.size_chart == chart %}selected{% endif %}>{{ chart }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Assign</button>
+  <p class="muted">
+    Charts are assigned per product, never derived from the category: T-Shirts and Polo Shirts each span
+    two charts, and Hoodies &amp; Sweatshirts spans five. A near-enough chart causes returns.
+  </p>
+</form>
+
+{% if product.images %}
+<h2>Photos</h2>
+<p class="muted">{{ product.images|length }} photos{% if product.color_images %}, {{ product.color_images|length }} colourways labelled{% endif %}.</p>
+<table>
+  <tr><th>Colour</th><th>Paths</th></tr>
+  {% for colour, paths in product.color_images.items() %}
+  <tr><td>{{ colour }}</td><td class="muted"><code>{{ paths|join(', ') }}</code></td></tr>
+  {% endfor %}
+  {% if not product.color_images %}
+  <tr><td class="muted">unlabelled</td><td class="muted"><code>{{ product.images|join(', ') }}</code></td></tr>
+  {% endif %}
+</table>
+{% endif %}
+{% endblock %}

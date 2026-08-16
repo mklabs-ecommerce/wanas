@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Audit{% endblock %}
+{% block content %}
+<h1>Audit log</h1>
+<p class="muted">
+  Everyone who can log in can do everything, so attribution is the only control there is —
+  "who dropped that price to 5 EGP" has to be answerable.
+</p>
+{% if entries %}
+<table>
+  <tr><th>When</th><th>Who</th><th>Action</th><th>Entity</th><th>Before</th><th>After</th></tr>
+  {% for entry in entries %}
+  <tr>
+    <td class="muted">{{ entry.at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td>{{ people.get(entry.staff_id, '—') }}</td>
+    <td>{{ entry.action }}</td>
+    <td><code>{{ entry.entity }}:{{ entry.entity_id }}</code></td>
+    <td class="muted"><code>{{ entry.before }}</code></td>
+    <td class="muted"><code>{{ entry.after }}</code></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="muted">Nothing logged yet.</p>{% endif %}
+{% endblock %}

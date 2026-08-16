@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h1>Today</h1>
+
+<div class="grid2">
+  <div class="card">
+    <strong>Queues</strong>
+    <p class="muted">In Phase 1 this inbox is the only place staff see anything — there is no email.</p>
+    <table>
+      <tr><th>Queue</th><th>Open</th></tr>
+      <tr><td><a href="/dashboard/queues?kind=handoff">Human handoff</a></td><td>{{ counts.handoff }}</td></tr>
+      <tr><td><a href="/dashboard/queues?kind=item_swap">Item swaps</a></td><td>{{ counts.item_swap }}</td></tr>
+      <tr><td><a href="/dashboard/queues?kind=alert">Alerts</a></td><td>{{ counts.alert }}</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <strong>Wiring</strong>
+    <p class="muted">Things that block orders until someone fills them in.</p>
+    <table>
+      <tr><th>Item</th><th>State</th></tr>
+      <tr>
+        <td><a href="/dashboard/shipping">Governorates with no fee</a></td>
+        <td>{% if unpriced %}<span class="pill sold_out">{{ unpriced }} of 27</span>{% else %}<span class="pill in_stock">all priced</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Low-stock variants</td>
+        <td>{{ low_stock|length }}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<h2>Open orders</h2>
+{% if open_orders %}
+<table>
+  <tr><th>Order</th><th>Status</th><th>Items</th><th>Total</th><th>Governorate</th><th>Placed</th></tr>
+  {% for order in open_orders %}
+  <tr>
+    <td><a href="/dashboard/orders/{{ order.order_id }}">{{ order.order_id }}</a></td>
+    <td><span class="pill {{ order.status }}">{{ order.status }}</span></td>
+    <td>{{ order.items|length }}</td>
+    <td>{{ order.total|money }} EGP</td>
+    <td>{{ order.governorate }}</td>
+    <td class="muted">{{ order.placed_at.strftime('%Y-%m-%d %H:%M') if order.placed_at }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="muted">No open orders.</p>{% endif %}
+
+<h2>Low stock</h2>
+{% if low_stock %}
+<table>
+  <tr><th>Product</th><th>Variant</th><th>Left</th><th>Threshold</th></tr>
+  {% for v in low_stock %}
+  <tr>
+    <td><a href="/dashboard/products/{{ v.product_id }}">{{ v.product.name }}</a></td>
+    <td>{{ v.color }}{% if v.length %} / {{ v.length }}{% endif %} — {{ v.size }}</td>
+    <td>{{ v.stock_qty }}</td>
+    <td>{{ v.low_stock_threshold }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="muted">Nothing below its threshold.</p>{% endif %}
+{% endblock %}

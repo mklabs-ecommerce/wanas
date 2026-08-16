@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Shipping rates{% endblock %}
+{% block content %}
+<h1>Shipping rates</h1>
+<p class="muted">
+  A flat fee per governorate, copied onto each order at the time it is placed — changing a rate here
+  never alters a past order. An order for a governorate with no fee is refused rather than shipped free.
+</p>
+<table>
+  <tr><th>Governorate</th><th>Arabic</th><th>Fee (EGP)</th><th>Updated</th><th></th></tr>
+  {% for rate in rates %}
+  <tr>
+    <form method="post" action="/dashboard/shipping">
+      <input type="hidden" name="{{ csrf_field }}" value="{{ csrf }}">
+      <input type="hidden" name="governorate" value="{{ rate.governorate }}">
+      <td>{{ rate.governorate }}</td>
+      <td>{{ rate.label_ar }}</td>
+      <td><input type="number" name="fee" min="0" step="0.01" value="{{ rate.fee|money if rate.fee is not none else '' }}" placeholder="not set"></td>
+      <td class="muted">{{ rate.updated_at.strftime('%Y-%m-%d %H:%M') if rate.updated_at else '—' }}</td>
+      <td><button type="submit">Save</button></td>
+    </form>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ item.queue_id }}{% endblock %}
+{% block content %}
+<h1>{{ item.queue_id }} <span class="pill">{{ item.kind }}</span> <span class="pill">{{ item.status }}</span></h1>
+<p>{{ item.summary }}</p>
+<p class="muted">
+  {{ item.reason or 'no reason' }} · {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}
+  {% if item.channel %} · {{ item.channel }}/<code>{{ item.external_id }}</code>{% endif %}
+  {% if item.order_id %} · <a href="/dashboard/orders/{{ item.order_id }}">{{ item.order_id }}</a>{% endif %}
+</p>
+
+{% if item.payload %}
+<div class="card"><strong>Payload</strong><br><code>{{ item.payload }}</code></div>
+{% endif %}
+
+{% if item.payload.get('images') %}
+<div class="card">
+  <strong>Photo the customer sent</strong>
+  <p class="muted">Image recognition is not built in Phase 1, so this went straight here rather than being guessed at.</p>
+  {% for path in item.payload['images'] %}<p><code>{{ path }}</code></p>{% endfor %}
+</div>
+{% endif %}
+
+{% if item.kind == 'item_swap' and order %}
+<h2>Swap request</h2>
+<div class="card">
+  <p class="muted">
+    Nothing has been applied. Check stock for the replacement, then approve — approving runs the same
+    logic as a quantity change and can still fail if the stock went while this sat here.
+  </p>
+  <table>
+    <tr><th>From</th><th>Requested</th><th>Note</th></tr>
+    <tr>
+      <td><code>{{ item.payload.get('from_variant_id') }}</code></td>
+      <td><code>{{ item.payload.get('to_variant_id') or '—' }}</code>{% if to_variant %}<br><span class="muted">{{ to_variant.product.name }} — {{ to_variant.color }}, {{ to_variant.size }} — {{ to_variant.stock_qty }} left</span>{% endif %}</td>
+      <td>{{ item.payload.get('note') or '—' }}</td>
+    </tr>
+  </table>
+  {% if item.status == 'open' and order.modifiable %}
+  <form method="post" action="/dashboard/queues/{{ item.queue_id }}/apply-swap" style="margin-top:.7rem">
+    <input type="hidden" name="{{ csrf_field }}" value="{{ csrf }}">
+    <input name="to_variant_id" value="{{ item.payload.get('to_variant_id') or '' }}" placeholder="variant_id to swap to" size="34" required>
+    <button type="submit">Approve and apply</button>
+  </form>
+  {% elif not order.modifiable %}
+  <p class="muted">Order is {{ order.status }} — nothing changes after Shipped.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if item.channel %}
+<h2>Conversation</h2>
+<div class="card">
+  {% if paused %}
+  <p class="msg">Paused — the bot is not replying. Resolving this item is the only thing that hands it back.</p>
+  {% endif %}
+  <div class="chat">
+    {% for turn in conversation %}
+      {% if turn.role == 'user' %}
+        <div class="turn user"><strong>customer</strong><br>{{ turn.content }}</div>
+      {% elif turn.role == 'assistant' %}
+        {% if turn.content %}<div class="turn assistant"><strong>shop</strong><br>{{ turn.content }}</div>{% endif %}
+        {% if turn.tool_calls %}<div class="turn tool">→ {{ turn.tool_calls|map(attribute='name')|join(', ') }}</div>{% endif %}
+      {% else %}
+        <div class="turn tool">← {{ turn.results|map(attribute='name')|join(', ') }}</div>
+      {% endif %}
+    {% else %}
+      <p class="muted">No history stored for this conversation.</p>
+    {% endfor %}
+  </div>
+
+  <form method="post" action="/dashboard/queues/{{ item.queue_id }}/reply" style="margin-top:.8rem">
+    <input type="hidden" name="{{ csrf_field }}" value="{{ csrf }}">
+    <textarea name="text" rows="3" style="width:100%" placeholder="Reply to the customer as the shop" required></textarea>
+    <button type="submit">Send reply</button>
+    <span class="muted">Sending does not hand the conversation back.</span>
+  </form>
+</div>
+{% endif %}
+
+{% if item.status == 'open' %}
+<h2>Resolve</h2>
+<div class="card">
+  <form class="inline" method="post" action="/dashboard/queues/{{ item.queue_id }}/resolve">
+    <input type="hidden" name="{{ csrf_field }}" value="{{ csrf }}">
+    <input type="hidden" name="decision" value="resolved">
+    <button type="submit">Resolve{% if item.kind == 'handoff' %} and hand back to the bot{% endif %}</button>
+  </form>
+  <form class="inline" method="post" action="/dashboard/queues/{{ item.queue_id }}/resolve" style="margin-left:.5rem">
+    <input type="hidden" name="{{ csrf_field }}" value="{{ csrf }}">
+    <input type="hidden" name="decision" value="rejected">
+    <button class="secondary" type="submit">Reject</button>
+  </form>
+</div>
+{% else %}
+<p class="muted">Resolved {{ item.resolved_at.strftime('%Y-%m-%d %H:%M') if item.resolved_at }}.</p>
+{% endif %}
+{% endblock %}

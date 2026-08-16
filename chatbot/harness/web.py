@@ -1,0 +1,247 @@
+"""Local chat harness — web version.
+
+The same throwaway scaffolding as the terminal harness, in a browser: it calls
+`handle_message(channel, external_id, text)` and renders what comes back. There
+is no chatbot logic in this file. No parallel agent, no second tool registry,
+no fake replies — if something works here it works on WhatsApp, and if it
+breaks here it was already broken.
+
+What it adds over the terminal version is only presentation: RTL bubbles,
+inline images for attachments, tool calls and refusals shown as they happen,
+and proactive notifications (order confirmation, status pushes) surfaced next
+to the conversation instead of in a log.
+
+Not a product surface, and not authenticated — anyone who can reach it can
+converse as any identity. Set HARNESS_ENABLED=0 to leave it out of the app.
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from fastapi import APIRouter, Body, Query
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+
+from backend.config import PROJECT_ROOT
+from backend.db import session_scope
+from backend.services import carts, identities, notifications
+from chatbot import session as session_store
+from chatbot.runtime import handle_message
+
+log = logging.getLogger("wanas.harness.web")
+
+router = APIRouter(prefix="/harness", tags=["harness"])
+
+PAGE = Path(__file__).parent / "chat.html"
+
+#: Attachments are local catalog files. Only these roots may be served, so a
+#: crafted path cannot walk out of the project.
+SERVABLE_ROOTS = ("data/size-charts", "data/images", "data/inbound")
+
+DEFAULT_IDENTITY = "201000000001"
+CHANNEL = "whatsapp"
+
+
+# --------------------------------------------------------------------------
+# Reading what a turn did, without changing the agent to tell us
+# --------------------------------------------------------------------------
+
+
+def _turn_detail(history: list[dict]) -> list[dict]:
+    """The tool calls and results of the most recent turn.
+
+    Read back out of the stored session rather than plumbed through
+    `AgentReply`: the history already holds every tool result in full, so the
+    UI can show a refusal exactly as the model saw it without the agent
+    growing a field that only exists for a test harness.
+
+    Walks backwards to the user message that started the turn, which is
+    trimming-proof — indices shift, the shape does not.
+    """
+    turn: list[dict] = []
+    for message in reversed(history):
+        role = message.get("role")
+        if role == "user":
+            break
+        if role == "tool_results":
+            for result in message.get("results") or []:
+                content = result.get("content") or {}
+                turn.append(
+                    {
+                        "name": result.get("name"),
+                        "error": content.get("error"),
+                        # The refusal payload matters as much as the code:
+                        # `out_of_stock` is only actionable with its
+                        # `alternatives`.
+                        "content": content,
+                    }
+                )
+    turn.reverse()
+    return turn
+
+
+def _display_history(history: list[dict]) -> list[dict]:
+    """The stored conversation as bubbles, so a reload is not a fresh start."""
+    items: list[dict] = []
+    for message in history:
+        role = message.get("role")
+        if role == "user":
+            items.append({"kind": "user", "text": message.get("content", "")})
+        elif role == "assistant":
+            if message.get("content"):
+                items.append({"kind": "bot", "text": message["content"]})
+            if message.get("tool_calls"):
+                items.append(
+                    {"kind": "tools", "names": [c.get("name") for c in message["tool_calls"]]}
+                )
+        elif role == "tool_results":
+            errors = [
+                {"name": r.get("name"), "error": (r.get("content") or {}).get("error")}
+                for r in message.get("results") or []
+                if (r.get("content") or {}).get("error")
+            ]
+            if errors:
+                items.append({"kind": "refusals", "refusals": errors})
+    return items
+
+
+def _drain_notifications(since: int) -> list[dict]:
+    """Proactive messages the Notification service produced during this turn.
+
+    Read after the transaction commits, because that is when they are actually
+    sent — an order confirmation must never appear for an order that rolled
+    back.
+    """
+    sender = notifications.get_sender()
+    sent = getattr(sender, "sent", None)
+    if sent is None:  # the real WhatsApp client is registered; nothing to show
+        return []
+    fresh = [
+        {
+            "to": message.to,
+            "text": message.text,
+            "template": message.template,
+            "kind": message.kind,
+            "image_path": message.image_path,
+        }
+        for message in sent[since:]
+    ]
+    if len(sent) > 500 and hasattr(sender, "clear"):
+        sender.clear()
+    return fresh
+
+
+def _sent_count() -> int:
+    return len(getattr(notifications.get_sender(), "sent", []))
+
+
+# --------------------------------------------------------------------------
+# Routes
+# --------------------------------------------------------------------------
+
+
+@router.get("", response_class=HTMLResponse)
+def page() -> HTMLResponse:
+    return HTMLResponse(PAGE.read_text(encoding="utf-8"))
+
+
+@router.get("/api/state")
+def state(identity: str = Query(DEFAULT_IDENTITY), channel: str = Query(CHANNEL)) -> JSONResponse:
+    with session_scope() as db:
+        return JSONResponse(
+            {
+                "identity": identity,
+                "channel": channel,
+                "history": _display_history(session_store.load(db, channel, identity)),
+                "paused": identities.is_paused(db, channel, identity),
+                "cart": carts.cart_payload(db, channel, identity),
+            }
+        )
+
+
+@router.post("/api/send")
+def send(payload: dict = Body(...)) -> JSONResponse:
+    identity = (payload.get("identity") or DEFAULT_IDENTITY).strip()
+    channel = (payload.get("channel") or CHANNEL).strip()
+    text = payload.get("text") or ""
+    image_paths = payload.get("image_paths") or None
+
+    before = _sent_count()
+    with session_scope() as db:
+        reply = handle_message(channel, identity, text, image_paths=image_paths, db=db)
+        detail = _turn_detail(session_store.load(db, channel, identity))
+        paused = identities.is_paused(db, channel, identity)
+        cart = carts.cart_payload(db, channel, identity)
+
+    return JSONResponse(
+        {
+            "text": reply.text,
+            "attachments": reply.attachments,
+            "paused": paused,
+            "duplicate": reply.duplicate,
+            "tool_calls": reply.tool_calls,
+            "error": reply.error,
+            "tools": detail,
+            "notifications": _drain_notifications(before),
+            "cart": cart,
+        }
+    )
+
+
+@router.post("/api/reset")
+def reset(payload: dict = Body(default={})) -> JSONResponse:
+    identity = (payload.get("identity") or DEFAULT_IDENTITY).strip()
+    channel = (payload.get("channel") or CHANNEL).strip()
+    with session_scope() as db:
+        session_store.clear(db, channel, identity)
+    # The cart is deliberately left alone: it survives a session reset by
+    # design, and the harness should show that rather than hide it.
+    return JSONResponse({"ok": True})
+
+
+@router.post("/api/unpause")
+def unpause(payload: dict = Body(default={})) -> JSONResponse:
+    """Stands in for the staff resolve in the dashboard, which is the only
+    thing that un-pauses a real conversation."""
+    identity = (payload.get("identity") or DEFAULT_IDENTITY).strip()
+    channel = (payload.get("channel") or CHANNEL).strip()
+    with session_scope() as db:
+        identities.unpause(db, channel, identity)
+    return JSONResponse({"ok": True})
+
+
+@router.get("/media")
+def media(path: str = Query(...)):
+    """Serve a catalog image so an attachment renders instead of being a path."""
+    normalised = path.replace("\\", "/").lstrip("/")
+    if not any(normalised.startswith(root) for root in SERVABLE_ROOTS):
+        return JSONResponse({"error": "forbidden_path"}, status_code=403)
+
+    target = (PROJECT_ROOT / normalised).resolve()
+    # Belt and braces: resolve() collapses any ".." before this check.
+    if not str(target).startswith(str(PROJECT_ROOT.resolve())) or not target.is_file():
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    return FileResponse(target)
+
+
+def _main() -> int:  # pragma: no cover - operational helper
+    """python -m chatbot.harness.web — serve the app and print the URL."""
+    import argparse
+
+    import uvicorn
+
+    parser = argparse.ArgumentParser(prog="chatbot.harness.web")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--reload", action="store_true")
+    args = parser.parse_args()
+
+    print(f"\n  chat UI:   http://{args.host}:{args.port}/harness")
+    print(f"  dashboard: http://{args.host}:{args.port}/dashboard\n")
+    uvicorn.run("app:app", host=args.host, port=args.port, reload=args.reload)
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(_main())

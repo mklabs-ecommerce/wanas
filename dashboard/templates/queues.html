@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Queues{% endblock %}
+{% block content %}
+<h1>Queues</h1>
+<p>
+  <a href="/dashboard/queues?show={{ show }}">All</a>
+  {% for k in kinds %} · <a href="/dashboard/queues?kind={{ k }}&show={{ show }}">{{ k }}</a>{% endfor %}
+  &nbsp;|&nbsp;
+  {% if show == 'open' %}<a href="/dashboard/queues?{% if kind %}kind={{ kind }}&{% endif %}show=all">show resolved too</a>
+  {% else %}<a href="/dashboard/queues?{% if kind %}kind={{ kind }}&{% endif %}show=open">open only</a>{% endif %}
+</p>
+{% if items %}
+<table>
+  <tr><th>ID</th><th>Kind</th><th>Reason</th><th>Summary</th><th>Order</th><th>Status</th><th>Created</th></tr>
+  {% for item in items %}
+  <tr>
+    <td><a href="/dashboard/queues/{{ item.queue_id }}">{{ item.queue_id }}</a></td>
+    <td>{{ item.kind }}</td>
+    <td class="muted">{{ item.reason or '—' }}</td>
+    <td>{{ item.summary }}</td>
+    <td>{% if item.order_id %}<a href="/dashboard/orders/{{ item.order_id }}">{{ item.order_id }}</a>{% else %}—{% endif %}</td>
+    <td><span class="pill {{ 'in_stock' if item.status == 'resolved' else ('sold_out' if item.status == 'rejected' else '') }}">{{ item.status }}</span></td>
+    <td class="muted">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="muted">Nothing here.</p>{% endif %}
+{% endblock %}

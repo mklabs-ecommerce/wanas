@@ -1,0 +1,11 @@
+:root{
+--shadow-0:none;
+--shadow-1:0 1px 2px rgba(20,38,31,.04);
+--shadow-2:0 6px 18px rgba(20,38,31,.06);
+--shadow-3:0 18px 44px rgba(20,38,31,.10);
+--shadow-inset-hairline:inset 0 0 0 1px var(--line-hairline);
+--shadow-card:var(--shadow-2);--shadow-float:var(--shadow-3);
+--blur-veil:blur(10px);
+--veil-light:rgba(253,251,249,.72);
+--protect-bottom:linear-gradient(to top,rgba(20,38,31,.55),rgba(20,38,31,0));
+}

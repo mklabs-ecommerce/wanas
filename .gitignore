@@ -1,0 +1,17 @@
+.env
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+# Photos customers send in. They land here so staff can see them in the
+# handoff queue; they are not catalog data and must not be committed.
+data/inbound/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Leftovers from the SFTP/FUSE mount: files deleted while still open. Not ours.
+.fuse_hidden*
+ziSuwgjf

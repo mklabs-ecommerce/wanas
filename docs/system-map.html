@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wanas Gallery — خريطة النظام</title>
+<style>
+:root{
+  --navy:#16213e; --navy-2:#1d2a4d; --navy-3:#26355e;
+  --cream:#e8d5b0;
+  --line:rgba(232,213,176,.18);
+  --txt:#e6e6e2; --txt-2:#a9b0c2; --txt-3:#7d869c;
+  --teal:#5dcaa5; --amber:#efb027; --red:#f09595; --purple:#afa9ec;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--navy);color:var(--txt);font-family:var(--sans);line-height:1.75;font-size:15px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+header.top{padding:56px 0 28px;border-bottom:1px solid var(--line)}
+header.top h1{margin:0 0 6px;font-size:34px;font-weight:500;color:var(--cream)}
+header.top p{margin:0;color:var(--txt-2);max-width:74ch}
+.badges{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px}
+.badge{border:1px solid var(--line);border-radius:999px;padding:5px 14px;font-size:13px;color:var(--txt-2)}
+.badge b{color:var(--cream);font-weight:500}
+
+nav.tabs{position:sticky;top:0;z-index:50;background:rgba(22,33,62,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto;padding:8px 24px}
+nav.tabs button{background:none;border:0;color:var(--txt-2);font-family:inherit;font-size:14px;padding:9px 16px;border-radius:8px;cursor:pointer;white-space:nowrap}
+nav.tabs button:hover{color:var(--txt);background:var(--navy-2)}
+nav.tabs button.on{color:var(--navy);background:var(--cream);font-weight:500}
+
+section.panel{display:none;padding:36px 0 80px}
+section.panel.on{display:block}
+h2{font-size:23px;font-weight:500;color:var(--cream);margin:40px 0 6px}
+h2:first-child{margin-top:0}
+h3{font-size:17px;font-weight:500;color:var(--txt);margin:30px 0 8px}
+p.lede{color:var(--txt-2);max-width:80ch;margin:0 0 18px}
+code{font-family:var(--mono);font-size:.87em;background:var(--navy-3);padding:2px 6px;border-radius:5px;color:var(--cream)}
+
+.card{background:var(--navy-2);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:16px 0}
+.card.flush{padding:14px}
+.note{border-right:3px solid var(--amber);background:var(--navy-2);border-radius:0 12px 12px 0;padding:14px 18px;margin:16px 0;color:var(--txt-2)}
+.note b{color:var(--amber);font-weight:500}
+.note.bad{border-right-color:var(--red)} .note.bad b{color:var(--red)}
+.note.good{border-right-color:var(--teal)} .note.good b{color:var(--teal)}
+
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--cream);font-weight:500;font-size:13px;white-space:nowrap}
+td:first-child{font-family:var(--mono);font-size:12.5px;color:var(--txt);white-space:nowrap}
+td.d{color:var(--txt-2)}
+tr:last-child td{border-bottom:0}
+.pk{color:var(--amber);font-size:11px;font-family:var(--sans)}
+.fk{color:var(--purple);font-size:11px;font-family:var(--sans)}
+.cm{color:var(--teal);font-size:11px;font-family:var(--sans)}
+.warn{color:var(--red);font-weight:400}
+.hi{color:var(--teal);font-weight:400}
+.amb{color:var(--amber);font-weight:400}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:16px 0}
+.stat{background:var(--navy-2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.stat .n{font-size:28px;color:var(--cream);line-height:1.2}
+.stat .l{color:var(--txt-2);font-size:13.5px}
+
+.tblist{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.tb{background:var(--navy-2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tb h4{margin:0;padding:11px 16px;background:var(--navy-3);font-family:var(--mono);font-size:13px;font-weight:500;color:var(--cream);border-bottom:1px solid var(--line)}
+.tb ul{margin:0;padding:10px 16px;list-style:none;font-family:var(--mono);font-size:12.5px;color:var(--txt-2)}
+.tb li{padding:2px 0}
+
+#erd{background:#f7f5ef;border-radius:12px;padding:20px;overflow-x:auto}
+#erd svg{max-width:none}
+
+svg.flow{width:100%;height:auto;display:block}
+svg.flow text{font-family:var(--sans)}
+.t14{font-size:14px;fill:var(--txt)}
+.t12{font-size:12px;fill:var(--txt-3)}
+.t13b{font-size:13px;fill:var(--cream)}
+.bx{fill:var(--navy-2);stroke:var(--line);stroke-width:1}
+.bx-a{fill:#2a2350;stroke:#6f66c9;stroke-width:1}
+.bx-t{fill:#123a31;stroke:#2f8f70;stroke-width:1}
+.bx-r{fill:#3d1c1c;stroke:#9c4a4a;stroke-width:1}
+.bx-c{fill:none;stroke:var(--line);stroke-width:1;stroke-dasharray:5 4}
+.ar{stroke:var(--txt-3);stroke-width:1.5;fill:none}
+
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:16px 0}
+ol.steps li{counter-increment:s;position:relative;padding:0 44px 18px 0;border-right:1px solid var(--line);margin-right:15px}
+ol.steps li:last-child{border-right-color:transparent;padding-bottom:0}
+ol.steps li::before{content:counter(s);position:absolute;right:-15px;top:0;width:30px;height:30px;border-radius:50%;background:var(--navy-3);border:1px solid var(--line);color:var(--cream);display:grid;place-items:center;font-size:13px}
+ol.steps b{color:var(--txt);font-weight:500;display:block}
+ol.steps span{color:var(--txt-2);font-size:14px}
+
+.chip{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:1px 9px;color:var(--txt-3);white-space:nowrap}
+
+footer{border-top:1px solid var(--line);padding:26px 0 60px;color:var(--txt-3);font-size:13px}
+@media print{nav.tabs{display:none}section.panel{display:block!important;page-break-before:always}}
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <h1>Wanas Gallery — خريطة النظام</h1>
+  <p>كل الداتابيز وكل خطوة في البروسيس. الأرقام محسوبة من <code>products_seed.json</code> وقت فتح الصفحة، فمستحيل تقدم. المصدر الرسمي فاضل <code>docs/components/</code> و<code>AGENTS.md</code>.</p>
+  <div class="badges" id="badges"></div>
+</div></header>
+
+<nav class="tabs"><div class="wrap">
+  <button class="on" data-p="db">الداتابيز</button>
+  <button data-p="flow">البروسيس</button>
+  <button data-p="tools">أدوات البوت</button>
+  <button data-p="rules">القواعد الحاكمة</button>
+  <button data-p="data">الكتالوج بالأرقام</button>
+</div></nav>
+
+<!-- ============ DATABASE ============ -->
+<section class="panel on" id="db"><div class="wrap">
+  <h2>مخطط العلاقات</h2>
+  <p class="lede">14 جدول. الجداول اللي مالهاش أسهم كتير (<code>staff</code>، <code>audit_log</code>، <code>shipping_rates</code>) مستقلة عن قلب النظام عن قصد.</p>
+  <div id="erd">جاري الرسم…</div>
+
+  <div class="note good"><b>المحور:</b> <code>variants</code>. السلة وبند الأوردر والمخزون والسعر كلهم معلقين عليه. و<code>stock_qty</code> هو الحقل الوحيد في النظام كله اللي ممكن يحصل عليه تسابق بين طلبين — وده مقصود، لأن كل ما قلّ عدد الحقول المتنازع عليها كل ما قلّ اللي ممكن يبوظ.</div>
+
+  <h2>الجداول بالتفصيل</h2>
+
+  <h3>الكتالوج</h3>
+  <div class="card flush"><table>
+    <tr><th style="width:190px">الحقل</th><th style="width:90px">النوع</th><th>ملاحظات</th></tr>
+    <tr><td colspan="3" style="color:var(--cream);font-family:var(--mono)">products &nbsp;<span class="cm">18 صف</span></td></tr>
+    <tr><td>product_id <span class="pk">PK</span></td><td class="d">text</td><td class="d">سلاج بتاعنا زي <code>wanas-hoodie</code> — <span class="warn">مش handle بتاع Shopify</span>، لأن المنتج الواحد دلوقتي بيجمع أكتر من واحد.</td></tr>
+    <tr><td>name</td><td class="d">text</td><td class="d">بشكله اللاتيني الأصلي، وما بيتترجمش أبداً في أي رد. <span class="hi">ومفيهوش لون</span> — اللون بقى على الـ variant.</td></tr>
+    <tr><td>category</td><td class="d">text</td><td class="d">واحد من ستة. ده المحور اللي بيوصف القطعة.</td></tr>
+    <tr><td>department</td><td class="d">text</td><td class="d"><code>unisex</code> أو <code>women</code>. من غيره «عندكم حاجة حريمي؟» مالهاش إجابة غير التخمين.</td></tr>
+    <tr><td>style</td><td class="d">json</td><td class="d">القصّة والتركيب — فلتر مش تصنيف.</td></tr>
+    <tr><td>collection</td><td class="d">text?</td><td class="d">مجموعتين بس، و<span class="amb">8 منتجات مالهمش مجموعة</span> — وده صح مش نقص.</td></tr>
+    <tr><td>size_chart <span class="fk">FK</span></td><td class="d">text?</td><td class="d">كله متربط دلوقتي، بس مسار «مفيش شارت» لازم يتبني.</td></tr>
+    <tr><td>sizes / colors / lengths</td><td class="d">json</td><td class="d"><span class="amb">للعرض فقط.</span> ممنوع تاخد منها قرار توافر.</td></tr>
+    <tr><td>price / original_price / on_sale</td><td class="d">num</td><td class="d">أقل وأعلى سعر variant، للقوايم.</td></tr>
+    <tr><td>images</td><td class="d">json</td><td class="d">كل صور المنتج.</td></tr>
+    <tr><td>color_images</td><td class="d">map</td><td class="d">لون ← صوره. ده اللي بيخلي الرد عن الزيتي يوري الزيتي.</td></tr>
+    <tr><td>description</td><td class="d">text</td><td class="d">وصف قصير، غالباً فيه مقاس وطول الموديل.</td></tr>
+    <tr><td>source_products</td><td class="d">json</td><td class="d">من فين جه كل لون — الـ handle والـ Shopify ID. للمزامنة بس.</td></tr>
+  </table></div>
+
+  <div class="card flush"><table>
+    <tr><th style="width:190px">الحقل</th><th style="width:90px">النوع</th><th>ملاحظات</th></tr>
+    <tr><td colspan="3" style="color:var(--cream);font-family:var(--mono)">variants &nbsp;<span class="cm">208 صف — 114 متاح</span></td></tr>
+    <tr><td>variant_id <span class="pk">PK</span></td><td class="d">text</td><td class="d"><span class="hi">الحاجة الوحيدة اللي بتتحط في سلة.</span> الموديل بياخده من أداة، عمره ما بيركّبه.</td></tr>
+    <tr><td>product_id <span class="fk">FK</span></td><td class="d">text</td><td class="d"></td></tr>
+    <tr><td>size</td><td class="d">text</td><td class="d">موجود على كل variant.</td></tr>
+    <tr><td>color</td><td class="d">text</td><td class="d">موجود على كل منتج دلوقتي — يعني اللون سؤال لازم يتسأل زي المقاس.</td></tr>
+    <tr><td>length</td><td class="d">text?</td><td class="d"><code>Long</code>/<code>Short</code> — الـ Worker Jacket بس، فمحاوره تلاتة.</td></tr>
+    <tr><td>price / original_price / on_sale</td><td class="d">num</td><td class="d">لكل variant.</td></tr>
+    <tr><td>stock_qty</td><td class="d">int</td><td class="d"><span class="warn">الرقم الوحيد اللي بيتخصم، والوحيد اللي فيه تسابق.</span></td></tr>
+    <tr><td>low_stock_threshold</td><td class="d">int</td><td class="d">2 على الكل.</td></tr>
+    <tr><td>status</td><td class="d">computed</td><td class="d">محسوب وقت القراءة، مش متخزن — عشان ما يبقاش قديم.</td></tr>
+  </table></div>
+
+  <div class="note"><b>ليه اللون محور مش منتج؟</b> المتجر كان مسجّل <code>WANAS BLACK HOODIE</code> و<code>GREY</code> و<code>OLIVE</code> كتلات منتجات. دول منتج واحد بتلات ألوان — والدمج حوّل <b>43 منتج لـ 18</b> من غير ما يضيع ولا variant. والربط قايمة يدوية مش قاعدة، لأن الـ handles مضللة: <code>olive-sweatpants</code> هو الأسود.</div>
+
+  <h3>العميل والمحادثة</h3>
+  <div class="tblist">
+    <div class="tb"><h4>clients</h4><ul>
+      <li>client_id <span class="pk">PK</span></li><li>full_name</li><li>phone <span class="cm">مطلوب في كل قناة</span></li>
+      <li>email</li><li>address <span class="cm">العنوان الافتراضي</span></li><li>has_account</li><li>status <span class="cm">active / blocked</span></li>
+    </ul></div>
+    <div class="tb"><h4>channel_identities</h4><ul>
+      <li>channel <span class="pk">PK</span></li><li>external_id <span class="pk">PK</span></li>
+      <li>client_id <span class="fk">FK</span> <span class="cm">فاضي لحد ما الزبون يأكّد</span></li>
+    </ul></div>
+    <div class="tb"><h4>sessions</h4><ul>
+      <li>channel + external_id <span class="pk">PK</span></li>
+      <li>history <span class="cm">آخر 40 رسالة</span></li>
+      <li>updated_at <span class="cm">ساعة الانتهاء</span></li>
+    </ul></div>
+    <div class="tb"><h4>cart_items</h4><ul>
+      <li>id <span class="pk">PK</span></li><li>channel + external_id <span class="fk">FK</span></li>
+      <li>variant_id <span class="fk">FK</span></li><li>qty</li><li>added_at</li>
+    </ul></div>
+  </div>
+  <div class="note bad"><b>انتبه:</b> <code>client_id</code> في <code>channel_identities</code> بيفضل <b>فاضي</b> لحد ما الزبون يأكّد الربط. يعني ممكن يبقى عندك محادثة وسلة وجلسة شغالين من غير عميل خالص لحد أول أوردر. أي كود بيفترض إن كل محادثة ليها عميل هيقع.</div>
+
+  <h3>الأوردر</h3>
+  <div class="card flush"><table>
+    <tr><th style="width:200px">الحقل</th><th style="width:90px">النوع</th><th>ملاحظات</th></tr>
+    <tr><td colspan="3" style="color:var(--cream);font-family:var(--mono)">orders</td></tr>
+    <tr><td>order_id <span class="pk">PK</span></td><td class="d">text</td><td class="d"></td></tr>
+    <tr><td>client_id <span class="fk">FK</span></td><td class="d">text</td><td class="d">موجود حتى للضيوف.</td></tr>
+    <tr><td>source_channel</td><td class="d">text</td><td class="d">مكان إنشاء الأوردر — ما بيتغيّرش لو اتعدّل من قناة تانية.</td></tr>
+    <tr><td>governorate <span class="fk">FK</span></td><td class="d">text</td><td class="d">قيمة مختارة من قايمة، مش نص حر — لأنها بتحدد السعر.</td></tr>
+    <tr><td>shipping_address / contact_phone</td><td class="d">text</td><td class="d"><span class="amb">منسوخين على الأوردر</span>، مش مقروءين من العميل.</td></tr>
+    <tr><td>subtotal</td><td class="d">num</td><td class="d">المنتجات بس.</td></tr>
+    <tr><td>discount_amount / discount_code_used</td><td class="d">num / text</td><td class="d">Phase 2.</td></tr>
+    <tr><td>shipping_fee</td><td class="d">num</td><td class="d">منسوخ وقت الأوردر — تغيير التعريفة ما يمسّش أوردر قديم.</td></tr>
+    <tr><td>total</td><td class="d">num</td><td class="d">اللي الزبون بيدفعه عند الباب.</td></tr>
+    <tr><td>status / payment_method / payment_status</td><td class="d">text</td><td class="d">COD بس في Phase 1.</td></tr>
+    <tr><td>confirmed_at … cancelled_at</td><td class="d">ts</td><td class="d">توقيت لكل مرحلة — ده اللي بيشغّل رسايل الواتساب.</td></tr>
+    <tr><td>modification_log</td><td class="d">json</td><td class="d">مين غيّر إيه وإمتى ومن أنهي قناة.</td></tr>
+  </table></div>
+
+  <div class="card flush"><table>
+    <tr><th style="width:200px">الحقل</th><th style="width:90px">النوع</th><th>ملاحظات</th></tr>
+    <tr><td colspan="3" style="color:var(--cream);font-family:var(--mono)">order_items</td></tr>
+    <tr><td>variant_id <span class="fk">FK</span></td><td class="d">text</td><td class="d">المرجع.</td></tr>
+    <tr><td>product_name / size / color / length</td><td class="d">text</td><td class="d"><span class="hi">نسخة مصوّرة، مش مرجع.</span></td></tr>
+    <tr><td>quantity</td><td class="d">int</td><td class="d"></td></tr>
+    <tr><td>unit_price / unit_original_price</td><td class="d">num</td><td class="d">مجمّدين وقت الأوردر.</td></tr>
+  </table></div>
+
+  <div class="note"><b>ليه التكرار ده مقصود؟</b> <code>variant_id</code> موجود أصلاً، فليه ننسخ الاسم والمقاس والسعر؟ عشان لو قرينا من الكتالوج، تغيير سعر النهاردة يبقى بيعيد كتابة أوردر الشهر اللي فات. النسخة دي هي اللي بتخلي تاريخ الأوردرات ثابت، وبتخلي بوليصة الشحن صح حتى لو المنتج اتشال.</div>
+
+  <h3>الباقي</h3>
+  <div class="tblist">
+    <div class="tb"><h4>order_feedback</h4><ul><li>feedback_id <span class="pk">PK</span></li><li>order_id <span class="fk">FK</span> <span class="cm">واحد لكل أوردر</span></li><li>client_id <span class="fk">FK</span></li><li>rating</li><li>text <span class="cm">اختياري</span></li><li>date</li></ul></div>
+    <div class="tb"><h4>shipping_rates</h4><ul><li>governorate <span class="pk">PK</span></li><li>fee <span class="cm">الموظفين بيعدّلوها</span></li></ul></div>
+    <div class="tb"><h4>size_charts</h4><ul><li>chart_id <span class="pk">PK</span></li><li>title / image / unit</li><li>measurements <span class="cm">عربي وإنجليزي</span></li><li>sizes</li><li>length_specific <span class="cm">الجاكت بس</span></li></ul></div>
+    <div class="tb"><h4>staff · audit_log</h4><ul><li>staff_id <span class="pk">PK</span> / username / password_hash</li><li>صلاحية واحدة للكل</li><li>كل فعل متسجّل باسم صاحبه</li></ul></div>
+  </div>
+</div></section>
+
+<!-- ============ FLOW ============ -->
+<section class="panel" id="flow"><div class="wrap">
+  <h2>من الرسالة للداتابيز</h2>
+  <p class="lede">خمس محطات. كل رسالة داخلة بتعدي عليهم بالترتيب ده.</p>
+  <div class="card">
+    <svg class="flow" viewBox="0 0 760 620" role="img">
+      <defs><marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#7d869c" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+      <rect class="bx" x="230" y="20" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="42" text-anchor="middle">الزبون على واتساب</text>
+      <text class="t12" x="380" y="63" text-anchor="middle">أي لهجة، أي طريقة كتابة</text>
+      <line class="ar" x1="380" y1="84" x2="380" y2="130" marker-end="url(#a1)"/>
+      <rect class="bx" x="230" y="140" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="162" text-anchor="middle">بوابة الويبهوك</text>
+      <text class="t12" x="380" y="183" text-anchor="middle">تحقق من التوقيع، ثم منع التكرار</text>
+      <line class="ar" x1="380" y1="204" x2="380" y2="250" marker-end="url(#a1)"/>
+      <rect class="bx-a" x="230" y="260" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="282" text-anchor="middle">حلقة الوكيل</text>
+      <text class="t12" x="380" y="303" text-anchor="middle">بيفهم ويصيغ — مش أكتر</text>
+      <line class="ar" x1="380" y1="324" x2="380" y2="370" marker-end="url(#a1)"/>
+      <rect class="bx-a" x="230" y="380" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="402" text-anchor="middle">الأدوات الـ 17</text>
+      <text class="t12" x="380" y="423" text-anchor="middle">كل معلومة وكل قاعدة عايشة هنا</text>
+      <line class="ar" x1="380" y1="444" x2="380" y2="490" marker-end="url(#a1)"/>
+      <rect class="bx-t" x="230" y="500" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="522" text-anchor="middle">الباك إند والداتابيز</text>
+      <text class="t12" x="380" y="543" text-anchor="middle">الكاتب الوحيد</text>
+    </svg>
+  </div>
+
+  <h2>حلقة الأدوات</h2>
+  <p class="lede">دي قلب البوت. الموديل ممكن ينده أدوات كذا مرة قبل ما يرد بكلام.</p>
+  <div class="card">
+    <svg class="flow" viewBox="0 0 760 600" role="img">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#7d869c" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+      <rect class="bx" x="230" y="20" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="42" text-anchor="middle">تحميل المحادثة والسلة</text>
+      <text class="t12" x="380" y="63" text-anchor="middle">من الداتابيز، مش من الرام</text>
+      <line class="ar" x1="380" y1="84" x2="380" y2="130" marker-end="url(#a2)"/>
+      <rect class="bx-a" x="230" y="140" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="162" text-anchor="middle">نداء الموديل</text>
+      <text class="t12" x="380" y="183" text-anchor="middle">البرومبت + المحادثة + وصف الأدوات</text>
+      <line class="ar" x1="380" y1="204" x2="380" y2="250" marker-end="url(#a2)"/>
+      <rect class="bx" x="255" y="260" width="250" height="46" rx="10"/>
+      <text class="t14" x="380" y="285" text-anchor="middle">طلب أدوات؟</text>
+      <path class="ar" d="M380 312 L380 338 L200 338 L200 368" marker-end="url(#a2)"/>
+      <path class="ar" d="M380 312 L380 338 L560 338 L560 368" marker-end="url(#a2)"/>
+      <rect class="bx-a" x="70" y="378" width="260" height="58" rx="10"/>
+      <text class="t14" x="200" y="400" text-anchor="middle">أيوه — نفّذهم كلهم</text>
+      <text class="t12" x="200" y="421" text-anchor="middle">دفعة واحدة، مش واحد ورا التاني</text>
+      <text class="t12" x="200" y="466" text-anchor="middle">↻ يرجع للموديل — بحد أقصى 8 لفّات</text>
+      <rect class="bx" x="430" y="378" width="260" height="58" rx="10"/>
+      <text class="t14" x="560" y="400" text-anchor="middle">لأ — ده الرد النهائي</text>
+      <text class="t12" x="560" y="421" text-anchor="middle">كلام من الموديل</text>
+      <line class="ar" x1="560" y1="442" x2="560" y2="488" marker-end="url(#a2)"/>
+      <rect class="bx-t" x="430" y="498" width="260" height="58" rx="10"/>
+      <text class="t14" x="560" y="520" text-anchor="middle">حفظ وإرسال</text>
+      <text class="t12" x="560" y="541" text-anchor="middle">نص + أي مرفقات</text>
+    </svg>
+  </div>
+  <div class="note bad"><b>أسهل غلطة هنا:</b> قص المحادثة لما تعدي 40 رسالة <b>لازم</b> يبدأ من رسالة زبون. لو قصّيت في نص زوج «نداء أداة / نتيجة أداة»، المزوّد بيرفض الطلب كله — مش بيتجاهله، بيرفضه.</div>
+
+  <h2>تسجيل الأوردر</h2>
+  <p class="lede">أخطر خطوة في النظام. لو فشلت في نصها، المخزون يبقى غلط للأبد.</p>
+  <div class="card">
+    <svg class="flow" viewBox="0 0 760 690" role="img">
+      <defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#7d869c" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+      <rect class="bx" x="230" y="20" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="42" text-anchor="middle">الزبون بيأكّد</text>
+      <text class="t12" x="380" y="63" text-anchor="middle">بعد ما شاف الإجمالي الحقيقي بالشحن</text>
+      <line class="ar" x1="380" y1="84" x2="380" y2="130" marker-end="url(#a3)"/>
+      <rect class="bx" x="230" y="140" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="162" text-anchor="middle">أربع بيانات أو رفض</text>
+      <text class="t12" x="380" y="183" text-anchor="middle">اسم، محافظة، عنوان، تليفون</text>
+      <line class="ar" x1="380" y1="204" x2="380" y2="250" marker-end="url(#a3)"/>
+      <rect class="bx" x="230" y="260" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="282" text-anchor="middle">إعادة فحص المخزون</text>
+      <text class="t12" x="380" y="303" text-anchor="middle">ممكن يكون عدى وقت من أول المحادثة</text>
+      <line class="ar" x1="380" y1="324" x2="380" y2="370" marker-end="url(#a3)"/>
+      <rect class="bx-c" x="60" y="380" width="640" height="140" rx="16"/>
+      <text class="t13b" x="676" y="406" text-anchor="end">ترانزاكشن ذرية واحدة — يا كلها يا ولا حاجة</text>
+      <rect class="bx-t" x="86" y="424" width="185" height="70" rx="10"/>
+      <text class="t14" x="178" y="450" text-anchor="middle">تحديث العميل</text>
+      <text class="t12" x="178" y="471" text-anchor="middle">ربط بعد تأكيد بس</text>
+      <rect class="bx-t" x="288" y="424" width="185" height="70" rx="10"/>
+      <text class="t14" x="380" y="450" text-anchor="middle">خصم المخزون</text>
+      <text class="t12" x="380" y="471" text-anchor="middle">لكل variant، ذرياً</text>
+      <rect class="bx-t" x="490" y="424" width="185" height="70" rx="10"/>
+      <text class="t14" x="582" y="450" text-anchor="middle">كتابة الأوردر</text>
+      <text class="t12" x="582" y="471" text-anchor="middle">ببنوده المصوّرة</text>
+      <line class="ar" x1="380" y1="526" x2="380" y2="572" marker-end="url(#a3)"/>
+      <rect class="bx" x="230" y="582" width="300" height="58" rx="10"/>
+      <text class="t14" x="380" y="604" text-anchor="middle">حدث order_confirmed</text>
+      <text class="t12" x="380" y="625" text-anchor="middle">الدفع كاش، فمفيش خطوة دفع</text>
+    </svg>
+  </div>
+
+  <h2>دورة حياة الأوردر</h2>
+  <div class="card">
+    <svg class="flow" viewBox="0 0 760 500" role="img">
+      <defs><marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#7d869c" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+      <rect class="bx" x="120" y="20" width="300" height="58" rx="10"/>
+      <text class="t14" x="270" y="42" text-anchor="middle">Confirmed</text>
+      <text class="t12" x="270" y="63" text-anchor="middle">إيميل + واتساب للزبون، وإيميل للموظفين</text>
+      <line class="ar" x1="270" y1="84" x2="270" y2="130" marker-end="url(#a4)"/>
+      <rect class="bx" x="120" y="140" width="300" height="58" rx="10"/>
+      <text class="t14" x="270" y="162" text-anchor="middle">Packed</text>
+      <text class="t12" x="270" y="183" text-anchor="middle">رسالة واتساب — الموظف بيحرّكها</text>
+      <line class="ar" x1="428" y1="169" x2="472" y2="169" marker-end="url(#a4)"/>
+      <rect class="bx-r" x="482" y="140" width="210" height="58" rx="10"/>
+      <text class="t14" x="587" y="162" text-anchor="middle">Cancelled</text>
+      <text class="t12" x="587" y="183" text-anchor="middle">المخزون بيرجع مكانه</text>
+      <line class="ar" x1="270" y1="204" x2="270" y2="250" marker-end="url(#a4)"/>
+      <rect class="bx" x="120" y="260" width="300" height="58" rx="10"/>
+      <text class="t14" x="270" y="282" text-anchor="middle">Shipped</text>
+      <text class="t12" x="270" y="303" text-anchor="middle">رسالة واتساب — وهنا بيتقفل التعديل</text>
+      <line class="ar" x1="270" y1="324" x2="270" y2="370" marker-end="url(#a4)"/>
+      <rect class="bx" x="120" y="380" width="300" height="58" rx="10"/>
+      <text class="t14" x="270" y="402" text-anchor="middle">Delivered</text>
+      <text class="t12" x="270" y="423" text-anchor="middle">واتساب بيطلب تقييم</text>
+    </svg>
+  </div>
+  <div class="note"><b>بعد الشحن:</b> البوت ما بيقولش «لأ» وخلاص. لو الزبون عايز حاجة زيادة → يعرض أوردر جديد. لو فيه مشكلة في اللي وصله → <b>شكوى</b>، تروح لموظف على طول من غير ما يقترح شراء تاني. والفرق ده بيتحدد وقت فهم الطلب، مش بعده.</div>
+</div></section>
+
+<!-- ============ TOOLS ============ -->
+<section class="panel" id="tools"><div class="wrap">
+  <h2>الأدوات الـ 17</h2>
+  <p class="lede">الموديل بيقرر <b>أنهي</b> أداة بس. الأدوات هي اللي بترفض. العقود الكاملة (الوسائط وشكل الرد لكل أداة) في <code>docs/components/15-tool-contracts.md</code>.</p>
+  <div class="card flush"><table>
+    <tr><th style="width:210px">الأداة</th><th>بترجّع إيه، والقاعدة اللي جواها</th></tr>
+    <tr><td colspan="2" style="color:var(--cream)">الطلب</td></tr>
+    <tr><td>get_categories</td><td class="d">التصنيفات الستة بعددها. أول حركة — بتثبّت الموديل على اللي موجود فعلاً.</td></tr>
+    <tr><td>get_products</td><td class="d">بحث في <code>name</code> و<code>category</code> و<code>style</code> وألوان الـ variants مع بعض — ده اللي بيخلي «الهودي الزيتي» يتلقى بعد ما الزيتي بقى لون مش اسم منتج.</td></tr>
+    <tr><td>get_variants</td><td class="d">كل الـ variants بالـ id والسعر والمخزون. <span class="amb">لازم قبل الإضافة للسلة</span> — الـ id مستحيل يتخمّن.</td></tr>
+    <tr><td>add_to_cart</td><td class="d">بترفض الـ variant اللي خلص، <b>وبترجّع البدايل معاها</b> عشان الرد يبقى رسالة واحدة.</td></tr>
+    <tr><td>view_cart</td><td class="d">البنود والإجمالي.</td></tr>
+    <tr><td>remove_from_cart</td><td class="d">بند، أو variant، أو تفضية بالكامل.</td></tr>
+    <tr><td>get_size_chart</td><td class="d">الأرقام + صورة الشارت. ولو مفيش شارت بترجّع <code>has_chart: false</code> وبس — والموديل ممنوع يقدّر رقم.</td></tr>
+    <tr><td>get_shipping_fee</td><td class="d">سعر المحافظة، أو «مفيش تعريفة» — والأوردر ما يتأكدش من غيرها.</td></tr>
+    <tr><td>confirm_order</td><td class="d">بتفحص المخزون بنفسها تاني، وبترفض لو أي بيان من الأربعة ناقص. الأداة الوحيدة اللي بتكتب أوردر.</td></tr>
+    <tr><td colspan="2" style="color:var(--cream)">بعد الأوردر</td></tr>
+    <tr><td>get_my_orders</td><td class="d">الأوردرات المفتوحة — ده اللي بيخلي البوت يعرف يسأل «أنهي أوردر؟».</td></tr>
+    <tr><td>modify_order_quantity</td><td class="d">بتشوف الحالة بنفسها وبترفض بعد الشحن.</td></tr>
+    <tr><td>cancel_order</td><td class="d">نفس القاعدة، وبترجّع المخزون.</td></tr>
+    <tr><td>request_item_swap</td><td class="d"><span class="amb">ما بتنفّذش التبديل أبداً</span> — بتحطه في طابور الموظفين وبس.</td></tr>
+    <tr><td>submit_feedback</td><td class="d">بيسجّل التقييم بعد التسليم. من غيرها البوت بيسأل سؤال مش قادر يسجّل إجابته.</td></tr>
+    <tr><td colspan="2" style="color:var(--cream)">التصعيد والهوية</td></tr>
+    <tr><td>request_human</td><td class="d">الطريقة الوحيدة اللي المحادثة تخرج بيها من البوت. بتحط علم إيقاف — <span class="amb">وموظف بس هو اللي بيشيله</span>، لا مؤقّت ولا الموديل لما يحس إن الأمور رجعت طبيعية.</td></tr>
+    <tr><td>get_my_profile</td><td class="d">اللي إحنا عارفينه عن الزبون ده — أو <code>known: false</code> لو جديد. بيتنده قبل ما نسأل عن العنوان، عشان الزبون القديم يأكّد بدل ما يعيد الكتابة.</td></tr>
+    <tr><td>link_client</td><td class="d">بتربط الهوية بعميل موجود بعد ما الزبون يأكّد. مفيش ربط بيحصل من غيرها.</td></tr>
+  </table></div>
+  <div class="note good"><b>ليه في الأدوات مش في البرومبت؟</b> تعليمة في البرومبت دي رغبة — الموديل ممكن يقنع نفسه بعكسها. أداة بترفض دي ضمانة. عشان كده قاعدة «مفيش تعديل بعد الشحن» عايشة جوه <code>cancel_order</code> نفسها، مش في نص البرومبت.</div>
+</div></section>
+
+<!-- ============ RULES ============ -->
+<section class="panel" id="rules"><div class="wrap">
+  <h2>القواعد اللي مالهاش استثناء</h2>
+  <ol class="steps">
+    <li><b>مفيش منتج أو سعر أو مقاس من دماغ الموديل</b><span>كل معلومة لازم تكون جت من نتيجة أداة في نفس المحادثة. والمقاسات أخطرهم: لو مفيش شارت، البوت يقول مفيش — عمره ما يقدّر رقم ولا يستخدم شارت منتج تاني.</span></li>
+    <li><b>get_variants قبل add_to_cart</b><span>مفروضة بإن الـ <code>variant_id</code> مستحيل يتخمّن، مش بطلب في البرومبت.</span></li>
+    <li><b>المخزون بيتفحص تاني جوه confirm_order</b><span>مش بيتصدّق من أول المحادثة. ممكن يكون عدى 10 دقايق من أول ما الزبون شاف المقاس متاح.</span></li>
+    <li><b>هوية الزبون بتتحقن من الخادم</b><span>الموديل ما بيمررش <code>client_id</code> ولا رقم تليفون لأدوات السلة. لو كان بيمررها، موديل متلخبط أو متلاعب فيه يقدر يقرا سلة زبون تاني.</span></li>
+    <li><b>الدفع كاش عند الاستلام بس</b><span>أي وسيلة تانية بترفض بوضوح، من غير وعود.</span></li>
+    <li><b>الأوردر ما بيتقالش إنه اتسجّل قبل ما الأداة ترجّع نجاح</b><span>تأكيد لأوردر الباك إند ما سجّلوش هو أسوأ فشل ممكن في النظام ده.</span></li>
+    <li><b>الملخص قبل التأكيد لازم يبان فيه الشحن والإجمالي الحقيقي</b><span>زبون وافق على رقم ولقى رقم أكبر عند الباب — دي أغلى غلطة ممكنة مع الدفع عند الاستلام.</span></li>
+  </ol>
+
+  <h2>الحاجات اللي بتغلط فيها التنفيذات عادةً</h2>
+  <div class="note bad"><b>قص المحادثة في مكان غلط</b> — لازم يبدأ من رسالة زبون، وإلا المزوّد يرفض الطلب كله.</div>
+  <div class="note bad"><b>استنتاج الشارت من التصنيف</b> — <code>T-Shirts</code> و<code>Polo Shirts</code> كل واحد عليه شارتين، و<code>Hoodies &amp; Sweatshirts</code> عليه خمسة. الربط قايمة صريحة لكل منتج عن قصد.</div>
+  <div class="note bad"><b>افتراض إن كل شارت فيه 4 مقاسات</b> — الـ Tops فيه S/M/L بس.</div>
+  <div class="note bad"><b>نسيان محور الطول في الجاكت</b> — محاوره تلاتة (لون × مقاس × طول). لو الفحص على المقاس واللون بس، الأوردر يعدي لقطعة مش موجودة.</div>
+  <div class="note bad"><b>استنتاج اللون من الاسم أو الـ id</b> — اللون بقى على الـ variant. والـ handles في <code>source_products</code> مضللة أصلاً: <code>olive-sweatpants</code> هو الأسود.</div>
+  <div class="note bad"><b>الاعتماد على <code>collection</code> في البحث</b> — 8 منتجات من 18 مالهمش مجموعة. أي فلترة بتعتمد عليها هتخفي نص الكتالوج.</div>
+</div></section>
+
+<!-- ============ DATA ============ -->
+<section class="panel" id="data"><div class="wrap">
+  <h2>الكتالوج بالأرقام</h2>
+  <div class="grid" id="stats"></div>
+
+  <h2>التصنيفات</h2>
+  <p class="lede">ستة، على نموذج ASOS. الـ Crewneck والـ Quarter-Zip مش تصنيفات — قيم <code>style</code> تحت Hoodies &amp; Sweatshirts.</p>
+  <div class="card flush"><table id="catTable"></table></div>
+
+  <h2>محاور الاختيار</h2>
+  <div class="card flush"><table id="axes"></table></div>
+
+  <div class="note"><b>المجموعة محور منفصل تماماً عن التصنيف.</b> المجموعة قرار تسويقي بيتغير كل موسم، والتصنيف هو القطعة نفسها وما بيتغيرش. ASOS بيفصلهم لنفس السبب. التقسيمة القديمة كانت خالطاهم، فطلعت مجموعة <code>T-SHIRTS</code> جنب نوع <code>T-Shirt</code>، وجاكيت متصنّف تحت التيشرتات.</div>
+
+  <h2>شارتات المقاسات</h2>
+  <div class="card flush"><table id="charts"></table></div>
+  <div class="note"><b>كل الأرقام دي «القطعة مفرودة»، مش مقاسات جسم.</b> وسط 31 سم للـ S ده الحزام مفرود — يعني حوالي نص المحيط. لو زبون قراها على إنها مقاس جسمه، هيفتكر البنطلون لطفل. البوت لازم يقول الجملة دي مع كل شارت.</div>
+</div></section>
+
+<footer><div class="wrap">
+  Wanas Gallery — Phase 1. الأرقام محسوبة وقت الفتح من <code>data/products_seed.json</code>. التقسيمة بالتفصيل في <code>taxonomy.html</code>.
+</div></footer>
+
+<script id="seed" type="application/json">[{"product_id":"boxy-wns-tee","name":"Boxy WNS Tee","category":"T-Shirts","department":"unisex","style":["boxy-fit"],"collection":null,"size_chart":"ringer-boxy-tee","sizes":["S","M","L","XL"],"colors":["Black","Grey","Olive"],"lengths":[],"price":590.0,"on_sale":false,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":0},{"size":"M","color":"Black","length":null,"stock_qty":10},{"size":"L","color":"Black","length":null,"stock_qty":10},{"size":"XL","color":"Black","length":null,"stock_qty":10},{"size":"S","color":"Grey","length":null,"stock_qty":0},{"size":"M","color":"Grey","length":null,"stock_qty":10},{"size":"L","color":"Grey","length":null,"stock_qty":10},{"size":"XL","color":"Grey","length":null,"stock_qty":10},{"size":"S","color":"Olive","length":null,"stock_qty":0},{"size":"M","color":"Olive","length":null,"stock_qty":10},{"size":"L","color":"Olive","length":null,"stock_qty":10},{"size":"XL","color":"Olive","length":null,"stock_qty":10}],"images":14},{"product_id":"cairokee-tee","name":"Cairokee T-shirt","category":"T-Shirts","department":"unisex","style":["oversized","graphic"],"collection":"CAIROKEE MERCH","size_chart":"oversized-graphic-tee","sizes":["S","M","L","XL"],"colors":["Brown","Black"],"lengths":[],"price":600.0,"on_sale":false,"variants":[{"size":"S","color":"Brown","length":null,"stock_qty":10},{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Brown","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":10},{"size":"L","color":"Brown","length":null,"stock_qty":10},{"size":"L","color":"Black","length":null,"stock_qty":10},{"size":"XL","color":"Brown","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":10}],"images":4},{"product_id":"cairokee-tee-2","name":"Cairokee T-shirt 2","category":"T-Shirts","department":"unisex","style":["oversized","graphic"],"collection":"CAIROKEE MERCH","size_chart":"oversized-graphic-tee","sizes":["S","M","L","XL"],"colors":["Black","White"],"lengths":[],"price":600.0,"on_sale":false,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":10},{"size":"L","color":"Black","length":null,"stock_qty":10},{"size":"XL","color":"Black","length":null,"stock_qty":10},{"size":"S","color":"White","length":null,"stock_qty":0},{"size":"M","color":"White","length":null,"stock_qty":0},{"size":"L","color":"White","length":null,"stock_qty":0},{"size":"XL","color":"White","length":null,"stock_qty":0}],"images":4},{"product_id":"envy-tee","name":"Envy T-shirt","category":"T-Shirts","department":"unisex","style":["oversized","graphic"],"collection":null,"size_chart":"oversized-graphic-tee","sizes":["S","M","L","XL"],"colors":["Grey"],"lengths":[],"price":500.0,"on_sale":false,"variants":[{"size":"S","color":"Grey","length":null,"stock_qty":10},{"size":"M","color":"Grey","length":null,"stock_qty":10},{"size":"L","color":"Grey","length":null,"stock_qty":0},{"size":"XL","color":"Grey","length":null,"stock_qty":0}],"images":3},{"product_id":"ringer-tee","name":"Ringer Tee","category":"T-Shirts","department":"unisex","style":["boxy-fit","ringer"],"collection":null,"size_chart":"ringer-boxy-tee","sizes":["S","M","L","XL"],"colors":["Beige","Brown","Burgundy","Navy"],"lengths":[],"price":500.0,"on_sale":true,"variants":[{"size":"S","color":"Beige","length":null,"stock_qty":0},{"size":"M","color":"Beige","length":null,"stock_qty":10},{"size":"L","color":"Beige","length":null,"stock_qty":10},{"size":"XL","color":"Beige","length":null,"stock_qty":10},{"size":"S","color":"Brown","length":null,"stock_qty":0},{"size":"M","color":"Brown","length":null,"stock_qty":10},{"size":"L","color":"Brown","length":null,"stock_qty":10},{"size":"XL","color":"Brown","length":null,"stock_qty":10},{"size":"S","color":"Burgundy","length":null,"stock_qty":0},{"size":"M","color":"Burgundy","length":null,"stock_qty":0},{"size":"L","color":"Burgundy","length":null,"stock_qty":0},{"size":"XL","color":"Burgundy","length":null,"stock_qty":10},{"size":"S","color":"Navy","length":null,"stock_qty":0},{"size":"M","color":"Navy","length":null,"stock_qty":10},{"size":"L","color":"Navy","length":null,"stock_qty":10},{"size":"XL","color":"Navy","length":null,"stock_qty":10}],"images":14},{"product_id":"cairokee-hoodie","name":"Cairokee Hoodie","category":"Hoodies & Sweatshirts","department":"unisex","style":["oversized","graphic","pullover"],"collection":"CAIROKEE MERCH","size_chart":"oversized-hoodie","sizes":["S","M","L","XL"],"colors":["Brown","Black"],"lengths":[],"price":800.0,"on_sale":true,"variants":[{"size":"S","color":"Brown","length":null,"stock_qty":0},{"size":"M","color":"Brown","length":null,"stock_qty":0},{"size":"L","color":"Brown","length":null,"stock_qty":0},{"size":"XL","color":"Brown","length":null,"stock_qty":0},{"size":"S","color":"Black","length":null,"stock_qty":0},{"size":"M","color":"Black","length":null,"stock_qty":0},{"size":"L","color":"Black","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":0}],"images":4},{"product_id":"wanas-crewneck","name":"WANAS Crewneck","category":"Hoodies & Sweatshirts","department":"unisex","style":["oversized","crewneck"],"collection":"WINTER COLLECTION","size_chart":"oversized-crewneck","sizes":["S","M","L","XL"],"colors":["Burgundy","Navy","Olive"],"lengths":[],"price":549.0,"on_sale":true,"variants":[{"size":"S","color":"Burgundy","length":null,"stock_qty":10},{"size":"M","color":"Burgundy","length":null,"stock_qty":10},{"size":"L","color":"Burgundy","length":null,"stock_qty":10},{"size":"XL","color":"Burgundy","length":null,"stock_qty":10},{"size":"S","color":"Navy","length":null,"stock_qty":0},{"size":"M","color":"Navy","length":null,"stock_qty":10},{"size":"L","color":"Navy","length":null,"stock_qty":10},{"size":"XL","color":"Navy","length":null,"stock_qty":10},{"size":"S","color":"Olive","length":null,"stock_qty":0},{"size":"M","color":"Olive","length":null,"stock_qty":0},{"size":"L","color":"Olive","length":null,"stock_qty":10},{"size":"XL","color":"Olive","length":null,"stock_qty":10}],"images":6},{"product_id":"wanas-hoodie","name":"WANAS Hoodie","category":"Hoodies & Sweatshirts","department":"unisex","style":["oversized","pullover"],"collection":"WINTER COLLECTION","size_chart":"oversized-hoodie","sizes":["S","M","L","XL"],"colors":["Black","Grey","Olive"],"lengths":[],"price":650.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":0},{"size":"L","color":"Black","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":0},{"size":"S","color":"Grey","length":null,"stock_qty":0},{"size":"M","color":"Grey","length":null,"stock_qty":0},{"size":"L","color":"Grey","length":null,"stock_qty":0},{"size":"XL","color":"Grey","length":null,"stock_qty":0},{"size":"S","color":"Olive","length":null,"stock_qty":10},{"size":"M","color":"Olive","length":null,"stock_qty":0},{"size":"L","color":"Olive","length":null,"stock_qty":0},{"size":"XL","color":"Olive","length":null,"stock_qty":0}],"images":13},{"product_id":"wanas-quarter-zip","name":"WANAS Quarter-Zip","category":"Hoodies & Sweatshirts","department":"unisex","style":["oversized","quarter-zip"],"collection":"WINTER COLLECTION","size_chart":"quarter-zip","sizes":["S","M","L","XL"],"colors":["Camel Brown","Light Brown","Navy"],"lengths":[],"price":500.0,"on_sale":true,"variants":[{"size":"S","color":"Camel Brown","length":null,"stock_qty":10},{"size":"M","color":"Camel Brown","length":null,"stock_qty":10},{"size":"L","color":"Camel Brown","length":null,"stock_qty":10},{"size":"XL","color":"Camel Brown","length":null,"stock_qty":10},{"size":"S","color":"Light Brown","length":null,"stock_qty":10},{"size":"M","color":"Light Brown","length":null,"stock_qty":10},{"size":"L","color":"Light Brown","length":null,"stock_qty":10},{"size":"XL","color":"Light Brown","length":null,"stock_qty":10},{"size":"S","color":"Navy","length":null,"stock_qty":10},{"size":"M","color":"Navy","length":null,"stock_qty":10},{"size":"L","color":"Navy","length":null,"stock_qty":10},{"size":"XL","color":"Navy","length":null,"stock_qty":10}],"images":7},{"product_id":"wanas-zip-hoodie","name":"WANAS Zip-Hoodie","category":"Hoodies & Sweatshirts","department":"unisex","style":["oversized","zip-through"],"collection":"WINTER COLLECTION","size_chart":"wanas-zip-hoodie","sizes":["S","M","L","XL"],"colors":["Black","Grey","Olive"],"lengths":[],"price":750.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":0},{"size":"M","color":"Black","length":null,"stock_qty":0},{"size":"L","color":"Black","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":0},{"size":"S","color":"Grey","length":null,"stock_qty":0},{"size":"M","color":"Grey","length":null,"stock_qty":0},{"size":"L","color":"Grey","length":null,"stock_qty":0},{"size":"XL","color":"Grey","length":null,"stock_qty":0},{"size":"S","color":"Olive","length":null,"stock_qty":10},{"size":"M","color":"Olive","length":null,"stock_qty":0},{"size":"L","color":"Olive","length":null,"stock_qty":0},{"size":"XL","color":"Olive","length":null,"stock_qty":0}],"images":12},{"product_id":"zipup","name":"Zipup","category":"Hoodies & Sweatshirts","department":"unisex","style":["zip-through"],"collection":"WINTER COLLECTION","size_chart":"zipup","sizes":["S","M","L","XL"],"colors":["Black","Pink","Vintage Green"],"lengths":[],"price":600.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":0},{"size":"L","color":"Black","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":0},{"size":"S","color":"Pink","length":null,"stock_qty":10},{"size":"M","color":"Pink","length":null,"stock_qty":10},{"size":"L","color":"Pink","length":null,"stock_qty":10},{"size":"XL","color":"Pink","length":null,"stock_qty":10},{"size":"S","color":"Vintage Green","length":null,"stock_qty":10},{"size":"M","color":"Vintage Green","length":null,"stock_qty":0},{"size":"L","color":"Vintage Green","length":null,"stock_qty":0},{"size":"XL","color":"Vintage Green","length":null,"stock_qty":0}],"images":7},{"product_id":"knitted-polo","name":"Knitted Polo","category":"Polo Shirts","department":"unisex","style":["boxy-fit","knitted"],"collection":null,"size_chart":"knitted-polo","sizes":["S","M","L","XL"],"colors":["Burgundy","Navy","Olive","White"],"lengths":[],"price":499.0,"on_sale":true,"variants":[{"size":"S","color":"Burgundy","length":null,"stock_qty":0},{"size":"M","color":"Burgundy","length":null,"stock_qty":10},{"size":"L","color":"Burgundy","length":null,"stock_qty":10},{"size":"XL","color":"Burgundy","length":null,"stock_qty":10},{"size":"S","color":"Navy","length":null,"stock_qty":0},{"size":"M","color":"Navy","length":null,"stock_qty":10},{"size":"L","color":"Navy","length":null,"stock_qty":10},{"size":"XL","color":"Navy","length":null,"stock_qty":10},{"size":"S","color":"Olive","length":null,"stock_qty":0},{"size":"M","color":"Olive","length":null,"stock_qty":10},{"size":"L","color":"Olive","length":null,"stock_qty":10},{"size":"XL","color":"Olive","length":null,"stock_qty":10},{"size":"S","color":"White","length":null,"stock_qty":0},{"size":"M","color":"White","length":null,"stock_qty":10},{"size":"L","color":"White","length":null,"stock_qty":10},{"size":"XL","color":"White","length":null,"stock_qty":10}],"images":22},{"product_id":"wanas-polo","name":"WANAS Polo","category":"Polo Shirts","department":"unisex","style":["oversized"],"collection":"WINTER COLLECTION","size_chart":"oversized-polo","sizes":["S","M","L","XL"],"colors":["Black","Grey","Olive"],"lengths":[],"price":650.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":0},{"size":"L","color":"Black","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":0},{"size":"S","color":"Grey","length":null,"stock_qty":0},{"size":"M","color":"Grey","length":null,"stock_qty":0},{"size":"L","color":"Grey","length":null,"stock_qty":0},{"size":"XL","color":"Grey","length":null,"stock_qty":0},{"size":"S","color":"Olive","length":null,"stock_qty":10},{"size":"M","color":"Olive","length":null,"stock_qty":0},{"size":"L","color":"Olive","length":null,"stock_qty":0},{"size":"XL","color":"Olive","length":null,"stock_qty":0}],"images":12},{"product_id":"lightweight-sweatpant","name":"Lightweight Sweatpant","category":"Joggers & Sweatpants","department":"unisex","style":["wide-leg","lightweight"],"collection":null,"size_chart":"wide-leg-sweatpants","sizes":["S","M","L","XL"],"colors":["Black","Grey","Navy"],"lengths":[],"price":650.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":0},{"size":"L","color":"Black","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":0},{"size":"S","color":"Grey","length":null,"stock_qty":10},{"size":"M","color":"Grey","length":null,"stock_qty":10},{"size":"L","color":"Grey","length":null,"stock_qty":0},{"size":"XL","color":"Grey","length":null,"stock_qty":10},{"size":"S","color":"Navy","length":null,"stock_qty":10},{"size":"M","color":"Navy","length":null,"stock_qty":10},{"size":"L","color":"Navy","length":null,"stock_qty":10},{"size":"XL","color":"Navy","length":null,"stock_qty":0}],"images":12},{"product_id":"wanas-sweatpant","name":"WANAS Sweatpant","category":"Joggers & Sweatpants","department":"unisex","style":["wide-leg"],"collection":"WINTER COLLECTION","size_chart":"wide-leg-sweatpants","sizes":["S","M","L","XL"],"colors":["Black","Grey","Olive"],"lengths":[],"price":650.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":0},{"size":"M","color":"Black","length":null,"stock_qty":0},{"size":"L","color":"Black","length":null,"stock_qty":0},{"size":"XL","color":"Black","length":null,"stock_qty":0},{"size":"S","color":"Grey","length":null,"stock_qty":0},{"size":"M","color":"Grey","length":null,"stock_qty":0},{"size":"L","color":"Grey","length":null,"stock_qty":0},{"size":"XL","color":"Grey","length":null,"stock_qty":0},{"size":"S","color":"Olive","length":null,"stock_qty":10},{"size":"M","color":"Olive","length":null,"stock_qty":10},{"size":"L","color":"Olive","length":null,"stock_qty":10},{"size":"XL","color":"Olive","length":null,"stock_qty":10}],"images":14},{"product_id":"worker-jacket","name":"Worker Jacket","category":"Jackets","department":"unisex","style":["oversized","worker"],"collection":null,"size_chart":"worker-jacket","sizes":["S","M","L","XL"],"colors":["Black","Olive"],"lengths":["Long","Short"],"price":500.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":"Long","stock_qty":0},{"size":"S","color":"Black","length":"Short","stock_qty":10},{"size":"M","color":"Black","length":"Long","stock_qty":0},{"size":"M","color":"Black","length":"Short","stock_qty":0},{"size":"L","color":"Black","length":"Long","stock_qty":0},{"size":"L","color":"Black","length":"Short","stock_qty":0},{"size":"XL","color":"Black","length":"Long","stock_qty":0},{"size":"XL","color":"Black","length":"Short","stock_qty":0},{"size":"S","color":"Olive","length":"Long","stock_qty":10},{"size":"S","color":"Olive","length":"Short","stock_qty":10},{"size":"M","color":"Olive","length":"Long","stock_qty":0},{"size":"M","color":"Olive","length":"Short","stock_qty":0},{"size":"L","color":"Olive","length":"Long","stock_qty":0},{"size":"L","color":"Olive","length":"Short","stock_qty":0},{"size":"XL","color":"Olive","length":"Long","stock_qty":0},{"size":"XL","color":"Olive","length":"Short","stock_qty":0}],"images":12},{"product_id":"feelin-fine-top","name":"Feelin Fine Top","category":"Tops","department":"women","style":["fitted"],"collection":null,"size_chart":"wns-tops","sizes":["S","M","L"],"colors":["Black","Olive","Pink","White"],"lengths":[],"price":200.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"S","color":"Olive","length":null,"stock_qty":10},{"size":"S","color":"Pink","length":null,"stock_qty":10},{"size":"S","color":"White","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Olive","length":null,"stock_qty":10},{"size":"M","color":"Pink","length":null,"stock_qty":10},{"size":"M","color":"White","length":null,"stock_qty":10},{"size":"L","color":"Black","length":null,"stock_qty":10},{"size":"L","color":"Olive","length":null,"stock_qty":10},{"size":"L","color":"Pink","length":null,"stock_qty":10},{"size":"L","color":"White","length":null,"stock_qty":10}],"images":8},{"product_id":"heart-top","name":"Heart Top","category":"Tops","department":"women","style":["fitted"],"collection":null,"size_chart":"wns-tops","sizes":["S","M","L"],"colors":["Black","Olive","Pink","White"],"lengths":[],"price":200.0,"on_sale":true,"variants":[{"size":"S","color":"Black","length":null,"stock_qty":10},{"size":"S","color":"Olive","length":null,"stock_qty":10},{"size":"S","color":"Pink","length":null,"stock_qty":10},{"size":"S","color":"White","length":null,"stock_qty":10},{"size":"M","color":"Black","length":null,"stock_qty":10},{"size":"M","color":"Olive","length":null,"stock_qty":10},{"size":"M","color":"Pink","length":null,"stock_qty":10},{"size":"M","color":"White","length":null,"stock_qty":10},{"size":"L","color":"Black","length":null,"stock_qty":10},{"size":"L","color":"Olive","length":null,"stock_qty":10},{"size":"L","color":"Pink","length":null,"stock_qty":10},{"size":"L","color":"White","length":null,"stock_qty":10}],"images":9}]</script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+var D = JSON.parse(document.getElementById('seed').textContent);
+var CATS = ['T-Shirts','Hoodies & Sweatshirts','Polo Shirts','Joggers & Sweatpants','Jackets','Tops'];
+var V = D.reduce(function(a,p){return a.concat(p.variants)},[]);
+var inStock = V.filter(function(v){return v.stock_qty>0});
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+
+document.getElementById('badges').innerHTML = [
+  ['<b>'+D.length+'</b> منتج'],['<b>'+V.length+'</b> variant'],['<b>'+inStock.length+'</b> متاح'],
+  ['<b>6</b> تصنيفات'],['<b>12</b> شارت مقاسات'],['<b>17</b> أداة للبوت'],['Phase 1 — واتساب فقط']
+].map(function(b){return '<span class="badge">'+b[0]+'</span>'}).join('');
+
+document.querySelectorAll('nav.tabs button').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('nav.tabs button').forEach(function(x){x.classList.remove('on')});
+    document.querySelectorAll('section.panel').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    document.getElementById(b.dataset.p).classList.add('on');
+    window.scrollTo(0,0);
+  });
+});
+
+var withStock = D.filter(function(p){return p.variants.some(function(v){return v.stock_qty>0})});
+var partial = withStock.filter(function(p){return p.variants.some(function(v){return v.stock_qty===0})});
+document.getElementById('stats').innerHTML = [
+  [D.length,'منتج'],[V.length,'variant'],[inStock.length,'variant متاح'],
+  [partial.length,'منتج متاح جزئياً'],
+  [D.length-withStock.length,'منتج خلص بالكامل'],
+  [D.filter(function(p){return p.on_sale}).length,'منتج عليه خصم'],
+  [new Set(V.map(function(v){return v.color}).filter(Boolean)).size,'لون مختلف'],
+  [D.reduce(function(a,p){return a+p.images},0)||177,'صورة منتج']
+].map(function(s){return '<div class="stat"><div class="n">'+s[0]+'</div><div class="l">'+s[1]+'</div></div>'}).join('');
+
+document.getElementById('catTable').innerHTML =
+  '<tr><th style="width:210px">التصنيف</th><th style="width:80px">منتجات</th><th style="width:90px">variants</th><th>المنتجات</th></tr>' +
+  CATS.map(function(c){
+    var ps = D.filter(function(p){return p.category===c});
+    var nv = ps.reduce(function(a,p){return a+p.variants.length},0);
+    return '<tr><td>'+esc(c)+'</td><td class="d">'+ps.length+'</td><td class="d">'+nv+'</td><td class="d">'+
+      ps.map(function(p){return esc(p.name)}).join(' · ')+'</td></tr>';
+  }).join('');
+
+var colors={},styles={},sizes={};
+V.forEach(function(v){ if(v.color) colors[v.color]=(colors[v.color]||0)+1; if(v.size) sizes[v.size]=(sizes[v.size]||0)+1 });
+D.forEach(function(p){ p.style.forEach(function(s){ styles[s]=(styles[s]||0)+1 }) });
+function chips(o){return Object.keys(o).sort(function(a,b){return o[b]-o[a]}).map(function(k){
+  return '<span class="chip">'+esc(k)+' '+o[k]+'</span>'}).join(' ')}
+document.getElementById('axes').innerHTML =
+  '<tr><th style="width:130px">المحور</th><th>القيم</th></tr>' +
+  '<tr><td>size</td><td>'+chips(sizes)+'</td></tr>' +
+  '<tr><td>color</td><td>'+chips(colors)+'</td></tr>' +
+  '<tr><td>length</td><td><span class="chip">Long</span> <span class="chip">Short</span> &nbsp;<span style="color:var(--txt-3);font-size:13px">الـ Worker Jacket بس</span></td></tr>' +
+  '<tr><td>style</td><td>'+chips(styles)+'</td></tr>' +
+  '<tr><td>department</td><td><span class="chip">unisex '+D.filter(function(p){return p.department==='unisex'}).length+'</span> <span class="chip">women '+D.filter(function(p){return p.department==='women'}).length+'</span></td></tr>' +
+  '<tr><td>collection</td><td><span class="chip">WINTER COLLECTION '+D.filter(function(p){return p.collection==='WINTER COLLECTION'}).length+'</span> <span class="chip">CAIROKEE MERCH '+D.filter(function(p){return p.collection==='CAIROKEE MERCH'}).length+'</span> <span class="chip">بدون '+D.filter(function(p){return !p.collection}).length+'</span></td></tr>';
+
+var byChart={};
+D.forEach(function(p){ (byChart[p.size_chart]=byChart[p.size_chart]||[]).push(p.name) });
+document.getElementById('charts').innerHTML =
+  '<tr><th style="width:220px">Chart</th><th style="width:80px">منتجات</th><th>المنتجات</th></tr>' +
+  Object.keys(byChart).sort(function(a,b){return byChart[b].length-byChart[a].length}).map(function(k){
+    return '<tr><td>'+esc(k)+'</td><td class="d">'+byChart[k].length+'</td><td class="d">'+byChart[k].map(esc).join(' · ')+'</td></tr>';
+  }).join('');
+
+mermaid.initialize({
+  startOnLoad:false, theme:'base',
+  themeVariables:{
+    fontFamily:'"Segoe UI",system-ui,sans-serif', fontSize:'13px',
+    primaryColor:'#ffffff', primaryTextColor:'#16213e', primaryBorderColor:'#8d99b8',
+    lineColor:'#5a6480', textColor:'#16213e'
+  },
+  er:{ diagramPadding:18, entityPadding:10, minEntityWidth:120, useMaxWidth:false }
+});
+
+var SRC = `erDiagram
+  SIZE_CHARTS ||--o{ PRODUCTS : "measures"
+  PRODUCTS ||--|{ VARIANTS : "sold as"
+  VARIANTS ||--o{ CART_ITEMS : "held in"
+  VARIANTS ||--o{ ORDER_ITEMS : "bought as"
+  CLIENTS ||--o{ CHANNEL_IDENTITIES : "reachable via"
+  CLIENTS ||--o{ ORDERS : places
+  CHANNEL_IDENTITIES ||--o| SESSIONS : "chat state"
+  CHANNEL_IDENTITIES ||--o{ CART_ITEMS : owns
+  ORDERS ||--|{ ORDER_ITEMS : contains
+  ORDERS ||--o| ORDER_FEEDBACK : "rated by"
+  CLIENTS ||--o{ ORDER_FEEDBACK : leaves
+  SHIPPING_RATES ||--o{ ORDERS : prices
+  STAFF ||--o{ AUDIT_LOG : performs
+
+  SIZE_CHARTS {
+    text chart_id PK
+    text image
+    json measurements
+    json sizes
+    bool length_specific
+  }
+  PRODUCTS {
+    text product_id PK
+    text name
+    text category
+    text department
+    json style
+    text collection
+    text size_chart FK
+    json sizes_display
+    json colors_display
+    num price
+    bool on_sale
+    json images
+    json color_images
+    text description
+    json source_products
+  }
+  VARIANTS {
+    text variant_id PK
+    text product_id FK
+    text size
+    text color
+    text length
+    num price
+    num original_price
+    int stock_qty
+    int low_stock_threshold
+  }
+  CLIENTS {
+    text client_id PK
+    text full_name
+    text phone
+    text email
+    text address
+    bool has_account
+    text status
+  }
+  CHANNEL_IDENTITIES {
+    text channel PK
+    text external_id PK
+    text client_id FK
+  }
+  SESSIONS {
+    text channel PK
+    text external_id PK
+    json history
+    int updated_at
+  }
+  CART_ITEMS {
+    int id PK
+    text external_id FK
+    text variant_id FK
+    int qty
+  }
+  ORDERS {
+    text order_id PK
+    text client_id FK
+    text source_channel
+    text governorate FK
+    text shipping_address
+    text contact_phone
+    num subtotal
+    num discount_amount
+    num shipping_fee
+    num total
+    text status
+    text payment_method
+    ts confirmed_at
+    ts shipped_at
+    ts delivered_at
+    json modification_log
+  }
+  ORDER_ITEMS {
+    int id PK
+    text order_id FK
+    text variant_id FK
+    text product_name
+    text size
+    text color
+    text length
+    int quantity
+    num unit_price
+    num unit_original_price
+  }
+  ORDER_FEEDBACK {
+    text feedback_id PK
+    text order_id FK
+    text client_id FK
+    int rating
+    text text
+    ts date
+  }
+  SHIPPING_RATES {
+    text governorate PK
+    num fee
+  }
+  STAFF {
+    text staff_id PK
+    text username
+    text password_hash
+  }
+  AUDIT_LOG {
+    int id PK
+    text staff_id FK
+    text action
+    text entity
+    ts at
+  }
+`;
+
+mermaid.render('erd-svg', SRC).then(function(r){
+  document.getElementById('erd').innerHTML = r.svg;
+}).catch(function(){
+  document.getElementById('erd').innerHTML = '<p style="color:#16213e">تعذّر رسم المخطط — مكتبة الرسم بتتحمّل من الإنترنت، فأول فتحة لازم تكون أونلاين.</p>';
+});
+</script>
+</body>
+</html>

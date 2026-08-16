@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wanas — local chat harness</title>
+<style>
+  :root {
+    --bg:#0b141a; --panel:#111b21; --header:#202c33; --line:#2a3942;
+    --in:#202c33; --out:#005c4b; --ink:#e9edef; --muted:#8696a0;
+    --tool:#1d2b33; --bad:#f2637d; --note:#3b2f14; --note-line:#6b551f;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; height:100vh; display:flex; flex-direction:column;
+    background:var(--bg); color:var(--ink);
+    font:15px/1.55 "Segoe UI","Noto Naskh Arabic",Tahoma,system-ui,sans-serif;
+  }
+  header {
+    background:var(--header); padding:.55rem .9rem; display:flex; gap:.7rem;
+    align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--line);
+  }
+  header .who { font-weight:600; }
+  header .sub { color:var(--muted); font-size:.8rem; }
+  header input {
+    background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    border-radius:6px; padding:.3rem .5rem; font:inherit; font-size:.85rem; width:11rem;
+    direction:ltr; text-align:left;
+  }
+  header button, footer button {
+    background:var(--line); color:var(--ink); border:none; border-radius:6px;
+    padding:.35rem .7rem; font:inherit; font-size:.85rem; cursor:pointer;
+  }
+  header button:hover, footer button:hover { background:#33434e; }
+  .spacer { flex:1; }
+
+  #log { flex:1; overflow-y:auto; padding:1rem; display:flex; flex-direction:column; gap:.45rem; }
+  .row { display:flex; }
+  .row.me { justify-content:flex-start; }
+  .row.them { justify-content:flex-end; }
+  .bubble {
+    max-width:min(78%,42rem); padding:.45rem .65rem; border-radius:8px;
+    white-space:pre-wrap; word-wrap:break-word; box-shadow:0 1px 1px rgba(0,0,0,.25);
+  }
+  .me .bubble  { background:var(--out); border-top-right-radius:2px; }
+  .them .bubble{ background:var(--in);  border-top-left-radius:2px; }
+  .bubble img { display:block; max-width:100%; border-radius:6px; margin-top:.4rem; }
+
+  .meta { align-self:center; max-width:min(90%,48rem); width:100%; }
+  .chip {
+    background:var(--tool); border:1px solid var(--line); border-radius:6px;
+    padding:.3rem .55rem; font-size:.78rem; color:var(--muted);
+    font-family:ui-monospace,"Cascadia Mono",monospace; direction:ltr; text-align:left;
+    overflow-x:auto;
+  }
+  .chip.bad { border-color:var(--bad); color:var(--bad); }
+  .chip details summary { cursor:pointer; }
+  .chip pre { margin:.4rem 0 0; white-space:pre-wrap; color:var(--muted); }
+  .note {
+    background:var(--note); border:1px solid var(--note-line); border-radius:6px;
+    padding:.45rem .6rem; font-size:.85rem; white-space:pre-wrap;
+  }
+  .note b { color:#e5c76b; font-weight:600; }
+  .sys { text-align:center; color:var(--muted); font-size:.8rem; padding:.2rem; }
+
+  footer {
+    background:var(--header); border-top:1px solid var(--line);
+    padding:.6rem .9rem; display:flex; gap:.5rem; align-items:flex-end;
+  }
+  footer textarea {
+    flex:1; resize:none; background:var(--panel); color:var(--ink);
+    border:1px solid var(--line); border-radius:8px; padding:.5rem .7rem;
+    font:inherit; max-height:9rem;
+  }
+  footer button.send { background:var(--out); padding:.5rem 1.1rem; }
+  #paused { display:none; background:#4a2b2b; color:#ffb4b4; padding:.4rem .9rem; font-size:.85rem; }
+  #paused.on { display:block; }
+  #paused button { background:#6b3a3a; margin-inline-start:.6rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="who">Wanas Gallery</div>
+    <div class="sub">local harness · same handle_message() as WhatsApp</div>
+  </div>
+  <div class="spacer"></div>
+  <label class="sub">identity <input id="identity" value="201000000001"></label>
+  <button id="btn-tools" title="show tool calls and refusals">tools: on</button>
+  <button id="btn-photo" title="simulate an incoming photo">📷 photo</button>
+  <button id="btn-reset">reset session</button>
+</header>
+
+<div id="paused">
+  المحادثة متوقفة — حد من الفريق شايفها دلوقتي، والبوت مش هيرد.
+  <button id="btn-unpause">resolve (staff action)</button>
+</div>
+
+<div id="log"></div>
+
+<footer>
+  <textarea id="text" rows="1" placeholder="اكتب رسالتك…"></textarea>
+  <button class="send" id="btn-send">إرسال</button>
+</footer>
+
+<script>
+const log = document.getElementById('log');
+const identityEl = document.getElementById('identity');
+const textEl = document.getElementById('text');
+const pausedEl = document.getElementById('paused');
+let showTools = true;
+
+const identity = () => identityEl.value.trim() || '201000000001';
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const scroll = () => { log.scrollTop = log.scrollHeight; };
+
+function bubble(side, text) {
+  const row = el('div', 'row ' + side);
+  const b = el('div', 'bubble', text);
+  row.appendChild(b);
+  log.appendChild(row);
+  return b;
+}
+
+function attachImages(bubbleEl, paths) {
+  (paths || []).forEach(p => {
+    const img = el('img');
+    img.src = '/harness/media?path=' + encodeURIComponent(p);
+    img.alt = p;
+    img.onerror = () => { img.replaceWith(el('div', 'chip', '📎 ' + p)); };
+    bubbleEl.appendChild(img);
+  });
+}
+
+function toolChips(tools) {
+  if (!showTools || !tools || !tools.length) return;
+  tools.forEach(t => {
+    const wrap = el('div', 'meta');
+    const chip = el('div', 'chip' + (t.error ? ' bad' : ''));
+    const details = el('details');
+    const summary = el('summary', null,
+      (t.error ? '⛔ ' : '🔧 ') + t.name + (t.error ? ' → ' + t.error : ' → ok'));
+    details.appendChild(summary);
+    const pre = el('pre', null, JSON.stringify(t.content, null, 2));
+    details.appendChild(pre);
+    if (t.error) details.open = true;   // a refusal is the interesting case
+    chip.appendChild(details);
+    wrap.appendChild(chip);
+    log.appendChild(wrap);
+  });
+}
+
+function notifications(list) {
+  (list || []).forEach(n => {
+    const wrap = el('div', 'meta');
+    const note = el('div', 'note');
+    note.appendChild(el('b', null, '↗ proactive [' + (n.template || n.kind) + '] → ' + n.to));
+    note.appendChild(document.createTextNode('\n' + (n.text || '')));
+    wrap.appendChild(note);
+    log.appendChild(wrap);
+  });
+}
+
+function system(text) {
+  log.appendChild(el('div', 'sys', text));
+}
+
+function setPaused(on) { pausedEl.classList.toggle('on', !!on); }
+
+async function api(path, body) {
+  const res = await fetch('/harness/api/' + path, {
+    method: 'POST',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify(Object.assign({identity: identity()}, body || {}))
+  });
+  if (!res.ok) throw new Error(path + ' failed: ' + res.status);
+  return res.json();
+}
+
+async function loadState() {
+  log.innerHTML = '';
+  const res = await fetch('/harness/api/state?identity=' + encodeURIComponent(identity()));
+  const state = await res.json();
+  state.history.forEach(item => {
+    if (item.kind === 'user') bubble('me', item.text);
+    else if (item.kind === 'bot') bubble('them', item.text);
+    else if (item.kind === 'tools' && showTools) {
+      const wrap = el('div', 'meta');
+      wrap.appendChild(el('div', 'chip', '🔧 ' + item.names.join(', ')));
+      log.appendChild(wrap);
+    } else if (item.kind === 'refusals' && showTools) {
+      item.refusals.forEach(r => {
+        const wrap = el('div', 'meta');
+        wrap.appendChild(el('div', 'chip bad', '⛔ ' + r.name + ' → ' + r.error));
+        log.appendChild(wrap);
+      });
+    }
+  });
+  if (!state.history.length) system('محادثة جديدة — ابعت رسالة تبدأ بيها');
+  setPaused(state.paused);
+  scroll();
+}
+
+async function send(text, imagePaths) {
+  if (!text && !imagePaths) return;
+  if (text) bubble('me', text);
+  else bubble('me', '📷 (صورة)');
+  scroll();
+
+  let reply;
+  try {
+    reply = await api('send', {text: text || '', image_paths: imagePaths || null});
+  } catch (err) {
+    system('⚠ ' + err.message);
+    scroll();
+    return;
+  }
+
+  if (reply.duplicate) { system('· duplicate delivery ignored'); scroll(); return; }
+  toolChips(reply.tools);
+  if (reply.text) attachImages(bubble('them', reply.text), reply.attachments);
+  else if (reply.paused) system('· البوت ساكت — المحادثة مع موظف');
+  if (reply.error) system('· agent error: ' + reply.error);
+  notifications(reply.notifications);
+  setPaused(reply.paused);
+  scroll();
+}
+
+document.getElementById('btn-send').onclick = () => {
+  const text = textEl.value.trim();
+  textEl.value = '';
+  textEl.style.height = 'auto';
+  send(text);
+};
+textEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('btn-send').click(); }
+});
+textEl.addEventListener('input', () => {
+  textEl.style.height = 'auto';
+  textEl.style.height = Math.min(textEl.scrollHeight, 144) + 'px';
+});
+document.getElementById('btn-photo').onclick = () => {
+  const path = prompt('صورة العميل (أي مسار):', 'data/inbound/customer-photo.jpg');
+  if (path) send('', [path]);
+};
+document.getElementById('btn-reset').onclick = async () => {
+  await api('reset');
+  system('· history cleared (the cart survives, by design)');
+  await loadState();
+};
+document.getElementById('btn-unpause').onclick = async () => {
+  await api('unpause');
+  system('· conversation handed back to the bot');
+  setPaused(false);
+};
+document.getElementById('btn-tools').onclick = e => {
+  showTools = !showTools;
+  e.target.textContent = 'tools: ' + (showTools ? 'on' : 'off');
+  loadState();
+};
+identityEl.addEventListener('change', loadState);
+
+loadState();
+</script>
+</body>
+</html>
