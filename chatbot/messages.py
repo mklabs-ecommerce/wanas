@@ -64,10 +64,3 @@ def tool_results(results: list[dict]) -> dict:
 def tool_result(call_id: str, name: str, content: dict) -> dict:
     return {"id": call_id, "name": name, "content": content}
 
-
-def is_user(message: dict) -> bool:
-    return message.get("role") == USER
-
-
-def has_tool_calls(message: dict) -> bool:
-    return bool(message.get("tool_calls"))

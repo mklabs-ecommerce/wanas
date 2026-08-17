@@ -53,9 +53,9 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def session_scope() -> Iterator[Session]:
     """One unit of work. Commits on success, rolls back on any exception.
 
-    The order transaction in 01-backend-platform.md depends on this being the
-    only way writes reach the database: stock decremented but no order written
-    is an inventory count that is permanently wrong with nothing to show for it.
+    The order transaction depends on this being the only way writes reach the
+    database: stock decremented but no order written is an inventory count
+    that is permanently wrong with nothing to show for it.
     """
     session = SessionLocal()
     try:
@@ -66,9 +66,3 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
-
-
-def get_session() -> Iterator[Session]:
-    """FastAPI dependency."""
-    with session_scope() as session:
-        yield session

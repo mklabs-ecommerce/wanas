@@ -15,7 +15,7 @@ Shopify    -> product/store source of truth (orders, live inventory, live price)
 FastAPI    -> backend/API, app.py is the composition root (uvicorn app:app)
 Chatbot    -> agent/runtime/tools/LLM (chatbot/)
 Gemini     -> current LLM provider, behind a provider abstraction
-PostgreSQL -> chat/session history, carts, shipping rates, staff, audit log,
+PostgreSQL -> chat/session history, carts, shipping rates, staff,
               human-handoff queue, plus catalog metadata Shopify can't hold
               (style, department, collection, size charts, per-colour photos)
 Railway    -> production hosting
@@ -39,7 +39,7 @@ backend/
   config.py               env-driven settings, no hardcoded credentials
   db.py                   SQLAlchemy engine/session
   models.py                ORM models (Client, Product, Variant, Order, ...,
-                            Staff, AuditLog, StaffQueueItem, ShippingRate)
+                            Staff, StaffQueueItem, ShippingRate)
   cli.py                   python -m backend.cli <seed|set-fee|create-staff|...>
   seed/                    seed importers (products, governorates)
   services/                 Order/Inventory/Notification/Catalog services,
@@ -83,7 +83,7 @@ tests/                   pytest suite, see README.md
   Seed a new database with `python -m backend.cli seed`.
 - Important models: `Client`, `Product`, `Variant`, `Order`/`OrderItem`
   (carry Shopify order id/number columns), `ShippingRate`, `Staff`,
-  `AuditLog`, `StaffQueueItem` (human-handoff / item-swap / alert queues),
+  `StaffQueueItem` (human-handoff / item-swap / alert queues),
   `WebhookEvent` (idempotency).
 
 ## Shopify

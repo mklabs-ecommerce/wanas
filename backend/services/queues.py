@@ -1,17 +1,16 @@
 """The staff queue -- swaps, handoffs and alerts in one table.
 
 Three review queues with one `kind` rather than three tables: they share every
-field that matters, staff work them from one list, and one table means one
-unread count. In Phase 1 there is no email, so this inbox is the only place
-staff see anything.
+field that matters and staff work them from one list. There is no email, so
+this inbox is the only place staff see anything.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import QueueKind, QueueStatus, StaffQueueItem, utcnow
+from backend.models import QueueStatus, StaffQueueItem, utcnow
 from backend.services.ids import next_queue_id
 
 
@@ -66,27 +65,3 @@ def open_items(session: Session, kind: str | None = None) -> list[StaffQueueItem
         stmt = stmt.where(StaffQueueItem.kind == kind)
     return list(session.scalars(stmt.order_by(StaffQueueItem.created_at.desc())).all())
 
-
-def open_counts(session: Session) -> dict:
-    rows = session.execute(
-        select(StaffQueueItem.kind, func.count())
-        .where(StaffQueueItem.status == QueueStatus.OPEN.value)
-        .group_by(StaffQueueItem.kind)
-    ).all()
-    counts = {kind.value: 0 for kind in QueueKind}
-    counts.update(dict(rows))
-    counts["total"] = sum(v for k, v in counts.items() if k != "total")
-    return counts
-
-
-def open_handoff_for(session: Session, channel: str, external_id: str) -> StaffQueueItem | None:
-    return session.scalar(
-        select(StaffQueueItem)
-        .where(
-            StaffQueueItem.kind == QueueKind.HANDOFF.value,
-            StaffQueueItem.status == QueueStatus.OPEN.value,
-            StaffQueueItem.channel == channel,
-            StaffQueueItem.external_id == external_id,
-        )
-        .order_by(StaffQueueItem.created_at.desc())
-    )

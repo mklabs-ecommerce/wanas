@@ -79,13 +79,6 @@ def location_id() -> str:
     return _location_id
 
 
-def reset_location() -> None:
-    """Tests and the verification script, after changing the environment."""
-    global _location_id
-    with _location_lock:
-        _location_id = None
-
-
 def _set(changes: list[dict], reason: str, note: str) -> None:
     """`changes` is [{inventory_item_id, was, now}].
 

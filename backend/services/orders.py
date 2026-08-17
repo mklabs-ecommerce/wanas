@@ -8,8 +8,6 @@ is permanently wrong with nothing to show for it.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -48,11 +46,6 @@ class Refusal(Exception):
     def __init__(self, payload: dict):
         super().__init__(payload.get("error", "refused"))
         self.payload = payload
-
-
-@dataclass
-class OrderResult:
-    order: Order
 
 
 def order_payload(order: Order) -> dict:
@@ -837,7 +830,3 @@ def submit_feedback(session: Session, order: Order, rating: int, text: str | Non
     session.add(feedback)
     session.flush()
     return {"saved": True, "order_id": order.order_id, "rating": rating}
-
-
-def total_with(order: Order, extra: Decimal) -> Decimal:  # pragma: no cover - arithmetic helper
-    return to_decimal(order.total) + to_decimal(extra)

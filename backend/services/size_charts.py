@@ -36,11 +36,3 @@ def get_chart(chart_id: str | None) -> dict | None:
     if not chart_id:
         return None
     return _load().get(chart_id)
-
-
-def chart_ids() -> list[str]:
-    return sorted(_load().keys())
-
-
-def clear_cache() -> None:
-    _load.cache_clear()

@@ -206,11 +206,3 @@ def get_client() -> ShopifyClient:
         if _client is None:
             _client = ShopifyClient()
         return _client
-
-
-def reset_client() -> None:
-    """Tests and the verification script rebuild the client after changing the
-    environment."""
-    global _client
-    with _client_lock:
-        _client = None

@@ -114,7 +114,7 @@ class AgentReply:
     text: str
     attachments: list[str] = field(default_factory=list)
     #: Tool names called this turn, in order. Logged, and what the tests and
-    #: the dashboard's conversation view read.
+    #: the chat harness read.
     tool_calls: list[str] = field(default_factory=list)
     error: str | None = None
 

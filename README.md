@@ -10,9 +10,10 @@ Shopify    -- source of truth for orders, live inventory, and live price
 FastAPI (app.py) -- the one deployed process (modular monolith)
 chatbot/   -- agent loop, tools, provider layer, WhatsApp channel, sessions
 backend/   -- Order/Inventory/Notification services, Shopify integration, DB models
-PostgreSQL -- chat/session history, carts, shipping rates, staff, audit log,
-              plus catalog metadata Shopify has no field for (style,
-              department, collection, size charts, per-colour photos)
+PostgreSQL -- chat/session history, carts, shipping rates, staff,
+              human-handoff queue, plus catalog metadata Shopify has no
+              field for (style, department, collection, size charts,
+              per-colour photos)
 ```
 
 - **Shopify** owns orders, live stock, and live price. Selling something
@@ -20,7 +21,7 @@ PostgreSQL -- chat/session history, carts, shipping rates, staff, audit log,
   shows up in Shopify admin tagged `chatbot` / `whatsapp` / `cash-on-delivery`.
 - **PostgreSQL** is not a duplicate product database. It holds fields
   Shopify has no place for, plus chat/session history, carts, shipping
-  rates, staff, and the audit/handoff queue. Price and stock are read live
+  rates, staff, and the human-handoff queue. Price and stock are read live
   from Shopify per message; if Shopify is unreachable the bot falls back to
   the local numbers and logs a warning once.
 - **Gemini** is the LLM provider, behind a provider abstraction

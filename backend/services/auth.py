@@ -1,9 +1,8 @@
 """Staff authentication.
 
-One role: everyone who can log in can do everything (12-admin-dashboard.md).
-What is not optional at one role is that passwords are hashed, there is no
-shared login, and every action is attributed -- attribution is the only
-control this model has.
+One role: everyone who can log in can do everything. What is not optional at
+one role is that passwords are hashed, there is no shared login, and every
+action is attributed -- attribution is the only control this model has.
 
 PBKDF2-HMAC-SHA256 from the standard library, so there is no native build step
 on any platform the shop might deploy from.
@@ -63,9 +62,3 @@ def authenticate(session: Session, username: str, password: str) -> Staff | None
         return None
     return staff
 
-
-def set_password(session: Session, staff: Staff, password: str) -> None:
-    if len(password) < 8:
-        raise ValueError("password must be at least 8 characters")
-    staff.password_hash = hash_password(password)
-    session.flush()

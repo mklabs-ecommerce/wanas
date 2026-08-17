@@ -127,7 +127,7 @@ def pause(session: Session, channel: str, external_id: str) -> ChannelIdentity:
 
 
 def unpause(session: Session, channel: str, external_id: str) -> None:
-    """Only ever called from a staff action in the dashboard. Not a timer, and
+    """Only ever called from a staff resolving the handoff. Not a timer, and
     not the model deciding the conversation looks normal again."""
     identity = get(session, channel, external_id)
     if identity is not None:

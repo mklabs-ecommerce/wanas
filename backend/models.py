@@ -20,7 +20,6 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
-    ForeignKeyConstraint,
     Integer,
     Numeric,
     String,
@@ -239,9 +238,9 @@ class Order(Base):
     modification_log: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
     # The same order as Shopify holds it. `order_id` above stays the primary
-    # key and the internal reference -- the dashboard, the queues and the
-    # modification log all point at it -- while these two are how the same
-    # sale is found in the admin.
+    # key and the internal reference -- the queues and the modification log
+    # all point at it -- while these two are how the same sale is found in
+    # the admin.
     #
     # Nullable on purpose. Orders placed before the move have neither, and a
     # NOT NULL here would mean either inventing an id for history or refusing
@@ -392,22 +391,9 @@ class Staff(Base):
     staff_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    # Deactivate rather than delete, so the audit log keeps resolving.
+    # Deactivate rather than delete, so `resolved_by` on old queue items keeps resolving.
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class AuditLog(Base):
-    __tablename__ = "audit_log"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    staff_id: Mapped[int | None] = mapped_column(ForeignKey("staff.staff_id"), nullable=True)
-    action: Mapped[str] = mapped_column(String(60), nullable=False)
-    entity: Mapped[str] = mapped_column(String(60), nullable=False)
-    entity_id: Mapped[str] = mapped_column(String(120), nullable=False)
-    before: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    after: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 class WebhookEvent(Base):
@@ -464,7 +450,6 @@ __all__ = [
     "ShippingRate",
     "StaffQueueItem",
     "Staff",
-    "AuditLog",
     "WebhookEvent",
     "Counter",
     "WhatsAppMedia",

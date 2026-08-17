@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("init-db", help="create the schema").set_defaults(func=cmd_init_db)
     sub.add_parser("seed", help="import catalog + governorates").set_defaults(func=cmd_seed)
 
-    p_staff = sub.add_parser("create-staff", help="create a staff account (used for audit-log attribution)")
+    p_staff = sub.add_parser("create-staff", help="create a staff account (used to attribute resolved queue items)")
     p_staff.add_argument("username")
     p_staff.set_defaults(func=cmd_create_staff)
 

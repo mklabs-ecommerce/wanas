@@ -268,12 +268,3 @@ def breached_threshold(session: Session, variant_id: str) -> bool:
     return variant.stock_qty <= variant.low_stock_threshold
 
 
-def set_stock(session: Session, variant_id: str, quantity: int) -> Variant | None:
-    """The dashboard's per-variant edit -- outside the order-driven path, and
-    the only other way this number changes (08-product-database.md)."""
-    variant = session.get(Variant, variant_id)
-    if variant is None:
-        return None
-    variant.stock_qty = max(0, int(quantity))
-    session.flush()
-    return variant

@@ -3,10 +3,9 @@
 The only thing that turns internal events into actual messages, so the Order
 and Inventory modules stay about business rules rather than message formatting.
 
-Two destinations in Phase 1: the customer over WhatsApp, and staff in the
-dashboard alert inbox. There is no email provider, because the WhatsApp flow
-never collects an email -- that is the dependency this phase deliberately
-removed.
+Two destinations: the customer over WhatsApp, and staff via the alert queue
+(`StaffQueueItem`). There is no email provider, because the WhatsApp flow
+never collects an email.
 
 Outbound delivery is a port, not an import. `LogSender` is the default, so
 every proactive message is produced, formatted and observable before any Meta
@@ -274,8 +273,3 @@ def item_swap_requested(session: Session, order: Order, payload: dict, summary: 
         payload=payload,
     )
     return item.queue_id
-
-
-def notify_customer(order: Order, text: str) -> OutboundMessage:
-    """Staff replying to a customer as the shop, from the handoff queue."""
-    return _sender.send_text(order.contact_phone, text)

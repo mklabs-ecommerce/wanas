@@ -162,7 +162,3 @@ def get_fee(session: Session, governorate: str):
     """The stored fee, or None when the shop has not priced it yet."""
     rate = session.get(ShippingRate, governorate)
     return None if rate is None else rate.fee
-
-
-def all_rates(session: Session) -> list[ShippingRate]:
-    return list(session.scalars(select(ShippingRate).order_by(ShippingRate.governorate)).all())

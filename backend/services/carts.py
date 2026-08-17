@@ -76,27 +76,6 @@ def add(session: Session, channel: str, external_id: str, variant_id: str, quant
     return line.quantity
 
 
-def set_quantity(session: Session, channel: str, external_id: str, line_id: int, quantity: int) -> CartItem | None:
-    """The storefront's PATCH /api/cart/items/{line_id}. Scoped to this
-    identity's own line; 0 removes it, same as `remove_line`."""
-    line = session.scalar(
-        select(CartItem).where(
-            CartItem.id == line_id,
-            CartItem.channel == channel,
-            CartItem.external_id == external_id,
-        )
-    )
-    if line is None:
-        return None
-    if quantity <= 0:
-        session.delete(line)
-        session.flush()
-        return None
-    line.quantity = min(quantity, settings.max_quantity_per_line)
-    session.flush()
-    return line
-
-
 def remove_line(session: Session, channel: str, external_id: str, line_id: int) -> None:
     session.execute(
         delete(CartItem).where(
