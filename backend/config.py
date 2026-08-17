@@ -59,9 +59,6 @@ class Settings:
     whatsapp_verify_token: str
     whatsapp_api_version: str
 
-    session_secret: str
-    session_max_age_seconds: int
-
     history_cap: int
     session_expiry_hours: int
     tool_loop_cap: int
@@ -110,8 +107,6 @@ def load_settings() -> Settings:
         whatsapp_app_secret=os.getenv("WHATSAPP_APP_SECRET", ""),
         whatsapp_verify_token=os.getenv("WHATSAPP_VERIFY_TOKEN", ""),
         whatsapp_api_version=os.getenv("WHATSAPP_API_VERSION", "v21.0"),
-        session_secret=os.getenv("SESSION_SECRET", "dev-only-insecure-secret-change-me"),
-        session_max_age_seconds=_int("SESSION_MAX_AGE_SECONDS", 28800),
         history_cap=_int("HISTORY_CAP", 40),
         session_expiry_hours=_int("SESSION_EXPIRY_HOURS", 6),
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),

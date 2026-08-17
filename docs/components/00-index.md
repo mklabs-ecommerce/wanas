@@ -6,7 +6,6 @@ Each file below covers one component in full detail: what it does, exactly how i
 |---|---|---|
 | 01 | `01-backend-platform.md` | Order, inventory, payment & notification services; concurrency; webhooks |
 | 02 | `02-chatbot.md` | LLM tool-use agent: the loop, the tools, guardrails, session state |
-| 03 | `03-website.md` | Catalog, cart, checkout, accounts |
 | 04 | `04-whatsapp-channel.md` | Ordering, tracking, confirmations, platform specifics |
 | 05 | `05-facebook-instagram.md` | DM ordering/support + public comment auto-reply |
 | 06 | `06-tiktok-dm.md` | DM ordering/support and its platform constraints |
@@ -15,13 +14,13 @@ Each file below covers one component in full detail: what it does, exactly how i
 | 09 | `09-order-database.md` | Order DB schema and behavior |
 | 10 | `10-order-feedback.md` | Order Feedback schema and behavior |
 | 11 | `11-discount-database.md` | Discount DB schema and behavior |
-| 12 | `12-admin-dashboard.md` | Staff-facing dashboard and review queues |
 | 13 | `13-analytics.md` | Metrics, their data sources, and computation |
 | 14 | `14-image-recognition.md` | Matching customer photos to the catalog, and routing custom requests to staff |
 | 15 | `15-tool-contracts.md` | **Normative.** Exact arguments and return shapes for all seventeen agent tools |
 | 16 | `16-supporting-tables.md` | **Normative.** Sessions, carts, channel identities, shipping rates, staff, audit log, webhook idempotency |
 
 **Adjustments folded in throughout, most recent first:**
+- The custom storefront (`03-website.md`) and the staff dashboard (`12-admin-dashboard.md`) were removed from this repository — the store moved to Shopify (theme + checkout), and Shopify Admin is now where orders/inventory/products are managed. See the root `README.md` and `CLAUDE.md` for the current architecture. The rest of the specs below (backend platform, chatbot, channels, databases, tool contracts) still describe the live system.
 - Two normative specs added: **`15-tool-contracts.md`** (the agent's tools grew to seventeen — feedback, human handoff and identity linking were described in prose but had no tool) and **`16-supporting-tables.md`** (seven Phase 1 tables that had no home).
 - **Email is optional in Phase 1.** The WhatsApp flow never collects one, so the customer confirmation is WhatsApp-only and staff alerts go to the dashboard inbox — no email provider needed to ship.
 - **Colour is now a variant axis, not a product.** 43 source products merged into **18**, all 208 variants intact. Taxonomy rebuilt on an ASOS-style model: six `category` values, `style` as a filter, `department`, and collections reduced to two optional ones — see `08-product-database.md`.

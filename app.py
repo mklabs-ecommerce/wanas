@@ -15,22 +15,16 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
-from fastapi.staticfiles import StaticFiles
 
-from backend.config import DATA_DIR, settings
+from backend.config import settings
 from backend.db import engine
 from backend.models import Base
 from chatbot.channels.whatsapp import register_outbound_sender
 from chatbot.channels.whatsapp import router as whatsapp_router
 from chatbot.harness.web import router as harness_router
-from dashboard.app import router as dashboard_router
-from storefront.api import router as storefront_router
-
-WEB_DIR = Path(__file__).resolve().parent / "web" / "store"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("wanas")
@@ -76,23 +70,10 @@ def health() -> dict:
 
 @app.get("/")
 def index() -> RedirectResponse:
-    return RedirectResponse("/dashboard")
+    return RedirectResponse("/health")
 
 
 app.include_router(whatsapp_router)
-app.include_router(dashboard_router)
-app.include_router(storefront_router)
-
-# Product photos and size-chart images the storefront API points at (see
-# storefront/api.py's `_asset`) -- only these two subfolders, not all of
-# data/ (which also holds the seed JSON, the source spreadsheet, and import
-# scripts that have no business being served over HTTP).
-app.mount("/data/images", StaticFiles(directory=str(DATA_DIR / "images")), name="data-images")
-app.mount("/data/size-charts", StaticFiles(directory=str(DATA_DIR / "size-charts")), name="data-size-charts")
-# The storefront itself: a static SPA, served with index.html as the
-# directory fallback so client-side routes (none yet, but /store/anything)
-# don't 404.
-app.mount("/store", StaticFiles(directory=str(WEB_DIR), html=True), name="store")
 
 if settings.harness_enabled:
     app.include_router(harness_router)

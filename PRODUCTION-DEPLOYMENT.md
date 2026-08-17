@@ -1,6 +1,8 @@
 # Wanas Gallery — خطة النزول Production
 
-المشروع كله (backend + bot + dashboard + storefront) app واحد FastAPI (modular monolith)، فالنزول production بسيط نسبيًا: نستضيف الـ app على Railway بـ Postgres، ونوجّه دومين اشتريته من Shopify على نفس الاستضافة، ونربط WhatsApp عن طريق Meta.
+> **ملاحظة:** بعد كتابة هذا الملف اتشال `dashboard/` و`storefront/` و`web/` من الريبو نهائيًا — المتجر بقى على Shopify theme، والداشبورد بقى Shopify Admin. الفقرات اللي بتتكلم عن `/store` أو `/dashboard` كمسارات في نفس الـ app بقت مش دقيقة، انظر `CLAUDE.md`.
+
+المشروع (backend + bot) app واحد FastAPI (modular monolith)، فالنزول production بسيط نسبيًا: نستضيف الـ app على Railway بـ Postgres، ونوجّه دومين اشتريته من Shopify على نفس الاستضافة، ونربط WhatsApp عن طريق Meta.
 
 ## 0. قبل ما تبدأ
 
@@ -40,10 +42,6 @@
    ```
 3. Environment variables — انسخ كل حاجة من `.env.example` واملاها فعليًا في Railway (Settings → Variables)، أهمهم:
    - `DATABASE_URL` (من خطوة 1)
-   - `SESSION_SECRET` — لازم قيمة عشوائية قوية، مش القيمة الافتراضية:
-     ```bash
-     python -c "import secrets;print(secrets.token_hex(32))"
-     ```
    - `LLM_PROVIDER=gemini` + `LLM_API_KEY` + `LLM_MODEL` (لو عايز تثبته)
    - `HARNESS_ENABLED=0` ← **مهم جدًا** — الـ harness endpoint مش محمي بأي login، لازم يتقفل قبل ما حد غيرك يوصله.
    - `CHATBOT_DEBUG=0` — عشان أخطاء الـ provider الخام ما تظهرش للعميل.
@@ -59,12 +57,7 @@ Shopify بيبيع دومينات كـ registrar عادي، مش شرط تستخ
 3. رجع لإعدادات الدومين في Shopify → DNS settings، وضيف:
    - CNAME record بيوجه للـ target اللي Railway ديهولك (أو A record لو Railway طلب كده).
 4. استنى الـ DNS يتنشر (دقايق لحد كام ساعة). Railway بيصدر شهادة SSL تلقائي (Let's Encrypt) بمجرد ما الـ DNS يتأكد.
-5. الـ storefront بتاعك (`web/store`) already مركب جوه نفس الـ app على `/store`، فبمجرد ما الدومين يشتغل هتلاقيه شغال على `yourdomain.com/store` من غير أي خطوة إضافية. لو عايز الدومين الرئيسي يوديك على المتجر مباشرة بدل الداشبورد، غيّر في `app.py`:
-   ```python
-   @app.get("/")
-   def index() -> RedirectResponse:
-       return RedirectResponse("/store")   # بدل "/dashboard"
-   ```
+5. المتجر نفسه بقى Shopify theme على دومين المتجر مباشرة (`admin.shopify.com` / الدومين اللي هيتربط بالمتجر) — مش جزء من الـ FastAPI app دي خالص. الدومين اللي بتوجهه لـ Railway ده بس لـ webhook الواتساب والـ API، مفيش `/store` تاني في الـ app.
 
 ## 4. Meta / WhatsApp Business API
 
@@ -81,8 +74,6 @@ Shopify بيبيع دومينات كـ registrar عادي، مش شرط تستخ
 
 - `HARNESS_ENABLED=0` (اتقال فوق بس بيتكرر لأهميته)
 - `CHATBOT_DEBUG=0`
-- `SESSION_SECRET` عشوائي حقيقي مش الافتراضي
-- حساب staff واحد فعلي بدل أي حساب افتراضي (`create-staff`)
 - رسوم الشحن لكل الـ 27 محافظة متظبطة
 - Meta templates متوافق عليها
 

@@ -219,6 +219,3 @@ def test_the_harness_can_be_switched_off(monkeypatch):
     switched_off = dataclasses.replace(settings, harness_enabled=False)
     assert switched_off.harness_enabled is False
 
-
-def test_the_dashboard_is_still_protected_alongside_it(client):
-    assert client.get("/dashboard").status_code == 303

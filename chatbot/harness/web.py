@@ -237,8 +237,7 @@ def _main() -> int:  # pragma: no cover - operational helper
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()
 
-    print(f"\n  chat UI:   http://{args.host}:{args.port}/harness")
-    print(f"  dashboard: http://{args.host}:{args.port}/dashboard\n")
+    print(f"\n  chat UI: http://{args.host}:{args.port}/harness\n")
     uvicorn.run("app:app", host=args.host, port=args.port, reload=args.reload)
     return 0
 

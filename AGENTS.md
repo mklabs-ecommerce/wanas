@@ -1,5 +1,7 @@
 # Wanas Gallery — Phase 1 build instructions
 
+> **Status note:** this is the original Phase 1 build brief, kept because the business rules in it (variant math, per-colour pricing, session/tool-loop limits, the seventeen tools) are still exactly how the chatbot behaves today. Two things it describes have since changed: the **custom storefront** (item 21 below, `docs/components/03-website.md`) and the **admin dashboard** (item 4 and 15 below, `docs/components/12-admin-dashboard.md`) were both removed from this repository — the store moved to **Shopify** (theme + checkout + Admin), which is now also the source of truth for orders, inventory, and live price. See the root `README.md` and `CLAUDE.md` for the current architecture. Everything else below — database, backend, WhatsApp chatbot — is still accurate.
+
 This is a B2C clothing e-commerce platform. Full system design lives in `/docs/components/` — read the relevant file(s) before building each piece listed below. This file defines what's **in scope right now** and what isn't, so nothing gets built ahead of what's actually being tested.
 
 ## Phase 1 scope
@@ -12,13 +14,13 @@ This is a B2C clothing e-commerce platform. Full system design lives in `/docs/c
 2. **Backend** — Order, Inventory, and Notification services as described in `docs/components/01-backend-platform.md`. Build it as one application with internal modules (a modular monolith), not separate services — see that file for why.
 3. **One chatbot channel: WhatsApp only.** The chatbot is an **LLM tool-use agent**, not a keyword classifier — read `docs/components/02-chatbot.md` for the architecture and `15-tool-contracts.md` for the exact arguments and return shapes of all seventeen tools, then `04-whatsapp-channel.md` for the platform integration. Do **not** build Facebook DM, Instagram DM, TikTok DM, or public comment auto-reply yet.
    - **Build a local chat harness before wiring WhatsApp** — a terminal or single-page interface that calls the same `handle_message(channel, external_id, text)` entry point with a fake identity. WhatsApp needs Meta approval and a live webhook; without a local way in, the hardest component in the system is also the last one you can test. The harness is throwaway scaffolding for the flow, not a product surface, and the WhatsApp adapter should be the only thing that changes when it's swapped in.
-4. **Admin dashboard** — Orders list/detail, Products & inventory management (**per-variant stock editing** is the screen staff will live in), Clients list, the **shipping rate table**, the **size-chart assignment screen**, and the queues: **item-swap review**, **human handoff** (unclear conversations, complaints, and every incoming photo land here — it's where `request_human` delivers, and only a staff action un-pauses a conversation), and the alert inbox. Per `docs/components/12-admin-dashboard.md`, minus custom product requests, which belong to image recognition. **Staff login is in scope** — username/password, one role, every action attributed; the dashboard must never be reachable unauthenticated. Discount codes and analytics are out of scope (see below).
+4. ~~**Admin dashboard**~~ — **removed.** A staff dashboard reading the local database was built for Phase 1 (per `docs/components/12-admin-dashboard.md`) but has since been removed from this repository as part of the Shopify migration; order/inventory/product management now happens in Shopify Admin. `request_human` still writes a handoff record and pauses the conversation — there is currently no UI to resolve one, which is a known gap, not an oversight.
 
 ## Explicitly out of scope for Phase 1
 
 Don't build these yet — they depend on things not in place, or weren't part of what's being tested right now:
 
-- **Website** — not needed to test ordering, since WhatsApp can create orders on its own.
+- ~~**Website**~~ — a custom storefront was later built for this project, then removed in favour of a Shopify theme + checkout. See `CLAUDE.md`.
 - **Facebook DM, Instagram DM, TikTok DM, public comment auto-reply** — blocked on Meta/TikTok business verification; WhatsApp can be tested now via Meta's test-recipient-number mode without full verification (see `docs/components/04-whatsapp-channel.md` and the operational notes on Meta review lead times).
 - **Discount codes** (`11-discount-database.md`) — not part of this test's necessary features.
 - **Image recognition** (`14-image-recognition.md`) — not part of this test's necessary features. **But incoming photos still need a Phase 1 answer:** an image goes straight to human handoff with the photo attached, same queue as an unclear conversation. Don't give the model an image tool and don't let it describe the photo — a guess about a garment the shop may not make is worse than a handoff.
@@ -65,10 +67,10 @@ Architecture, guardrails, session handling and failure behaviour are in `docs/co
 **Python 3.11+, FastAPI, PostgreSQL.**
 
 - **Python** because the LLM provider SDKs are most mature there, and because the working prototype this design came from is Python — its provider-abstraction and session-trimming logic is worth reading before rewriting.
-- **FastAPI** because the WhatsApp webhook is an HTTP endpoint and the dashboard needs an API; one framework covers both, and its request/response models line up with the tool contracts in `15-tool-contracts.md`.
+- **FastAPI** because the WhatsApp webhook is an HTTP endpoint; its request/response models line up with the tool contracts in `15-tool-contracts.md`.
 - **PostgreSQL** because the order transaction in `01-backend-platform.md` needs real transactional guarantees and the atomic conditional decrement (`UPDATE ... SET stock_qty = stock_qty - n WHERE stock_qty >= n`). SQLite is fine for local development, but the schema must not depend on anything SQLite-specific.
 - **Sessions and carts live in Postgres, not Redis.** At this volume Redis is an extra moving part for no gain, and both need to survive a restart anyway.
-- Dashboard: server-rendered templates are enough. A separate frontend framework is not in scope.
+- **Shopify** is the source of truth for orders, live inventory, and live price (see `CLAUDE.md`). Postgres still holds catalog metadata Shopify has no field for (style, department, collection, size charts, colour photos), sessions/chat history, shipping rates, staff, and the audit log/queues.
 
 ## What to test
 
@@ -81,18 +83,22 @@ Not full coverage — the parts where a silent bug is expensive:
 
 ## Folder structure
 
+Current, post-Shopify-migration layout — see `CLAUDE.md` for the full picture:
+
 ```
-/docs/components/   an index + 16 specs (read the relevant one before building each piece)
+/docs/components/   an index + specs (read the relevant one before building each piece)
                     15 = tool contracts, 16 = supporting tables — both are normative
 /data/               products_seed.json + size_charts.json + governorates.json
                      + merge_catalog.py
-                     + images/ (177 product photos) + size-charts/ (12 chart images)
+                     + images/ (product photos) + size-charts/ (chart images)
+                     -- catalog metadata Shopify has no field for; not a duplicate
+                        product database, price/stock come from Shopify live.
 /backend/            Order, Inventory, Notification services + database models
+                     + Shopify integration (backend/integrations/, backend/services/shopify_*.py)
 /chatbot/            the agent loop, the tools, the provider layer, session storage
-/dashboard/          staff-facing admin UI
 ```
 
-(No `/website/` folder yet — see scope above.)
+No `/dashboard/`, `/storefront/`, or `/web/` — removed with the Shopify migration.
 
 ## Testing this phase
 
