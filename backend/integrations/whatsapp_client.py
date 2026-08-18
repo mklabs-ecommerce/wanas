@@ -30,6 +30,15 @@ log = logging.getLogger("wanas.whatsapp")
 GRAPH = "https://graph.facebook.com"
 
 
+def _is_url(image_path: str) -> bool:
+    """Whether this is already hosted somewhere, rather than a path on this
+    process's own disk. `data/images/...` and `data/size-charts/...` are the
+    only other shape this value ever takes, so http(s) is an unambiguous
+    signal without needing a config flag to say which products came from
+    Shopify."""
+    return image_path.startswith(("http://", "https://"))
+
+
 class WhatsAppClient:
     """Implements the Notification service's OutboundSender port."""
 
@@ -104,6 +113,28 @@ class WhatsAppClient:
         return OutboundMessage(to=to, text=text, template=template, delivered=ok, error=error)
 
     def send_image(self, to: str, image_path: str, *, caption: str = "") -> OutboundMessage:
+        if _is_url(image_path):
+            # Already hosted -- Shopify's CDN today, potentially another host
+            # later. Meta fetches the link itself, so there is nothing here to
+            # upload or cache; that machinery exists for the files this process
+            # actually has on disk (size charts, and any product photo Shopify
+            # has no picture for yet).
+            image_field = {"link": image_path}
+            if caption:
+                image_field["caption"] = caption[:1024]
+            ok, error = self._post(
+                {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": self.normalise_recipient(to),
+                    "type": "image",
+                    "image": image_field,
+                }
+            )
+            return OutboundMessage(
+                to=to, text=caption, kind="image", image_path=image_path, delivered=ok, error=error
+            )
+
         media_id = self.media_id_for(image_path)
         if media_id is None:
             return OutboundMessage(
@@ -120,8 +151,6 @@ class WhatsAppClient:
                 "recipient_type": "individual",
                 "to": self.normalise_recipient(to),
                 "type": "image",
-                # A real image message, not a link: a link in a DM looks like
-                # spam and often is not tapped.
                 "image": (
                     {"id": media_id, "caption": caption[:1024]} if caption else {"id": media_id}
                 ),

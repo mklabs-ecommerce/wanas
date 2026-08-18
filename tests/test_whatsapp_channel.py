@@ -275,6 +275,52 @@ def test_media_ids_are_cached_not_re_uploaded(configured, monkeypatch, seeded):
     assert uploads == ["data/size-charts/zipup.png"]
 
 
+def test_a_shopify_hosted_photo_is_sent_by_link_not_uploaded(configured, monkeypatch):
+    """catalog.get_variants can now hand back a Shopify CDN URL instead of a
+    local file (backend/services/catalog.py::_overlay_images). Meta fetches a
+    `link` itself, so a URL must never touch the local-file upload path --
+    there is nothing on this process's disk to open."""
+    uploads: list[str] = []
+    posts: list[dict] = []
+
+    def fake_upload(self, path):
+        uploads.append(path)
+        return "media-1"
+
+    def fake_post(self, payload):
+        posts.append(payload)
+        return True, None
+
+    monkeypatch.setattr(adapter.WhatsAppClient, "_upload", fake_upload)
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", fake_post)
+    client = adapter.WhatsAppClient(phone_number_id="1", access_token="t")
+
+    url = "https://cdn.shopify.com/s/files/1/hoodie-olive.jpg"
+    result = client.send_image("201000000123", url, caption="زي كده")
+
+    assert uploads == []  # never went near the upload endpoint
+    assert result.delivered is True
+    assert posts[0]["image"] == {"link": url, "caption": "زي كده"}
+
+
+def test_a_local_photo_still_goes_through_the_cached_upload(configured, monkeypatch):
+    """The other half of the same guard: a plain local path must not be
+    mistaken for a link and sent unresolved."""
+    uploads: list[str] = []
+
+    def fake_upload(self, path):
+        uploads.append(path)
+        return "media-1"
+
+    monkeypatch.setattr(adapter.WhatsAppClient, "_upload", fake_upload)
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
+    client = adapter.WhatsAppClient(phone_number_id="1", access_token="t")
+
+    client.send_image("201000000123", "data/images/wanas-hoodie/01.jpg")
+
+    assert uploads == ["data/images/wanas-hoodie/01.jpg"]
+
+
 def test_the_notification_sender_is_only_registered_when_configured(monkeypatch):
     from backend.services import notifications
 

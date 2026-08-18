@@ -76,6 +76,27 @@ time. `VOICE_NOTES_ENABLED`, `IMAGE_UNDERSTANDING_ENABLED`,
 New handoff reason `voice_received`, so staff can see a message is waiting on
 someone to listen rather than reading it as generic `out_of_scope`.
 
+### Product photos can be served from Shopify instead of this repo
+
+This project is a sample built to show the idea, not a deployment tied to one
+shop, so it shipped with a scraped photo set bundled in `data/images/` —
+fine for a demo, but not what a real deployment should keep doing: every photo
+change means a redeploy, and the files add up in the repo for no benefit a
+CDN was not already offering for free.
+
+`shopify_catalog.fetch_all` now reads each variant's photo (`image_url`)
+alongside the price and stock it already fetched — no extra network call.
+`catalog.get_variants` puts it ahead of the matching local file for that
+colour once staff attach one in Shopify Admin, without ever inventing a colour
+split the local gallery does not already have (`catalog._overlay_images`).
+`WhatsAppClient.send_image` sends an `http(s)` path straight to Meta by
+`link`, skipping the upload-and-cache path entirely — that path
+(`media_id_for`) still exists for genuine local files, chiefly the twelve size
+charts and any colour Shopify has no photo for yet. No third image host was
+added: the store already holds price and stock, and is the simplest place for
+its own photos too. See the "Shopify owns price, stock and orders" section of
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ### The governorate is actually picked
 
 `AGENTS.md` has always said the governorate is "a picked value from a fixed
@@ -103,4 +124,4 @@ is not watching an unread message for the length of a model call.
 - `pyproject.toml` (ruff + pytest config), `Makefile`, `.editorconfig`,
   `Procfile`, GitHub Actions CI running lint and the suite on both SQLite and
   PostgreSQL, and `docs/`.
-- Test suite: 297 → 375.
+- Test suite: 297 → 397 (381 passed, 16 skipped without live Shopify/WhatsApp credentials).

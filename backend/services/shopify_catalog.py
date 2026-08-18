@@ -1,18 +1,22 @@
-"""Live price and stock, read from Shopify at the moment a customer asks.
+"""Live price and stock -- and, where Shopify has one, the photo -- read from
+Shopify at the moment a customer asks.
 
 Why this module is a thin overlay rather than a replacement for `catalog.py`:
 
-Shopify owns the two facts that change without anyone telling wanas.db --
-`price` and `stock_qty` -- and those are the two that hurt when they are wrong.
-Quoting 650 for a hoodie the customer is charged 700 for, or promising an XL
-that the storefront sold four minutes ago, are the failures this exists to
-prevent.
+Shopify owns the facts that change without anyone telling wanas.db -- `price`
+and `stock_qty` above all, and those are the two that hurt when they are
+wrong. Quoting 650 for a hoodie the customer is charged 700 for, or promising
+an XL that the storefront sold four minutes ago, are the failures this exists
+to prevent. A product photo does not go stale the same way, but once staff
+have uploaded one to Shopify Admin it is the current photo, the same way the
+price on the product page is the current price -- so `catalog.get_variants`
+prefers it over whatever file `wanas.db` was seeded with.
 
 Everything else a reply needs -- style facets, department, collection, the
-size chart, which photo belongs to which colourway -- has no home on Shopify
-and does not drift on its own. Those keep coming from wanas.db. Moving the
-whole taxonomy into Shopify tags is a separate migration and not one the
-chatbot needs in order to stop overselling.
+size chart, which photo belongs to which colourway when Shopify has not been
+given one -- has no home on Shopify and does not drift on its own. Those keep
+coming from wanas.db. Moving the whole taxonomy into Shopify tags is a
+separate migration and not one the chatbot needs in order to stop overselling.
 
 Variants are matched on **SKU**, which holds the wanas.db `variant_id`. Nothing
 here matches on a product title.
@@ -36,7 +40,10 @@ log = logging.getLogger("wanas.shopify.catalog")
 
 #: Pulls every variant with its SKU, price and available quantity in one call.
 #: `inventoryQuantity` is the sum across locations, which is what the single
-#: Shebeen El-Kom location makes it anyway.
+#: Shebeen El-Kom location makes it anyway. `image` / `featuredImage` ride
+#: along on the same call rather than a second query -- a photo is read no
+#: more often than the price next to it, so it costs nothing extra to ask for
+#: both at once.
 VARIANTS_QUERY = """
 query($cursor: String) {
   productVariants(first: 250, after: $cursor) {
@@ -48,7 +55,8 @@ query($cursor: String) {
       compareAtPrice
       inventoryQuantity
       inventoryItem { id tracked }
-      product { id title status }
+      image { url }
+      product { id title status featuredImage { url } }
     }
   }
 }
@@ -66,7 +74,8 @@ query($query: String!) {
       compareAtPrice
       inventoryQuantity
       inventoryItem { id tracked }
-      product { id title status }
+      image { url }
+      product { id title status featuredImage { url } }
     }
   }
 }
@@ -86,6 +95,10 @@ class LiveVariant:
     stock_qty: int
     tracked: bool
     product_active: bool
+    #: The variant's own photo if staff set one, else the product's featured
+    #: photo, else None. A hint for `catalog.get_variants` to prefer over the
+    #: local file -- never required, since most demo variants have neither.
+    image_url: str | None = None
 
     @property
     def on_sale(self) -> bool:
@@ -116,6 +129,14 @@ def _node_to_live(node: dict) -> LiveVariant | None:
     tracked = bool(inventory_item.get("tracked", True))
     qty = node.get("inventoryQuantity")
 
+    # The variant's own photo first -- a customer picking olive should not see
+    # whichever colour happens to be the product's featured image -- and the
+    # product's featured photo only for a variant nobody has photographed on
+    # its own.
+    own_image = (node.get("image") or {}).get("url")
+    featured_image = (product.get("featuredImage") or {}).get("url")
+    image_url = own_image or featured_image or None
+
     return LiveVariant(
         variant_id=sku,
         shopify_id=node.get("id", ""),
@@ -130,6 +151,7 @@ def _node_to_live(node: dict) -> LiveVariant | None:
         stock_qty=(int(qty) if qty is not None else 0) if tracked else 999,
         tracked=tracked,
         product_active=(product.get("status") or "").upper() == "ACTIVE",
+        image_url=image_url,
     )
 
 

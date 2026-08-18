@@ -21,7 +21,7 @@ from backend.services import catalog, inventory, shopify_catalog
 from backend.services.shopify_catalog import LiveVariant
 
 
-def live(variant_id, price, stock, *, compare=None, active=True):
+def live(variant_id, price, stock, *, compare=None, active=True, image_url=None):
     price = Decimal(str(price))
     return LiveVariant(
         variant_id=variant_id,
@@ -32,6 +32,7 @@ def live(variant_id, price, stock, *, compare=None, active=True):
         stock_qty=stock,
         tracked=True,
         product_active=active,
+        image_url=image_url,
     )
 
 
@@ -188,6 +189,66 @@ def test_alternatives_are_only_offered_for_stock_shopify_confirms(seeded, turn):
 
     offered = catalog.alternatives_for(seeded, wanted)
     assert [a["variant_id"] for a in offered] == [siblings[0].variant_id]
+
+
+# --------------------------------------------------------------------------
+# photos
+# --------------------------------------------------------------------------
+#
+# The customer-facing counterpart to these lives in test_media.py and
+# test_whatsapp_channel.py: this section only pins down which URL
+# `get_variants` hands upward, not what the adapter does with it.
+
+
+def test_a_photo_staff_set_on_shopify_leads_the_colours_gallery(seeded, turn):
+    """The variant's own Shopify photo becomes photo #1 for its colour; the
+    local gallery for that colour still follows behind it, so "another angle"
+    still has something to reach for."""
+    target = seeded.query(Variant).filter_by(product_id="wanas-hoodie", color="Olive").first()
+    url = "https://cdn.shopify.com/s/files/1/hoodie-olive.jpg"
+    shopify_catalog.prime(
+        snapshot_of(
+            seeded, "wanas-hoodie", **{target.variant_id: live(target.variant_id, target.price, 5, image_url=url)}
+        )
+    )
+
+    gallery = catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"]
+    assert gallery[0] == url
+    assert len(gallery) > 1
+
+
+def test_no_shopify_photo_leaves_the_local_gallery_untouched(seeded, turn):
+    shopify_catalog.prime(snapshot_of(seeded, "wanas-hoodie"))
+
+    gallery = catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"]
+    assert gallery[0].startswith("data/images/")
+
+
+def test_a_shopify_photo_does_not_fragment_a_gallery_the_local_data_never_split_by_colour(seeded, turn):
+    """cairokee-tee's photos are one undifferentiated set (`color_images` is
+    empty in wanas.db). A Shopify photo for its Black variant must overlay
+    onto that shared set, not invent a partial `color_images` split that would
+    make `_candidate_images` (chatbot/tools/base.py) show Black's photo and
+    silently drop Brown's out of the gallery for everyone else."""
+    target = seeded.query(Variant).filter_by(product_id="cairokee-tee", color="Black").first()
+    url = "https://cdn.shopify.com/s/files/1/cairokee-black.jpg"
+    shopify_catalog.prime(
+        snapshot_of(
+            seeded, "cairokee-tee", **{target.variant_id: live(target.variant_id, target.price, 5, image_url=url)}
+        )
+    )
+
+    payload = catalog.get_variants(seeded, "cairokee-tee")
+    assert payload["color_images"] == {}
+    assert payload["images"][0] == url
+    assert len(payload["images"]) > 1  # Brown's local photos are still there
+
+
+def test_when_shopify_cannot_be_reached_the_local_photos_are_served(seeded, turn):
+    shopify_catalog.prime(None)
+
+    gallery = catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"]
+    assert gallery[0].startswith("data/images/")
 
 
 # --------------------------------------------------------------------------

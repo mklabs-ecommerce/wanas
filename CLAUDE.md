@@ -109,9 +109,18 @@ tests/                   pytest suite, see README.md
 - Source of truth for **orders, live inventory, live price**. Do not build a
   second product database in Postgres for these fields.
 - Postgres still legitimately holds catalog data Shopify has no field for
-  (`style`, `department`, `collection`, size charts, per-colour images) —
-  see `backend/services/catalog.py` (the overlay: Shopify numbers over local
+  (`style`, `department`, `collection`, size charts) — see
+  `backend/services/catalog.py` (the overlay: Shopify numbers over local
   rows). `variant_id` <-> Shopify variant is matched by SKU.
+- Product photos follow the same overlay as price/stock, not the
+  style/department list above: `shopify_catalog.LiveVariant.image_url` (read
+  alongside price/stock, same call) wins over the local `data/images/` file
+  for that colour when staff have set one in Shopify Admin —
+  `catalog._overlay_images` never invents a new colour split the local
+  gallery does not already have. `WhatsAppClient.send_image` sends an
+  `http(s)` path by `link`; the local-file upload/cache path
+  (`media_id_for`) is what still serves the twelve size charts and any
+  product colour Shopify has no photo for yet. See `docs/ARCHITECTURE.md`.
 - Manual inventory decrement is deliberately **not** in the order path —
   Shopify already decrements on `orderCreate`; doing it twice would silently
   oversell.

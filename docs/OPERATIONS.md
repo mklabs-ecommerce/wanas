@@ -130,3 +130,14 @@ python scripts/shopify_check_live.py    # read-only: do the two sides agree?
 python scripts/shopify_set_skus.py      # link local variant_id -> Shopify SKU
 python scripts/shopify_sync.py          # reconcile the catalog
 ```
+
+## Product photos
+
+`data/images/` is what this sample shipped with — a real deployment does not
+need to keep bundling photos in the repo. Attach a photo to a product or
+variant in Shopify Admin the normal way; the next message that reads that
+variant already picks it up (`shopify_catalog.fetch_all` reads it alongside
+price and stock, same call, no extra step and nothing to run). It only takes
+over from the local file for the colour it was set on — a product with no
+photo on Shopify yet keeps serving `data/images/` exactly as before. See
+`docs/ARCHITECTURE.md` ("Shopify owns price, stock and orders").

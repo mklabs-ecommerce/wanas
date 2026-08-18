@@ -79,14 +79,15 @@ class _Priced:
     wanas.db.
     """
 
-    __slots__ = ("price", "original_price", "on_sale", "stock_qty", "live")
+    __slots__ = ("price", "original_price", "on_sale", "stock_qty", "live", "image_url")
 
-    def __init__(self, price, original_price, on_sale, stock_qty, live):
+    def __init__(self, price, original_price, on_sale, stock_qty, live, image_url=None):
         self.price = price
         self.original_price = original_price
         self.on_sale = on_sale
         self.stock_qty = stock_qty
         self.live = live
+        self.image_url = image_url
 
 
 def _overlay(variant: Variant, live_map) -> _Priced:
@@ -101,6 +102,11 @@ def _overlay(variant: Variant, live_map) -> _Priced:
       - Product archived or draft on Shopify: it is not for sale, whatever
         wanas.db says. Stock reads zero so the bot offers alternatives instead
         of taking an order the storefront would refuse.
+
+    `image_url` rides along the same lookup: None whenever Shopify was not
+    reached, the variant is not there, or staff never attached a photo --
+    `get_variants` treats a None the same as any other cache miss and keeps
+    the local file.
     """
     if live_map is None:
         return _Priced(
@@ -119,6 +125,7 @@ def _overlay(variant: Variant, live_map) -> _Priced:
         live.on_sale,
         live.stock_qty if live.product_active else 0,
         True,
+        image_url=live.image_url,
     )
 
 
@@ -244,6 +251,41 @@ def variant_payload(variant: Variant, live_map=None) -> dict:
     }
 
 
+def _overlay_images(
+    product: Product, variants: list[Variant], live_map
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Shopify's own photo for a colour, when staff have set one, ahead of the
+    file `wanas.db` was seeded with -- see the module note in
+    `shopify_catalog`. Only the lead photo is ever replaced; whatever gallery
+    wanas.db already has for that colour still follows behind it, so "show me
+    another angle" still has something to reach for.
+
+    A colour only ever gets a Shopify photo swapped in if `color_images`
+    already had an entry for it -- never a new key. `merge_catalog.py` keeps
+    that dict all-or-nothing per product (every colour or none), and a partial
+    one would make `_candidate_images` (chatbot/tools/base.py) show a photo for
+    some colours and silently drop the rest of the product's gallery for
+    everyone else. Products with no colour split at all (`color_images` is
+    empty) overlay onto the shared `images` list instead, on the same logic:
+    the local set is already undifferentiated, so a colour is not a key worth
+    inventing here either.
+    """
+    color_images = {color: list(paths) for color, paths in (product.color_images or {}).items()}
+    images = list(product.images or [])
+
+    for variant in variants:
+        url = _overlay(variant, live_map).image_url
+        if not url:
+            continue
+        if variant.color and variant.color in color_images:
+            gallery = [p for p in color_images[variant.color] if p != url]
+            color_images[variant.color] = [url, *gallery]
+        elif not color_images:
+            images = [url, *(p for p in images if p != url)]
+
+    return images, color_images
+
+
 def get_variants(session: Session, product_id: str) -> dict | None:
     product = session.get(Product, product_id)
     if product is None:
@@ -252,6 +294,7 @@ def get_variants(session: Session, product_id: str) -> dict | None:
     live_map = shopify_catalog.live_map()
     variants = sorted(product.variants, key=lambda v: (v.color or "", v.length or "", v.size))
     stock = {v.variant_id: _overlay(v, live_map).stock_qty for v in variants}
+    images, color_images = _overlay_images(product, variants, live_map)
     return {
         "product_id": product.product_id,
         "name": product.name,
@@ -261,11 +304,11 @@ def get_variants(session: Session, product_id: str) -> dict | None:
         # in Black" rather than pretending the combination never existed.
         "variants": [variant_payload(v, live_map) for v in variants],
         "in_stock": [v.variant_id for v in variants if stock[v.variant_id] > 0],
-        "images": list(product.images or []),
+        "images": images,
         # May be empty for the five products the store never split by colour.
         # An unlabelled photo is fine; the wrong colourway labelled
         # confidently is not.
-        "color_images": dict(product.color_images or {}),
+        "color_images": color_images,
     }
 
 

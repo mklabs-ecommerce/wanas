@@ -78,6 +78,22 @@ When Shopify is unreachable the browse path falls back to the local numbers and
 logs once; the **order** path refuses (`store_unavailable`) rather than
 promising stock it could not check.
 
+**Product photos follow the same rule as price.** `wanas.db`/`data/images/`
+was this project's starting point — this repo is a sample built to show the
+idea, not a deployment for one specific shop, so it shipped with a scraped
+photo set rather than a live store's own CDN. Once staff attach a photo to a
+variant or product in Shopify Admin, `shopify_catalog.fetch_all` reads it back
+alongside price and stock (`LiveVariant.image_url`), and
+`catalog.get_variants` puts it ahead of the local file for that colour —
+never inventing a colour split the local gallery does not already have; see
+the docstring on `catalog._overlay_images`. `WhatsAppClient.send_image` sends
+an `http(s)` path by `link` directly rather than uploading it through Meta's
+media endpoint, since Meta fetches the link itself — the upload-and-cache path
+(`media_id_for` / `WhatsAppMedia`) still exists for whatever is a genuine local
+file, chiefly the twelve size charts. No separate image host was added: the
+store that is already the source of truth for price and stock is also the
+simplest place for its own photos to live.
+
 ### 3. The provider is a boundary, not a dependency
 
 Nothing above `chatbot/providers/` imports a vendor SDK. Gemini is called over
