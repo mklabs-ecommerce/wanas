@@ -1,115 +1,117 @@
-# Wanas Gallery — Shopify chatbot
+# Wanas Gallery — WhatsApp sales agent
 
-A WhatsApp LLM agent that sells an Egyptian streetwear brand's catalog and
-places real orders on Shopify.
-
-## Architecture
+An LLM agent that sells an Egyptian streetwear brand's catalog over WhatsApp
+and places real orders on Shopify. It talks in Egyptian Arabic, understands
+voice notes and photos, and cannot state a price, a size or an availability
+that did not come from a tool.
 
 ```
-Shopify    -- source of truth for orders, live inventory, and live price
-FastAPI (app.py) -- the one deployed process (modular monolith)
-chatbot/   -- agent loop, tools, provider layer, WhatsApp channel, sessions
-backend/   -- Order/Inventory/Notification services, Shopify integration, DB models
-PostgreSQL -- chat/session history, carts, shipping rates, staff,
-              human-handoff queue, plus catalog metadata Shopify has no
-              field for (style, department, collection, size charts,
-              per-colour photos)
+Shopify           source of truth for orders, live inventory, live price
+FastAPI (app.py)  the one deployed process
+chatbot/          agent loop, tools, provider layer, channels, sessions, media
+backend/          order/inventory/notification services, integrations, models
+PostgreSQL        chat history, carts, clients, shipping rates, staff queue
 ```
 
-- **Shopify** owns orders, live stock, and live price. Selling something
-  calls Shopify's `orderCreate`; Shopify decrements inventory, and the order
-  shows up in Shopify admin tagged `chatbot` / `whatsapp` / `cash-on-delivery`.
-- **PostgreSQL** is not a duplicate product database. It holds fields
-  Shopify has no place for, plus chat/session history, carts, shipping
-  rates, staff, and the human-handoff queue. Price and stock are read live
-  from Shopify per message; if Shopify is unreachable the bot falls back to
-  the local numbers and logs a warning once.
-- **Gemini** is the LLM provider, behind a provider abstraction
-  (`chatbot/providers/`) — nothing above that layer imports a vendor SDK.
+- **Shopify** owns orders, stock and price. Selling calls `orderCreate`;
+  Shopify decrements inventory, and the order appears in the admin tagged
+  `chatbot` / `whatsapp` / `cash-on-delivery`.
+- **PostgreSQL** is not a duplicate product database. It holds what Shopify has
+  no field for — style, department, collection, size charts, per-colour photos
+  — plus everything conversational.
+- **Gemini** sits behind a provider abstraction; nothing above
+  `chatbot/providers/` imports a vendor SDK.
 
-Business rules (variant/pricing math, shipping, sizing) live in `AGENTS.md`.
-Repository conventions and constraints for Claude Code sessions live in
-`CLAUDE.md`.
+Business rules (variant/pricing maths, shipping, sizing) are in
+[`AGENTS.md`](AGENTS.md). Repository conventions are in
+[`CLAUDE.md`](CLAUDE.md). Deeper documentation:
 
-## Setup
+| | |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it fits together and the five decisions behind it |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Deploying, webhooks, tuning, reading the logs |
+| [docs/MEDIA.md](docs/MEDIA.md) | Voice notes and photos |
+| [CHANGELOG.md](CHANGELOG.md) | What changed and why |
+
+## Quick start
 
 ```bash
-pip install -r requirements.txt
+make dev                      # dependencies, including test and lint tools
 cp .env.example .env
+make seed                     # import the catalog and the governorate list
+make harness                  # browser chat UI at /harness
+make test
 ```
 
-Every value in `.env` has a working default or a documented "not
-configured" behaviour — the app boots and the local harness works with none
-of them filled in. See `.env.example` for what each variable does.
+With no LLM key the harness runs a rehearsal stand-in that maps typed commands
+(`products hoodie`, `variants wanas-hoodie`, `gov`, `add <variant_id>`) to tool
+calls. Set `LLM_PROVIDER=gemini` and a key to get the real agent.
 
-## Running locally
+`make help` lists the rest. Useful CLI:
+`python -m backend.cli <seed|set-fee|create-staff|catalog-report>`.
 
-```bash
-python -m backend.cli seed              # import catalog + governorates
-python -m chatbot.harness.web            # browser chat UI at /harness
-# or: python -m chatbot.harness          # terminal harness
-uvicorn app:app --reload                 # full app, incl. the WhatsApp webhook
-```
+## What it can do
 
-With no LLM key the harness runs a rehearsal stand-in that maps typed
-commands to tool calls. With `LLM_PROVIDER=gemini` and a key it's the real
-agent.
-
-Useful CLI commands: `python -m backend.cli <seed|set-fee|create-staff|catalog-report>`.
-
-Shopify-side maintenance scripts live in `scripts/` (all dry-run by default,
-idempotent, need `--apply`): `shopify_sync.py` reconciles the local catalog
-against Shopify, `shopify_check_live.py` is a read-only smoke check,
-`shopify_set_skus.py` links local variant IDs to Shopify SKUs.
+- **Browse and sell.** Search the catalog in Arabic, franco-Arabic or English
+  (`هودي أسود`, `hoodi olive`, `الهودي الزيتي` all resolve), quote real
+  per-variant prices, send one product photo, answer sizing from the published
+  chart only, take an address, and place a cash-on-delivery order.
+- **Voice notes.** Transcribed and answered like any other message.
+- **Photos.** Read against a shortlist built from the real catalog. The reading
+  is a hint about which tool to call — never a claim about stock. See
+  [docs/MEDIA.md](docs/MEDIA.md).
+- **A tappable governorate picker**, in two steps (region, then governorate),
+  because twenty-seven governorates do not fit in one WhatsApp list and the
+  governorate sets the shipping fee.
+- **Order tracking that is actually true.** Shopify webhooks move the order
+  through packed → shipped → delivered and push the message for each stage.
+- **After the sale.** Change a quantity, cancel before shipping, request an
+  item swap (staff decide), rate a delivered order.
+- **Hand over to a person** for complaints, anything out of scope, or anything
+  it could not read.
 
 ## Testing
 
 ```bash
-python -m pytest tests/ -q
+make test
 ```
 
-Against PostgreSQL (worth doing before deploying — the concurrency test
-depends most on the database):
+Against PostgreSQL — worth doing before deploying, since the concurrency test
+is the one that depends most on the database:
 
 ```bash
-DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas python -m pytest tests/ -q
+DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test
 ```
 
-Opt-in live-model tests (cost real quota, skip by default):
+Opt-in live-model tests (these cost real quota and are skipped by default):
 
 ```bash
-RUN_LIVE_TESTS=1 python -m pytest tests/test_conversation_live.py -v
+RUN_LIVE_TESTS=1 pytest tests/test_conversation_live.py -v
 ```
 
 ## Production
 
-Start command (Railway):
+Railway start command:
 
 ```bash
 uvicorn app:app --host 0.0.0.0 --port $PORT
 ```
 
-PostgreSQL is required in production (`DATABASE_URL` as
-`postgresql+psycopg://...`). There's no Alembic — tables are created at
-startup; run `seed` / `set-fee` / `create-staff` once against a new
-database. Register the WhatsApp webhook (`POST /webhooks/whatsapp`) with
-Meta once the app is reachable over HTTPS.
+PostgreSQL is required. There is no Alembic — tables are created at startup;
+run `seed` / `set-fee` / `create-staff` once against a new database. Register
+the Meta webhook (`POST /webhooks/whatsapp`) and the Shopify webhooks
+(`POST /webhooks/shopify`) once the app is reachable over HTTPS.
 
-Before anything is reachable by a real customer:
+The full pre-launch checklist, including what silently does nothing when it is
+missing, is in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-- `HARNESS_ENABLED=0` — the local chat harness is unauthenticated by design
-- `CHATBOT_DEBUG=0` — raw provider errors must never reach a customer reply
-- Real shipping fees set for every governorate you deliver to
-- Meta WhatsApp templates approved for proactive messages (confirmation,
-  status pushes, feedback request); until approved they go out as free-form
-  text, which only works for verified test recipients
+## Environment
 
-## Environment variables
+See [`.env.example`](.env.example) for every variable with its default and the
+behaviour when it is unset. Required for a real deployment: `DATABASE_URL`,
+`LLM_PROVIDER`, `LLM_API_KEY`, `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`,
+`SHOPIFY_WEBHOOK_SECRET`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
+`WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`.
 
-See `.env.example` for the full list with defaults and notes. Required for a
-real deployment: `DATABASE_URL`, `LLM_PROVIDER`, `LLM_API_KEY`,
-`SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`,
-`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`.
-
-Never commit `.env` — it's git-ignored. `.env.example` holds names and safe
+Never commit `.env` — it is git-ignored. `.env.example` holds names and safe
 placeholders only.

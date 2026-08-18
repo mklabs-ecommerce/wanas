@@ -12,14 +12,25 @@ Shopify integration — not a general-purpose website or admin platform.
 
 ```
 Shopify    -> product/store source of truth (orders, live inventory, live price)
+              and, via webhooks, the trigger for order-status pushes
 FastAPI    -> backend/API, app.py is the composition root (uvicorn app:app)
 Chatbot    -> agent/runtime/tools/LLM (chatbot/)
-Gemini     -> current LLM provider, behind a provider abstraction
+Gemini     -> current LLM provider, behind a provider abstraction; also reads
+              voice notes and photos
 PostgreSQL -> chat/session history, carts, shipping rates, staff,
               human-handoff queue, plus catalog metadata Shopify can't hold
               (style, department, collection, size charts, per-colour photos)
 Railway    -> production hosting
 ```
+
+A fuller picture, including the five decisions the design follows from, is in
+`docs/ARCHITECTURE.md`.
+
+**Inbound messages are not answered in the request.** The webhook verifies,
+claims the message id, downloads media and returns 200; the agent turn runs on
+a worker thread after a short debounce window (`chatbot/dispatcher.py`). Never
+move work back into the endpoint: it is `async`, the turn is synchronous, and
+one message would block every other conversation in the process.
 
 When the bot sells something it creates a real Shopify order
 (`orderCreate`); Shopify decrements inventory itself. Price and stock are
@@ -48,15 +59,22 @@ backend/
   integrations/
     shopify_client.py        GraphQL client for the live Shopify path
     whatsapp_client.py        Meta Cloud API client
+  webhooks/shopify.py       inbound from Shopify: fulfilments and cancellations
+                              -> order status -> the customer's tracking message
+  services/search_terms.py  Arabic + franco vocabulary for the catalog search
 chatbot/
   runtime.py                entry point: handle_message(channel, external_id, text)
+  dispatcher.py             debounce + worker threads; what keeps the webhook fast
   agent.py                  the tool-use loop
+  media.py                  voice notes and photos (see docs/MEDIA.md)
+  interactive.py            tappable pickers, in a channel-neutral shape
   session.py                 DB-backed session storage
   providers/                  gemini.py (real), fake.py (tests/rehearsal), base.py
   tools/                      cart_tools, catalog_tools, order_tools, support_tools
   channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
   harness/                    local dev-only chat UI (web + terminal), unauthenticated
-                              by design; HARNESS_ENABLED=0 removes it
+                              by design and OFF unless HARNESS_ENABLED=1
+docs/                    ARCHITECTURE.md, OPERATIONS.md, MEDIA.md
 data/                    products_seed.json, size_charts.json, governorates.json,
                           merge_catalog.py, images/, size-charts/ — catalog
                           metadata Shopify has no field for, NOT a duplicate
@@ -97,7 +115,13 @@ tests/                   pytest suite, see README.md
 - Manual inventory decrement is deliberately **not** in the order path —
   Shopify already decrements on `orderCreate`; doing it twice would silently
   oversell.
-- `SHOPIFY_ADMIN_TOKEN` lives only in `.env`. Never print, log, or commit it.
+- Order **status** comes back the other way: `backend/webhooks/shopify.py`
+  turns `orders/fulfilled` / `orders/cancelled` / `fulfillments/update` into
+  `orders.advance_status`, which is what makes the tracking messages fire.
+  Statuses move forward one stage at a time — never assign `order.status`
+  directly.
+- `SHOPIFY_ADMIN_TOKEN` and `SHOPIFY_WEBHOOK_SECRET` live only in `.env`.
+  Never print, log, or commit either.
 
 ## LLM
 
@@ -109,22 +133,33 @@ tests/                   pytest suite, see README.md
   (or `GEMINI_MODEL`, blank lets the provider pick a working model).
 - `LLM_PROVIDER=fake` runs the scripted provider used by tests and by the
   harness when no key is set.
+- The provider also owns media: `transcribe()` for voice notes and
+  `inspect_image()` for photos, both declared by `supports_audio` /
+  `supports_vision` so the runtime can fall back to a human *before* spending a
+  call finding out. A vision reading is a hint about which tool to call, never
+  a fact — see `docs/MEDIA.md`.
 
 ## Development
 
 ```bash
-pip install -r requirements.txt
+make dev                  # or: pip install -r requirements-dev.txt
 cp .env.example .env
-python -m backend.cli seed
-python -m chatbot.harness.web    # or: python -m chatbot.harness (terminal)
-uvicorn app:app --reload
+make seed
+make harness              # or: python -m chatbot.harness (terminal)
+make run
 ```
+
+`make help` lists the rest.
 
 ## Testing
 
 ```bash
-python -m pytest tests/ -q
+make check                # ruff + the full suite
 ```
+
+Dependencies are **pinned** in `requirements.txt`. Railway rebuilds from it on
+every deploy, so an unpinned range means the build that ships is not the build
+that was tested. Bump deliberately, with the suite green.
 
 ## Production
 
@@ -134,9 +169,10 @@ Railway startup command — **do not change this**:
 uvicorn app:app
 ```
 
-`DATABASE_URL` must point at PostgreSQL in production.
-`HARNESS_ENABLED=0` and `CHATBOT_DEBUG=0` before anything is reachable by a
-real customer.
+`DATABASE_URL` must point at PostgreSQL in production. `HARNESS_ENABLED` and
+`CHATBOT_DEBUG` both default to off and must stay off. The full pre-launch
+checklist — including `SHOPIFY_WEBHOOK_SECRET`, whose absence silently means no
+tracking message ever fires — is in `docs/OPERATIONS.md`.
 
 ## Security Rules
 
@@ -151,7 +187,11 @@ real customer.
   explicit approval.
 - Never revert the Railway startup command away from `uvicorn app:app`.
 - Never re-enable the harness (`HARNESS_ENABLED=1`) in a deployment reachable
-  by anyone other than a developer — it is unauthenticated by design.
+  by anyone other than a developer — it is unauthenticated by design, and it
+  now ships off precisely so that forgetting a variable is not what exposes it.
+- Never accept a webhook without verifying its signature. Meta signs with hex
+  HMAC-SHA256, Shopify with base64; with no secret configured the Shopify
+  endpoint refuses everything, and that is the correct behaviour.
 
 ## Legacy Architecture
 

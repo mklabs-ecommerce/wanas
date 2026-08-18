@@ -166,10 +166,13 @@ def send(payload: dict = Body(...)) -> JSONResponse:
     channel = (payload.get("channel") or CHANNEL).strip()
     text = payload.get("text") or ""
     image_paths = payload.get("image_paths") or None
+    audio_paths = payload.get("audio_paths") or None
 
     before = _sent_count()
     with session_scope() as db:
-        reply = handle_message(channel, identity, text, image_paths=image_paths, db=db)
+        reply = handle_message(
+            channel, identity, text, image_paths=image_paths, audio_paths=audio_paths, db=db
+        )
         detail = _turn_detail(session_store.load(db, channel, identity))
         paused = identities.is_paused(db, channel, identity)
         cart = carts.cart_payload(db, channel, identity)
@@ -178,6 +181,11 @@ def send(payload: dict = Body(...)) -> JSONResponse:
         {
             "text": reply.text,
             "attachments": reply.attachments,
+            # The picker and the transcript are shown here for the same reason
+            # the tool calls are: this is where a developer finds out what the
+            # customer would actually have received.
+            "interactive": reply.interactive,
+            "transcript": reply.transcript,
             "paused": paused,
             "duplicate": reply.duplicate,
             "tool_calls": reply.tool_calls,

@@ -113,6 +113,10 @@ def _sent_images(history: list[dict]) -> set[str]:
 class AgentReply:
     text: str
     attachments: list[str] = field(default_factory=list)
+    #: A tappable picker a tool asked for, in the neutral shape
+    #: `chatbot/interactive.py` defines. The adapter decides whether it can
+    #: send one; a channel that cannot just sends the text.
+    interactive: dict | None = None
     #: Tool names called this turn, in order. Logged, and what the tests and
     #: the chat harness read.
     tool_calls: list[str] = field(default_factory=list)
@@ -138,7 +142,13 @@ def run_turn(
     # `history` is the same list object the loop below appends to, so the
     # tool layer's duplicate-call cache and image de-dup both see this turn's
     # own calls as they happen, not only what was already saved.
-    ctx = ToolContext(session=db, channel=channel, external_id=external_id, sent_images=sent_images, history=history)
+    ctx = ToolContext(
+        session=db,
+        channel=channel,
+        external_id=external_id,
+        sent_images=sent_images,
+        history=history,
+    )
     called: list[str] = []
 
     for _turn in range(settings.tool_loop_cap):
@@ -174,7 +184,10 @@ def run_turn(
                 # Usually a token limit or a content filter, and invisible
                 # otherwise.
                 log.warning(
-                    "empty model reply for %s/%s (finish_reason=%s)", channel, external_id, reply.finish_reason
+                    "empty model reply for %s/%s (finish_reason=%s)",
+                    channel,
+                    external_id,
+                    reply.finish_reason,
                 )
             text_out, path_leaked = strip_paths(reply.text)
             text_out, tool_leaked = strip_tool_leaks(text_out)
@@ -193,7 +206,10 @@ def run_turn(
             history.append(msg.assistant(text_out, signature=reply.signature, attachments=ctx.attachments))
             session_store.save(db, channel, external_id, history)
             return AgentReply(
-                text=text_out or GENERIC_FAILURE, attachments=ctx.attachments, tool_calls=called
+                text=text_out or GENERIC_FAILURE,
+                attachments=ctx.attachments,
+                interactive=ctx.interactive,
+                tool_calls=called,
             )
 
         # The signatures ride along in the history and are handed straight
@@ -218,5 +234,9 @@ def run_turn(
     history.append(msg.assistant(LOOP_EXHAUSTED, attachments=ctx.attachments))
     session_store.save(db, channel, external_id, history)
     return AgentReply(
-        text=LOOP_EXHAUSTED, attachments=ctx.attachments, tool_calls=called, error="loop_cap"
+        text=LOOP_EXHAUSTED,
+        attachments=ctx.attachments,
+        interactive=ctx.interactive,
+        tool_calls=called,
+        error="loop_cap",
     )

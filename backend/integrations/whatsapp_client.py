@@ -107,7 +107,12 @@ class WhatsAppClient:
         media_id = self.media_id_for(image_path)
         if media_id is None:
             return OutboundMessage(
-                to=to, text=caption, kind="image", image_path=image_path, delivered=False, error="upload_failed"
+                to=to,
+                text=caption,
+                kind="image",
+                image_path=image_path,
+                delivered=False,
+                error="upload_failed",
             )
         ok, error = self._post(
             {
@@ -117,12 +122,87 @@ class WhatsAppClient:
                 "type": "image",
                 # A real image message, not a link: a link in a DM looks like
                 # spam and often is not tapped.
-                "image": {"id": media_id, "caption": caption[:1024]} if caption else {"id": media_id},
+                "image": (
+                    {"id": media_id, "caption": caption[:1024]} if caption else {"id": media_id}
+                ),
             }
         )
         return OutboundMessage(
             to=to, text=caption, kind="image", image_path=image_path, delivered=ok, error=error
         )
+
+    def send_interactive(self, to: str, payload: dict, *, fallback: str = "") -> OutboundMessage:
+        """A tappable list or button row, from the neutral shape.
+
+        This is the only place Meta's interactive JSON is written. An unknown
+        `kind`, or an interactive message Meta rejects, falls back to sending
+        the text -- a picker that fails must never mean the customer is left
+        with no reply at all.
+        """
+        body = payload.get("body") or fallback
+        built = self._interactive_payload(payload)
+        if built is None:
+            log.warning("unknown interactive kind %r; sending text instead", payload.get("kind"))
+            return self.send_text(to, fallback or body)
+
+        ok, error = self._post(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": self.normalise_recipient(to),
+                "type": "interactive",
+                "interactive": built,
+            }
+        )
+        if not ok:
+            log.warning("interactive message rejected (%s); falling back to text", error)
+            return self.send_text(to, fallback or body)
+        return OutboundMessage(to=to, text=body, kind="interactive", delivered=True)
+
+    @staticmethod
+    def _interactive_payload(payload: dict) -> dict | None:
+        kind = payload.get("kind")
+        body = {"text": payload.get("body") or ""}
+
+        if kind == "list":
+            return {
+                "type": "list",
+                "body": body,
+                "action": {
+                    "button": payload.get("button") or "اختار",
+                    "sections": [
+                        {
+                            **({"title": section["title"]} if section.get("title") else {}),
+                            "rows": [
+                                {
+                                    "id": row["id"],
+                                    "title": row["title"],
+                                    **(
+                                        {"description": row["description"]}
+                                        if row.get("description")
+                                        else {}
+                                    ),
+                                }
+                                for row in section.get("rows") or []
+                            ],
+                        }
+                        for section in payload.get("sections") or []
+                    ],
+                },
+            }
+
+        if kind == "buttons":
+            return {
+                "type": "button",
+                "body": body,
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": button["id"], "title": button["title"]}}
+                        for button in payload.get("buttons") or []
+                    ]
+                },
+            }
+        return None
 
     # -- media ------------------------------------------------------------
 
@@ -173,10 +253,46 @@ class WhatsAppClient:
             return None
         return response.json().get("id")
 
-    def download_media(self, media_id: str, destination_dir: Path) -> str | None:
-        """Fetch an inbound photo so staff can actually see it in the queue."""
+    def mark_as_read(self, message_id: str) -> bool:
+        """Turn the customer's ticks blue, and show a typing indicator.
+
+        An agent turn takes seconds -- a model call, sometimes a Shopify read.
+        Without this the customer watches an unread message the whole time and
+        sends it again, which is a second inbound message and a second reply.
+        Best effort by design: a failure here must never cost the actual answer.
+        """
+        if not message_id:
+            return False
+        ok, error = self._post(
+            {
+                "messaging_product": "whatsapp",
+                "status": "read",
+                "message_id": message_id,
+                # Cleared automatically when the next message is sent, or
+                # after 25 seconds, whichever comes first.
+                "typing_indicator": {"type": "text"},
+            }
+        )
+        if not ok:
+            log.info("could not mark %s as read: %s", message_id, error)
+        return ok
+
+    def download_media(
+        self, media_id: str, destination_dir: Path, *, default_extension: str = ".jpg"
+    ) -> str | None:
+        """Fetch inbound media so it can be read, and so staff can see it.
+
+        `default_extension` matters more than it looks: a voice note arrives as
+        `audio/ogg; codecs=opus`, which `guess_extension` cannot read with the
+        parameter attached, and a `.opus` file saved as `.jpg` is one the
+        transcriber refuses.
+        """
         try:
-            meta = httpx.get(f"{GRAPH}/{self.api_version}/{media_id}", headers=self._headers, timeout=self.timeout)
+            meta = httpx.get(
+                f"{GRAPH}/{self.api_version}/{media_id}",
+                headers=self._headers,
+                timeout=self.timeout,
+            )
             if meta.status_code >= 400:
                 log.error("media lookup failed %s: %s", meta.status_code, meta.text[:200])
                 return None
@@ -192,7 +308,13 @@ class WhatsAppClient:
             return None
 
         destination_dir.mkdir(parents=True, exist_ok=True)
-        extension = mimetypes.guess_extension(blob.headers.get("content-type", "image/jpeg")) or ".jpg"
+        content_type = (blob.headers.get("content-type") or "").split(";")[0].strip()
+        extension = mimetypes.guess_extension(content_type) if content_type else None
+        if content_type in {"audio/ogg", "audio/opus"}:
+            # Both map to `.oga` or nothing depending on the platform's mime
+            # database; the transcriber wants a name it recognises.
+            extension = ".ogg"
+        extension = extension or default_extension
         destination = destination_dir / f"{media_id}{extension}"
         destination.write_bytes(blob.content)
         try:

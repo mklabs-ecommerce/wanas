@@ -49,14 +49,17 @@ def sent(monkeypatch):
     outbox: list[dict] = []
 
     def fake_post(self, payload):
-        outbox.append(payload)
+        # Read receipts and typing indicators go through the same POST but are
+        # not messages; the assertions below are about what the customer sees.
+        if payload.get("status") != "read":
+            outbox.append(payload)
         return True, None
 
     def fake_upload(self, path):
         return f"media-for-{path}"
 
-    def fake_download(self, media_id, destination_dir):
-        return f"data/inbound/{media_id}.jpg"
+    def fake_download(self, media_id, destination_dir, *, default_extension=".jpg"):
+        return f"data/inbound/{media_id}{default_extension}"
 
     monkeypatch.setattr(adapter.WhatsAppClient, "_post", fake_post)
     monkeypatch.setattr(adapter.WhatsAppClient, "_upload", fake_upload)
@@ -83,6 +86,8 @@ def webhook_body(text: str, *, message_id: str = "wamid.1", message_type: str = 
         content["image"] = {"id": "media-99", "mime_type": "image/jpeg", "caption": text}
     elif message_type == "audio":
         content["audio"] = {"id": "audio-1"}
+    elif message_type == "location":
+        content["location"] = {"latitude": 30.0, "longitude": 31.0}
     return {
         "object": "whatsapp_business_account",
         "entry": [
@@ -215,12 +220,26 @@ def test_an_incoming_photo_goes_to_the_handoff_queue_with_the_photo(client, conf
     assert "الفريق" in sent[0]["text"]["body"]
 
 
-def test_an_unsupported_message_type_goes_to_a_person(client, configured, sent, seeded):
+def test_a_voice_note_no_one_can_transcribe_goes_to_a_person(client, configured, sent, seeded):
+    """The rehearsal provider cannot listen, so this is the fallback path.
+
+    It is its own handoff reason rather than `out_of_scope`: staff working the
+    queue need to see that a message is waiting on someone to listen to it.
+    """
     post(client, webhook_body("", message_type="audio"))
     seeded.expire_all()
     item = queues.open_items(seeded, QueueKind.HANDOFF.value)[0]
+    assert item.reason == "voice_received"
+    assert item.payload["audio"] == ["data/inbound/audio-1.ogg"]
+    assert len(sent) == 1
+
+
+def test_an_unsupported_message_type_goes_to_a_person(client, configured, sent, seeded):
+    post(client, webhook_body("", message_type="location"))
+    seeded.expire_all()
+    item = queues.open_items(seeded, QueueKind.HANDOFF.value)[0]
     assert item.reason == "out_of_scope"
-    assert item.payload["message_type"] == "audio"
+    assert item.payload["message_type"] == "location"
     assert len(sent) == 1
 
 

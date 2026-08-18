@@ -19,6 +19,13 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Must be set before backend.config is imported anywhere.
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{PROJECT_ROOT / 'test_wanas.db'}")
 os.environ.setdefault("LLM_PROVIDER", "fake")
+# The dispatcher runs inline at zero, so a webhook test can assert on the reply
+# on the line after the request instead of sleeping through the debounce window.
+os.environ["MESSAGE_DEBOUNCE_SECONDS"] = "0"
+# The harness ships switched off now (it is unauthenticated), but its own test
+# module needs it mounted. Set here rather than in that module so `app` is only
+# ever imported once, with the flag already in place.
+os.environ["HARNESS_ENABLED"] = "1"
 
 # The suite must not read the developer's .env. python-dotenv skips any name
 # already present in the environment, so pinning these to blank here is what
@@ -37,7 +44,6 @@ for _name in (
     "GEMINI_MODEL",
     "CHATBOT_DEBUG",
     "LLM_DEBUG_PAYLOAD",
-    "HARNESS_ENABLED",
     "WHATSAPP_PHONE_NUMBER_ID",
     "WHATSAPP_ACCESS_TOKEN",
     "WHATSAPP_APP_SECRET",

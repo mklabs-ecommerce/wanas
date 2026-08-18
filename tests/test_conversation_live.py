@@ -117,7 +117,8 @@ def test_a_colour_change_keeps_the_current_product(bot):
     bot("عايز الـ WANAS Hoodie")
     reply = bot("طب الأسود")
     assert "hoodie" in reply.text.lower() or "get_variants" in reply.tool_calls
-    assert "add_to_cart" not in reply.tool_calls or True  # either is fine; it must not restart
+    # Adding to the cart here is fine and so is not adding; what must not
+    # happen is the bot treating "طب الأسود" as a brand new request.
 
 
 def test_a_reversal_is_a_change_not_a_new_conversation(bot):

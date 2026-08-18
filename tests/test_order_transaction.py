@@ -23,7 +23,6 @@ VARIANT = "wanas-hoodie-s-olive"
 
 @pytest.fixture()
 def last_unit(cairo_rate, shopify):
-    session = cairo_rate  # fixture returns the rate; grab a session off it
     from backend.db import SessionLocal as _SL
 
     with _SL() as s:
@@ -129,18 +128,17 @@ def test_crash_mid_transaction_rolls_back_stock_and_order(cairo_rate, monkeypatc
 
     monkeypatch.setattr(orders, "next_order_id", boom)
 
-    with pytest.raises(RuntimeError):
-        with session_scope() as session:
-            carts.add(session, "whatsapp", "201888", VARIANT, 1)
-            orders.place_order(
-                session,
-                channel="whatsapp",
-                external_id="201888",
-                customer_name="Hana",
-                governorate="Cairo",
-                address="3 Test Street",
-                contact_phone="01088888888",
-            )
+    with pytest.raises(RuntimeError), session_scope() as session:
+        carts.add(session, "whatsapp", "201888", VARIANT, 1)
+        orders.place_order(
+            session,
+            channel="whatsapp",
+            external_id="201888",
+            customer_name="Hana",
+            governorate="Cairo",
+            address="3 Test Street",
+            contact_phone="01088888888",
+        )
 
     assert _stock() == before
     with SessionLocal() as session:

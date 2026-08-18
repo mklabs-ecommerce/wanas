@@ -18,9 +18,9 @@ from sqlalchemy import func, select
 from backend.db import engine, session_scope
 from backend.models import Base, Product, ShippingRate, Variant
 from backend.seed.governorates import import_governorates
+from backend.seed.products import import_products
 from backend.services.auth import create_staff
 from backend.services.size_charts import all_charts
-from backend.seed.products import import_products
 
 
 def cmd_init_db(_args) -> int:
@@ -97,7 +97,11 @@ def cmd_catalog_report(_args) -> int:
         print()
         print(f"{'category':<24} {'products':>8} {'variants':>9}")
         rows = session.execute(
-            select(Product.category, func.count(func.distinct(Product.product_id)), func.count(Variant.variant_id))
+            select(
+                Product.category,
+                func.count(func.distinct(Product.product_id)),
+                func.count(Variant.variant_id),
+            )
             .join(Variant, Variant.product_id == Product.product_id)
             .group_by(Product.category)
             .order_by(func.count(Variant.variant_id).desc())
@@ -106,7 +110,9 @@ def cmd_catalog_report(_args) -> int:
             print(f"{category:<24} {n_products:>8} {n_variants:>9}")
         print()
         print("shipping rates without a fee: ", end="")
-        missing = session.scalar(select(func.count()).select_from(ShippingRate).where(ShippingRate.fee.is_(None)))
+        missing = session.scalar(
+            select(func.count()).select_from(ShippingRate).where(ShippingRate.fee.is_(None))
+        )
         total = session.scalar(select(func.count()).select_from(ShippingRate))
         print(f"{missing} of {total}")
     return 0
@@ -119,7 +125,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("init-db", help="create the schema").set_defaults(func=cmd_init_db)
     sub.add_parser("seed", help="import catalog + governorates").set_defaults(func=cmd_seed)
 
-    p_staff = sub.add_parser("create-staff", help="create a staff account (used to attribute resolved queue items)")
+    p_staff = sub.add_parser(
+        "create-staff", help="create a staff account (used to attribute resolved queue items)"
+    )
     p_staff.add_argument("username")
     p_staff.set_defaults(func=cmd_create_staff)
 

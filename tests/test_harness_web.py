@@ -213,9 +213,14 @@ def test_the_harness_can_be_switched_off(monkeypatch):
     """It is unauthenticated, so a deployment has to be able to drop it."""
     import dataclasses
 
-    from backend.config import settings
+    # Off unless a developer asks for it: forgetting an environment variable
+    # must not be what exposes an unauthenticated chat surface. (This suite
+    # switches it on explicitly -- see tests/conftest.py.)
+    from backend.config import load_settings, settings
 
-    assert settings.harness_enabled is True  # the default, for local work
-    switched_off = dataclasses.replace(settings, harness_enabled=False)
-    assert switched_off.harness_enabled is False
+    monkeypatch.delenv("HARNESS_ENABLED", raising=False)
+    assert load_settings().harness_enabled is False
+
+    switched_on = dataclasses.replace(settings, harness_enabled=True)
+    assert switched_on.harness_enabled is True
 

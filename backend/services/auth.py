@@ -33,7 +33,9 @@ def verify_password(password: str, encoded: str) -> bool:
     try:
         algo_part, iterations, salt_hex, digest_hex = encoded.split("$")
         algo = algo_part.split("_", 1)[1]
-        computed = hashlib.pbkdf2_hmac(algo, password.encode("utf-8"), bytes.fromhex(salt_hex), int(iterations))
+        computed = hashlib.pbkdf2_hmac(
+            algo, password.encode("utf-8"), bytes.fromhex(salt_hex), int(iterations)
+        )
     except (ValueError, IndexError):
         return False
     # Constant-time: a timing difference on password comparison is a real leak.

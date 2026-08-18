@@ -12,7 +12,7 @@ target and SQLite is only a local convenience (AGENTS.md, Tech stack).
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -30,7 +30,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
@@ -92,7 +92,17 @@ class QueueStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
-HANDOFF_REASONS = ("unclear", "complaint", "customer_asked", "image_received", "out_of_scope")
+#: `voice_received` is its own reason rather than `out_of_scope`: a voice
+#: note the transcriber could not read is a message the shop still wants,
+#: and staff working the queue need to see it is waiting on a listen.
+HANDOFF_REASONS = (
+    "unclear",
+    "complaint",
+    "customer_asked",
+    "image_received",
+    "voice_received",
+    "out_of_scope",
+)
 ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancelled", "swap_requested",
                  "confirmation_delivery_failed")
 
@@ -117,7 +127,7 @@ class Client(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    orders: Mapped[list["Order"]] = relationship(back_populates="client")
+    orders: Mapped[list[Order]] = relationship(back_populates="client")
 
     @property
     def public_id(self) -> str:
@@ -159,7 +169,7 @@ class Product(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     source_products: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
-    variants: Mapped[list["Variant"]] = relationship(
+    variants: Mapped[list[Variant]] = relationship(
         back_populates="product", cascade="all, delete-orphan", order_by="Variant.variant_id"
     )
 
@@ -251,7 +261,7 @@ class Order(Base):
     shopify_order_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     client: Mapped[Client] = relationship(back_populates="orders")
-    items: Mapped[list["OrderItem"]] = relationship(
+    items: Mapped[list[OrderItem]] = relationship(
         back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
     )
 
@@ -373,7 +383,9 @@ class StaffQueueItem(Base):
     # is also what makes a single unread count possible.
     queue_id: Mapped[str] = mapped_column(String(20), primary_key=True)
     kind: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default=QueueStatus.OPEN.value, index=True)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=QueueStatus.OPEN.value, index=True
+    )
     channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     order_id: Mapped[str | None] = mapped_column(ForeignKey("orders.order_id"), nullable=True)

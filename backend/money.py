@@ -6,7 +6,7 @@ number in EGP -- never a formatted string (15-tool-contracts.md).
 
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 TWO_PLACES = Decimal("0.01")
 

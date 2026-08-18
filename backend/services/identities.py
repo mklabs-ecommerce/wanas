@@ -38,7 +38,9 @@ def client_for(session: Session, channel: str, external_id: str) -> Client | Non
     return session.get(Client, identity.client_id)
 
 
-def find_matching_client(session: Session, *, phone: str | None = None, email: str | None = None) -> Client | None:
+def find_matching_client(
+    session: Session, *, phone: str | None = None, email: str | None = None
+) -> Client | None:
     clauses = []
     if phone:
         for candidate in phone_variants(phone):

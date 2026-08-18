@@ -45,7 +45,6 @@ from scripts.shopify_sync import (  # noqa: E402
     variant_key,
 )
 
-
 PRODUCTS_QUERY = """
 query($cursor: String) {
   products(first: 25, after: $cursor) {

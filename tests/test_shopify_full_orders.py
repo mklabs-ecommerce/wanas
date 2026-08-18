@@ -29,14 +29,14 @@ def priced(seeded):
 
 
 def place(session, **overrides):
-    args = dict(
-        channel="whatsapp",
-        external_id=WHO,
-        customer_name="Hazem Abdelhamid",
-        governorate="Cairo",
-        address="12 El Sebki Street",
-        contact_phone="01067177128",
-    )
+    args = {
+        "channel": "whatsapp",
+        "external_id": WHO,
+        "customer_name": "Hazem Abdelhamid",
+        "governorate": "Cairo",
+        "address": "12 El Sebki Street",
+        "contact_phone": "01067177128",
+    }
     args.update(overrides)
     return orders.place_order(session, **args)
 

@@ -1,12 +1,14 @@
 """Catalog and sizing tools: get_categories, get_products, get_variants,
-get_size_chart, get_shipping_fee."""
+get_size_chart, get_shipping_fee, ask_governorate."""
 
 from __future__ import annotations
 
+from backend.config import settings
 from backend.models import Product
 from backend.money import money
 from backend.services import catalog, shipping
 from backend.services.size_charts import MEASUREMENT_NOTE, get_chart
+from chatbot import interactive
 from chatbot.tools.base import ToolContext, tool
 
 
@@ -145,3 +147,63 @@ def get_shipping_fee(ctx: ToolContext, governorate: str) -> dict:
         # shipping free by accident is a real loss on every parcel.
         return {"error": "no_rate_set", "governorate": resolved}
     return {"governorate": resolved, "fee": money(fee)}
+
+
+@tool(
+    "ask_governorate",
+    "Ask which governorate to ship to, as a list the customer taps rather than a question they "
+    "answer in prose. Call it with no arguments to offer the six regions; when they pick one, call "
+    "it again with that region to offer its governorates. The governorate sets the shipping fee, so "
+    "it has to be one of the twenty-seven real values -- this is what makes that true instead of "
+    "hoping the address text can be parsed. Ask for the street address separately, in words. If the "
+    "customer simply names their governorate themselves, you do not need this at all: go straight "
+    "to get_shipping_fee.",
+    properties={
+        "region": {
+            "type": "string",
+            "description": "The region the customer just picked. Omit on the first call.",
+        }
+    },
+)
+def ask_governorate(ctx: ToolContext, region: str | None = None) -> dict:
+    if not region:
+        regions = shipping.regions()
+        payload = {
+            "step": "region",
+            "regions": [
+                {"region_id": item["region_id"], "label_ar": item["label_ar"]} for item in regions
+            ],
+        }
+        if settings.interactive_messages_enabled:
+            payload["picker_sent"] = ctx.offer(interactive.region_picker(regions))
+        return payload
+
+    resolved = shipping.resolve_region(region)
+    if resolved is None:
+        # Not a region. It is very often a governorate the customer typed
+        # straight out, so say which it was rather than making them start over.
+        governorate = shipping.resolve(ctx.session, region)
+        if governorate is not None:
+            return {"step": "done", "governorate": governorate}
+        return {
+            "error": "unknown_region",
+            "regions": [item["region_id"] for item in shipping.regions()],
+        }
+
+    rows = shipping.governorates_in_region(ctx.session, resolved)
+    if not rows:
+        return {"error": "unknown_region", "regions": [item["region_id"] for item in shipping.regions()]}
+
+    label = next(
+        (item["label_ar"] for item in shipping.regions() if item["region_id"] == resolved), resolved
+    )
+    payload = {
+        "step": "governorate",
+        "region": resolved,
+        "governorates": [
+            {"governorate": row["governorate"], "label_ar": row["label_ar"]} for row in rows
+        ],
+    }
+    if settings.interactive_messages_enabled:
+        payload["picker_sent"] = ctx.offer(interactive.governorate_picker(rows, label))
+    return payload

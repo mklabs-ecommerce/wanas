@@ -25,8 +25,8 @@ What this does that the source data doesn't:
 Run:  python data/merge_catalog.py
 """
 
-import os
 import json
+import os
 import re
 import shutil
 from pathlib import Path

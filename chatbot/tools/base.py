@@ -16,8 +16,8 @@ Rules that apply to every tool (15-tool-contracts.md):
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from sqlalchemy.orm import Session
 
@@ -44,6 +44,22 @@ class ToolContext:
     #: already answered earlier in the conversation instead of hitting the
     #: database again.
     history: list[dict] = field(default_factory=list)
+    #: A tappable picker the adapter should send instead of a plain text
+    #: reply. Set by a tool, never by the model: the options have to come from
+    #: the database for the same reason a price does.
+    interactive: dict | None = None
+
+    def offer(self, payload: dict) -> bool:
+        """Attach a picker to this reply. First one wins.
+
+        A turn produces one message, so a second picker would silently replace
+        the first -- and the tool that set it would have no idea. Refusing is
+        the honest outcome and the caller can say so in words instead.
+        """
+        if not payload or self.interactive is not None:
+            return False
+        self.interactive = payload
+        return True
 
     def attach(self, path: str, *, force: bool = False) -> bool:
         """Add an image to this turn's reply, once.
@@ -159,6 +175,9 @@ def validate_arguments(spec: ToolSpec, arguments: dict) -> dict | None:
 #: Read-only catalog lookups whose answer for the same arguments does not
 #: meaningfully change inside one conversation. Cart, order and handoff tools
 #: are never cached -- those have to run for real every time.
+#: `ask_governorate` is *not* cacheable even though it only reads: its whole
+#: purpose is to put a picker in front of the customer, and a cached copy
+#: would return the rows with no picker attached.
 CACHEABLE_TOOLS = {"get_categories", "get_products", "get_variants", "get_size_chart", "get_shipping_fee"}
 
 

@@ -66,6 +66,15 @@ class LogSender:
         log.info("[outbound:%s] image %s", to, image_path)
         return message
 
+    def send_interactive(self, to: str, payload: dict, *, fallback: str = "") -> OutboundMessage:
+        message = OutboundMessage(to=to, text=payload.get("body") or fallback, kind="interactive")
+        self.sent.append(message)
+        log.info("[outbound:%s] interactive %s", to, payload.get("kind"))
+        return message
+
+    def mark_as_read(self, message_id: str) -> bool:
+        return True
+
     def clear(self) -> None:
         self.sent.clear()
 
@@ -139,8 +148,17 @@ _STATUS_TEXT = {
 }
 
 
-def status_change_text(order: Order) -> str | None:
-    template = _STATUS_TEXT.get(order.status)
+def status_change_text(order: Order, status: str | None = None) -> str | None:
+    """The push for one status change.
+
+    `status` is passed explicitly by anything that moves an order through more
+    than one stage in a single transaction. The messages are only *sent* after
+    that transaction commits, and by then `order.status` is whatever the order
+    ended on -- so reading it here made "packed" and "shipped" both come out as
+    "shipped", which is one message telling the customer something that had
+    not happened yet.
+    """
+    template = _STATUS_TEXT.get(status or order.status)
     if template is None:
         return None
     return template.format(order_id=customer_reference(order), total=money(order.total))
@@ -202,11 +220,12 @@ def _deliver_confirmation(phone: str, text: str, order_id: str) -> None:
         )
 
 
-def order_status_changed(session: Session, order: Order) -> None:
-    text = status_change_text(order)
+def order_status_changed(session: Session, order: Order, status: str | None = None) -> None:
+    status = status or order.status
+    text = status_change_text(order, status)
     if text:
-        _sender.send_text(order.contact_phone, text, template=f"status_{order.status.lower()}")
-    if order.status == "Delivered":
+        _sender.send_text(order.contact_phone, text, template=f"status_{status.lower()}")
+    if status == "Delivered":
         order_delivered(session, order)
 
 

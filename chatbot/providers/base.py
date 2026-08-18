@@ -41,8 +41,59 @@ class ModelReply:
     finish_reason: str | None = None
 
 
+@dataclass
+class ImageReading:
+    """What a vision pass is allowed to conclude about a customer's photo.
+
+    Deliberately narrow. The model may point at a product **that was given to
+    it in a list**, or say it recognised nothing -- it may not name a garment
+    the shop might sell, invent a colour, or quote anything. Everything the
+    customer is eventually told still comes from a tool, exactly as it does for
+    text; this is a hint about *which* tool to call, not an answer.
+    """
+
+    #: A product_id from the shortlist handed to the provider, or None.
+    product_id: str | None = None
+    #: 0.0-1.0. The runtime, not the provider, decides what is high enough.
+    confidence: float = 0.0
+    #: A short, plain description of the garment in the photo. Used to ask a
+    #: better question when nothing matched -- never repeated as a claim about
+    #: stock.
+    description: str = ""
+    #: True when the photo is not a garment at all (a receipt, a screenshot, a
+    #: person, a parcel). Those are support, not shopping.
+    is_garment: bool = True
+
+
 class LLMProvider:
     name = "base"
 
+    #: Media capabilities, declared rather than discovered: the runtime has to
+    #: decide whether to transcribe or to hand a voice note to a person
+    #: *before* it spends a call finding out.
+    supports_audio = False
+    supports_vision = False
+
     def generate(self, system_prompt: str, history: list[dict], tools: list) -> ModelReply:
         raise NotImplementedError
+
+    def transcribe(self, audio: bytes, mime_type: str, *, hint: str = "") -> str:
+        """A voice note as text, in the language it was spoken.
+
+        Providers that cannot do this raise `ProviderError(kind="unsupported")`
+        and the caller falls back to handing the message to a person -- which
+        is what happened to every voice note before this existed.
+        """
+        raise ProviderError(f"{self.name} cannot transcribe audio", kind="unsupported")
+
+    def inspect_image(
+        self, image: bytes, mime_type: str, *, catalog: list[dict]
+    ) -> ImageReading:
+        """Read a customer's photo against a shortlist of real products.
+
+        `catalog` is a list of ``{"product_id", "name", "category", "colors"}``
+        built by the caller from the actual catalog. Matching is only ever
+        against that list; there is no path by which the model can answer with
+        a product the shop does not have.
+        """
+        raise ProviderError(f"{self.name} cannot read images", kind="unsupported")

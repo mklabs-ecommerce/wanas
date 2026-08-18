@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.models import Product, Variant
 from backend.money import money
-from backend.services import shopify_catalog
+from backend.services import search_terms, shopify_catalog
 
 #: Categories come first and collections last, labelled optional: 8 of the 18
 #: products have no collection, so a reply that opens with collections has
@@ -51,7 +51,10 @@ def get_categories(session: Session) -> dict:
     for (raw,) in session.execute(select(Product.style)).all():
         styles.update(raw or [])
 
-    departments = [row[0] for row in session.execute(select(Product.department).distinct().order_by(Product.department))]
+    departments = [
+        row[0]
+        for row in session.execute(select(Product.department).distinct().order_by(Product.department))
+    ]
     collections = [
         row[0]
         for row in session.execute(
@@ -151,24 +154,37 @@ def _product_summary(product: Product, live_map=None) -> dict:
     }
 
 
-def _matches_query(product: Product, needle: str) -> bool:
-    """Free text against name, category, style and variant colours together.
-
-    That combination is what resolves "الهودي الزيتي" now that olive is a
-    colour rather than part of a product name.
-    """
-    haystack = " ".join(
+def _haystack(product: Product) -> str:
+    """Everything about a product one free-text search may look at."""
+    return " ".join(
         [
             product.name,
             product.category,
             product.department,
             " ".join(product.style or []),
             " ".join(product.colors or []),
+            " ".join(product.sizes or []),
             product.collection or "",
             product.description or "",
         ]
-    ).lower()
-    return all(token in haystack for token in needle.lower().split())
+    )
+
+
+def _matches_query(product: Product, needle: str) -> bool:
+    """Free text against name, category, style and variant colours together.
+
+    That combination is what resolves "الهودي الزيتي" now that olive is a
+    colour rather than part of a product name.
+
+    The matching itself lives in `search_terms`, which folds Arabic spelling
+    variants, maps Arabic and franco words onto the English the catalog is
+    actually written in, and drops the padding a spoken request carries. The
+    catalog holds no Arabic at all, so without that layer a query typed the way
+    a customer types it matches nothing -- and "we don't have it" about
+    something on the shelf is the most expensive wrong answer this shop can
+    give.
+    """
+    return search_terms.matches(_haystack(product), needle)
 
 
 def get_products(

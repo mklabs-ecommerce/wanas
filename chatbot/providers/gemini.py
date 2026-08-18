@@ -32,6 +32,7 @@ Quirks absorbed here, none of which leak upward:
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 
@@ -39,7 +40,7 @@ import httpx
 
 from backend.config import settings
 from chatbot.messages import ASSISTANT, TOOL_RESULTS, USER
-from chatbot.providers.base import LLMProvider, ModelReply, ProviderError
+from chatbot.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
 
 log = logging.getLogger("wanas.provider.gemini")
 
@@ -78,6 +79,12 @@ def is_gemini_3(model: str) -> bool:
 class GeminiProvider(LLMProvider):
     name = "gemini"
 
+    # Every Gemini model this code will resolve to reads audio and images on
+    # the same `generateContent` endpoint the conversation already uses, so
+    # there is no second vendor, no second key, and no second failure mode.
+    supports_audio = True
+    supports_vision = True
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -89,6 +96,10 @@ class GeminiProvider(LLMProvider):
         self.api_key = api_key if api_key is not None else settings.llm_api_key
         self.model = (model or settings.llm_model or "").replace("models/", "")
         self.timeout = timeout
+        #: Media is read outside the customer's turn (the reply is already on
+        #: its way to them), so it can afford to wait longer than a chat call
+        #: that someone is sitting in front of.
+        self.media_timeout = max(timeout, 60.0)
         #: Resolve against the live model list when the configured name is
         #: missing or turns out to be gone. Off in tests that pin a model.
         self.auto_resolve = (not self.model) if auto_resolve is None else auto_resolve
@@ -344,6 +355,178 @@ class GeminiProvider(LLMProvider):
             tool_calls=tool_calls,
             signature=text_signature,
             finish_reason=finish_reason,
+        )
+
+    # -- media ------------------------------------------------------------
+
+    def _media_model(self) -> str:
+        """Which model reads a voice note or a photo.
+
+        Its own setting, because the cheapest model that is good enough to run
+        a whole conversation is not necessarily the one you want reading
+        Egyptian Arabic off a noisy voice note -- and vice versa. Falls back to
+        the conversation model, so nothing has to be configured for this to
+        work.
+        """
+        if settings.llm_media_model:
+            return settings.llm_media_model.replace("models/", "")
+        if self.auto_resolve and not self._resolved:
+            self.resolve_model()
+        return self.model
+
+    def _generate_media(self, payload: dict, model: str) -> dict:
+        """One non-conversational call. Shares the error mapping, not the loop."""
+        url = f"{BASE_URL}/{API_VERSION}/models/{model}:generateContent"
+        try:
+            response = httpx.post(
+                url,
+                params={"key": self.api_key},
+                json=payload,
+                timeout=self.media_timeout,
+                headers={"content-type": "application/json"},
+            )
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"network error talking to Gemini: {exc}") from exc
+
+        if response.status_code == 429:
+            raise ProviderError(f"rate limited on model {model!r}", kind="rate_limit")
+        if response.status_code in (401, 403):
+            raise ProviderError(
+                f"auth rejected ({response.status_code}) for key {mask_key(self.api_key)}",
+                kind="auth",
+            )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"gemini media error {response.status_code} on {model!r}: {response.text[:300]}"
+            )
+        return response.json()
+
+    @staticmethod
+    def _first_text(data: dict) -> str:
+        for candidate in data.get("candidates") or []:
+            parts = (candidate.get("content") or {}).get("parts") or []
+            joined = "".join(part.get("text", "") for part in parts).strip()
+            if joined:
+                return joined
+        return ""
+
+    def transcribe(self, audio: bytes, mime_type: str, *, hint: str = "") -> str:
+        """A voice note, written down.
+
+        Asked for a verbatim transcript and nothing else -- no summary, no
+        translation, no answer to whatever was said. Egyptian Arabic stays in
+        Arabic script and an English product name stays in Latin, because that
+        is the mixture the agent's own prompt is written for and the mixture
+        `search_terms` expects.
+        """
+        instruction = (
+            "اكتب اللي اتقال في التسجيل ده حرفياً، بنفس اللهجة وبنفس الكلمات.\n"
+            "- لو الكلام عربي اكتبه عربي، ولو فيه اسم منتج أو مقاس بالإنجليزي سيبه بالإنجليزي.\n"
+            "- متلخصش، متترجمش، ومتردش على الكلام — انت بتفرّغ صوت وبس.\n"
+            "- لو مفيش كلام مفهوم خالص، رد بكلمة واحدة: (غير مفهوم)"
+        )
+        if hint:
+            instruction = f"{instruction}\n- سياق المحادثة: {hint}"
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": instruction},
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type or "audio/ogg",
+                                "data": base64.b64encode(audio).decode("ascii"),
+                            }
+                        },
+                    ],
+                }
+            ],
+            # Deterministic: a transcript is not a place for creativity.
+            "generationConfig": {"temperature": 0.0},
+        }
+        text = self._first_text(self._generate_media(payload, self._media_model()))
+        if not text or text.strip() in {"(غير مفهوم)", "()"}:
+            return ""
+        return text
+
+    #: The vision pass answers in this shape or not at all. A schema rather
+    #: than a "reply with JSON" instruction, because the caller branches on
+    #: `product_id` and a prose answer there is an outage, not a bad answer.
+    _IMAGE_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "product_id": {"type": "string"},
+            "confidence": {"type": "number"},
+            "description": {"type": "string"},
+            "is_garment": {"type": "boolean"},
+        },
+        "required": ["product_id", "confidence", "description", "is_garment"],
+    }
+
+    def inspect_image(self, image: bytes, mime_type: str, *, catalog: list[dict]) -> ImageReading:
+        listing = "\n".join(
+            f"- {item.get('product_id')}: {item.get('name')} "
+            f"({item.get('category')}; ألوان: {', '.join(item.get('colors') or []) or '—'})"
+            for item in catalog
+        )
+        instruction = (
+            "دي صورة بعتها زبون لمحل هدوم. شوف الصورة وقارنها بالمنتجات اللي في اللستة دي بس.\n\n"
+            f"{listing}\n\n"
+            "قواعد لازم تلتزم بيها:\n"
+            "- product_id لازم يكون واحد بالظبط من اللستة فوق، أو سلسلة فاضية لو مفيش حاجة قريبة.\n"
+            "- متخترعش منتج مش في اللستة ومتقولش سعر ولا مقاس ولا إنه متوفر.\n"
+            "- confidence رقم من 0 لـ 1 يعبر عن مدى تأكدك من المطابقة.\n"
+            "- description: وصف قصير جداً للقطعة اللي في الصورة (نوعها ولونها) بالعامية المصرية.\n"
+            "- is_garment: false لو الصورة مش قطعة هدوم أصلاً (إيصال، سكرين شوت، شخص، طرد، حاجة تانية)."
+        )
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": instruction},
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type or "image/jpeg",
+                                "data": base64.b64encode(image).decode("ascii"),
+                            }
+                        },
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.0,
+                "responseMimeType": "application/json",
+                "responseSchema": self._IMAGE_SCHEMA,
+            },
+        }
+        raw = self._first_text(self._generate_media(payload, self._media_model()))
+        try:
+            parsed = json.loads(raw or "{}")
+        except json.JSONDecodeError as exc:
+            raise ProviderError(f"vision reply was not JSON: {raw[:200]}") from exc
+
+        allowed = {item.get("product_id") for item in catalog}
+        product_id = (parsed.get("product_id") or "").strip() or None
+        if product_id not in allowed:
+            # The one guarantee worth enforcing on this side: a product_id the
+            # shop does not have is worse than no match at all.
+            if product_id:
+                log.warning("vision returned an unknown product_id %r; treating as no match", product_id)
+            product_id = None
+
+        try:
+            confidence = float(parsed.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        return ImageReading(
+            product_id=product_id,
+            confidence=max(0.0, min(1.0, confidence)),
+            description=str(parsed.get("description") or "").strip(),
+            is_garment=bool(parsed.get("is_garment", True)),
         )
 
 

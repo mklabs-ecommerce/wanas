@@ -23,24 +23,48 @@ from __future__ import annotations
 import re
 
 from chatbot.messages import TOOL_RESULTS, USER
-from chatbot.providers.base import LLMProvider, ModelReply
+from chatbot.providers.base import ImageReading, LLMProvider, ModelReply
 
 
 class ScriptedProvider(LLMProvider):
     name = "scripted"
 
+    #: Media is scripted the same way replies are, so a test can drive the
+    #: voice-note and photo paths without a key and without a network call.
+    supports_audio = True
+    supports_vision = True
+
     def __init__(self, script: list[ModelReply] | None = None):
         self.script = list(script or [])
         self.calls: list[tuple[str, list[dict], list]] = []
+        self.transcripts: list[str] = []
+        self.readings: list[ImageReading] = []
+        #: What was actually handed to the media calls, for assertions.
+        self.audio_calls: list[tuple[bytes, str]] = []
+        self.image_calls: list[tuple[bytes, str, list[dict]]] = []
 
     def push(self, reply: ModelReply) -> None:
         self.script.append(reply)
+
+    def push_transcript(self, text: str) -> None:
+        self.transcripts.append(text)
+
+    def push_reading(self, reading: ImageReading) -> None:
+        self.readings.append(reading)
 
     def generate(self, system_prompt: str, history: list[dict], tools: list) -> ModelReply:
         self.calls.append((system_prompt, list(history), tools))
         if not self.script:
             return ModelReply(text="(scripted provider exhausted)")
         return self.script.pop(0)
+
+    def transcribe(self, audio: bytes, mime_type: str, *, hint: str = "") -> str:
+        self.audio_calls.append((audio, mime_type))
+        return self.transcripts.pop(0) if self.transcripts else ""
+
+    def inspect_image(self, image: bytes, mime_type: str, *, catalog: list[dict]) -> ImageReading:
+        self.image_calls.append((image, mime_type, list(catalog)))
+        return self.readings.pop(0) if self.readings else ImageReading()
 
 
 HELP = (
@@ -52,6 +76,7 @@ HELP = (
     "  add <variant_id> [qty]\n"
     "  cart | remove <variant_id> | clear\n"
     "  ship <governorate>\n"
+    "  gov [region]                    | the tappable governorate picker\n"
     "  profile | link yes | link no\n"
     "  order <name> | <governorate> | <address> | <phone>\n"
     "  orders [all] | qty <order_id> <variant_id> <n> | cancel <order_id>\n"
@@ -64,6 +89,13 @@ class RehearsalProvider(LLMProvider):
     """A stand-in, not a classifier design. See the module docstring."""
 
     name = "rehearsal"
+
+    # No key, so no transcription and no vision. Declaring that here is what
+    # makes the runtime fall back to a person for a voice note instead of
+    # silently dropping it -- the same behaviour as before this feature, which
+    # is the correct thing for a stand-in to do.
+    supports_audio = False
+    supports_vision = False
 
     def generate(self, system_prompt: str, history: list[dict], tools: list) -> ModelReply:
         last = history[-1] if history else None
@@ -116,6 +148,11 @@ class RehearsalProvider(LLMProvider):
             return call("remove_from_cart", {"variant_id": match.group(1)})
         if match := re.match(r"^ship\s+(.+)$", text, re.IGNORECASE):
             return call("get_shipping_fee", {"governorate": match.group(1).strip()})
+        if match := re.match(r"^gov\s*(.*)$", text, re.IGNORECASE):
+            # Walks the two-step picker so the harness can see the list message
+            # without a Meta credential.
+            region = match.group(1).strip()
+            return call("ask_governorate", {"region": region} if region else {})
         if match := re.match(r"^order\s+(.+)$", text, re.IGNORECASE):
             parts = [p.strip() for p in match.group(1).split("|")]
             if len(parts) != 4:
@@ -197,6 +234,19 @@ class RehearsalProvider(LLMProvider):
                 lines.append(f"  {v['variant_id']} — {bits} — {v['price']} EGP — {v['status']}")
             return "\n".join(lines)
 
+        if name == "ask_governorate":
+            if content.get("step") == "region":
+                names = ", ".join(
+                    f"{r['label_ar']} [{r['region_id']}]" for r in content["regions"]
+                )
+                return f"اختار المنطقة: {names}"
+            if content.get("step") == "governorate":
+                names = ", ".join(
+                    f"{g['label_ar']} [{g['governorate']}]" for g in content["governorates"]
+                )
+                return f"محافظات {content['region']}: {names}"
+            return f"المحافظة: {content.get('governorate')}"
+
         if name == "get_size_chart":
             if not content.get("has_chart"):
                 return "مفيش chart منشور للمنتج ده."
@@ -210,7 +260,8 @@ class RehearsalProvider(LLMProvider):
                 return "الشنطة فاضية."
             lines = [
                 f"  {ln['quantity']}× {ln['product_name']} — "
-                f"{', '.join(b for b in (ln['color'], ln['size'], ln['length']) if b)} — {ln['line_total']} EGP"
+                f"{', '.join(b for b in (ln['color'], ln['size'], ln['length']) if b)} — "
+                f"{ln['line_total']} EGP"
                 for ln in content["lines"]
             ]
             return "الشنطة:\n" + "\n".join(lines) + f"\nالمجموع: {content['subtotal']} EGP"
@@ -253,7 +304,10 @@ class RehearsalProvider(LLMProvider):
             if not content.get("known"):
                 pending = content.get("pending_link")
                 if pending:
-                    return f"هو ده انت؟ {pending['masked_name']} ({pending['matched_on']})  — رد بـ 'link yes' أو 'link no'"
+                    return (
+                        f"هو ده انت؟ {pending['masked_name']} ({pending['matched_on']}) "
+                        f" — رد بـ 'link yes' أو 'link no'"
+                    )
                 return "لسه معرفكش — أول مرة."
             return f"{content['full_name']} — {content['governorate']} — {content['address']}"
         if name == "link_client":

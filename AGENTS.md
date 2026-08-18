@@ -63,11 +63,25 @@ service file. For architecture and where things live, see `CLAUDE.md`.
 - Shipping is a flat fee **per governorate**, from a rate table
   (`ShippingRate`, seeded blank from `data/governorates.json`, 27 entries).
   The bot asks which governorate as part of collecting the address — it's a
-  picked value, not free text, because it sets the price. **An order for a
-  governorate with no fee set must be refused.** The fee is copied onto the
+  picked value, not free text, because it sets the price. That is now literal
+  rather than aspirational: `ask_governorate` sends a tappable WhatsApp list,
+  in **two steps** (region, then governorate) because Meta allows ten rows per
+  list and there are twenty-seven. The regions live in
+  `backend/services/shipping.py`; every governorate belongs to exactly one, and
+  a test asserts both that and the ten-row ceiling. A customer who simply names
+  their governorate skips the picker entirely. **An order for a governorate
+  with no fee set must be refused.** The fee is copied onto the
   order at confirm time, so a later rate change never alters a past order.
 - **Order totals are four separate numbers** — `subtotal`,
   `discount_amount`, `shipping_fee`, `total`. Don't collapse them.
+- **Status is Shopify's to report, not ours to assume.** Staff fulfil in
+  Shopify Admin; `backend/webhooks/shopify.py` turns that into
+  `orders.advance_status`, which is what sends the packed / shipped / delivered
+  messages and the feedback request. Statuses move **forward, one stage at a
+  time** — and because those messages are only sent after the transaction
+  commits, the stage has to be bound when the transition happens, not read off
+  the order later. A single fulfilment walks two stages in one transaction, and
+  reading late made both of them say "shipped".
 - **Payment is cash on delivery only.** No gateway, no `Pending payment`
   status/timeout logic.
 - **Email is optional.** Orders arrive over WhatsApp and the flow never asks
@@ -119,12 +133,29 @@ hard architectural boundary, not a nice-to-have.
 Tool argument/return shapes and refusal codes are defined by the `@tool`
 decorators in `chatbot/tools/*.py` and pinned down by
 `tests/test_tool_contracts.py` (every refusal, and that there are exactly
-seventeen tools) — that pairing is what to build against, not a separate
+eighteen tools) — that pairing is what to build against, not a separate
 spec.
+
+**A photo and a voice note do not escape any of this.** A voice note is
+transcribed into ordinary text before the agent sees it. A photo is read
+against a shortlist built from the real catalog and handed to the agent as a
+*note* — carrying the product's **name**, never its id — that says, in as many
+words, to verify with the tools before quoting anything. A `product_id` the
+shop does not have is discarded before the caller ever sees it, and every
+failure in either path falls back to the human handoff, which is what happened
+to all of them before. See `docs/MEDIA.md`.
 
 **Numbers that are decided, so nobody has to guess:** history cap 40
 messages, session expiry 6 hours, tool-loop cap 8 turns, max 10 units per
-cart line.
+cart line, inbound debounce 6 seconds, image-match confidence 0.6.
+
+**The catalog is in English; the customers are not.** Search goes through
+`backend/services/search_terms.py`, which folds Arabic spelling variants, maps
+Arabic and franco words onto the English the catalog actually uses, and drops
+the padding a spoken request carries. This is a rule below the model, not a
+habit the model has: before it existed `get_products(query="هودي أسود")`
+returned nothing, and the bot only worked because Gemini happened to translate
+first. Adding a word is one line in that file.
 
 ## What to test
 
@@ -138,6 +169,11 @@ Not full coverage — the parts where a silent bug is expensive:
   rather than the model behaving.
 - **Session trimming.** History over the cap trims to a user message and
   never splits a tool-call/tool-result pair.
+- **The media fallbacks.** Every way a voice note or a photo can fail still
+  reaches a person. That path used to be the *only* path, so it is the one that
+  must not quietly stop working.
+- **Webhook signatures and idempotency**, on both sides. A retry must not send
+  a second "your order shipped" or place a second order.
 - **The seed import.** Product/variant counts match `merge_catalog.py`'s own
   assertions after loading.
 - **No double-decrement.** An order writes stock down on Shopify exactly

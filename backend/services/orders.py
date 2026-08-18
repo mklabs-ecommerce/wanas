@@ -33,7 +33,8 @@ from backend.services import (
     shopify_orders,
 )
 from backend.services.ids import next_order_id
-from backend.services.shipping import get_fee, resolve as resolve_governorate
+from backend.services.shipping import get_fee
+from backend.services.shipping import resolve as resolve_governorate
 
 log = logging.getLogger("wanas.orders")
 
@@ -618,11 +619,30 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
     return order_payload(order)
 
 
-def cancel(session: Session, order: Order, *, by: str = "customer", notify_customer: bool = False) -> dict:
+def cancel(
+    session: Session,
+    order: Order,
+    *,
+    by: str = "customer",
+    notify_customer: bool = False,
+    remote_already_cancelled: bool = False,
+) -> dict:
+    """Close an order and give its stock back.
+
+    `remote_already_cancelled` is set when Shopify is the one telling *us* --
+    staff cancelled in the admin and the webhook arrived. Asking Shopify to
+    cancel an order it has already cancelled is a call that can only fail, and
+    the error it logs looks like a bug rather than the no-op it is.
+    """
     if not order.modifiable:
         return {"error": "not_modifiable", "status": order.status}
 
-    if order.shopify_order_id:
+    if order.shopify_order_id and remote_already_cancelled:
+        # Shopify restocked as part of its own cancel. The local rows still
+        # have to stop claiming these units are sold.
+        for item in order.items:
+            inventory.record_returned(session, item.variant_id, item.quantity)
+    elif order.shopify_order_id:
         # Shopify owns the stock for this order, so it has to be the one to
         # give it back -- `restock=True` on the cancel. Doing it locally as
         # well would put every item back twice.
@@ -808,8 +828,12 @@ def advance_status(session: Session, order: Order, new_status: str) -> dict:
     session.flush()
 
     # The push (and the feedback request on Delivered) go out only once the
-    # status change has committed.
-    after_commit(session, lambda: notifications.order_status_changed(session, order))
+    # status change has committed. `new_status` is bound now, not read from the
+    # order later: a Shopify fulfilment walks Confirmed -> Packed -> Shipped
+    # inside one transaction, and a callback that reads `order.status` at
+    # commit time would send "shipped" twice and never send "packed".
+    stage = new_status
+    after_commit(session, lambda: notifications.order_status_changed(session, order, stage))
     return {"order_id": order.order_id, "status": order.status}
 
 

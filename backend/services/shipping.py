@@ -154,8 +154,85 @@ def resolve(session: Session, value: str) -> str | None:
     return None
 
 
+#: The 27 governorates grouped the way an Egyptian would group them.
+#:
+#: This exists for one practical reason: WhatsApp allows **ten rows** in a list
+#: message and there are twenty-seven governorates, so a single picker is not
+#: possible. Two steps are -- six regions, then at most eight governorates --
+#: and picking twice beats typing an address line that has to be parsed.
+#: Order is deliberate: where the orders actually come from, first.
+REGIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("greater_cairo", "القاهرة الكبرى", ("Cairo", "Giza", "Qalyubia")),
+    ("alexandria", "إسكندرية والساحل", ("Alexandria", "Beheira", "Matrouh")),
+    (
+        "delta",
+        "الدلتا",
+        ("Sharqia", "Dakahlia", "Gharbia", "Monufia", "Kafr El Sheikh", "Damietta"),
+    ),
+    ("canal", "القناة وسينا", ("Port Said", "Ismailia", "Suez", "North Sinai", "South Sinai")),
+    (
+        "saeed",
+        "الصعيد",
+        ("Beni Suef", "Faiyum", "Minya", "Asyut", "Sohag", "Qena", "Luxor", "Aswan"),
+    ),
+    ("remote", "البحر الأحمر والوادي الجديد", ("Red Sea", "New Valley")),
+)
+
+
+def regions() -> list[dict]:
+    """The region list, as data rather than as six hardcoded strings."""
+    return [
+        {"region_id": key, "label_ar": label, "governorates": list(members)}
+        for key, label, members in REGIONS
+    ]
+
+
+def resolve_region(value: str) -> str | None:
+    """A region key from whatever the customer tapped or typed.
+
+    Matched on the key and the Arabic label, through the same normalisation
+    the governorate lookup uses -- an interactive reply comes back as its
+    *title*, not its id, on some WhatsApp clients.
+    """
+    if not value:
+        return None
+    target = normalise(value)
+    if not target:
+        return None
+    for key, label, _members in REGIONS:
+        if target in {normalise(key), normalise(label)}:
+            return key
+    for key, label, _members in REGIONS:
+        if normalise(label) and normalise(label) in target:
+            return key
+    return None
+
+
+def governorates_in_region(session: Session, region: str) -> list[dict]:
+    """The priced-or-not governorates of one region, with their Arabic labels.
+
+    Reads the rate table rather than the constant so a governorate the shop
+    removed from the table never appears in a picker the customer can tap.
+    """
+    members = next((m for key, _label, m in REGIONS if key == region), ())
+    rows = []
+    for key in members:
+        rate = session.get(ShippingRate, key)
+        if rate is None:
+            continue
+        rows.append(
+            {
+                "governorate": rate.governorate,
+                "label_ar": rate.label_ar,
+                "has_fee": rate.fee is not None,
+            }
+        )
+    return rows
+
+
 def valid_governorates(session: Session) -> list[str]:
-    return [r.governorate for r in session.scalars(select(ShippingRate).order_by(ShippingRate.governorate)).all()]
+    rows = session.scalars(select(ShippingRate).order_by(ShippingRate.governorate)).all()
+    return [rate.governorate for rate in rows]
 
 
 def get_fee(session: Session, governorate: str):

@@ -337,7 +337,7 @@ def check_order(variant_id: str) -> bool:
         print("  ! Creating the order did not take the unit off the shelf.")
         return False
     if after != before:
-        print(f"  ! The unit did not come back after 10s.")
+        print("  ! The unit did not come back after 10s.")
         print(f"    Check {created['name']} in the admin; set {variant_id} to {before} by hand.")
         return False
 

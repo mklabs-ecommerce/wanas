@@ -22,6 +22,8 @@ from fastapi.responses import RedirectResponse
 from backend.config import settings
 from backend.db import engine
 from backend.models import Base
+from backend.webhooks.shopify import router as shopify_router
+from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
 from chatbot.channels.whatsapp import router as whatsapp_router
 from chatbot.harness.web import router as harness_router
@@ -51,7 +53,22 @@ async def lifespan(_app: FastAPI):
         # Unauthenticated by design -- it is a local testing surface, and
         # anyone who can reach it can converse as any customer identity.
         log.warning("local chat harness mounted at /harness (unauthenticated). HARNESS_ENABLED=0 removes it.")
+    if not settings.shopify_webhooks_configured:
+        # Without it the shop's own fulfilments never reach the customer, and
+        # that failure is silent: orders simply stay `Confirmed` forever.
+        log.warning(
+            "SHOPIFY_WEBHOOK_SECRET is not set: order status pushes "
+            "(packed / shipped / delivered) will never fire."
+        )
+    log.info(
+        "inbound messages: debounce %.1fs across %s workers",
+        settings.message_debounce_seconds,
+        settings.message_workers,
+    )
     yield
+    # Let anything still buffered finish rather than dropping a customer's
+    # message on a deploy.
+    whatsapp_dispatcher.shutdown(wait=True)
 
 
 app = FastAPI(title="Wanas Gallery", version="0.1.0", lifespan=lifespan)
@@ -65,6 +82,10 @@ def health() -> dict:
         "llm_provider": settings.llm_provider,
         "llm_key_set": bool(settings.llm_api_key),
         "whatsapp_configured": settings.whatsapp_configured,
+        "shopify_configured": settings.shopify_configured,
+        "shopify_webhooks_configured": settings.shopify_webhooks_configured,
+        "voice_notes": settings.voice_notes_enabled,
+        "image_understanding": settings.image_understanding_enabled,
     }
 
 
@@ -74,6 +95,7 @@ def index() -> RedirectResponse:
 
 
 app.include_router(whatsapp_router)
+app.include_router(shopify_router)
 
 if settings.harness_enabled:
     app.include_router(harness_router)

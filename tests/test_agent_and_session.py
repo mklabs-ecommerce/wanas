@@ -6,12 +6,12 @@ the real tools, with no network and nothing non-deterministic.
 
 from __future__ import annotations
 
-import pytest
-
 from backend.config import settings
 from backend.models import ChannelIdentity, Order, QueueKind, SessionRow, ShippingRate, utcnow
 from backend.services import identities, queues
-from chatbot import agent, messages as msg, session as session_store
+from chatbot import agent
+from chatbot import messages as msg
+from chatbot import session as session_store
 from chatbot.providers.base import ModelReply, ProviderError
 from chatbot.providers.fake import RehearsalProvider, ScriptedProvider
 from chatbot.runtime import handle_message, staff_reply
