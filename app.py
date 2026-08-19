@@ -23,7 +23,7 @@ from fastapi.responses import RedirectResponse
 from backend.config import settings
 from backend.db import engine, session_scope
 from backend.legal import router as legal_router
-from backend.models import Base
+from backend.models import Base, Product, Variant
 from backend.webhooks.shopify import router as shopify_router
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
@@ -129,7 +129,16 @@ app = FastAPI(title="Wanas Gallery", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health() -> dict:
-    """What is wired up and what is still waiting on a credential."""
+    """What is wired up and what is still waiting on a credential.
+
+    `catalog_products` / `catalog_variants` are here for the same reason as
+    every other field on this page: a silent-but-total failure (an unseeded
+    database behind a perfectly healthy process) looks identical to "working"
+    from the outside otherwise, and costs a customer conversation to notice.
+    """
+    with session_scope() as db:
+        product_count = db.query(Product).count()
+        variant_count = db.query(Variant).count()
     return {
         "status": "ok",
         "llm_provider": settings.llm_provider,
@@ -140,6 +149,8 @@ def health() -> dict:
         "voice_notes": settings.voice_notes_enabled,
         "image_understanding": settings.image_understanding_enabled,
         "dashboard_configured": settings.dashboard_configured,
+        "catalog_products": product_count,
+        "catalog_variants": variant_count,
     }
 
 
