@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from sqlalchemy import func, update
+from sqlalchemy import case, update
 from sqlalchemy.orm import Session
 
 from backend.models import Variant
@@ -192,11 +192,21 @@ def _local_decrement(session: Session, variant_id: str, quantity: int) -> None:
     was the decision. Now that Shopify has already agreed to the sale, a local
     row that happens to disagree must not be allowed to veto it -- but it must
     not go negative either.
+
+    A `CASE WHEN`, not `func.max(a, b)`: SQLite's `max()` is overloaded to
+    also act as a 2-argument scalar function, but PostgreSQL's `max()` is
+    aggregate-only -- `max(a, b)` is `UndefinedFunction` there, every time,
+    unconditionally. That silently passed every test against the SQLite
+    default and broke every single order placement in production (Postgres)
+    at the last step, after the Shopify order had already been created. See
+    AGENTS.md / CLAUDE.md on running the suite against Postgres before
+    deploying -- this is exactly the failure that warning is about. `CASE
+    WHEN` is plain SQL-92 and compiles identically on both.
     """
     session.execute(
         update(Variant)
         .where(Variant.variant_id == variant_id)
-        .values(stock_qty=func.max(Variant.stock_qty - quantity, 0))
+        .values(stock_qty=case((Variant.stock_qty - quantity > 0, Variant.stock_qty - quantity), else_=0))
     )
     session.expire_all()
 

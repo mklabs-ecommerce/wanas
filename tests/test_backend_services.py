@@ -38,6 +38,46 @@ def test_release_adds_back(seeded):
     assert seeded.get(Variant, VARIANT).stock_qty == 7
 
 
+def test_record_sold_floors_at_zero(seeded):
+    """`record_sold` is unconditional bookkeeping after Shopify has already
+    sold the item -- it must never write a negative local stock number even
+    if the local row disagreed with Shopify going in."""
+    seeded.get(Variant, VARIANT).stock_qty = 1
+    seeded.flush()
+    inventory.record_sold(seeded, VARIANT, 5)
+    assert seeded.get(Variant, VARIANT).stock_qty == 0
+
+
+def test_local_decrement_sql_is_portable_to_postgres():
+    """`_local_decrement` used to write `func.max(stock_qty - n, 0)`. SQLite
+    overloads `max()` to also work as a 2-argument scalar function, so every
+    test here passed -- but PostgreSQL's `max()` is aggregate-only, and
+    `max(a, b)` raised `UndefinedFunction` on *every* order placed in
+    production. This captures the actual statement `_local_decrement` builds
+    and compiles it against the postgres dialect (no live connection needed)
+    so this class of SQLite-only-passing bug cannot silently return -- see
+    AGENTS.md / CLAUDE.md on why the suite must be run against Postgres
+    before deploying.
+    """
+    from sqlalchemy.dialects import postgresql
+
+    from backend.services.inventory import _local_decrement
+
+    captured = {}
+
+    class FakeSession:
+        def execute(self, stmt):
+            captured["stmt"] = stmt
+
+        def expire_all(self):
+            pass
+
+    _local_decrement(FakeSession(), VARIANT, 1)
+    compiled = str(captured["stmt"].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "CASE WHEN" in compiled
+    assert "max(" not in compiled.lower()
+
+
 def test_threshold_breach(seeded):
     variant = seeded.get(Variant, VARIANT)
     variant.stock_qty = 3
