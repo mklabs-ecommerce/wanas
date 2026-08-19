@@ -21,6 +21,7 @@ from fastapi.responses import RedirectResponse
 
 from backend.config import settings
 from backend.db import engine
+from backend.legal import router as legal_router
 from backend.models import Base
 from backend.webhooks.shopify import router as shopify_router
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
@@ -96,6 +97,9 @@ def index() -> RedirectResponse:
 
 app.include_router(whatsapp_router)
 app.include_router(shopify_router)
+# Public, unauthenticated: Meta requires a privacy policy URL a logged-out
+# reviewer can read.
+app.include_router(legal_router)
 
 if settings.harness_enabled:
     app.include_router(harness_router)
