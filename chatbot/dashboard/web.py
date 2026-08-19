@@ -41,7 +41,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Cookie, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from backend.config import settings
 from backend.db import session_scope
@@ -211,9 +211,26 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
             return _unauthenticated()
 
         handoffs = _open_handoffs(db)
-        rows = db.scalars(
-            select(SessionRow).order_by(SessionRow.updated_at.desc()).limit(MAX_CONVERSATIONS)
-        ).all()
+        rows = list(
+            db.scalars(
+                select(SessionRow).order_by(SessionRow.updated_at.desc()).limit(MAX_CONVERSATIONS)
+            ).all()
+        )
+
+        # A paused conversation must never go invisible just because enough
+        # *other* traffic pushed it out of the top-300-by-recency page --
+        # that is exactly how a customer waiting on a human got stuck forever
+        # with nothing in the queue pointing back at them. Every open handoff
+        # is fetched by its own key, unbounded, and merged in.
+        present = {(row.channel, row.external_id) for row in rows}
+        missing = [key for key in handoffs if key not in present]
+        if missing:
+            conditions = [
+                and_(SessionRow.channel == channel, SessionRow.external_id == external_id)
+                for channel, external_id in missing
+            ]
+            rows.extend(db.scalars(select(SessionRow).where(or_(*conditions))).all())
+
         items = [_conversation_summary(row, handoffs.get((row.channel, row.external_id))) for row in rows]
 
     # Paused conversations first, oldest wait first -- that is the actual

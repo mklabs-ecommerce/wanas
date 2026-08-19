@@ -178,6 +178,27 @@ def test_paused_conversations_sort_ahead_of_everything_else(logged_in, seeded):
     assert ordered[0]["paused"] is True
 
 
+def test_a_paused_conversation_never_disappears_behind_the_recency_cap(logged_in, seeded, monkeypatch):
+    """A paused conversation used to be looked up only among the top
+    `MAX_CONVERSATIONS` most-recently-updated rows -- so once enough other
+    traffic happened, it aged out of that page and vanished from the list even
+    though the queue item (and the pause) were both still open. That left the
+    customer permanently un-repliable with no sign of them anywhere staff
+    would look. The list must surface every open handoff regardless of how
+    much has happened since."""
+    monkeypatch.setattr(dashboard, "MAX_CONVERSATIONS", 3)
+    make_paused(seeded)
+    for i in range(5):
+        session_store.append(seeded, CHANNEL, f"20100000010{i}", msg.user("hi"))
+    seeded.commit()
+
+    body = logged_in.get("/dashboard/api/conversations").json()
+    assert body["open_count"] == 1
+    ids = [c["external_id"] for c in body["conversations"]]
+    assert CUSTOMER in ids
+    assert body["conversations"][0]["external_id"] == CUSTOMER
+
+
 # --------------------------------------------------------------------------
 # reading one conversation
 # --------------------------------------------------------------------------

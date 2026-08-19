@@ -14,13 +14,14 @@ what keeps /backend/ free of any import from /chatbot/.
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from backend.config import settings
-from backend.db import engine
+from backend.db import engine, session_scope
 from backend.legal import router as legal_router
 from backend.models import Base
 from backend.webhooks.shopify import router as shopify_router
@@ -37,6 +38,38 @@ from chatbot.harness.web import router as harness_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("wanas")
+
+
+def _import_missing_shopify_products() -> None:
+    """A product created straight in Shopify Admin -- not through the
+    dashboard's own create panel -- gets no wanas.db row, and the bot's
+    search only ever reads wanas.db; see
+    `backend/services/shopify_product_import.py`. Run once per boot, off the
+    request path, so a slow or unreachable Shopify never delays startup or a
+    customer's reply. Additive-only and idempotent (a product already
+    imported is skipped every later run), so re-running it on every deploy is
+    safe -- any failure here is logged and swallowed, never raised past this
+    function, the same guarantee every other optional piece of startup config
+    on this page gets.
+    """
+    from backend.services.shopify_product_import import import_missing_products
+
+    try:
+        with session_scope() as db:
+            report = import_missing_products(db, apply=True)
+    except Exception:
+        log.exception("Shopify product import reconciliation failed")
+        return
+
+    if report["imported"]:
+        log.info(
+            "imported %d product(s) from Shopify that had no wanas.db row: %s",
+            len(report["imported"]),
+            ", ".join(item["title"] for item in report["imported"]),
+        )
+    for problem in report["problems"]:
+        log.warning("Shopify product import: %s", problem)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -79,6 +112,12 @@ async def lifespan(_app: FastAPI):
         settings.message_debounce_seconds,
         settings.message_workers,
     )
+    if settings.shopify_configured:
+        threading.Thread(
+            target=_import_missing_shopify_products,
+            name="shopify-product-import",
+            daemon=True,
+        ).start()
     yield
     # Let anything still buffered finish rather than dropping a customer's
     # message on a deploy.

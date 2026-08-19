@@ -504,6 +504,17 @@ class FakeShopify:
                     self.shelf[sku]["price"] = Decimal(entry["price"])
                 if "compareAtPrice" in entry:
                     self.shelf[sku]["compare"] = Decimal(entry["compareAtPrice"]) if entry["compareAtPrice"] else None
+                # `shopify_product_import.py` re-keys a variant that has no
+                # SKU wanas.db recognises yet -- rename the shelf entry (and
+                # everything else keyed by sku) rather than only tracking
+                # price/stock, the way every other caller of this mutation
+                # has used it until now.
+                new_sku = entry.get("sku")
+                if new_sku is not None and new_sku != sku:
+                    self.shelf[new_sku] = self.shelf.pop(sku)
+                    self.variant_to_product[new_sku] = self.variant_to_product.pop(sku, product_gid)
+                    if sku in self.variant_options:
+                        self.variant_options[new_sku] = self.variant_options.pop(sku)
 
     # -- admin customers ---------------------------------------------------
     #
