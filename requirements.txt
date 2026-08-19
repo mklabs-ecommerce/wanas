@@ -10,3 +10,4 @@ sqlalchemy==2.0.52
 psycopg[binary]==3.3.4
 httpx==0.28.1
 python-dotenv==1.2.2
+certifi==2026.7.22

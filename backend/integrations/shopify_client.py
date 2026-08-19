@@ -20,10 +20,18 @@ from __future__ import annotations
 import json
 import logging
 import os
+import ssl
 import threading
 import time
 import urllib.error
 import urllib.request
+
+try:
+    import certifi
+
+    _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except ImportError:  # pragma: no cover - certifi is an indirect dependency
+    _SSL_CONTEXT = None
 
 log = logging.getLogger("wanas.shopify")
 
@@ -123,7 +131,12 @@ class ShopifyClient:
         for attempt in range(3):
             req = urllib.request.Request(self.url, data=body, headers=headers)
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                # certifi's bundle, not the OS trust store, which can go
+                # stale (seen failing with CERTIFICATE_VERIFY_FAILED on an
+                # otherwise-valid chain).
+                with urllib.request.urlopen(
+                    req, timeout=self.timeout, context=_SSL_CONTEXT
+                ) as response:
                     payload = json.loads(response.read().decode())
                 break
             except urllib.error.HTTPError as exc:
