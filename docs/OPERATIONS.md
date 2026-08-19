@@ -11,7 +11,14 @@ something looks wrong.
 - [ ] `CHATBOT_DEBUG=0` — raw provider errors must never reach a customer reply
 - [ ] `LLM_PROVIDER=gemini` and `LLM_API_KEY` set (otherwise the rehearsal
       stand-in answers, and it is a keyword matcher, not the product)
-- [ ] `SHOPIFY_STORE_DOMAIN` + `SHOPIFY_ADMIN_TOKEN` set
+- [ ] `SHOPIFY_STORE_DOMAIN` + `SHOPIFY_ADMIN_TOKEN` set, with the token's
+      scopes covering **both** the chat path and the dashboard's Shopify
+      section: `read_products`, `read_inventory`, `read_locations`,
+      `read_orders` for the bot; `write_products`, `write_inventory`,
+      `write_orders`, `write_fulfillments`, `read_customers` for the
+      dashboard's product/order management. A missing write scope shows up
+      as a `store_unavailable` (config) refusal from the dashboard action
+      that needed it, not a crash
 - [ ] `SHOPIFY_WEBHOOK_SECRET` set **and** the webhooks registered (below) —
       without it orders stay `Confirmed` forever and no tracking message ever
       goes out
@@ -25,6 +32,10 @@ something looks wrong.
       status pushes, feedback request). Until then they go out as free-form
       text, which only works for verified test recipients and inside the
       24-hour window.
+- [ ] `DASHBOARD_SESSION_SECRET` set (a long random string) **and** at least
+      one staff account exists (`python -m backend.cli create-staff`) — without
+      the secret, `/dashboard` cannot log anyone in, and a conversation that
+      pauses for a person has no way back to the customer
 
 `GET /health` answers most of this:
 
@@ -37,7 +48,8 @@ something looks wrong.
   "shopify_configured": true,
   "shopify_webhooks_configured": true,
   "voice_notes": true,
-  "image_understanding": true
+  "image_understanding": true,
+  "dashboard_configured": true
 }
 ```
 
@@ -61,6 +73,28 @@ Every delivery is HMAC-verified against `SHOPIFY_WEBHOOK_SECRET`; with no
 secret configured the endpoint refuses everything, because an unauthenticated
 way to cancel orders is worse than no integration at all.
 
+## The staff dashboard
+
+`https://<host>/dashboard` — log in with a staff account, see who is waiting
+on a reply, and answer them. It exists because `request_human` has always
+paused a conversation and queued it; for a long stretch nothing read that
+queue back or un-paused the conversation.
+
+```bash
+python -m backend.cli create-staff <username>   # prompts for a password twice
+```
+
+Everyone who can log in can do everything — one role, no admin/agent split —
+so an account is who to hold responsible, not what to restrict. Deactivate
+rather than delete someone who leaves (flip `Staff.is_active`, direct in the
+database — there is no CLI for it yet) so their name stays attached to what
+they already resolved.
+
+`DASHBOARD_ENABLED=0` removes the router entirely; leaving it on with no
+`DASHBOARD_SESSION_SECRET` set is also safe (login refuses, 503) but means
+nobody can reply, which is the situation the checklist above exists to catch
+before a launch rather than after the first stuck customer.
+
 ## Tuning inbound handling
 
 | Setting | Default | What it changes |
@@ -77,7 +111,8 @@ way to cancel orders is worse than no integration at all.
 
 The logger names say where you are: `wanas.runtime`, `wanas.agent`,
 `wanas.tools`, `wanas.dispatcher`, `wanas.media`, `wanas.channel.whatsapp`,
-`wanas.webhooks.shopify`, `wanas.shopify`, `wanas.provider.gemini`.
+`wanas.webhooks.shopify`, `wanas.shopify`, `wanas.provider.gemini`,
+`wanas.dashboard`.
 
 Lines worth alerting on:
 
@@ -110,9 +145,12 @@ silence, not as an error.
 by design. Beyond that, look at the Gemini timeout and whether the Shopify
 snapshot is timing out at eight seconds per turn.
 
-**A conversation has gone silent.** It is probably paused on a handoff. Until
-there is a staff UI (see ARCHITECTURE.md, "Known gap") the only way back is a
-staff action against `channel_identities.paused_until_staff_reply`.
+**A conversation has gone silent.** It is probably paused on a handoff — check
+`/dashboard` (see "The staff dashboard" above); it lists exactly these, oldest
+wait first. Reply there, or resolve without a reply if it turns out to be a
+false alarm. Only reach for the database directly
+(`channel_identities.paused_until_staff_reply`) if the dashboard itself is the
+thing not working.
 
 ## Database
 

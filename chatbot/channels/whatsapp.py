@@ -24,7 +24,7 @@ from fastapi import APIRouter, Request, Response
 from backend.config import PROJECT_ROOT, settings
 from backend.db import session_scope
 from backend.integrations.whatsapp_client import WhatsAppClient
-from backend.services import notifications
+from backend.services import notifications, runtime_flags
 from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message
 from chatbot.tools.support_tools import raise_handoff
@@ -211,7 +211,12 @@ def _deliver(external_id: str, pending: Pending) -> None:
 
     client = WhatsAppClient()
 
-    if reply.interactive and settings.interactive_messages_enabled:
+    with session_scope() as db:
+        interactive_enabled = runtime_flags.get(
+            db, "interactive_messages_enabled", settings.interactive_messages_enabled
+        )
+
+    if reply.interactive and interactive_enabled:
         # The picker carries its own prompt, so the model's words go first and
         # the tappable list follows -- two messages, in the order a person
         # would send them.

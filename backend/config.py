@@ -96,6 +96,14 @@ class Settings:
     chatbot_debug: bool
     harness_enabled: bool
 
+    #: The staff dashboard: view conversations, reply to a paused one, resolve
+    #: the handoff. On by default -- unlike the harness it requires a staff
+    #: login -- but with no secret set it refuses every login rather than
+    #: signing session cookies nobody could invalidate; see `dashboard_configured`.
+    dashboard_enabled: bool
+    dashboard_session_secret: str
+    dashboard_session_hours: int
+
     shopify_store_domain: str
     shopify_admin_token: str
     shopify_api_version: str
@@ -114,6 +122,13 @@ class Settings:
     def shopify_webhooks_configured(self) -> bool:
         """Order-status pushes only work when Shopify can tell us it shipped."""
         return bool(self.shopify_webhook_secret)
+
+    @property
+    def dashboard_configured(self) -> bool:
+        """Without a secret, a signed session cookie could never be told apart
+        from a forged one -- refusing login is the same call the Shopify
+        webhook makes with no signing secret set."""
+        return bool(self.dashboard_session_secret)
 
     @property
     def whatsapp_configured(self) -> bool:
@@ -160,6 +175,12 @@ def load_settings() -> Settings:
         # converse as any customer identity, so the default that costs
         # something when you forget it has to be the closed one.
         harness_enabled=_bool("HARNESS_ENABLED", False),
+        # On by default: unlike the harness this requires a staff login, so
+        # forgetting the flag does not expose anything -- only forgetting the
+        # secret does, and that is refused explicitly (dashboard_configured).
+        dashboard_enabled=_bool("DASHBOARD_ENABLED", True),
+        dashboard_session_secret=os.getenv("DASHBOARD_SESSION_SECRET", "").strip(),
+        dashboard_session_hours=_int("DASHBOARD_SESSION_HOURS", 12),
         shopify_store_domain=os.getenv("SHOPIFY_STORE_DOMAIN", "").strip(),
         shopify_admin_token=os.getenv("SHOPIFY_ADMIN_TOKEN", "").strip(),
         shopify_api_version=os.getenv("SHOPIFY_API_VERSION", "2025-01").strip(),

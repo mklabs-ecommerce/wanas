@@ -1,0 +1,1577 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wanas — لوحة الفريق</title>
+<style>
+  :root {
+    --bg:#0b141a; --panel:#111b21; --header:#202c33; --line:#2a3942;
+    --in:#202c33; --out:#005c4b; --ink:#e9edef; --muted:#8696a0;
+    --bad:#f2637d; --note:#3b2f14; --note-line:#6b551f; --accent:#00a884;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; height:100vh; overflow:hidden; display:flex; flex-direction:column;
+    background:var(--bg); color:var(--ink);
+    font:15px/1.55 "Segoe UI","Noto Naskh Arabic",Tahoma,system-ui,sans-serif;
+  }
+
+  header.top {
+    background:var(--header); padding:.55rem .9rem; display:flex; gap:.7rem;
+    align-items:center; border-bottom:1px solid var(--line); flex:0 0 auto;
+  }
+  header.top .who { font-weight:600; }
+  header.top .sub { color:var(--muted); font-size:.8rem; }
+  header.top .spacer { flex:1; }
+  header.top button {
+    background:var(--line); color:var(--ink); border:none; border-radius:6px;
+    padding:.35rem .7rem; font:inherit; font-size:.85rem; cursor:pointer;
+  }
+
+  #sectionNav {
+    background:var(--panel); display:flex; gap:.3rem; padding:.5rem .9rem 0;
+    border-bottom:1px solid var(--line); flex:0 0 auto;
+  }
+  #sectionNav button {
+    background:transparent; color:var(--muted); border:none; border-bottom:2px solid transparent;
+    padding:.5rem .9rem; font:inherit; font-size:.88rem; cursor:pointer;
+  }
+  #sectionNav button.active { color:var(--ink); border-bottom-color:var(--accent); font-weight:600; }
+
+  main.section { flex:1; display:none; min-height:0; }
+  main.section.active { display:flex; }
+
+  .placeholderPage { margin:auto; color:var(--muted); font-size:.95rem; }
+
+  #settingsPage { flex:1; overflow-y:auto; padding:1.2rem; max-width:44rem; margin:0 auto; width:100%; }
+  .settingsBlock { margin-bottom:1.6rem; }
+  .settingsBlock h2 { font-size:1rem; margin:0 0 .3rem; }
+  .settingsHint { color:var(--muted); font-size:.82rem; margin:0 0 .8rem; }
+  .flagRow {
+    display:flex; align-items:center; gap:.8rem; padding:.7rem .9rem; background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; margin-bottom:.5rem;
+  }
+  .flagRow .info { flex:1; min-width:0; }
+  .flagRow .label { font-weight:600; font-size:.9rem; }
+  .flagRow .desc { color:var(--muted); font-size:.78rem; margin-top:.15rem; }
+  .flagRow .meta { color:var(--muted); font-size:.72rem; margin-top:.2rem; }
+  .switch { position:relative; width:2.6rem; height:1.5rem; flex:0 0 auto; }
+  .switch input { opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+  .switch .track {
+    position:absolute; inset:0; background:var(--line); border-radius:1rem; transition:.15s;
+    pointer-events:none;
+  }
+  .switch .track::after {
+    content:""; position:absolute; top:.15rem; inset-inline-start:.15rem; width:1.2rem; height:1.2rem;
+    background:var(--ink); border-radius:50%; transition:.15s;
+  }
+  .switch input:checked ~ .track { background:var(--accent); }
+  .switch input:checked ~ .track::after { inset-inline-start:1.25rem; }
+  #statusGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(13rem,1fr)); gap:.6rem; }
+  .statusCard {
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.6rem .8rem;
+    font-size:.82rem; display:flex; justify-content:space-between; gap:.5rem;
+  }
+  .statusCard .dot { width:.6rem; height:.6rem; border-radius:50%; flex:0 0 auto; margin-top:.15rem; }
+  .statusCard .dot.on { background:var(--accent); }
+  .statusCard .dot.off { background:var(--bad); }
+
+  /* --- Shopify section: shared table/toolbar chrome ------------------- */
+  #shopifyPage { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; padding:0 1rem; }
+  #shopifySubnav { display:flex; gap:.4rem; padding:.8rem 0 .6rem; border-bottom:1px solid var(--line); flex:0 0 auto; }
+  #shopifySubnav button {
+    background:var(--header); color:var(--muted); border:1px solid var(--line); border-radius:16px;
+    padding:.35rem .8rem; font:inherit; font-size:.82rem; cursor:pointer;
+  }
+  #shopifySubnav button.active { background:var(--accent); color:#04120e; border-color:var(--accent); font-weight:600; }
+  .shopTab { flex:1; display:none; flex-direction:column; min-height:0; padding-top:.8rem; }
+  .shopTab.active { display:flex; }
+  .toolbar { display:flex; gap:.5rem; margin-bottom:.7rem; flex:0 0 auto; }
+  .toolbar input {
+    flex:1; background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:6px;
+    padding:.4rem .6rem; font:inherit; font-size:.85rem;
+  }
+  .toolbar button {
+    background:var(--line); color:var(--ink); border:none; border-radius:6px; padding:.4rem .8rem;
+    font:inherit; font-size:.85rem; cursor:pointer;
+  }
+  .pageError {
+    background:#3a1f22; border:1px solid var(--bad); color:#ffb4b4; border-radius:6px;
+    padding:.5rem .8rem; margin-bottom:.6rem; font-size:.85rem;
+  }
+  .tableWrap { flex:1; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+  table.dataTable { width:100%; border-collapse:collapse; font-size:.85rem; }
+  table.dataTable th {
+    position:sticky; top:0; background:var(--header); text-align:start; padding:.5rem .7rem;
+    border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  table.dataTable td { padding:.5rem .7rem; border-bottom:1px solid var(--line); white-space:nowrap; }
+  table.dataTable tbody tr { cursor:pointer; }
+  table.dataTable tbody tr:hover { background:var(--header); }
+  .badge-source { border-radius:10px; padding:.05rem .5rem; font-size:.72rem; font-weight:600; }
+  .badge-source.chatbot { background:#0f3d33; color:#5fe0c0; }
+  .badge-source.website { background:#2a2f52; color:#a8b4ff; }
+  .badge-cancelled { color:var(--bad); font-weight:600; }
+
+  /* --- shared side-panel overlay (order detail, product detail/create) - */
+  .panelOverlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:stretch;
+    justify-content:flex-end; z-index:20;
+  }
+  .panelBox {
+    width:min(34rem,92vw); background:var(--bg); border-inline-start:1px solid var(--line);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .panelHead {
+    display:flex; align-items:center; justify-content:space-between; padding:.8rem 1rem;
+    border-bottom:1px solid var(--line); background:var(--header);
+  }
+  .panelHead button { background:none; border:none; color:var(--ink); font-size:1.1rem; cursor:pointer; }
+  .panelBody { flex:1; overflow-y:auto; padding:1rem; font-size:.88rem; }
+  .odRow { display:flex; justify-content:space-between; gap:.6rem; padding:.3rem 0; }
+  .odRow .k { color:var(--muted); }
+  .odSection { margin-top:1rem; }
+  .odSection h3 { font-size:.85rem; color:var(--muted); margin:0 0 .4rem; }
+  .odLine {
+    display:flex; justify-content:space-between; gap:.5rem; padding:.4rem 0; border-bottom:1px solid var(--line);
+    align-items:center;
+  }
+  .odLine .qtyEdit { width:3.2rem; background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    border-radius:4px; padding:.15rem .3rem; font:inherit; }
+  .odActions { display:flex; gap:.5rem; margin-top:1rem; flex-wrap:wrap; }
+  .odActions button {
+    background:var(--out); color:var(--ink); border:none; border-radius:6px; padding:.5rem .9rem;
+    font:inherit; font-size:.85rem; cursor:pointer;
+  }
+  .odActions button.danger { background:#5a2323; }
+  .odActions button:disabled { opacity:.5; cursor:default; }
+
+  /* --- product form fields -------------------------------------------- */
+  .formRow { margin-bottom:.7rem; }
+  .formRow label { display:block; font-size:.78rem; color:var(--muted); margin-bottom:.25rem; }
+  .formRow input, .formRow select, .formRow textarea {
+    width:100%; background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:6px;
+    padding:.4rem .6rem; font:inherit; font-size:.85rem; box-sizing:border-box;
+  }
+  .formRow textarea { resize:vertical; min-height:3.5rem; }
+  .variantRow {
+    display:grid; grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto; gap:.4rem; margin-bottom:.4rem;
+    align-items:center;
+  }
+  .variantRow input { width:100%; }
+  .variantRow button { background:#5a2323; color:var(--ink); border:none; border-radius:4px; cursor:pointer; padding:.3rem; }
+  .addVariantBtn {
+    background:var(--line); color:var(--ink); border:none; border-radius:6px; padding:.4rem .8rem;
+    font:inherit; font-size:.82rem; cursor:pointer; margin-top:.3rem;
+  }
+  .toolbar .newBtn { background:var(--accent); color:#04120e; font-weight:600; }
+
+  /* --- Statistics page -------------------------------------------------- */
+  #statsPage { flex:1; overflow-y:auto; padding:1rem; }
+  .rangeBtn.active { background:var(--accent); color:#04120e; font-weight:600; }
+  #kpiGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(11rem,1fr)); gap:.7rem; margin:.9rem 0; }
+  .kpiCard {
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:.8rem 1rem;
+  }
+  .kpiCard .label { color:var(--muted); font-size:.78rem; margin-bottom:.3rem; }
+  .kpiCard .value { font-size:1.4rem; font-weight:700; }
+  .chartEmpty { color:var(--muted); font-size:.85rem; padding:.5rem 0; }
+  #revenueChart svg, #bestSellersChart svg, #statusChart svg { direction:ltr; }
+  .queueRow {
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.6rem .8rem;
+    margin-bottom:.5rem; display:flex; flex-direction:column; gap:.4rem;
+  }
+  .queueRow .summary { font-size:.85rem; }
+  .queueRow .meta { color:var(--muted); font-size:.72rem; }
+  .queueRow .rowActions { display:flex; gap:.4rem; flex-wrap:wrap; align-items:center; }
+  .queueRow .rowActions input {
+    background:var(--header); color:var(--ink); border:1px solid var(--line); border-radius:4px;
+    padding:.25rem .4rem; font:inherit; font-size:.78rem; width:11rem;
+  }
+  .queueRow .rowActions button {
+    background:var(--out); color:var(--ink); border:none; border-radius:6px; padding:.3rem .7rem;
+    font:inherit; font-size:.78rem; cursor:pointer;
+  }
+  .queueRow .rowActions button.reject { background:#5a2323; }
+
+  main { flex:1; display:flex; min-height:0; }
+
+  /* --- sidebar ------------------------------------------------------ */
+  #sidebar { width:22rem; flex:0 0 22rem; border-inline-end:1px solid var(--line);
+             display:flex; flex-direction:column; background:var(--panel); }
+  #tabs { display:flex; gap:.4rem; padding:.6rem .7rem; border-bottom:1px solid var(--line); }
+  #tabs button {
+    flex:1; background:var(--header); color:var(--muted); border:1px solid var(--line);
+    border-radius:16px; padding:.35rem .5rem; font:inherit; font-size:.82rem; cursor:pointer;
+  }
+  #tabs button.active { background:var(--accent); color:#04120e; border-color:var(--accent); font-weight:600; }
+  #list { flex:1; overflow-y:auto; }
+  .conv {
+    padding:.65rem .9rem; border-bottom:1px solid var(--line); cursor:pointer;
+    display:flex; gap:.6rem; align-items:center;
+  }
+  .conv:hover { background:var(--header); }
+  .conv.selected { background:var(--header); }
+  .conv .avatar {
+    width:2.4rem; height:2.4rem; border-radius:50%; background:var(--line);
+    display:flex; align-items:center; justify-content:center; font-weight:600;
+    flex:0 0 auto; color:var(--muted);
+  }
+  .conv.paused .avatar { background:#4a2b2b; color:#ffb4b4; }
+  .conv .body { min-width:0; flex:1; }
+  .conv .id-line { display:flex; justify-content:space-between; gap:.4rem; }
+  .conv .id { font-weight:600; font-size:.92rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .conv .time { color:var(--muted); font-size:.72rem; flex:0 0 auto; }
+  .conv .preview {
+    color:var(--muted); font-size:.82rem; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; margin-top:.15rem;
+  }
+  .conv.paused .preview { color:#ffb4b4; }
+  .conv .badge {
+    background:var(--bad); color:#2a0a10; border-radius:10px; font-size:.68rem;
+    font-weight:700; padding:.05rem .4rem; flex:0 0 auto;
+  }
+  #empty-list { padding:1.5rem .9rem; color:var(--muted); font-size:.85rem; text-align:center; }
+
+  /* --- conversation pane --------------------------------------------- */
+  #convPane { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #placeholder { flex:1; display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  #convHeader {
+    background:var(--header); padding:.6rem .9rem; border-bottom:1px solid var(--line);
+    display:none; align-items:center; gap:.6rem;
+  }
+  #convHeader .who { font-weight:600; }
+  #convHeader .sub { color:var(--muted); font-size:.78rem; }
+
+  #handoffBanner {
+    display:none; background:var(--note); border-bottom:1px solid var(--note-line);
+    padding:.55rem .9rem; font-size:.85rem; gap:.5rem; align-items:center; flex-wrap:wrap;
+  }
+  #handoffBanner b { color:#e5c76b; }
+  #handoffBanner button {
+    background:#3a4a52; color:var(--ink); border:none; border-radius:6px;
+    padding:.3rem .7rem; font:inherit; font-size:.8rem; cursor:pointer;
+  }
+  #handoffBanner img.payload-media { max-height:3.2rem; border-radius:4px; }
+  #handoffBanner audio.payload-media { height:2.2rem; max-width:14rem; }
+
+  #log { flex:1; overflow-y:auto; padding:1rem; display:none; flex-direction:column; gap:.45rem; }
+  .row { display:flex; }
+  .row.out { justify-content:flex-start; }
+  .row.in { justify-content:flex-end; }
+  .bubble {
+    max-width:min(78%,42rem); padding:.45rem .65rem; border-radius:8px;
+    white-space:pre-wrap; word-wrap:break-word; box-shadow:0 1px 1px rgba(0,0,0,.25);
+  }
+  .out .bubble { background:var(--out); border-top-right-radius:2px; }
+  .in  .bubble { background:var(--in);  border-top-left-radius:2px; }
+  .bubble .who-tag { display:block; font-size:.7rem; color:#ffe08a; margin-bottom:.15rem; font-weight:600; }
+  .bubble img { display:block; max-width:100%; border-radius:6px; margin-top:.4rem; }
+  .meta { align-self:center; max-width:min(90%,48rem); width:100%; }
+  .chip {
+    background:#1d2b33; border:1px solid var(--line); border-radius:6px;
+    padding:.3rem .55rem; font-size:.78rem; color:var(--muted); direction:ltr; text-align:left;
+  }
+  .chip.bad { border-color:var(--bad); color:var(--bad); }
+
+  #replyBar { border-top:1px solid var(--line); background:var(--header);
+              padding:.6rem .9rem; display:none; gap:.5rem; align-items:flex-end; }
+  #replyBar textarea {
+    flex:1; resize:none; background:var(--panel); color:var(--ink);
+    border:1px solid var(--line); border-radius:8px; padding:.5rem .7rem; font:inherit; max-height:8rem;
+  }
+  #replyBar button.send { background:var(--out); color:var(--ink); border:none; border-radius:8px;
+                          padding:.5rem 1.1rem; font:inherit; cursor:pointer; }
+  #replyBar button.send:disabled { opacity:.5; cursor:default; }
+  #notPaused { display:none; padding:.7rem .9rem; text-align:center; color:var(--muted); font-size:.85rem;
+               border-top:1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <div class="who">Wanas Gallery</div>
+    <div class="sub" id="sectionSub">لوحة الفريق — المحادثات والردود اللي محتاجة حد</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="sub" id="whoami"></span>
+  <button id="btn-logout">خروج</button>
+</header>
+
+<nav id="sectionNav">
+  <button id="nav-conversations" class="active" data-section="conversations">المحادثات</button>
+  <button id="nav-shopify" data-section="shopify">المتجر</button>
+  <button id="nav-stats" data-section="stats">الإحصائيات</button>
+  <button id="nav-settings" data-section="settings">الإعدادات</button>
+</nav>
+
+<main id="section-conversations" class="section active">
+  <div id="sidebar">
+    <div id="tabs">
+      <button id="tab-open" class="active">محتاجة رد <span id="open-count"></span></button>
+      <button id="tab-all">كل المحادثات</button>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <div id="convPane">
+    <div id="placeholder">اختار محادثة من القايمة</div>
+    <div id="convHeader">
+      <div>
+        <div class="who" id="convWho"></div>
+        <div class="sub" id="convSub"></div>
+      </div>
+    </div>
+    <div id="handoffBanner"></div>
+    <div id="log"></div>
+    <div id="replyBar">
+      <textarea id="replyText" rows="1" placeholder="اكتب ردك للعميل…"></textarea>
+      <button class="send" id="btn-send">إرسال</button>
+    </div>
+    <div id="notPaused">المحادثة شغالة مع البوت دلوقتي — الرد اليدوي متاح بس للمحادثات المتوقفة.</div>
+  </div>
+</main>
+
+<main id="section-shopify" class="section" hidden>
+  <div id="shopifyPage">
+    <nav id="shopifySubnav">
+      <button id="shop-tab-orders" class="active" data-tab="orders">الطلبات</button>
+      <button id="shop-tab-products" data-tab="products">المنتجات</button>
+      <button id="shop-tab-customers" data-tab="customers">العملاء</button>
+    </nav>
+
+    <div id="shop-orders" class="shopTab active">
+      <div class="toolbar">
+        <input id="ordersSearch" placeholder="بحث بصيغة شوبيفاي، مثلا financial_status:paid">
+        <button id="ordersSearchBtn">بحث</button>
+        <button id="ordersRefresh">تحديث</button>
+      </div>
+      <div id="ordersError" class="pageError" hidden></div>
+      <div class="tableWrap">
+        <table class="dataTable">
+          <thead>
+            <tr>
+              <th>الطلب</th><th>العميل</th><th>المحافظة</th><th>الإجمالي</th>
+              <th>الدفع</th><th>الشحن</th><th>المصدر</th><th>التاريخ</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="shop-products" class="shopTab" hidden>
+      <div class="toolbar">
+        <input id="productsSearch" placeholder="بحث بالاسم أو صيغة شوبيفاي">
+        <button id="productsSearchBtn">بحث</button>
+        <button id="productsRefresh">تحديث</button>
+        <button id="productsNew" class="newBtn">+ منتج جديد</button>
+      </div>
+      <div id="productsError" class="pageError" hidden></div>
+      <div class="tableWrap">
+        <table class="dataTable">
+          <thead>
+            <tr><th></th><th>الاسم</th><th>الفئة</th><th>الحالة</th><th>الفاريانتس</th><th>متوفر</th></tr>
+          </thead>
+          <tbody id="productsTbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="shop-customers" class="shopTab" hidden>
+      <div class="toolbar">
+        <button id="cust-tab-shopify" class="active">عملاء شوبيفاي (كل المتجر)</button>
+        <button id="cust-tab-whatsapp">عملاء واتساب (البوت)</button>
+        <input id="customersSearch" placeholder="بحث بالاسم أو التليفون" style="flex:1">
+        <button id="customersSearchBtn">بحث</button>
+      </div>
+      <div id="customersError" class="pageError" hidden></div>
+      <div class="tableWrap">
+        <table class="dataTable">
+          <thead>
+            <tr><th>الاسم</th><th>التليفون</th><th>البريد/المحافظة</th><th>عدد الطلبات</th><th>الإجمالي</th></tr>
+          </thead>
+          <tbody id="customersTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="orderDetailOverlay" class="panelOverlay" hidden>
+    <div class="panelBox">
+      <div class="panelHead">
+        <div id="orderDetailTitle"></div>
+        <button id="orderDetailClose">✕</button>
+      </div>
+      <div id="orderDetailBody" class="panelBody"></div>
+    </div>
+  </div>
+
+  <div id="productDetailOverlay" class="panelOverlay" hidden>
+    <div class="panelBox">
+      <div class="panelHead">
+        <div id="productDetailTitle"></div>
+        <button id="productDetailClose">✕</button>
+      </div>
+      <div id="productDetailBody" class="panelBody"></div>
+    </div>
+  </div>
+
+  <div id="customerDetailOverlay" class="panelOverlay" hidden>
+    <div class="panelBox">
+      <div class="panelHead">
+        <div id="customerDetailTitle"></div>
+        <button id="customerDetailClose">✕</button>
+      </div>
+      <div id="customerDetailBody" class="panelBody"></div>
+    </div>
+  </div>
+
+  <div id="productCreateOverlay" class="panelOverlay" hidden>
+    <div class="panelBox">
+      <div class="panelHead">
+        <div>منتج جديد</div>
+        <button id="productCreateClose">✕</button>
+      </div>
+      <div id="productCreateBody" class="panelBody"></div>
+    </div>
+  </div>
+</main>
+
+<main id="section-stats" class="section" hidden>
+  <div id="statsPage">
+    <div class="toolbar">
+      <button class="rangeBtn" data-range="7">٧ أيام</button>
+      <button class="rangeBtn active" data-range="30">٣٠ يوم</button>
+      <button class="rangeBtn" data-range="90">٩٠ يوم</button>
+      <button id="statsRefresh">تحديث</button>
+    </div>
+    <div id="statsError" class="pageError" hidden></div>
+    <div id="statsTruncated" class="pageError" hidden></div>
+
+    <div id="kpiGrid"></div>
+
+    <div class="odSection">
+      <h3>الإيرادات باليوم</h3>
+      <div id="revenueChart"></div>
+    </div>
+    <div class="odSection">
+      <h3>أكتر المنتجات مبيعًا</h3>
+      <div id="bestSellersChart"></div>
+    </div>
+    <div class="odSection">
+      <h3>حالة الطلبات</h3>
+      <div id="statusChart"></div>
+    </div>
+
+    <div class="odSection">
+      <h3>قائمة المراجعة (تبديلات وتنبيهات)</h3>
+      <div id="queueList"></div>
+    </div>
+  </div>
+</main>
+
+<main id="section-settings" class="section" hidden>
+  <div id="settingsPage">
+    <section class="settingsBlock">
+      <h2>أتمتة البوت</h2>
+      <p class="settingsHint">تشغيل أو تقفيل من غير ما نعمل ديبلوي جديد. القيمة الافتراضية جايه من الإعدادات، وأي تغيير هنا بيبقى فوقها.</p>
+      <div id="flagsList"></div>
+    </section>
+    <section class="settingsBlock">
+      <h2>حالة النظام</h2>
+      <div id="statusGrid"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+let currentTab = 'open';
+let current = null; // {channel, external_id}
+let conversations = [];
+
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+async function api(path, opts) {
+  const res = await fetch('/dashboard/api' + path, Object.assign({headers: {'content-type': 'application/json'}}, opts || {}));
+  if (res.status === 401) { window.location.href = '/dashboard/login'; throw new Error('unauthenticated'); }
+  return res;
+}
+
+// --- top-level section nav ---------------------------------------------
+
+const SECTIONS = ['conversations', 'shopify', 'stats', 'settings'];
+const SECTION_SUBTITLES = {
+  conversations: 'لوحة الفريق — المحادثات والردود اللي محتاجة حد',
+  shopify: 'المتجر — المنتجات والطلبات والعملاء من شوبيفاي',
+  stats: 'الإحصائيات — الإيرادات والطلبات وأكتر المنتجات مبيعًا',
+  settings: 'الإعدادات — أتمتة البوت وحالة النظام',
+};
+const sectionLoaded = {};
+
+function switchSection(name) {
+  SECTIONS.forEach(s => {
+    const active = s === name;
+    document.getElementById('nav-' + s).classList.toggle('active', active);
+    const page = document.getElementById('section-' + s);
+    page.classList.toggle('active', active);
+    page.hidden = !active;
+  });
+  document.getElementById('sectionSub').textContent = SECTION_SUBTITLES[name];
+  if (name === 'settings' && !sectionLoaded.settings) {
+    sectionLoaded.settings = true;
+    loadSettings();
+  }
+  if (name === 'shopify' && !sectionLoaded.shopify) {
+    sectionLoaded.shopify = true;
+    loadOrders();
+  }
+  if (name === 'stats' && !sectionLoaded.stats) {
+    sectionLoaded.stats = true;
+    loadStats();
+    loadQueue();
+  }
+}
+
+SECTIONS.forEach(s => {
+  document.getElementById('nav-' + s).onclick = () => switchSection(s);
+});
+
+// --- settings / automations ---------------------------------------------
+
+async function loadSettings() {
+  await Promise.all([loadFlags(), loadStatus()]);
+}
+
+async function loadFlags() {
+  const res = await api('/settings/flags');
+  const data = await res.json();
+  const list = document.getElementById('flagsList');
+  list.innerHTML = '';
+  data.flags.forEach(flag => {
+    const row = el('div', 'flagRow');
+    const info = el('div', 'info');
+    info.appendChild(el('div', 'label', flag.label_ar));
+    info.appendChild(el('div', 'desc', flag.description_ar));
+    const metaText = flag.overridden
+      ? 'آخر تغيير: ' + (flag.updated_by || '؟') + (flag.updated_at ? ' — ' + fmtTime(flag.updated_at) : '')
+      : 'القيمة الافتراضية من إعدادات السيرفر';
+    info.appendChild(el('div', 'meta', metaText));
+    row.appendChild(info);
+
+    const label = document.createElement('label');
+    label.className = 'switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!flag.value;
+    input.onchange = () => toggleFlag(flag.key, input.checked, row);
+    label.appendChild(input);
+    label.appendChild(el('span', 'track'));
+    row.appendChild(label);
+
+    list.appendChild(row);
+  });
+}
+
+async function toggleFlag(key, value, row) {
+  row.style.opacity = '.6';
+  try {
+    const res = await api('/settings/flags/' + encodeURIComponent(key), {
+      method: 'POST', body: JSON.stringify({value}),
+    });
+    if (!res.ok) alert('تعذر حفظ التغيير');
+  } finally {
+    row.style.opacity = '';
+    await loadFlags();
+  }
+}
+
+async function loadStatus() {
+  const res = await api('/settings/status');
+  const data = await res.json();
+  const grid = document.getElementById('statusGrid');
+  grid.innerHTML = '';
+  const rows = [
+    ['المزود اللغوي', data.llm_provider + (data.llm_key_set ? '' : ' (مفتاح مش متضبط)'), data.llm_key_set],
+    ['واتساب', data.whatsapp_configured ? 'متصل' : 'غير متصل', data.whatsapp_configured],
+    ['شوبيفاي', data.shopify_configured ? 'متصل' : 'غير متصل', data.shopify_configured],
+    ['ويب هوكس شوبيفاي', data.shopify_webhooks_configured ? 'شغالة' : 'غير مضبوطة', data.shopify_webhooks_configured],
+  ];
+  rows.forEach(([label, value, ok]) => {
+    const card = el('div', 'statusCard');
+    card.appendChild(el('div', null, label + ': ' + value));
+    card.appendChild(el('span', 'dot ' + (ok ? 'on' : 'off')));
+    grid.appendChild(card);
+  });
+}
+
+// --- Shopify section: sub-nav -------------------------------------------
+
+const SHOP_TABS = ['orders', 'products', 'customers'];
+SHOP_TABS.forEach(t => {
+  document.getElementById('shop-tab-' + t).onclick = () => switchShopTab(t);
+});
+
+const shopTabLoaded = {};
+
+function switchShopTab(tab) {
+  SHOP_TABS.forEach(t => {
+    document.getElementById('shop-tab-' + t).classList.toggle('active', t === tab);
+    const page = document.getElementById('shop-' + t);
+    page.classList.toggle('active', t === tab);
+    page.hidden = t !== tab;
+  });
+  if (tab === 'products' && !shopTabLoaded.products) {
+    shopTabLoaded.products = true;
+    loadProducts();
+  }
+  if (tab === 'customers' && !shopTabLoaded.customers) {
+    shopTabLoaded.customers = true;
+    loadCustomers();
+  }
+}
+
+// --- Shopify section: orders --------------------------------------------
+
+let ordersCache = [];
+
+async function loadOrders() {
+  const q = document.getElementById('ordersSearch').value.trim();
+  const errBox = document.getElementById('ordersError');
+  errBox.hidden = true;
+  const tbody = document.getElementById('ordersTbody');
+  tbody.innerHTML = '';
+
+  let res;
+  try {
+    res = await api('/shopify/orders' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  } catch (e) {
+    return;
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    errBox.hidden = false;
+    errBox.textContent = res.status === 503
+      ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
+      : ('تعذر تحميل الطلبات: ' + (body.detail || body.error || res.status));
+    return;
+  }
+  const data = await res.json();
+  ordersCache = data.orders;
+  renderOrders();
+}
+
+function fmtMoney(v) {
+  const n = Number(v);
+  return (isNaN(n) ? v : n.toFixed(2)) + ' ج.م';
+}
+
+function renderOrders() {
+  const tbody = document.getElementById('ordersTbody');
+  tbody.innerHTML = '';
+  ordersCache.forEach(o => {
+    const tr = document.createElement('tr');
+    const cells = [
+      o.name || o.id,
+      o.customer_name || '—',
+      o.governorate || '—',
+      fmtMoney(o.total),
+      o.financial_status || '—',
+      o.cancelled ? 'ملغي' : (o.fulfillment_status || '—'),
+      '',
+      fmtTime(o.created_at),
+    ];
+    cells.forEach((text, i) => {
+      const td = document.createElement('td');
+      if (i === 5 && o.cancelled) td.className = 'badge-cancelled';
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    const sourceTd = tr.children[6];
+    const badge = el('span', 'badge-source ' + o.source, o.source === 'chatbot' ? 'بوت' : 'موقع');
+    sourceTd.appendChild(badge);
+    tr.onclick = () => openOrderDetail(o.id);
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('ordersRefresh').onclick = loadOrders;
+document.getElementById('ordersSearchBtn').onclick = loadOrders;
+document.getElementById('ordersSearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadOrders(); }
+});
+
+// --- Shopify section: order detail ---------------------------------------
+
+let currentOrderGid = null;
+
+async function openOrderDetail(gid) {
+  currentOrderGid = gid;
+  const overlay = document.getElementById('orderDetailOverlay');
+  overlay.hidden = false;
+  document.getElementById('orderDetailTitle').textContent = '...';
+  document.getElementById('orderDetailBody').innerHTML = '';
+
+  const res = await api('/shopify/orders/' + encodeURIComponent(gid));
+  if (!res.ok) {
+    document.getElementById('orderDetailBody').textContent = 'تعذر تحميل الطلب.';
+    return;
+  }
+  renderOrderDetail(await res.json());
+}
+
+document.getElementById('orderDetailClose').onclick = () => {
+  document.getElementById('orderDetailOverlay').hidden = true;
+  currentOrderGid = null;
+};
+
+function renderOrderDetail(o) {
+  document.getElementById('orderDetailTitle').textContent = o.name || o.id;
+  const body = document.getElementById('orderDetailBody');
+  body.innerHTML = '';
+
+  const info = el('div');
+  const rows = [
+    ['العميل', o.customer_name || '—'],
+    ['التليفون', o.customer_phone || '—'],
+    ['المحافظة', o.governorate || '—'],
+    ['العنوان', o.address || '—'],
+    ['الدفع', o.financial_status || '—'],
+    ['التنفيذ', o.cancelled ? 'ملغي' : (o.fulfillment_status || '—')],
+    ['المصدر', o.local ? ('بوت واتساب — ' + o.local.order_id) : 'الموقع مباشرة'],
+    ['الإجمالي', fmtMoney(o.total)],
+  ];
+  rows.forEach(([k, v]) => {
+    const row = el('div', 'odRow');
+    row.appendChild(el('span', 'k', k));
+    row.appendChild(el('span', null, v));
+    info.appendChild(row);
+  });
+  body.appendChild(info);
+
+  const linesSection = el('div', 'odSection');
+  linesSection.appendChild(el('h3', null, 'الأصناف'));
+  (o.line_items || []).forEach(li => {
+    const row = el('div', 'odLine');
+    row.appendChild(el('span', null, li.title + ' (' + li.sku + ')'));
+    const controls = el('div');
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.className = 'qtyEdit';
+    input.value = li.quantity;
+    controls.appendChild(input);
+    if (!o.cancelled) {
+      const saveBtn = el('button', null, 'حفظ');
+      saveBtn.style.marginInlineStart = '.4rem';
+      saveBtn.onclick = () => editQuantity(li.sku, parseInt(input.value, 10));
+      controls.appendChild(saveBtn);
+    }
+    row.appendChild(controls);
+    linesSection.appendChild(row);
+  });
+  body.appendChild(linesSection);
+
+  if (!o.cancelled) {
+    const actions = el('div', 'odActions');
+    const fulfillBtn = el('button', null, 'تنفيذ الطلب (شحن)');
+    fulfillBtn.disabled = o.fulfillment_status === 'FULFILLED';
+    fulfillBtn.onclick = fulfillOrder;
+    actions.appendChild(fulfillBtn);
+
+    const cancelBtn = el('button', 'danger', 'إلغاء الطلب');
+    cancelBtn.onclick = cancelOrder;
+    actions.appendChild(cancelBtn);
+    body.appendChild(actions);
+  }
+}
+
+async function fulfillOrder() {
+  if (!currentOrderGid) return;
+  const res = await api('/shopify/orders/' + encodeURIComponent(currentOrderGid) + '/fulfill', {
+    method: 'POST', body: JSON.stringify({}),
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error === 'already_fulfilled' ? 'الطلب متنفذ خلاص' : 'تعذر تنفيذ الطلب'); return; }
+  await openOrderDetail(currentOrderGid);
+  await loadOrders();
+}
+
+async function cancelOrder() {
+  if (!currentOrderGid) return;
+  if (!confirm('تأكيد إلغاء الطلب؟')) return;
+  const res = await api('/shopify/orders/' + encodeURIComponent(currentOrderGid) + '/cancel', {method: 'POST'});
+  if (!res.ok) { alert('تعذر إلغاء الطلب'); return; }
+  await openOrderDetail(currentOrderGid);
+  await loadOrders();
+}
+
+async function editQuantity(variantId, quantity) {
+  if (!currentOrderGid || isNaN(quantity)) return;
+  const res = await api('/shopify/orders/' + encodeURIComponent(currentOrderGid) + '/quantity', {
+    method: 'POST', body: JSON.stringify({variant_id: variantId, quantity}),
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.detail || data.error || 'تعذر تعديل الكمية'); return; }
+  await openOrderDetail(currentOrderGid);
+  await loadOrders();
+}
+
+// --- Shopify section: products ------------------------------------------
+
+const CATEGORIES = ["T-Shirts", "Hoodies & Sweatshirts", "Polo Shirts", "Joggers & Sweatpants", "Jackets", "Tops"];
+const DEPARTMENTS = ["unisex", "women"];
+
+let productsCache = [];
+
+async function loadProducts() {
+  const q = document.getElementById('productsSearch').value.trim();
+  const errBox = document.getElementById('productsError');
+  errBox.hidden = true;
+  const tbody = document.getElementById('productsTbody');
+  tbody.innerHTML = '';
+
+  const res = await api('/shopify/products' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    errBox.hidden = false;
+    errBox.textContent = res.status === 503
+      ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
+      : ('تعذر تحميل المنتجات: ' + (body.detail || body.error || res.status));
+    return;
+  }
+  const data = await res.json();
+  productsCache = data.products;
+  renderProducts();
+}
+
+function renderProducts() {
+  const tbody = document.getElementById('productsTbody');
+  tbody.innerHTML = '';
+  productsCache.forEach(p => {
+    const tr = document.createElement('tr');
+    const imgTd = document.createElement('td');
+    if (p.image_url) {
+      const img = document.createElement('img');
+      img.src = p.image_url;
+      img.style.height = '2.2rem';
+      img.style.borderRadius = '4px';
+      imgTd.appendChild(img);
+    }
+    tr.appendChild(imgTd);
+    [p.title, p.category || '—', p.status, String(p.variant_count), p.any_in_stock ? 'نعم' : 'لا'].forEach(text => {
+      tr.appendChild(el('td', null, text));
+    });
+    tr.onclick = () => openProductDetail(p.id);
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('productsRefresh').onclick = loadProducts;
+document.getElementById('productsSearchBtn').onclick = loadProducts;
+document.getElementById('productsSearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadProducts(); }
+});
+
+// --- product detail / edit ------------------------------------------------
+
+let currentProductGid = null;
+
+async function openProductDetail(gid) {
+  currentProductGid = gid;
+  document.getElementById('productDetailOverlay').hidden = false;
+  document.getElementById('productDetailTitle').textContent = '...';
+  document.getElementById('productDetailBody').innerHTML = '';
+
+  const res = await api('/shopify/products/' + encodeURIComponent(gid));
+  if (!res.ok) {
+    document.getElementById('productDetailBody').textContent = 'تعذر تحميل المنتج.';
+    return;
+  }
+  renderProductDetail(await res.json());
+}
+
+document.getElementById('productDetailClose').onclick = () => {
+  document.getElementById('productDetailOverlay').hidden = true;
+  currentProductGid = null;
+};
+
+function selectField(label, options, current) {
+  const row = el('div', 'formRow');
+  row.appendChild(el('label', null, label));
+  const select = document.createElement('select');
+  options.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt; o.textContent = opt;
+    if (opt === current) o.selected = true;
+    select.appendChild(o);
+  });
+  row.appendChild(select);
+  return {row, select};
+}
+
+function textField(label, value, multiline) {
+  const row = el('div', 'formRow');
+  row.appendChild(el('label', null, label));
+  const input = document.createElement(multiline ? 'textarea' : 'input');
+  input.value = value || '';
+  row.appendChild(input);
+  return {row, input};
+}
+
+function renderProductDetail(p) {
+  document.getElementById('productDetailTitle').textContent = p.title;
+  const body = document.getElementById('productDetailBody');
+  body.innerHTML = '';
+
+  if (!p.local) {
+    const warn = el('div', 'pageError', 'المنتج ده على شوبيفاي بس، ولسه مش مربوط بكتالوج البوت — البوت لسه مش يقدر يبيعه لحد ما يتحدث كتالوجه.');
+    warn.hidden = false;
+    body.appendChild(warn);
+  }
+
+  const titleF = textField('الاسم', p.title);
+  const descF = textField('الوصف', p.description_html, true);
+  const catF = selectField('الفئة', CATEGORIES, p.category);
+  body.appendChild(titleF.row);
+  body.appendChild(descF.row);
+  body.appendChild(catF.row);
+
+  let deptF = null, collF = null, chartF = null;
+  if (p.local) {
+    deptF = selectField('القسم', DEPARTMENTS, p.local.department);
+    collF = textField('التصنيف (Collection)', p.local.collection || '');
+    chartF = textField('شارت المقاسات', p.local.size_chart || '');
+    body.appendChild(deptF.row);
+    body.appendChild(collF.row);
+    body.appendChild(chartF.row);
+  }
+
+  const variantsSection = el('div', 'odSection');
+  variantsSection.appendChild(el('h3', null, 'الفاريانتس'));
+  const variantInputs = [];
+  (p.variants || []).forEach(v => {
+    const row = el('div', 'odLine');
+    const label = [v.size, v.color, v.length].filter(Boolean).join(' / ') + ' (' + v.sku + ')';
+    row.appendChild(el('span', null, label));
+    const controls = el('div');
+    const priceInput = document.createElement('input');
+    priceInput.type = 'number'; priceInput.step = '0.01'; priceInput.className = 'qtyEdit';
+    priceInput.style.width = '5rem'; priceInput.value = v.price;
+    const stockInput = document.createElement('input');
+    stockInput.type = 'number'; stockInput.className = 'qtyEdit'; stockInput.value = v.inventory_quantity;
+    controls.appendChild(priceInput);
+    controls.appendChild(stockInput);
+    row.appendChild(controls);
+    variantsSection.appendChild(row);
+    variantInputs.push({sku: v.sku, priceInput, stockInput});
+  });
+  body.appendChild(variantsSection);
+
+  const actions = el('div', 'odActions');
+  const saveBtn = el('button', null, 'حفظ التعديلات');
+  saveBtn.onclick = () => saveProductEdits(p, titleF, descF, catF, deptF, collF, chartF, variantInputs);
+  actions.appendChild(saveBtn);
+  body.appendChild(actions);
+}
+
+async function saveProductEdits(p, titleF, descF, catF, deptF, collF, chartF, variantInputs) {
+  if (!p.local_product_id) {
+    alert('المنتج ده مش مربوط بكتالوج البوت لسه — منتظرة عملية مزامنة الأول.');
+    return;
+  }
+  const payload = {
+    title: titleF.input.value,
+    description: descF.input.value,
+    category: catF.select.value,
+    variant_updates: variantInputs.map(v => ({
+      variant_id: v.sku,
+      price: parseFloat(v.priceInput.value),
+      stock_qty: parseInt(v.stockInput.value, 10),
+    })),
+  };
+  if (deptF) payload.department = deptF.select.value;
+  if (collF) payload.collection = collF.input.value || null;
+  if (chartF) payload.size_chart = chartF.input.value || null;
+
+  const res = await api('/shopify/products/' + encodeURIComponent(p.local_product_id) + '/update', {
+    method: 'POST', body: JSON.stringify(payload),
+  });
+  if (!res.ok) { alert('تعذر حفظ التعديلات'); return; }
+  await openProductDetail(currentProductGid);
+  await loadProducts();
+}
+
+// --- product create ---------------------------------------------------
+
+let createVariantRows = [];
+
+document.getElementById('productsNew').onclick = openProductCreate;
+document.getElementById('productCreateClose').onclick = () => {
+  document.getElementById('productCreateOverlay').hidden = true;
+};
+
+function openProductCreate() {
+  document.getElementById('productCreateOverlay').hidden = false;
+  const body = document.getElementById('productCreateBody');
+  body.innerHTML = '';
+  createVariantRows = [];
+
+  const titleF = textField('الاسم', '');
+  const descF = textField('الوصف', '', true);
+  const catF = selectField('الفئة', CATEGORIES, CATEGORIES[0]);
+  const deptF = selectField('القسم', DEPARTMENTS, DEPARTMENTS[0]);
+  const imgF = textField('رابط صورة (اختياري)', '');
+  [titleF, descF, catF, deptF, imgF].forEach(f => body.appendChild(f.row));
+
+  const variantsSection = el('div', 'odSection');
+  variantsSection.appendChild(el('h3', null, 'الفاريانتس (مقاس / لون / طول / سعر / سعر قبل الخصم / كمية)'));
+  const variantsWrap = el('div');
+  variantsSection.appendChild(variantsWrap);
+  const addBtn = el('button', 'addVariantBtn', '+ فاريانت جديد');
+  addBtn.onclick = () => addCreateVariantRow(variantsWrap);
+  variantsSection.appendChild(addBtn);
+  body.appendChild(variantsSection);
+  addCreateVariantRow(variantsWrap);
+
+  const actions = el('div', 'odActions');
+  const submitBtn = el('button', null, 'إنشاء المنتج');
+  submitBtn.onclick = () => submitProductCreate(titleF, descF, catF, deptF, imgF, submitBtn);
+  actions.appendChild(submitBtn);
+  body.appendChild(actions);
+}
+
+function addCreateVariantRow(wrap) {
+  const row = el('div', 'variantRow');
+  const size = document.createElement('input'); size.placeholder = 'مقاس*';
+  const color = document.createElement('input'); color.placeholder = 'لون';
+  const length = document.createElement('input'); length.placeholder = 'طول';
+  const price = document.createElement('input'); price.type = 'number'; price.step = '0.01'; price.placeholder = 'سعر*';
+  const original = document.createElement('input'); original.type = 'number'; original.step = '0.01'; original.placeholder = 'قبل الخصم';
+  const stock = document.createElement('input'); stock.type = 'number'; stock.placeholder = 'كمية';
+  const removeBtn = el('button', null, '×');
+  [size, color, length, price, original, stock, removeBtn].forEach(elm => row.appendChild(elm));
+
+  const entry = {row, size, color, length, price, original, stock};
+  removeBtn.onclick = () => {
+    row.remove();
+    createVariantRows = createVariantRows.filter(r => r !== entry);
+  };
+  createVariantRows.push(entry);
+  wrap.appendChild(row);
+}
+
+async function submitProductCreate(titleF, descF, catF, deptF, imgF, submitBtn) {
+  const variants = createVariantRows
+    .filter(r => r.size.value.trim() && r.price.value)
+    .map(r => {
+      const v = {size: r.size.value.trim(), price: parseFloat(r.price.value)};
+      if (r.color.value.trim()) v.color = r.color.value.trim();
+      if (r.length.value.trim()) v.length = r.length.value.trim();
+      if (r.original.value) v.original_price = parseFloat(r.original.value);
+      v.stock_qty = r.stock.value ? parseInt(r.stock.value, 10) : 0;
+      return v;
+    });
+
+  if (!titleF.input.value.trim() || !variants.length) {
+    alert('لازم اسم للمنتج وفاريانت واحد على الأقل بمقاس وسعر.');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  try {
+    const res = await api('/shopify/products', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: titleF.input.value.trim(),
+        description: descF.input.value,
+        category: catF.select.value,
+        department: deptF.select.value,
+        variants,
+        image_url: imgF.input.value.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('تعذر إنشاء المنتج: ' + (data.detail || data.error || res.status)); return; }
+    document.getElementById('productCreateOverlay').hidden = true;
+    await loadProducts();
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+// --- Shopify section: customers -----------------------------------------
+
+let customersSource = 'shopify'; // 'shopify' | 'whatsapp'
+
+document.getElementById('cust-tab-shopify').onclick = () => switchCustomersSource('shopify');
+document.getElementById('cust-tab-whatsapp').onclick = () => switchCustomersSource('whatsapp');
+document.getElementById('customersSearchBtn').onclick = loadCustomers;
+document.getElementById('customersSearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); loadCustomers(); }
+});
+
+function switchCustomersSource(source) {
+  customersSource = source;
+  document.getElementById('cust-tab-shopify').classList.toggle('active', source === 'shopify');
+  document.getElementById('cust-tab-whatsapp').classList.toggle('active', source === 'whatsapp');
+  loadCustomers();
+}
+
+async function loadCustomers() {
+  const q = document.getElementById('customersSearch').value.trim();
+  const errBox = document.getElementById('customersError');
+  errBox.hidden = true;
+  const tbody = document.getElementById('customersTbody');
+  tbody.innerHTML = '';
+
+  const path = customersSource === 'shopify' ? '/shopify/customers' : '/customers';
+  const res = await api(path + (q ? '?q=' + encodeURIComponent(q) : ''));
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    errBox.hidden = false;
+    errBox.textContent = res.status === 503
+      ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
+      : ('تعذر تحميل العملاء: ' + (body.detail || body.error || res.status));
+    return;
+  }
+  const data = await res.json();
+  renderCustomers(data.customers);
+}
+
+function renderCustomers(customers) {
+  const tbody = document.getElementById('customersTbody');
+  tbody.innerHTML = '';
+  customers.forEach(c => {
+    const tr = document.createElement('tr');
+    if (customersSource === 'shopify') {
+      [c.name || '—', c.phone || '—', (c.email || c.governorate || '—'), String(c.order_count), fmtMoney(c.amount_spent)]
+        .forEach(text => tr.appendChild(el('td', null, text)));
+      tr.onclick = () => openCustomerDetail(c.id);
+    } else {
+      [c.full_name, c.phone, (c.email || c.governorate || '—'), '—', '—']
+        .forEach(text => tr.appendChild(el('td', null, text)));
+      tr.onclick = () => openCustomerDetail(c.client_id);
+    }
+    tbody.appendChild(tr);
+  });
+}
+
+async function openCustomerDetail(id) {
+  document.getElementById('customerDetailOverlay').hidden = false;
+  document.getElementById('customerDetailTitle').textContent = '...';
+  const body = document.getElementById('customerDetailBody');
+  body.innerHTML = '';
+
+  const path = customersSource === 'shopify'
+    ? '/shopify/customers/' + encodeURIComponent(id)
+    : '/customers/' + encodeURIComponent(id);
+  const res = await api(path);
+  if (!res.ok) { body.textContent = 'تعذر تحميل العميل.'; return; }
+  const c = await res.json();
+
+  document.getElementById('customerDetailTitle').textContent = c.name || c.full_name || '—';
+  const info = el('div');
+  const rows = customersSource === 'shopify'
+    ? [['التليفون', c.phone || '—'], ['البريد', c.email || '—'], ['المحافظة', c.governorate || '—'],
+       ['عدد الطلبات', String(c.order_count)], ['الإجمالي', fmtMoney(c.amount_spent)]]
+    : [['التليفون', c.phone || '—'], ['البريد', c.email || '—'], ['المحافظة', c.governorate || '—'],
+       ['العنوان', c.address || '—'], ['الحالة', c.status || '—']];
+  rows.forEach(([k, v]) => {
+    const row = el('div', 'odRow');
+    row.appendChild(el('span', 'k', k));
+    row.appendChild(el('span', null, v));
+    info.appendChild(row);
+  });
+  body.appendChild(info);
+
+  const ordersSection = el('div', 'odSection');
+  ordersSection.appendChild(el('h3', null, 'الطلبات'));
+  (c.orders || []).forEach(o => {
+    const row = el('div', 'odLine');
+    row.appendChild(el('span', null, (o.name || o.reference || o.order_id) + ' — ' + fmtTime(o.created_at || o.placed_at)));
+    row.appendChild(el('span', null, fmtMoney(o.total)));
+    ordersSection.appendChild(row);
+  });
+  if (!(c.orders || []).length) ordersSection.appendChild(el('div', null, 'مفيش طلبات لسه'));
+  body.appendChild(ordersSection);
+}
+
+document.getElementById('customerDetailClose').onclick = () => {
+  document.getElementById('customerDetailOverlay').hidden = true;
+};
+
+// --- Statistics: hand-rolled SVG charts (no chart library) --------------
+
+function escapeXml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function svgBarsHorizontal(items, {width = 560, valueFmt = v => v} = {}) {
+  if (!items.length) return '<div class="chartEmpty">مفيش بيانات لسه</div>';
+  const max = Math.max(...items.map(i => i.value), 1);
+  const barH = 22, gap = 10, labelW = 130, valueW = 60;
+  const trackW = width - labelW - valueW;
+  const height = items.length * (barH + gap);
+  let out = '';
+  items.forEach((it, i) => {
+    const y = i * (barH + gap);
+    const w = Math.max((it.value / max) * trackW, 2);
+    out += `<text x="${labelW - 8}" y="${y + barH / 2 + 4}" font-size="11" fill="#8696a0" text-anchor="end">${escapeXml(it.label)}</text>`;
+    out += `<rect x="${labelW}" y="${y}" width="${w}" height="${barH}" rx="3" fill="#00a884"></rect>`;
+    out += `<text x="${labelW + trackW + 8}" y="${y + barH / 2 + 4}" font-size="11" fill="#e9edef">${escapeXml(valueFmt(it.value))}</text>`;
+  });
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">${out}</svg>`;
+}
+
+function svgBarsVertical(items, {width = 560, height = 160, valueFmt = v => v} = {}) {
+  if (!items.length) return '<div class="chartEmpty">مفيش بيانات لسه</div>';
+  const max = Math.max(...items.map(i => i.value), 1);
+  const padBottom = 20, gap = 6;
+  const barW = Math.max((width - gap * items.length) / items.length - gap, 3);
+  let out = '';
+  items.forEach((it, i) => {
+    const x = i * (barW + gap) + gap;
+    const h = Math.max((it.value / max) * (height - padBottom - 16), 1);
+    const y = height - padBottom - h;
+    out += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="#00a884" rx="2">`
+      + `<title>${escapeXml(it.label)}: ${escapeXml(valueFmt(it.value))}</title></rect>`;
+    out += `<text x="${x + barW / 2}" y="${height - 6}" font-size="9" fill="#8696a0" text-anchor="middle">${escapeXml(it.label)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">${out}</svg>`;
+}
+
+// --- Statistics: load + render --------------------------------------------
+
+let statsRangeDays = 30;
+
+document.querySelectorAll('.rangeBtn').forEach(btn => {
+  btn.onclick = () => {
+    statsRangeDays = parseInt(btn.dataset.range, 10);
+    document.querySelectorAll('.rangeBtn').forEach(b => b.classList.toggle('active', b === btn));
+    loadStats();
+  };
+});
+document.getElementById('statsRefresh').onclick = () => { loadStats(); loadQueue(); };
+
+async function loadStats() {
+  const errBox = document.getElementById('statsError');
+  const truncBox = document.getElementById('statsTruncated');
+  errBox.hidden = true;
+  truncBox.hidden = true;
+
+  const res = await api('/stats?days=' + statsRangeDays);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    errBox.hidden = false;
+    errBox.textContent = res.status === 503
+      ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
+      : ('تعذر تحميل الإحصائيات: ' + (body.detail || body.error || res.status));
+    return;
+  }
+  const data = await res.json();
+  if (data.truncated) {
+    truncBox.hidden = false;
+    truncBox.textContent = 'عدد الطلبات كبير — الأرقام دي بناءً على جزء من المدة المطلوبة بس.';
+  }
+  renderKpis(data);
+  document.getElementById('revenueChart').innerHTML = svgBarsVertical(
+    data.revenue_by_day.map(d => ({label: d.date.slice(5), value: parseFloat(d.revenue)})),
+    {valueFmt: v => v.toFixed(0)}
+  );
+  document.getElementById('bestSellersChart').innerHTML = svgBarsHorizontal(
+    data.best_sellers.map(b => ({label: b.title, value: b.quantity}))
+  );
+  document.getElementById('statusChart').innerHTML = svgBarsHorizontal(
+    Object.entries(data.status_breakdown).map(([label, value]) => ({label, value}))
+  );
+}
+
+function kpiCard(label, value) {
+  const card = el('div', 'kpiCard');
+  card.appendChild(el('div', 'label', label));
+  card.appendChild(el('div', 'value', value));
+  return card;
+}
+
+function renderKpis(data) {
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+  grid.appendChild(kpiCard('الإيرادات', fmtMoney(data.revenue)));
+  grid.appendChild(kpiCard('عدد الطلبات', String(data.order_count)));
+  grid.appendChild(kpiCard('متوسط قيمة الطلب', fmtMoney(data.average_order_value)));
+  grid.appendChild(kpiCard('عدد العملاء', String(data.customer_count)));
+  grid.appendChild(kpiCard('طلبات ملغاة', String(data.cancelled_count)));
+}
+
+// --- review queue (item_swap + alert) -------------------------------------
+
+async function loadQueue() {
+  const res = await api('/queue');
+  const wrap = document.getElementById('queueList');
+  wrap.innerHTML = '';
+  if (!res.ok) { wrap.textContent = 'تعذر تحميل قائمة المراجعة.'; return; }
+  const items = (await res.json()).items;
+  if (!items.length) { wrap.appendChild(el('div', 'chartEmpty', 'مفيش حاجة محتاجة مراجعة دلوقتي 🎉')); return; }
+  items.forEach(item => wrap.appendChild(renderQueueRow(item)));
+}
+
+function renderQueueRow(item) {
+  const row = el('div', 'queueRow');
+  const kindLabel = item.kind === 'item_swap' ? 'طلب تبديل' : 'تنبيه';
+  row.appendChild(el('div', 'summary', '[' + kindLabel + '] ' + item.summary));
+  row.appendChild(el('div', 'meta', fmtTime(item.created_at) + (item.order_id ? ' — ' + item.order_id : '')));
+
+  const actions = el('div', 'rowActions');
+  if (item.kind === 'item_swap') {
+    let toInput = null;
+    if (!item.payload || !item.payload.to_variant_id) {
+      toInput = document.createElement('input');
+      toInput.placeholder = 'variant_id البديل';
+      actions.appendChild(toInput);
+    }
+    const approveBtn = el('button', null, 'اعتماد التبديل');
+    approveBtn.onclick = async () => {
+      const body = toInput ? {to_variant_id: toInput.value.trim()} : {};
+      const res = await api('/queue/' + encodeURIComponent(item.queue_id) + '/approve-swap', {
+        method: 'POST', body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert('تعذر اعتماد التبديل: ' + (data.detail || data.error)); return; }
+      await loadQueue();
+    };
+    actions.appendChild(approveBtn);
+  }
+  const rejectBtn = el('button', 'reject', item.kind === 'item_swap' ? 'رفض' : 'تأكيد الاطلاع');
+  rejectBtn.onclick = async () => {
+    await api('/queue/' + encodeURIComponent(item.queue_id) + '/resolve', {method: 'POST'});
+    await loadQueue();
+  };
+  actions.appendChild(rejectBtn);
+  row.appendChild(actions);
+  return row;
+}
+
+// --- boot -------------------------------------------------------------
+
+async function boot() {
+  const meRes = await api('/me');
+  if (!meRes.ok) return;
+  const me = await meRes.json();
+  document.getElementById('whoami').textContent = me.username;
+  await refreshList();
+  setInterval(refreshList, 8000);
+}
+
+document.getElementById('btn-logout').onclick = async () => {
+  await api('/logout', {method: 'POST'});
+  window.location.href = '/dashboard/login';
+};
+
+// --- sidebar ------------------------------------------------------------
+
+document.getElementById('tab-open').onclick = () => switchTab('open');
+document.getElementById('tab-all').onclick = () => switchTab('all');
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-open').classList.toggle('active', tab === 'open');
+  document.getElementById('tab-all').classList.toggle('active', tab === 'all');
+  renderList();
+}
+
+async function refreshList() {
+  const res = await api('/conversations');
+  const data = await res.json();
+  conversations = data.conversations;
+  const openCount = document.getElementById('open-count');
+  openCount.textContent = data.open_count ? '(' + data.open_count + ')' : '';
+  renderList();
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleString('ar-EG', {hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'});
+}
+
+function renderList() {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const shown = currentTab === 'open' ? conversations.filter(c => c.paused) : conversations;
+
+  if (!shown.length) {
+    list.appendChild(el('div', null, ''));
+    document.getElementById('list').appendChild(
+      Object.assign(el('div', null, currentTab === 'open' ? 'مفيش حد مستني رد دلوقتي 🎉' : 'مفيش محادثات لسه'), {id: 'empty-list'})
+    );
+    return;
+  }
+
+  shown.forEach(c => {
+    const row = el('div', 'conv' + (c.paused ? ' paused' : '') +
+      (current && current.channel === c.channel && current.external_id === c.external_id ? ' selected' : ''));
+    const avatar = el('div', 'avatar', (c.external_id || '?').slice(-2));
+    const body = el('div', 'body');
+    const idLine = el('div', 'id-line');
+    idLine.appendChild(el('div', 'id', c.external_id));
+    idLine.appendChild(el('div', 'time', fmtTime(c.updated_at)));
+    body.appendChild(idLine);
+    const previewLine = el('div', 'preview', c.paused ? '⏸ ' + reasonLabel(c.reason) : (c.preview || '…'));
+    body.appendChild(previewLine);
+    row.appendChild(avatar);
+    row.appendChild(body);
+    row.onclick = () => openConversation(c.channel, c.external_id);
+    list.appendChild(row);
+  });
+}
+
+function reasonLabel(reason) {
+  const labels = {
+    customer_asked: 'العميل طلب حد',
+    out_of_scope: 'برة نطاق البوت',
+    voice_received: 'رسالة صوتية محتاجة سماع',
+    image_received: 'صورة محتاجة نظرة',
+  };
+  return labels[reason] || 'محتاجة رد';
+}
+
+// --- conversation pane ----------------------------------------------------
+
+function bubble(side, text, tag) {
+  const row = el('div', 'row ' + side);
+  const b = el('div', 'bubble');
+  if (tag) b.appendChild(el('span', 'who-tag', tag));
+  b.appendChild(document.createTextNode(text));
+  row.appendChild(b);
+  document.getElementById('log').appendChild(row);
+  return b;
+}
+
+function mediaUrl(p) {
+  return p.startsWith('http://') || p.startsWith('https://') ? p : '/dashboard/media?path=' + encodeURIComponent(p);
+}
+
+function attachImages(bubbleEl, paths) {
+  (paths || []).forEach(p => {
+    const img = el('img');
+    img.src = mediaUrl(p);
+    img.alt = p;
+    img.onerror = () => { img.replaceWith(el('div', 'chip', '📎 ' + p)); };
+    bubbleEl.appendChild(img);
+  });
+}
+
+async function openConversation(channel, externalId) {
+  current = {channel, external_id: externalId};
+  renderList();
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('convHeader').style.display = 'flex';
+  document.getElementById('log').style.display = 'flex';
+  document.getElementById('convWho').textContent = externalId;
+  document.getElementById('convSub').textContent = channel;
+
+  const res = await api('/conversations/' + encodeURIComponent(channel) + '/' + encodeURIComponent(externalId));
+  const data = await res.json();
+  renderConversation(data);
+}
+
+function renderConversation(data) {
+  const log = document.getElementById('log');
+  log.innerHTML = '';
+  data.history.forEach(item => {
+    if (item.kind === 'user') bubble('in', item.text);
+    else if (item.kind === 'bot') attachImages(bubble('out', item.text, item.by === 'staff' ? '👤 رد يدوي' : null), item.attachments);
+    else if (item.kind === 'tools') {
+      const wrap = el('div', 'meta');
+      wrap.appendChild(el('div', 'chip', '🔧 ' + item.names.join(', ')));
+      log.appendChild(wrap);
+    } else if (item.kind === 'refusals') {
+      item.refusals.forEach(r => {
+        const wrap = el('div', 'meta');
+        wrap.appendChild(el('div', 'chip bad', '⛔ ' + r.name + ' → ' + r.error));
+        log.appendChild(wrap);
+      });
+    }
+  });
+  if (!data.history.length) log.appendChild(el('div', 'meta', 'مفيش رسايل لسه'));
+  log.scrollTop = log.scrollHeight;
+
+  const banner = document.getElementById('handoffBanner');
+  banner.innerHTML = '';
+  if (data.paused) {
+    banner.style.display = 'flex';
+    const text = el('span', null, '⏸ ' + reasonLabel(data.reason) + (data.summary ? ' — ' + data.summary : ''));
+    banner.appendChild(text);
+    // A voice_received / image_received handoff carries the actual file --
+    // staff should not have to guess what "listen to this" refers to.
+    const payload = data.payload || {};
+    (payload.images || []).forEach(p => {
+      const img = el('img', 'payload-media');
+      img.src = mediaUrl(p);
+      img.alt = p;
+      img.onerror = () => { img.replaceWith(el('div', 'chip', '📎 ' + p)); };
+      banner.appendChild(img);
+    });
+    (payload.audio || []).forEach(p => {
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.className = 'payload-media';
+      audio.src = mediaUrl(p);
+      banner.appendChild(audio);
+    });
+    const resolveBtn = el('button', null, 'اتحل من غير رد');
+    resolveBtn.onclick = resolveWithoutReply;
+    banner.appendChild(resolveBtn);
+    document.getElementById('replyBar').style.display = 'flex';
+    document.getElementById('notPaused').style.display = 'none';
+  } else {
+    banner.style.display = 'none';
+    document.getElementById('replyBar').style.display = 'none';
+    document.getElementById('notPaused').style.display = 'block';
+  }
+}
+
+async function sendReply() {
+  const textEl = document.getElementById('replyText');
+  const text = textEl.value.trim();
+  if (!text || !current) return;
+  const btn = document.getElementById('btn-send');
+  btn.disabled = true;
+  try {
+    const res = await api('/conversations/' + encodeURIComponent(current.channel) + '/' + encodeURIComponent(current.external_id) + '/reply', {
+      method: 'POST', body: JSON.stringify({text}),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error === 'send_failed' ? 'فشل إرسال الرسالة، جرب تاني' : 'المحادثة مش متوقفة دلوقتي'); return; }
+    textEl.value = '';
+    await openConversation(current.channel, current.external_id);
+    await refreshList();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function resolveWithoutReply() {
+  if (!current) return;
+  await api('/conversations/' + encodeURIComponent(current.channel) + '/' + encodeURIComponent(current.external_id) + '/resolve', {method: 'POST'});
+  await openConversation(current.channel, current.external_id);
+  await refreshList();
+}
+
+document.getElementById('btn-send').onclick = sendReply;
+document.getElementById('replyText').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(); }
+});
+
+boot();
+</script>
+</body>
+</html>

@@ -80,6 +80,11 @@ how distinctive its catalog is.
 **Falls back to a person** on the same conditions as voice, with reason
 `image_received`.
 
+Either fallback shows up at `/dashboard` — see "The staff dashboard" in
+`docs/ARCHITECTURE.md` — with the actual audio/image paths in its payload, so
+staff working the queue know a `voice_received` item is waiting on a listen
+and an `image_received` one on a look, not just "reply to this person".
+
 ## The invariant that survives all of it
 
 A vision reading is a hint about *which tool to call*. It is never a fact.

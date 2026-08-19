@@ -253,5 +253,5 @@ def test_an_unknown_extension_is_refused(seeded, tmp_path):
     provider = ScriptedProvider()
     provider.push_transcript("hello")
 
-    assert media.transcribe_voice(provider, str(odd)) == ""
+    assert media.transcribe_voice(seeded, provider, str(odd)) == ""
     assert provider.audio_calls == []

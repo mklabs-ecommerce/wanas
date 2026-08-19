@@ -1,11 +1,12 @@
-"""Staff authentication.
+"""Staff authentication, and the dashboard session built on top of it.
 
 One role: everyone who can log in can do everything. What is not optional at
 one role is that passwords are hashed, there is no shared login, and every
 action is attributed -- attribution is the only control this model has.
 
 PBKDF2-HMAC-SHA256 from the standard library, so there is no native build step
-on any platform the shop might deploy from.
+on any platform the shop might deploy from. The session token below is HMAC
+over the same standard library, for the same reason.
 """
 
 from __future__ import annotations
@@ -13,10 +14,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.config import settings
 from backend.models import Staff
 
 _ALGO = "sha256"
@@ -61,6 +64,54 @@ def authenticate(session: Session, username: str, password: str) -> Staff | None
     if staff is None or not staff.is_active:
         return None
     if not verify_password(password, staff.password_hash):
+        return None
+    return staff
+
+
+# --------------------------------------------------------------------------
+# Dashboard sessions
+#
+# A signed, stateless cookie rather than a sessions table: one more thing
+# that must survive a restart for a shop this size is not worth the table.
+# `staff_id.expires_at` signed with HMAC -- forging one means guessing
+# `DASHBOARD_SESSION_SECRET`, and there is nothing to look up, so a login
+# check costs one query instead of a join on every request.
+# --------------------------------------------------------------------------
+
+
+def issue_session_token(staff: Staff) -> str:
+    expires_at = int(time.time()) + settings.dashboard_session_hours * 3600
+    payload = f"{staff.staff_id}.{expires_at}"
+    signature = hmac.new(
+        settings.dashboard_session_secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def staff_from_session_token(session: Session, token: str | None) -> Staff | None:
+    """None on anything wrong with the token -- expired, tampered with, or the
+    account deactivated since it was issued. Never raises: a malformed cookie
+    is exactly as unauthenticated as no cookie at all."""
+    if not settings.dashboard_session_secret or not token:
+        return None
+    try:
+        staff_id_part, expires_part, signature = token.split(".")
+        staff_id = int(staff_id_part)
+        expires_at = int(expires_part)
+    except (ValueError, AttributeError):
+        return None
+
+    payload = f"{staff_id_part}.{expires_part}"
+    expected = hmac.new(
+        settings.dashboard_session_secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        return None
+    if expires_at < int(time.time()):
+        return None
+
+    staff = session.get(Staff, staff_id)
+    if staff is None or not staff.is_active:
         return None
     return staff
 

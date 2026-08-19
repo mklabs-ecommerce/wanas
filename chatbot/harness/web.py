@@ -23,10 +23,11 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from backend.config import PROJECT_ROOT
 from backend.db import session_scope
 from backend.services import carts, identities, notifications
 from chatbot import session as session_store
+from chatbot.display import display_history, turn_detail
+from chatbot.media_serving import resolve_servable_path
 from chatbot.runtime import handle_message
 
 log = logging.getLogger("wanas.harness.web")
@@ -35,75 +36,8 @@ router = APIRouter(prefix="/harness", tags=["harness"])
 
 PAGE = Path(__file__).parent / "chat.html"
 
-#: Attachments are local catalog files. Only these roots may be served, so a
-#: crafted path cannot walk out of the project.
-SERVABLE_ROOTS = ("data/size-charts", "data/images", "data/inbound")
-
 DEFAULT_IDENTITY = "201000000001"
 CHANNEL = "whatsapp"
-
-
-# --------------------------------------------------------------------------
-# Reading what a turn did, without changing the agent to tell us
-# --------------------------------------------------------------------------
-
-
-def _turn_detail(history: list[dict]) -> list[dict]:
-    """The tool calls and results of the most recent turn.
-
-    Read back out of the stored session rather than plumbed through
-    `AgentReply`: the history already holds every tool result in full, so the
-    UI can show a refusal exactly as the model saw it without the agent
-    growing a field that only exists for a test harness.
-
-    Walks backwards to the user message that started the turn, which is
-    trimming-proof — indices shift, the shape does not.
-    """
-    turn: list[dict] = []
-    for message in reversed(history):
-        role = message.get("role")
-        if role == "user":
-            break
-        if role == "tool_results":
-            for result in message.get("results") or []:
-                content = result.get("content") or {}
-                turn.append(
-                    {
-                        "name": result.get("name"),
-                        "error": content.get("error"),
-                        # The refusal payload matters as much as the code:
-                        # `out_of_stock` is only actionable with its
-                        # `alternatives`.
-                        "content": content,
-                    }
-                )
-    turn.reverse()
-    return turn
-
-
-def _display_history(history: list[dict]) -> list[dict]:
-    """The stored conversation as bubbles, so a reload is not a fresh start."""
-    items: list[dict] = []
-    for message in history:
-        role = message.get("role")
-        if role == "user":
-            items.append({"kind": "user", "text": message.get("content", "")})
-        elif role == "assistant":
-            if message.get("content"):
-                items.append({"kind": "bot", "text": message["content"]})
-            if message.get("tool_calls"):
-                items.append(
-                    {"kind": "tools", "names": [c.get("name") for c in message["tool_calls"]]}
-                )
-        elif role == "tool_results":
-            errors = [
-                {"name": r.get("name"), "error": (r.get("content") or {}).get("error")}
-                for r in message.get("results") or []
-                if (r.get("content") or {}).get("error")
-            ]
-            if errors:
-                items.append({"kind": "refusals", "refusals": errors})
-    return items
 
 
 def _drain_notifications(since: int) -> list[dict]:
@@ -153,7 +87,7 @@ def state(identity: str = Query(DEFAULT_IDENTITY), channel: str = Query(CHANNEL)
             {
                 "identity": identity,
                 "channel": channel,
-                "history": _display_history(session_store.load(db, channel, identity)),
+                "history": display_history(session_store.load(db, channel, identity)),
                 "paused": identities.is_paused(db, channel, identity),
                 "cart": carts.cart_payload(db, channel, identity),
             }
@@ -173,7 +107,7 @@ def send(payload: dict = Body(...)) -> JSONResponse:
         reply = handle_message(
             channel, identity, text, image_paths=image_paths, audio_paths=audio_paths, db=db
         )
-        detail = _turn_detail(session_store.load(db, channel, identity))
+        detail = turn_detail(session_store.load(db, channel, identity))
         paused = identities.is_paused(db, channel, identity)
         cart = carts.cart_payload(db, channel, identity)
 
@@ -222,13 +156,8 @@ def unpause(payload: dict = Body(default={})) -> JSONResponse:
 @router.get("/media")
 def media(path: str = Query(...)):
     """Serve a catalog image so an attachment renders instead of being a path."""
-    normalised = path.replace("\\", "/").lstrip("/")
-    if not any(normalised.startswith(root) for root in SERVABLE_ROOTS):
-        return JSONResponse({"error": "forbidden_path"}, status_code=403)
-
-    target = (PROJECT_ROOT / normalised).resolve()
-    # Belt and braces: resolve() collapses any ".." before this check.
-    if not str(target).startswith(str(PROJECT_ROOT.resolve())) or not target.is_file():
+    target = resolve_servable_path(path)
+    if target is None:
         return JSONResponse({"error": "not_found"}, status_code=404)
     return FileResponse(target)
 

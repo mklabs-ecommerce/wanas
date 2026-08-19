@@ -68,7 +68,11 @@ calls. Set `LLM_PROVIDER=gemini` and a key to get the real agent.
 - **After the sale.** Change a quantity, cancel before shipping, request an
   item swap (staff decide), rate a delivered order.
 - **Hand over to a person** for complaints, anything out of scope, or anything
-  it could not read.
+  it could not read — and a staff dashboard (`/dashboard`, its own login) to
+  see who is waiting and answer them, alongside Shopify products/orders/
+  customers, store-wide statistics, the swap/alert review queue, and the
+  bot's own feature-flag settings. See "The staff dashboard" in
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Testing
 
@@ -100,7 +104,8 @@ uvicorn app:app --host 0.0.0.0 --port $PORT
 PostgreSQL is required. There is no Alembic — tables are created at startup;
 run `seed` / `set-fee` / `create-staff` once against a new database. Register
 the Meta webhook (`POST /webhooks/whatsapp`) and the Shopify webhooks
-(`POST /webhooks/shopify`) once the app is reachable over HTTPS.
+(`POST /webhooks/shopify`) once the app is reachable over HTTPS. Staff log in
+at `/dashboard` with the account `create-staff` made.
 
 The full pre-launch checklist, including what silently does nothing when it is
 missing, is in [docs/OPERATIONS.md](docs/OPERATIONS.md).
@@ -111,7 +116,7 @@ See [`.env.example`](.env.example) for every variable with its default and the
 behaviour when it is unset. Required for a real deployment: `DATABASE_URL`,
 `LLM_PROVIDER`, `LLM_API_KEY`, `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`,
 `SHOPIFY_WEBHOOK_SECRET`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
-`WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`.
+`WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `DASHBOARD_SESSION_SECRET`.
 
 Never commit `.env` — it is git-ignored. `.env.example` holds names and safe
 placeholders only.

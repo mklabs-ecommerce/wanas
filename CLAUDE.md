@@ -69,11 +69,24 @@ chatbot/
   media.py                  voice notes and photos (see docs/MEDIA.md)
   interactive.py            tappable pickers, in a channel-neutral shape
   session.py                 DB-backed session storage
+  display.py                 stored history -> bubbles a person can read;
+                              shared by the harness and the dashboard
+  media_serving.py           the local-file path guard both of them serve through
   providers/                  gemini.py (real), fake.py (tests/rehearsal), base.py
   tools/                      cart_tools, catalog_tools, order_tools, support_tools
   channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
   harness/                    local dev-only chat UI (web + terminal), unauthenticated
                               by design and OFF unless HARNESS_ENABLED=1
+  dashboard/                  staff dashboard: conversations, Shopify (products/
+                              orders/customers), statistics, the review queue,
+                              and feature-flag settings; staff-login
+                              authenticated, ON by default
+                              (DASHBOARD_SESSION_SECRET gates login).
+                              web.py (auth + conversations) stays one file;
+                              shopify_api.py / stats_api.py / queue_api.py /
+                              settings_api.py / customers_api.py are sibling
+                              routers under the same guard, not a growing
+                              single file -- see web.py's own docstring
 docs/                    ARCHITECTURE.md, OPERATIONS.md, MEDIA.md
 data/                    products_seed.json, size_charts.json, governorates.json,
                           merge_catalog.py, images/, size-charts/ — catalog
@@ -163,8 +176,26 @@ make run
 ## Testing
 
 ```bash
-make check                # ruff + the full suite
+make check                                          # ruff + the full suite (what CI runs)
+make lint                                           # ruff check ., no autofix
+pytest tests/test_order_transaction.py              # one file
+pytest tests/test_order_transaction.py::test_name   # one test
 ```
+
+Every test gets a fresh schema and an in-memory fake Shopify shelf
+(`tests/conftest.py`), and the suite blanks real `LLM_API_KEY` /
+`SHOPIFY_*` / `WHATSAPP_*` env vars before importing the app, so it never
+reads a developer's `.env` by accident. Two markers opt out of the default:
+
+- `@pytest.mark.no_shopify` — skips installing the fake Shopify shelf, to
+  exercise the "Shopify unreachable" fallback path.
+- `@pytest.mark.live` (`tests/test_conversation_live.py`) — hits a real model
+  and costs quota; skipped unless run explicitly:
+  `RUN_LIVE_TESTS=1 pytest tests/test_conversation_live.py -v`.
+
+Run the suite against PostgreSQL before deploying — `tests/test_order_transaction.py`
+(the atomic-order concurrency test) is the one that depends on it most:
+`DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test`.
 
 Dependencies are **pinned** in `requirements.txt`. Railway rebuilds from it on
 every deploy, so an unpinned range means the build that ships is not the build
@@ -201,17 +232,40 @@ tracking message ever fires — is in `docs/OPERATIONS.md`.
 - Never accept a webhook without verifying its signature. Meta signs with hex
   HMAC-SHA256, Shopify with base64; with no secret configured the Shopify
   endpoint refuses everything, and that is the correct behaviour.
+- Never expose `DASHBOARD_SESSION_SECRET`, and never weaken
+  `chatbot/dashboard/web.py`'s login so it signs a session without one —
+  same shape as the Shopify webhook rule above: no secret means refuse, not
+  fall back to something guessable.
 
 ## Legacy Architecture
 
-The old custom e-commerce website (a React storefront) and the staff
-dashboard (a server-rendered admin UI reading the local database) were
-**removed from this repository**. The storefront moved to a Shopify theme;
-Shopify Admin is now where products, inventory, and orders are managed by
-staff. Do not recreate the old website/dashboard architecture unless
-explicitly requested.
+The old custom e-commerce website (a React storefront) and the old
+server-rendered admin UI reading the local database were **removed from this
+repository**. The storefront moved to a Shopify theme; Shopify Admin is now
+where products, inventory, and orders are managed by staff. Do not recreate
+the old website architecture unless explicitly requested.
 
-One known gap from that removal: `request_human` still pauses a
-conversation and writes a handoff record, but there is currently no UI to
-resolve one — only the dev-only harness's `/unpause` stand-in. This is a
-known limitation, not something to silently "fix" by rebuilding a dashboard.
+The one gap that removal left — `request_human` pausing a conversation with
+no UI to resolve it — is closed. `chatbot/dashboard/` is a new, purpose-built
+staff dashboard: it lists conversations, shows one in full, and lets a
+logged-in staff member reply to a *paused* one or resolve it without a
+reply. See "The staff dashboard" in `docs/ARCHITECTURE.md`, and
+`DASHBOARD_SESSION_SECRET` / `python -m backend.cli create-staff` in
+`docs/OPERATIONS.md`.
+
+**This is no longer read-only for Shopify.** The dashboard grew into the
+single control/monitoring surface for the whole business: alongside
+conversations it has a Shopify section (products — view, create, edit;
+orders — view, fulfil, cancel, edit across *both* the bot and the website;
+customers), store-wide statistics (KPIs, charts, built from a live Shopify
+read since only bot orders ever reach Postgres — see
+`backend/services/dashboard_stats.py`), the `item_swap`/`alert` review
+queue, and staff-toggleable feature flags
+(`backend/services/runtime_flags.py`). Shopify is still the source of truth
+for price/stock/orders; product create/edit pushes to Shopify first and
+mirrors the wanas.db-only fields (`category`/`department`/`style`/
+`collection`/`size_chart`) after — see the module docstring on
+`backend/services/shopify_admin_products.py` for exactly where that line
+is drawn (no file-upload images yet, no refunds — this shop is
+cash-on-delivery with nothing to refund against, and removing a variant
+from an existing Shopify product is deliberately left to Shopify Admin).

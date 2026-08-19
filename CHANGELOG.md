@@ -97,6 +97,37 @@ added: the store already holds price and stock, and is the simplest place for
 its own photos too. See the "Shopify owns price, stock and orders" section of
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+### A paused conversation can actually come back
+
+`request_human` has paused a conversation and written a `StaffQueueItem`
+since Phase 1. Nothing ever read that queue back or un-paused the
+conversation except the dev harness's `/unpause` stand-in — a customer who
+triggered a handoff **stayed stuck** until someone edited the database by
+hand. This was a known, documented gap (`docs/ARCHITECTURE.md`, "Known
+gap"), not an oversight, but it was still the single biggest thing standing
+between this project and a real deployment.
+
+`chatbot/dashboard/` closes it: a staff login (`Staff` already existed —
+`backend/services/auth.py`, `python -m backend.cli create-staff` — with
+nowhere to log in) at `/dashboard` lists conversations, waiting-on-staff ones
+first, oldest wait first. Opening one shows the full history and, if it is
+paused, why. Replying sends the customer a real message through the same
+`OutboundSender` port the bot's own replies use, then resolves the queue item
+and un-pauses the conversation in one transaction; "resolve without a reply"
+covers a false alarm or a customer already handled by phone. It refuses
+(409) to reply into a conversation the bot still owns — the same two-writers
+race `chatbot/dispatcher.py`'s debounce lock exists to prevent.
+
+The session is a signed cookie (`backend/services/auth.py::issue_session_token`),
+not a table. With no `DASHBOARD_SESSION_SECRET` set, login refuses outright
+(503) — the same call the Shopify webhook makes with no signing secret.
+`DASHBOARD_ENABLED`, `DASHBOARD_SESSION_SECRET`, `DASHBOARD_SESSION_HOURS`.
+
+Two small refactors came out of building it: `chatbot/display.py` (stored
+history → bubbles a person can read) and `chatbot/media_serving.py` (the
+local-file path guard) are now shared between the harness and the
+dashboard, rather than living only in the harness.
+
 ### The governorate is actually picked
 
 `AGENTS.md` has always said the governorate is "a picked value from a fixed
@@ -124,4 +155,4 @@ is not watching an unread message for the length of a model call.
 - `pyproject.toml` (ruff + pytest config), `Makefile`, `.editorconfig`,
   `Procfile`, GitHub Actions CI running lint and the suite on both SQLite and
   PostgreSQL, and `docs/`.
-- Test suite: 297 → 397 (381 passed, 16 skipped without live Shopify/WhatsApp credentials).
+- Test suite: 297 → 421 (405 passed, 16 skipped without live Shopify/WhatsApp credentials).

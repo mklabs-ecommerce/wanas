@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.models import Product
+from backend.services import runtime_flags
 from chatbot.providers import LLMProvider, ProviderError
 from chatbot.providers.base import ImageReading
 
@@ -92,14 +93,14 @@ def _read(path: str) -> tuple[bytes, str] | None:
 # --------------------------------------------------------------------------
 
 
-def transcribe_voice(provider: LLMProvider, path: str, *, hint: str = "") -> str:
+def transcribe_voice(session: Session, provider: LLMProvider, path: str, *, hint: str = "") -> str:
     """A voice note as text, or "" when it could not be read.
 
     Empty is not an error to shout about -- it is the documented signal that
     this message belongs to a person, and the caller falls back to the handoff
     it would have done anyway.
     """
-    if not settings.voice_notes_enabled:
+    if not runtime_flags.get(session, "voice_notes_enabled", settings.voice_notes_enabled):
         return ""
     if not getattr(provider, "supports_audio", False):
         log.info("provider %s cannot transcribe; voice note goes to a person", provider.name)
@@ -159,7 +160,7 @@ def read_photo(session: Session, provider: LLMProvider, path: str) -> ImageReadi
     or the provider refused. It is not the same as a confident "this is not a
     garment", which is a real reading and handled by the caller.
     """
-    if not settings.image_understanding_enabled:
+    if not runtime_flags.get(session, "image_understanding_enabled", settings.image_understanding_enabled):
         return None
     if not getattr(provider, "supports_vision", False):
         log.info("provider %s cannot read images; photo goes to a person", provider.name)

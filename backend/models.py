@@ -408,6 +408,26 @@ class Staff(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class RuntimeSetting(Base):
+    """A staff-toggled override for a handful of named feature flags.
+
+    `backend/config.py`'s `Settings` stays env-only and frozen -- that
+    boundary does not move. This is a separate, deliberately small overlay:
+    the same "Shopify's number over wanas.db's" shape (`catalog._overlay`),
+    just for `voice_notes_enabled` / `image_understanding_enabled` /
+    `interactive_messages_enabled` instead of price and stock. Absent means
+    "use the env default"; a row here is a staff decision made from the
+    dashboard, without a redeploy.
+    """
+
+    __tablename__ = "runtime_settings"
+
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    value: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("staff.staff_id"), nullable=True)
+
+
 class WebhookEvent(Base):
     __tablename__ = "webhook_events"
 
@@ -462,6 +482,7 @@ __all__ = [
     "ShippingRate",
     "StaffQueueItem",
     "Staff",
+    "RuntimeSetting",
     "WebhookEvent",
     "Counter",
     "WhatsAppMedia",

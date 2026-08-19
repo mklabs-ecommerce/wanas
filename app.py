@@ -27,6 +27,12 @@ from backend.webhooks.shopify import router as shopify_router
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
 from chatbot.channels.whatsapp import router as whatsapp_router
+from chatbot.dashboard.customers_api import router as dashboard_customers_router
+from chatbot.dashboard.queue_api import router as dashboard_queue_router
+from chatbot.dashboard.settings_api import router as dashboard_settings_router
+from chatbot.dashboard.shopify_api import router as dashboard_shopify_router
+from chatbot.dashboard.stats_api import router as dashboard_stats_router
+from chatbot.dashboard.web import router as dashboard_router
 from chatbot.harness.web import router as harness_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -61,6 +67,13 @@ async def lifespan(_app: FastAPI):
             "SHOPIFY_WEBHOOK_SECRET is not set: order status pushes "
             "(packed / shipped / delivered) will never fire."
         )
+    if settings.dashboard_enabled and not settings.dashboard_configured:
+        # Same failure shape as the line above: a conversation that pauses for
+        # a person still pauses, but there is no way left to un-pause it.
+        log.warning(
+            "DASHBOARD_SESSION_SECRET is not set: /dashboard cannot log anyone "
+            "in, so a paused conversation has no way back to the customer."
+        )
     log.info(
         "inbound messages: debounce %.1fs across %s workers",
         settings.message_debounce_seconds,
@@ -87,6 +100,7 @@ def health() -> dict:
         "shopify_webhooks_configured": settings.shopify_webhooks_configured,
         "voice_notes": settings.voice_notes_enabled,
         "image_understanding": settings.image_understanding_enabled,
+        "dashboard_configured": settings.dashboard_configured,
     }
 
 
@@ -100,6 +114,19 @@ app.include_router(shopify_router)
 # Public, unauthenticated: Meta requires a privacy policy URL a logged-out
 # reviewer can read.
 app.include_router(legal_router)
+
+if settings.dashboard_enabled:
+    # Authenticated (a staff login), unlike the harness below -- safe to leave
+    # mounted by default. `dashboard_configured` still gates whether login
+    # actually works; see the lifespan warning above. Split into sibling
+    # routers (chatbot/dashboard/*_api.py) rather than one growing file, all
+    # under the same guard since they all sit behind the same staff login.
+    app.include_router(dashboard_router)
+    app.include_router(dashboard_settings_router)
+    app.include_router(dashboard_shopify_router)
+    app.include_router(dashboard_customers_router)
+    app.include_router(dashboard_stats_router)
+    app.include_router(dashboard_queue_router)
 
 if settings.harness_enabled:
     app.include_router(harness_router)

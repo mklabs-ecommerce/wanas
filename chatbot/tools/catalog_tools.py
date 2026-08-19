@@ -6,7 +6,7 @@ from __future__ import annotations
 from backend.config import settings
 from backend.models import Product
 from backend.money import money
-from backend.services import catalog, shipping
+from backend.services import catalog, runtime_flags, shipping
 from backend.services.size_charts import MEASUREMENT_NOTE, get_chart
 from chatbot import interactive
 from chatbot.tools.base import ToolContext, tool
@@ -149,6 +149,12 @@ def get_shipping_fee(ctx: ToolContext, governorate: str) -> dict:
     return {"governorate": resolved, "fee": money(fee)}
 
 
+def _interactive_enabled(ctx: ToolContext) -> bool:
+    return runtime_flags.get(
+        ctx.session, "interactive_messages_enabled", settings.interactive_messages_enabled
+    )
+
+
 @tool(
     "ask_governorate",
     "Ask which governorate to ship to, as a list the customer taps rather than a question they "
@@ -174,7 +180,7 @@ def ask_governorate(ctx: ToolContext, region: str | None = None) -> dict:
                 {"region_id": item["region_id"], "label_ar": item["label_ar"]} for item in regions
             ],
         }
-        if settings.interactive_messages_enabled:
+        if _interactive_enabled(ctx):
             payload["picker_sent"] = ctx.offer(interactive.region_picker(regions))
         return payload
 
@@ -204,6 +210,6 @@ def ask_governorate(ctx: ToolContext, region: str | None = None) -> dict:
             {"governorate": row["governorate"], "label_ar": row["label_ar"]} for row in rows
         ],
     }
-    if settings.interactive_messages_enabled:
+    if _interactive_enabled(ctx):
         payload["picker_sent"] = ctx.offer(interactive.governorate_picker(rows, label))
     return payload

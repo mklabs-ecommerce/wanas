@@ -162,7 +162,7 @@ def _handle(
     transcript: str | None = None
 
     if audio_paths:
-        transcript = media.transcribe_voice(provider, audio_paths[0], hint=text)
+        transcript = media.transcribe_voice(db, provider, audio_paths[0], hint=text)
         if not transcript:
             # Unreadable, or no provider that can listen. The same fallback
             # this path has always had.

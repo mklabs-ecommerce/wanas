@@ -35,6 +35,7 @@ def assistant(
     tool_calls: list[dict] | None = None,
     signature: str | None = None,
     attachments: list[str] | None = None,
+    by: str | None = None,
 ) -> dict:
     message: dict = {"role": ASSISTANT, "content": text or ""}
     if tool_calls:
@@ -47,6 +48,14 @@ def assistant(
         # later turn can tell what the customer has already been shown and
         # never resend it uninvited.
         message["attachments"] = list(attachments)
+    if by:
+        # Set to "staff" for a reply the dashboard sent on a person's behalf
+        # while the conversation was paused. Absent (equivalent to "bot") for
+        # everything the model itself said -- also never sent to the
+        # provider, same reasoning as `attachments`, but here it is what lets
+        # `chatbot/display.py` show a staff member's own words as
+        # unmistakably theirs rather than the model's.
+        message["by"] = by
     return message
 
 

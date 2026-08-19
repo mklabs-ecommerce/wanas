@@ -48,6 +48,10 @@ for _name in (
     "WHATSAPP_ACCESS_TOKEN",
     "WHATSAPP_APP_SECRET",
     "WHATSAPP_VERIFY_TOKEN",
+    # A real value here would make the "no secret configured" dashboard tests
+    # pass or fail depending on whose .env happens to be sitting next to the
+    # repo, rather than on the code.
+    "DASHBOARD_SESSION_SECRET",
     # A real store domain here would have the suite quietly making live calls
     # to Shopify -- slow, rate-limited, and dependent on what the shop happens
     # to be selling today. Tests that exercise the live path inject a snapshot

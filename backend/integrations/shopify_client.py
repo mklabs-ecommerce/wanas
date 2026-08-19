@@ -77,10 +77,16 @@ class ShopifyClient:
         domain: str | None = None,
         token: str | None = None,
         version: str | None = None,
+        *,
+        timeout: float = REQUEST_TIMEOUT,
     ):
         self.domain = domain or _env("SHOPIFY_STORE_DOMAIN")
         self.token = token or _env("SHOPIFY_ADMIN_TOKEN")
         self.version = version or _env("SHOPIFY_API_VERSION", default=DEFAULT_API_VERSION)
+        #: Per-instance, not the module constant directly -- `get_admin_client()`
+        #: hands bulk list/stats pages a longer budget than a live chat turn
+        #: gets, without the two sharing a mutable global.
+        self.timeout = timeout
         self._lock = threading.Lock()
         self._throttle_until = 0.0
 
@@ -117,7 +123,7 @@ class ShopifyClient:
         for attempt in range(3):
             req = urllib.request.Request(self.url, data=body, headers=headers)
             try:
-                with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
                     payload = json.loads(response.read().decode())
                 break
             except urllib.error.HTTPError as exc:
@@ -206,3 +212,23 @@ def get_client() -> ShopifyClient:
         if _client is None:
             _client = ShopifyClient()
         return _client
+
+
+#: Everything above is tuned for an 8s live chat turn a customer is waiting
+#: on. A dashboard product/order list paginates through dozens of calls and
+#: can afford to wait longer for each -- `scripts/shopify_sync.py` makes the
+#: same call with a 60s timeout for the same reason. A separate instance (not
+#: `get_client()` with a mutated timeout) so the two never fight over the same
+#: throttle-pause state under concurrent staff + customer traffic.
+ADMIN_REQUEST_TIMEOUT = 20.0
+
+_admin_client: ShopifyClient | None = None
+_admin_client_lock = threading.Lock()
+
+
+def get_admin_client() -> ShopifyClient:
+    global _admin_client
+    with _admin_client_lock:
+        if _admin_client is None:
+            _admin_client = ShopifyClient(timeout=ADMIN_REQUEST_TIMEOUT)
+        return _admin_client

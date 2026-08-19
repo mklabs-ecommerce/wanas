@@ -179,9 +179,10 @@ Not full coverage — the parts where a silent bug is expensive:
 - **No double-decrement.** An order writes stock down on Shopify exactly
   once; a cancellation restocks exactly once.
 
-## Known gap
+## The handoff has a UI now
 
-`request_human` pauses a conversation and writes a handoff record, but
-there is currently no staff UI to resolve one (the dashboard that used to
-do this was removed — see `CLAUDE.md`). Don't silently "fix" this by
-rebuilding a dashboard; it's a deliberate, documented gap.
+`request_human` pauses a conversation and writes a handoff record.
+`chatbot/dashboard/` (a staff login, `/dashboard`) lists what is waiting,
+lets staff reply — which un-pauses the conversation and resolves the record
+in the same transaction — or resolve it without a reply. See "The staff
+dashboard" in `docs/ARCHITECTURE.md`.
