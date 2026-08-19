@@ -453,6 +453,25 @@ class Counter(Base):
     value: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+class TestPhoneNumber(Base):
+    """Numbers staff use to test the bot by chatting with it for real.
+
+    The bot treats these exactly like any other customer -- this table
+    changes nothing about how a conversation is handled. It exists only so
+    `backend/services/dashboard_stats.py` can leave a test purchase out of
+    revenue/order-count/best-sellers, the same way a cancelled order already
+    is: testing should not make the shop's own numbers look busier than they
+    are.
+    """
+
+    __tablename__ = "test_phone_numbers"
+
+    phone: Mapped[str] = mapped_column(String(40), primary_key=True)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    added_by: Mapped[int | None] = mapped_column(ForeignKey("staff.staff_id"), nullable=True)
+
+
 class WhatsAppMedia(Base):
     """Cache of Meta media IDs for the 12 size-chart images.
 
@@ -483,6 +502,7 @@ __all__ = [
     "StaffQueueItem",
     "Staff",
     "RuntimeSetting",
+    "TestPhoneNumber",
     "WebhookEvent",
     "Counter",
     "WhatsAppMedia",

@@ -119,6 +119,15 @@
     position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:stretch;
     justify-content:flex-end; z-index:20;
   }
+  /* `.panelOverlay`'s own `display:flex` above has the same specificity as
+     the browser's built-in `[hidden] { display:none }` rule, and an author
+     stylesheet wins that tie -- so a `hidden` overlay was still rendering
+     as a full-viewport layer that silently ate every click on the page from
+     the moment its section first became active. This is the actual "the
+     dashboard hangs" bug: not slow, just permanently unclickable underneath
+     an invisible-looking pane. `!important` is the standard fix for exactly
+     this hidden-attribute-vs-class-display conflict. */
+  .panelOverlay[hidden] { display:none !important; }
   .panelBox {
     width:min(34rem,92vw); background:var(--bg); border-inline-start:1px solid var(--line);
     display:flex; flex-direction:column; min-height:0;
@@ -243,6 +252,16 @@
   }
   #convHeader .who { font-weight:600; }
   #convHeader .sub { color:var(--muted); font-size:.78rem; }
+  #convHeader .spacer { flex:1; }
+  #convHeader .controlStatus { font-size:.8rem; white-space:nowrap; }
+  #convHeader .controlStatus.human { color:#ffb4b4; }
+  #convHeader .controlStatus.bot { color:var(--accent); }
+  #convHeader button {
+    background:var(--line); color:var(--ink); border:none; border-radius:6px;
+    padding:.35rem .7rem; font:inherit; font-size:.8rem; cursor:pointer; white-space:nowrap;
+  }
+  #convHeader button.primary { background:var(--accent); color:#04120e; font-weight:600; }
+  #convHeader button.danger { background:#5a2323; }
 
   #handoffBanner {
     display:none; background:var(--note); border-bottom:1px solid var(--note-line);
@@ -323,6 +342,11 @@
         <div class="who" id="convWho"></div>
         <div class="sub" id="convSub"></div>
       </div>
+      <div class="spacer"></div>
+      <span class="controlStatus" id="controlStatus"></span>
+      <button id="btn-takeover">🧑 تولي المحادثة</button>
+      <button id="btn-release" class="primary">🤖 رجّع البوت</button>
+      <button id="btn-reset" class="danger">♻️ إعادة تعيين</button>
     </div>
     <div id="handoffBanner"></div>
     <div id="log"></div>
@@ -446,11 +470,25 @@
       <button class="rangeBtn active" data-range="30">٣٠ يوم</button>
       <button class="rangeBtn" data-range="90">٩٠ يوم</button>
       <button id="statsRefresh">تحديث</button>
+      <span class="sub" id="statsRefreshedAt" style="align-self:center;"></span>
     </div>
     <div id="statsError" class="pageError" hidden></div>
     <div id="statsTruncated" class="pageError" hidden></div>
+    <div id="statsExcluded" class="pageError" hidden style="background:#1d2b33;border-color:var(--line);color:var(--muted);"></div>
 
     <div id="kpiGrid"></div>
+
+    <div class="odSection">
+      <h3>أرقام تليفونات الاختبار</h3>
+      <p class="settingsHint">أي طلب من الأرقام دي بيتشال من الإحصائيات فوق تلقائيًا — البوت بيتعامل معاها زي أي عميل عادي.</p>
+      <div id="testNumbersError" class="pageError" hidden></div>
+      <div id="testNumbersList"></div>
+      <div class="toolbar" style="margin-top:.5rem;">
+        <input id="testNumberInput" placeholder="رقم التليفون، مثلا 01001234567" style="max-width:16rem;">
+        <input id="testNumberNote" placeholder="ملاحظة (اختياري)" style="max-width:14rem;">
+        <button id="testNumberAdd" class="newBtn">+ إضافة</button>
+      </div>
+    </div>
 
     <div class="odSection">
       <h3>الإيرادات باليوم</h3>
@@ -498,10 +536,54 @@ const el = (tag, cls, text) => {
   return node;
 };
 
+//: A slow or throttled Shopify call could otherwise leave a tab looking
+//: frozen for a minute (the admin client retries 3x at up to 20s each) with
+//: nothing on screen to say why. This turns that into a clear, timely error
+//: instead -- see loadOrders/loadProducts/loadCustomers/loadStats for how
+//: the resulting rejection is shown.
+const API_TIMEOUT_MS = 15000;
+
 async function api(path, opts) {
-  const res = await fetch('/dashboard/api' + path, Object.assign({headers: {'content-type': 'application/json'}}, opts || {}));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch('/dashboard/api' + path, Object.assign(
+      {headers: {'content-type': 'application/json'}, signal: controller.signal}, opts || {}
+    ));
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('timeout');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (res.status === 401) { window.location.href = '/dashboard/login'; throw new Error('unauthenticated'); }
   return res;
+}
+
+//: Shared by every list loader below: show a single "loading" row instead of
+//: an empty table while the request is in flight, so a slow-but-working
+//: fetch never looks identical to a frozen page.
+function loadingRow(tbody, colspan, text) {
+  tbody.innerHTML = '';
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = colspan;
+  td.style.textAlign = 'center';
+  td.style.color = 'var(--muted)';
+  td.textContent = text || 'جار التحميل…';
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+//: A timeout throws before `fetch` ever resolves, so it needs its own
+//: message distinct from a real HTTP error -- "Shopify didn't answer in
+//: time" is actionable, "تعذر تحميل..." with no detail is not.
+function networkErrorText(e, what) {
+  if (e && e.message === 'timeout') {
+    return 'شوبيفاي بطيء في الرد دلوقتي — جرب تاني.';
+  }
+  return 'تعذر تحميل ' + what + ' — تأكد من الاتصال وجرب تاني.';
 }
 
 // --- top-level section nav ---------------------------------------------
@@ -536,6 +618,7 @@ function switchSection(name) {
     sectionLoaded.stats = true;
     loadStats();
     loadQueue();
+    loadTestNumbers();
   }
 }
 
@@ -646,16 +729,20 @@ async function loadOrders() {
   const errBox = document.getElementById('ordersError');
   errBox.hidden = true;
   const tbody = document.getElementById('ordersTbody');
-  tbody.innerHTML = '';
+  loadingRow(tbody, 8);
 
   let res;
   try {
     res = await api('/shopify/orders' + (q ? '?q=' + encodeURIComponent(q) : ''));
   } catch (e) {
+    tbody.innerHTML = '';
+    errBox.hidden = false;
+    errBox.textContent = networkErrorText(e, 'الطلبات');
     return;
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    tbody.innerHTML = '';
     errBox.hidden = false;
     errBox.textContent = res.status === 503
       ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
@@ -716,9 +803,15 @@ async function openOrderDetail(gid) {
   const overlay = document.getElementById('orderDetailOverlay');
   overlay.hidden = false;
   document.getElementById('orderDetailTitle').textContent = '...';
-  document.getElementById('orderDetailBody').innerHTML = '';
+  document.getElementById('orderDetailBody').textContent = 'جار التحميل…';
 
-  const res = await api('/shopify/orders/' + encodeURIComponent(gid));
+  let res;
+  try {
+    res = await api('/shopify/orders/' + encodeURIComponent(gid));
+  } catch (e) {
+    document.getElementById('orderDetailBody').textContent = networkErrorText(e, 'الطلب');
+    return;
+  }
   if (!res.ok) {
     document.getElementById('orderDetailBody').textContent = 'تعذر تحميل الطلب.';
     return;
@@ -835,11 +928,20 @@ async function loadProducts() {
   const errBox = document.getElementById('productsError');
   errBox.hidden = true;
   const tbody = document.getElementById('productsTbody');
-  tbody.innerHTML = '';
+  loadingRow(tbody, 6);
 
-  const res = await api('/shopify/products' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  let res;
+  try {
+    res = await api('/shopify/products' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  } catch (e) {
+    tbody.innerHTML = '';
+    errBox.hidden = false;
+    errBox.textContent = networkErrorText(e, 'المنتجات');
+    return;
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    tbody.innerHTML = '';
     errBox.hidden = false;
     errBox.textContent = res.status === 503
       ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
@@ -887,9 +989,15 @@ async function openProductDetail(gid) {
   currentProductGid = gid;
   document.getElementById('productDetailOverlay').hidden = false;
   document.getElementById('productDetailTitle').textContent = '...';
-  document.getElementById('productDetailBody').innerHTML = '';
+  document.getElementById('productDetailBody').textContent = 'جار التحميل…';
 
-  const res = await api('/shopify/products/' + encodeURIComponent(gid));
+  let res;
+  try {
+    res = await api('/shopify/products/' + encodeURIComponent(gid));
+  } catch (e) {
+    document.getElementById('productDetailBody').textContent = networkErrorText(e, 'المنتج');
+    return;
+  }
   if (!res.ok) {
     document.getElementById('productDetailBody').textContent = 'تعذر تحميل المنتج.';
     return;
@@ -1129,12 +1237,21 @@ async function loadCustomers() {
   const errBox = document.getElementById('customersError');
   errBox.hidden = true;
   const tbody = document.getElementById('customersTbody');
-  tbody.innerHTML = '';
+  loadingRow(tbody, 5);
 
   const path = customersSource === 'shopify' ? '/shopify/customers' : '/customers';
-  const res = await api(path + (q ? '?q=' + encodeURIComponent(q) : ''));
+  let res;
+  try {
+    res = await api(path + (q ? '?q=' + encodeURIComponent(q) : ''));
+  } catch (e) {
+    tbody.innerHTML = '';
+    errBox.hidden = false;
+    errBox.textContent = networkErrorText(e, 'العملاء');
+    return;
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    tbody.innerHTML = '';
     errBox.hidden = false;
     errBox.textContent = res.status === 503
       ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
@@ -1167,12 +1284,18 @@ async function openCustomerDetail(id) {
   document.getElementById('customerDetailOverlay').hidden = false;
   document.getElementById('customerDetailTitle').textContent = '...';
   const body = document.getElementById('customerDetailBody');
-  body.innerHTML = '';
+  body.textContent = 'جار التحميل…';
 
   const path = customersSource === 'shopify'
     ? '/shopify/customers/' + encodeURIComponent(id)
     : '/customers/' + encodeURIComponent(id);
-  const res = await api(path);
+  let res;
+  try {
+    res = await api(path);
+  } catch (e) {
+    body.textContent = networkErrorText(e, 'العميل');
+    return;
+  }
   if (!res.ok) { body.textContent = 'تعذر تحميل العميل.'; return; }
   const c = await res.json();
 
@@ -1263,16 +1386,29 @@ document.getElementById('statsRefresh').onclick = () => { loadStats(); loadQueue
 async function loadStats() {
   const errBox = document.getElementById('statsError');
   const truncBox = document.getElementById('statsTruncated');
+  const excludedBox = document.getElementById('statsExcluded');
   errBox.hidden = true;
   truncBox.hidden = true;
+  excludedBox.hidden = true;
+  document.getElementById('kpiGrid').innerHTML = '';
+  document.getElementById('statsRefreshedAt').textContent = 'بيتحمل دلوقتي…';
 
-  const res = await api('/stats?days=' + statsRangeDays);
+  let res;
+  try {
+    res = await api('/stats?days=' + statsRangeDays);
+  } catch (e) {
+    errBox.hidden = false;
+    errBox.textContent = networkErrorText(e, 'الإحصائيات');
+    document.getElementById('statsRefreshedAt').textContent = '';
+    return;
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     errBox.hidden = false;
     errBox.textContent = res.status === 503
       ? 'مفيش اتصال بشوبيفاي دلوقتي — جرب تاني بعد شوية.'
       : ('تعذر تحميل الإحصائيات: ' + (body.detail || body.error || res.status));
+    document.getElementById('statsRefreshedAt').textContent = '';
     return;
   }
   const data = await res.json();
@@ -1280,6 +1416,13 @@ async function loadStats() {
     truncBox.hidden = false;
     truncBox.textContent = 'عدد الطلبات كبير — الأرقام دي بناءً على جزء من المدة المطلوبة بس.';
   }
+  if (data.excluded_test_orders) {
+    excludedBox.hidden = false;
+    excludedBox.textContent = 'اتشال ' + data.excluded_test_orders + ' طلب اختبار من الأرقام المسجلة تحت (مش داخل في الأرقام دي).';
+  }
+  // Stats are computed live on every request -- nothing here is cached --
+  // but that fact is invisible unless the page says so explicitly.
+  document.getElementById('statsRefreshedAt').textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('ar-EG');
   renderKpis(data);
   document.getElementById('revenueChart').innerHTML = svgBarsVertical(
     data.revenue_by_day.map(d => ({label: d.date.slice(5), value: parseFloat(d.revenue)})),
@@ -1356,6 +1499,63 @@ function renderQueueRow(item) {
   actions.appendChild(rejectBtn);
   row.appendChild(actions);
   return row;
+}
+
+// --- test phone numbers (excluded from statistics) -----------------------
+
+async function loadTestNumbers() {
+  const errBox = document.getElementById('testNumbersError');
+  errBox.hidden = true;
+  const wrap = document.getElementById('testNumbersList');
+  wrap.textContent = 'جار التحميل…';
+
+  let res;
+  try {
+    res = await api('/settings/test-numbers');
+  } catch (e) {
+    wrap.innerHTML = '';
+    errBox.hidden = false;
+    errBox.textContent = networkErrorText(e, 'أرقام الاختبار');
+    return;
+  }
+  if (!res.ok) { wrap.innerHTML = ''; errBox.hidden = false; errBox.textContent = 'تعذر تحميل الأرقام.'; return; }
+  const data = await res.json();
+  wrap.innerHTML = '';
+  if (!data.numbers.length) {
+    wrap.appendChild(el('div', 'chartEmpty', 'مفيش أرقام اختبار مسجلة — سجل رقمك عشان طلباتك التجريبية متبقاش داخلة في الإحصائيات.'));
+    return;
+  }
+  data.numbers.forEach(n => {
+    const row = el('div', 'queueRow');
+    const label = n.phone + (n.note ? ' — ' + n.note : '');
+    row.appendChild(el('div', 'summary', label));
+    row.appendChild(el('div', 'meta', n.added_by ? ('أضافه ' + n.added_by + (n.added_at ? ' — ' + fmtTime(n.added_at) : '')) : ''));
+    const actions = el('div', 'rowActions');
+    const removeBtn = el('button', 'reject', 'حذف');
+    removeBtn.onclick = () => removeTestNumber(n.phone);
+    actions.appendChild(removeBtn);
+    row.appendChild(actions);
+    wrap.appendChild(row);
+  });
+}
+
+document.getElementById('testNumberAdd').onclick = async () => {
+  const phoneEl = document.getElementById('testNumberInput');
+  const noteEl = document.getElementById('testNumberNote');
+  const phone = phoneEl.value.trim();
+  if (!phone) return;
+  const res = await api('/settings/test-numbers', {
+    method: 'POST', body: JSON.stringify({phone, note: noteEl.value.trim()}),
+  });
+  if (!res.ok) { alert('تعذر إضافة الرقم'); return; }
+  phoneEl.value = '';
+  noteEl.value = '';
+  await loadTestNumbers();
+};
+
+async function removeTestNumber(phone) {
+  await api('/settings/test-numbers/' + encodeURIComponent(phone), {method: 'DELETE'});
+  await loadTestNumbers();
 }
 
 // --- boot -------------------------------------------------------------
@@ -1439,6 +1639,9 @@ function reasonLabel(reason) {
     out_of_scope: 'برة نطاق البوت',
     voice_received: 'رسالة صوتية محتاجة سماع',
     image_received: 'صورة محتاجة نظرة',
+    unclear: 'محتاجة توضيح',
+    complaint: 'شكوى',
+    manual: 'حد من الفريق تولى المحادثة',
   };
   return labels[reason] || 'محتاجة رد';
 }
@@ -1477,8 +1680,20 @@ async function openConversation(channel, externalId) {
   document.getElementById('log').style.display = 'flex';
   document.getElementById('convWho').textContent = externalId;
   document.getElementById('convSub').textContent = channel;
+  const log = document.getElementById('log');
+  log.innerHTML = '';
+  log.appendChild(el('div', 'meta', 'جار التحميل…'));
 
-  const res = await api('/conversations/' + encodeURIComponent(channel) + '/' + encodeURIComponent(externalId));
+  let res;
+  try {
+    res = await api('/conversations/' + encodeURIComponent(channel) + '/' + encodeURIComponent(externalId));
+  } catch (e) {
+    log.innerHTML = '';
+    const wrap = el('div', 'meta');
+    wrap.appendChild(el('div', 'chip bad', networkErrorText(e, 'المحادثة')));
+    log.appendChild(wrap);
+    return;
+  }
   const data = await res.json();
   renderConversation(data);
 }
@@ -1504,9 +1719,13 @@ function renderConversation(data) {
   if (!data.history.length) log.appendChild(el('div', 'meta', 'مفيش رسايل لسه'));
   log.scrollTop = log.scrollHeight;
 
+  updateControlBar(data);
+
   const banner = document.getElementById('handoffBanner');
   banner.innerHTML = '';
-  if (data.paused) {
+  // A manual takeover has no handoff reason/summary/payload worth a banner
+  // for -- the control bar above already says "under manual control".
+  if (data.paused && data.reason && data.reason !== 'manual') {
     banner.style.display = 'flex';
     const text = el('span', null, '⏸ ' + reasonLabel(data.reason) + (data.summary ? ' — ' + data.summary : ''));
     banner.appendChild(text);
@@ -1527,15 +1746,37 @@ function renderConversation(data) {
       audio.src = mediaUrl(p);
       banner.appendChild(audio);
     });
-    const resolveBtn = el('button', null, 'اتحل من غير رد');
-    resolveBtn.onclick = resolveWithoutReply;
-    banner.appendChild(resolveBtn);
+  } else {
+    banner.style.display = 'none';
+  }
+
+  if (data.paused) {
     document.getElementById('replyBar').style.display = 'flex';
     document.getElementById('notPaused').style.display = 'none';
   } else {
-    banner.style.display = 'none';
     document.getElementById('replyBar').style.display = 'none';
     document.getElementById('notPaused').style.display = 'block';
+  }
+}
+
+//: The Bot ON/OFF control: always visible once a conversation is open, not
+//: only once the bot has already paused itself -- staff can pull any
+//: conversation under manual control, send as many messages as they want,
+//: and hand it back whenever they choose.
+function updateControlBar(data) {
+  const status = document.getElementById('controlStatus');
+  const takeoverBtn = document.getElementById('btn-takeover');
+  const releaseBtn = document.getElementById('btn-release');
+  if (data.paused) {
+    status.textContent = '🧑 تحت التحكم اليدوي';
+    status.className = 'controlStatus human';
+    takeoverBtn.hidden = true;
+    releaseBtn.hidden = false;
+  } else {
+    status.textContent = '🤖 البوت شغال';
+    status.className = 'controlStatus bot';
+    takeoverBtn.hidden = false;
+    releaseBtn.hidden = true;
   }
 }
 
@@ -1559,12 +1800,58 @@ async function sendReply() {
   }
 }
 
-async function resolveWithoutReply() {
+async function takeoverConversation() {
   if (!current) return;
-  await api('/conversations/' + encodeURIComponent(current.channel) + '/' + encodeURIComponent(current.external_id) + '/resolve', {method: 'POST'});
-  await openConversation(current.channel, current.external_id);
-  await refreshList();
+  const btn = document.getElementById('btn-takeover');
+  btn.disabled = true;
+  try {
+    const res = await api(convPath('takeover'), {method: 'POST'});
+    if (!res.ok) { alert('تعذر تولي المحادثة'); return; }
+    await openConversation(current.channel, current.external_id);
+    await refreshList();
+  } finally {
+    btn.disabled = false;
+  }
 }
+
+async function releaseConversation() {
+  if (!current) return;
+  const btn = document.getElementById('btn-release');
+  btn.disabled = true;
+  try {
+    const res = await api(convPath('release'), {method: 'POST'});
+    if (!res.ok) { alert('تعذر رجّوع المحادثة للبوت'); return; }
+    await openConversation(current.channel, current.external_id);
+    await refreshList();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function resetConversation() {
+  if (!current) return;
+  if (!confirm('هيتمسح كل تاريخ المحادثة والسلة والحالة، والبوت هيتعامل مع الرقم ده كعميل جديد تمامًا. الطلبات الحقيقية القديمة مش بتتمسح. تأكيد؟')) {
+    return;
+  }
+  const btn = document.getElementById('btn-reset');
+  btn.disabled = true;
+  try {
+    const res = await api(convPath('reset'), {method: 'POST'});
+    if (!res.ok) { alert('تعذر إعادة تعيين المحادثة'); return; }
+    await openConversation(current.channel, current.external_id);
+    await refreshList();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function convPath(action) {
+  return '/conversations/' + encodeURIComponent(current.channel) + '/' + encodeURIComponent(current.external_id) + '/' + action;
+}
+
+document.getElementById('btn-takeover').onclick = takeoverConversation;
+document.getElementById('btn-release').onclick = releaseConversation;
+document.getElementById('btn-reset').onclick = resetConversation;
 
 document.getElementById('btn-send').onclick = sendReply;
 document.getElementById('replyText').addEventListener('keydown', e => {

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Cookie, Query
 from fastapi.responses import JSONResponse
 
 from backend.db import session_scope
-from backend.services import dashboard_stats
+from backend.services import dashboard_stats, test_numbers
 from backend.services.shopify_catalog import ShopifyConfigError, ShopifyUnavailable
 from chatbot.dashboard.guard import staff_for, unauthenticated
 
@@ -32,8 +32,9 @@ def stats(days: int = Query(default=30), wanas_staff: str | None = Cookie(defaul
     with session_scope() as db:
         if staff_for(db, wanas_staff) is None:
             return unauthenticated()
+        exclude_phones = test_numbers.all_variants(db)
         try:
-            result = dashboard_stats.stats_for_days(days)
+            result = dashboard_stats.stats_for_days(days, exclude_phones=exclude_phones)
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             return JSONResponse({"error": "store_unavailable", "detail": str(exc)}, status_code=503)
     return JSONResponse(result)

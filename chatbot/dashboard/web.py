@@ -45,8 +45,8 @@ from sqlalchemy import and_, or_, select
 
 from backend.config import settings
 from backend.db import session_scope
-from backend.models import QueueKind, SessionRow
-from backend.services import auth, identities, notifications, queues
+from backend.models import ChannelIdentity, QueueKind, SessionRow
+from backend.services import auth, conversation_reset, identities, notifications, queues
 from chatbot import messages as msg
 from chatbot import session as session_store
 from chatbot.display import display_history
@@ -100,6 +100,21 @@ def _open_handoffs(db) -> dict[tuple[str, str], object]:
     }
 
 
+def _paused_identity_keys(db) -> set[tuple[str, str]]:
+    """Every conversation currently under human control, whether the bot
+    paused itself for a handoff reason or a staff member took it over
+    manually (`/takeover`, no `StaffQueueItem` involved). This -- not
+    `_open_handoffs` -- is the actual source of truth for "paused": a
+    handoff always sets this same flag (`identities.pause`), but a manual
+    takeover sets it with no queue item to show for it."""
+    rows = db.execute(
+        select(ChannelIdentity.channel, ChannelIdentity.external_id).where(
+            ChannelIdentity.paused_until_staff_reply.is_(True)
+        )
+    ).all()
+    return {(row.channel, row.external_id) for row in rows}
+
+
 def _preview(history: list[dict]) -> str:
     """The last thing either side actually said, for the conversation list --
     a tool call or a refusal is not something a staff member is scanning for
@@ -116,15 +131,22 @@ def _preview(history: list[dict]) -> str:
     return ""
 
 
-def _conversation_summary(row: SessionRow, handoff) -> dict:
+def _conversation_summary(row: SessionRow, *, paused: bool, handoff) -> dict:
     return {
         "channel": row.channel,
         "external_id": row.external_id,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "preview": _preview(row.history or []),
-        "paused": handoff is not None,
-        "reason": handoff.reason if handoff else None,
-        "waiting_since": handoff.created_at.isoformat() if handoff else None,
+        "paused": paused,
+        # A manual takeover has no handoff reason to show -- "manual" is a
+        # real, distinct value the frontend labels as "staff took over",
+        # never confused with the bot's own escalation reasons.
+        "reason": handoff.reason if handoff else ("manual" if paused else None),
+        "waiting_since": (
+            handoff.created_at.isoformat()
+            if handoff
+            else (row.updated_at.isoformat() if paused and row.updated_at else None)
+        ),
     }
 
 
@@ -211,6 +233,7 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
             return _unauthenticated()
 
         handoffs = _open_handoffs(db)
+        paused_keys = _paused_identity_keys(db)
         rows = list(
             db.scalars(
                 select(SessionRow).order_by(SessionRow.updated_at.desc()).limit(MAX_CONVERSATIONS)
@@ -220,10 +243,11 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
         # A paused conversation must never go invisible just because enough
         # *other* traffic pushed it out of the top-300-by-recency page --
         # that is exactly how a customer waiting on a human got stuck forever
-        # with nothing in the queue pointing back at them. Every open handoff
-        # is fetched by its own key, unbounded, and merged in.
+        # with nothing pointing back at them. Every paused identity (handoff
+        # or manual takeover) is fetched by its own key, unbounded, and
+        # merged in.
         present = {(row.channel, row.external_id) for row in rows}
-        missing = [key for key in handoffs if key not in present]
+        missing = [key for key in (set(handoffs) | paused_keys) if key not in present]
         if missing:
             conditions = [
                 and_(SessionRow.channel == channel, SessionRow.external_id == external_id)
@@ -231,7 +255,14 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
             ]
             rows.extend(db.scalars(select(SessionRow).where(or_(*conditions))).all())
 
-        items = [_conversation_summary(row, handoffs.get((row.channel, row.external_id))) for row in rows]
+        items = [
+            _conversation_summary(
+                row,
+                paused=(row.channel, row.external_id) in paused_keys,
+                handoff=handoffs.get((row.channel, row.external_id)),
+            )
+            for row in rows
+        ]
 
     # Paused conversations first, oldest wait first -- that is the actual
     # queue order a person should work them in. Everything else stays in the
@@ -251,18 +282,33 @@ def conversation_detail(
 
         history = session_store.load(db, channel, external_id)
         handoff = _open_handoffs(db).get((channel, external_id))
+        paused = identities.is_paused(db, channel, external_id)
 
         return JSONResponse(
             {
                 "channel": channel,
                 "external_id": external_id,
                 "history": display_history(history),
-                "paused": handoff is not None,
-                "reason": handoff.reason if handoff else None,
+                "paused": paused,
+                "reason": handoff.reason if handoff else ("manual" if paused else None),
                 "summary": handoff.summary if handoff else None,
                 "payload": handoff.payload if handoff else None,
             }
         )
+
+
+@router.post("/api/conversations/{channel}/{external_id}/takeover")
+def takeover(channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """Staff pulls a conversation under manual control without waiting for
+    the bot to escalate it itself -- to watch an order in progress, correct
+    course before the bot says something wrong, or just answer in person.
+    Idempotent: taking over an already-paused conversation is a no-op that
+    still answers `ok`, so the frontend never has to check first."""
+    with session_scope() as db:
+        if _staff(db, wanas_staff) is None:
+            return _unauthenticated()
+        identities.pause(db, channel, external_id)
+    return JSONResponse({"ok": True})
 
 
 @router.post("/api/conversations/{channel}/{external_id}/reply")
@@ -295,31 +341,51 @@ def reply(
 
         session_store.append(db, channel, external_id, msg.assistant(text, by="staff"))
         if handoff is not None:
+            # The thing that needed attention has been answered; the queue
+            # item's job is done. The pause itself is a separate, longer-
+            # lived state -- staff may still send several more messages
+            # before handing control back, see `/release`.
+            queues.resolve(db, handoff.queue_id, staff.staff_id)
+
+    return JSONResponse({"ok": True})
+
+
+@router.post("/api/conversations/{channel}/{external_id}/release")
+def release(channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """Hand control back to the bot -- whichever way staff took it: a
+    handoff (resolves the queue item too, for the "false alarm, no reply
+    needed" case) or a manual takeover (nothing else to clear). No message
+    goes out; the next thing the customer sends is what the bot answers."""
+    with session_scope() as db:
+        staff = _staff(db, wanas_staff)
+        if staff is None:
+            return _unauthenticated()
+
+        if not identities.is_paused(db, channel, external_id):
+            return JSONResponse({"error": "not_paused"}, status_code=409)
+
+        handoff = _open_handoffs(db).get((channel, external_id))
+        if handoff is not None:
             queues.resolve(db, handoff.queue_id, staff.staff_id)
         identities.unpause(db, channel, external_id)
 
     return JSONResponse({"ok": True})
 
 
-@router.post("/api/conversations/{channel}/{external_id}/resolve")
-def resolve_without_reply(
+@router.post("/api/conversations/{channel}/{external_id}/reset")
+def reset_conversation(
     channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    """The other outcome: a false alarm, or a customer already handled by
-    phone. No message goes out, but the queue item and the pause both have to
-    clear or the conversation is stuck exactly as before."""
+    """Wipe this conversation back to how a brand-new customer looks --
+    for staff testing the bot repeatedly from the same WhatsApp number. See
+    `backend/services/conversation_reset.py` for exactly what is, and is
+    not, touched: a real `Client` record and its order history are never
+    reachable from here."""
     with session_scope() as db:
         staff = _staff(db, wanas_staff)
         if staff is None:
             return _unauthenticated()
-
-        handoff = _open_handoffs(db).get((channel, external_id))
-        if handoff is None:
-            return JSONResponse({"error": "not_paused"}, status_code=409)
-
-        queues.resolve(db, handoff.queue_id, staff.staff_id)
-        identities.unpause(db, channel, external_id)
-
+        conversation_reset.reset(db, channel, external_id, staff_id=staff.staff_id)
     return JSONResponse({"ok": True})
 
 

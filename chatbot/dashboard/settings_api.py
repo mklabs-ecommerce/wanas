@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from backend.config import settings
 from backend.db import session_scope
 from backend.models import Staff
-from backend.services import runtime_flags
+from backend.services import runtime_flags, test_numbers
 from chatbot.dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/settings", tags=["dashboard-settings"])
@@ -65,6 +65,56 @@ def set_flag(
         flag = next(f for f in runtime_flags.KNOWN_FLAGS if f.key == key)
         result = _flag_payload(db, flag, row)
     return JSONResponse(result)
+
+
+def _number_payload(session, row) -> dict:
+    staff = session.get(Staff, row.added_by) if row.added_by is not None else None
+    return {
+        "phone": row.phone,
+        "note": row.note,
+        "added_at": row.added_at.isoformat() if row.added_at else None,
+        "added_by": staff.username if staff else None,
+    }
+
+
+@router.get("/test-numbers")
+def list_test_numbers(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """Numbers marked as staff testing the bot -- excluded from the
+    Statistics page's totals. See `backend/services/test_numbers.py`."""
+    with session_scope() as db:
+        if staff_for(db, wanas_staff) is None:
+            return unauthenticated()
+        rows = test_numbers.list_numbers(db)
+        numbers = [_number_payload(db, row) for row in rows]
+    return JSONResponse({"numbers": numbers})
+
+
+@router.post("/test-numbers")
+def add_test_number(
+    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+) -> JSONResponse:
+    with session_scope() as db:
+        staff = staff_for(db, wanas_staff)
+        if staff is None:
+            return unauthenticated()
+        phone = (payload.get("phone") or "").strip()
+        if not any(ch.isdigit() for ch in phone):
+            return JSONResponse({"error": "bad_arguments", "detail": "phone is required"}, status_code=400)
+        note = (payload.get("note") or "").strip() or None
+        row = test_numbers.add(db, phone, note=note, staff_id=staff.staff_id)
+        result = _number_payload(db, row)
+    return JSONResponse(result, status_code=201)
+
+
+@router.delete("/test-numbers/{phone}")
+def remove_test_number(phone: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    with session_scope() as db:
+        if staff_for(db, wanas_staff) is None:
+            return unauthenticated()
+        removed = test_numbers.remove(db, phone)
+    if not removed:
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    return JSONResponse({"ok": True})
 
 
 @router.get("/status")

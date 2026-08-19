@@ -252,19 +252,37 @@ def test_a_staff_reply_already_in_history_is_labelled_as_such(logged_in, seeded)
 # --------------------------------------------------------------------------
 
 
-def test_replying_to_a_paused_conversation_sends_appends_and_unpauses(logged_in, seeded, outbox):
+def test_replying_to_a_paused_conversation_sends_appends_and_stays_paused(logged_in, seeded, outbox):
+    """A reply resolves the handoff queue item (the thing that needed
+    attention has been answered) but must NOT hand control back to the bot
+    by itself -- staff may send several more messages before releasing."""
     make_paused(seeded)
 
     res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً، إزاي أقدر أساعدك؟"})
     assert res.status_code == 200
 
     assert any(m.text == "أهلاً، إزاي أقدر أساعدك؟" and m.to == CUSTOMER for m in outbox)
-    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
     assert queues.open_items(seeded, QueueKind.HANDOFF.value) == []
 
     history = session_store.load(seeded, CHANNEL, CUSTOMER)
     assert history[-1]["content"] == "أهلاً، إزاي أقدر أساعدك؟"
     assert history[-1]["by"] == "staff"
+
+
+def test_several_replies_in_a_row_never_return_control_to_the_bot(logged_in, seeded, outbox):
+    make_paused(seeded)
+
+    for text in ("لحظة واحدة", "شكلك عايز مقاس L", "تمام، هظبطلك الطلب"):
+        res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": text})
+        assert res.status_code == 200
+        assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
+        # That read took a write lock (BEGIN IMMEDIATE on every SQLite
+        # transaction, see backend/db.py); release it before the next
+        # request opens its own session, or the two deadlock.
+        seeded.rollback()
+
+    assert [m.text for m in outbox] == ["لحظة واحدة", "شكلك عايز مقاس L", "تمام، هظبطلك الطلب"]
 
 
 def test_the_reply_is_attributed_to_the_staff_member_who_sent_it(logged_in, seeded, staff):
@@ -315,25 +333,117 @@ def test_a_failed_delivery_does_not_unpause_or_resolve(logged_in, seeded, monkey
 
 
 # --------------------------------------------------------------------------
-# resolving without a reply
+# manual takeover, and returning control to the bot
 # --------------------------------------------------------------------------
 
 
-def test_resolving_without_a_reply_still_unpauses_and_sends_nothing(logged_in, seeded, outbox):
+def test_taking_over_pauses_a_conversation_with_no_queue_item(logged_in, seeded):
+    session_store.append(seeded, CHANNEL, CUSTOMER, msg.user("hi"))
+    seeded.commit()
+
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/takeover")
+    assert res.status_code == 200
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
+    assert queues.open_items(seeded, QueueKind.HANDOFF.value) == []
+    seeded.rollback()
+
+    body = logged_in.get("/dashboard/api/conversations").json()
+    row = next(c for c in body["conversations"] if c["external_id"] == CUSTOMER)
+    assert row["paused"] is True
+    assert row["reason"] == "manual"
+
+
+def test_taking_over_an_already_paused_conversation_is_a_harmless_no_op(logged_in, seeded):
+    make_paused(seeded)
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/takeover")
+    assert res.status_code == 200
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
+    # The original handoff item is untouched by a redundant takeover.
+    assert len(queues.open_items(seeded, QueueKind.HANDOFF.value)) == 1
+
+
+def test_release_returns_control_to_the_bot_after_a_manual_takeover(logged_in, seeded, outbox):
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/takeover")
+
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
+    assert res.status_code == 200
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+    assert outbox == []
+
+
+def test_release_resolves_the_handoff_item_too(logged_in, seeded, outbox):
     make_paused(seeded)
 
-    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/resolve")
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
     assert res.status_code == 200
     assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
     assert queues.open_items(seeded, QueueKind.HANDOFF.value) == []
     assert outbox == []
 
 
-def test_resolving_a_conversation_that_was_never_paused_is_refused(logged_in, seeded):
+def test_releasing_a_conversation_that_was_never_paused_is_refused(logged_in, seeded):
     session_store.append(seeded, CHANNEL, CUSTOMER, msg.user("hi"))
     seeded.commit()
-    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/resolve")
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
     assert res.status_code == 409
+
+
+def test_reply_then_release_is_the_full_multi_message_takeover_flow(logged_in, seeded, outbox):
+    make_paused(seeded)
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً"})
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "تمام كده"})
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
+    seeded.rollback()
+
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
+    assert res.status_code == 200
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+    assert [m.text for m in outbox] == ["أهلاً", "تمام كده"]
+
+
+# --------------------------------------------------------------------------
+# resetting a conversation
+# --------------------------------------------------------------------------
+
+
+def test_reset_clears_history_pause_and_cart(logged_in, seeded):
+    from backend.models import CartItem
+
+    make_paused(seeded)
+    seeded.add(CartItem(channel=CHANNEL, external_id=CUSTOMER, variant_id="wanas-hoodie-s-olive", quantity=1))
+    seeded.commit()
+
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reset")
+    assert res.status_code == 200
+
+    assert session_store.load(seeded, CHANNEL, CUSTOMER) == []
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+    assert queues.open_items(seeded, QueueKind.HANDOFF.value) == []
+    assert seeded.query(CartItem).filter_by(channel=CHANNEL, external_id=CUSTOMER).count() == 0
+
+
+def test_reset_unlinks_the_client_but_never_touches_the_client_record(logged_in, seeded):
+    from backend.models import Client
+    from backend.services import identities as identities_service
+
+    client = Client(full_name="Test Customer", phone=CUSTOMER)
+    seeded.add(client)
+    seeded.flush()
+    identity = identities_service.get_or_create(seeded, CHANNEL, CUSTOMER)
+    identity.client_id = client.client_id
+    identity.pending_link = {"client_id": "pub-1", "matched_on": "phone", "masked_name": "T…"}
+    seeded.commit()
+
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reset")
+    assert res.status_code == 200
+
+    seeded.expire_all()
+    refreshed_identity = identities_service.get(seeded, CHANNEL, CUSTOMER)
+    assert refreshed_identity.client_id is None
+    assert refreshed_identity.pending_link is None
+    # The Client row itself -- and by extension any real order history --
+    # is completely untouched.
+    assert seeded.get(Client, client.client_id) is not None
 
 
 # --------------------------------------------------------------------------

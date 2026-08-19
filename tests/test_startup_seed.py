@@ -10,7 +10,9 @@ must not touch a single row.
 
 from __future__ import annotations
 
-from app import _ensure_catalog_seeded
+from decimal import Decimal
+
+from app import _ensure_catalog_seeded, _ensure_shipping_fees_set
 from backend.models import Product, ShippingRate, Variant
 
 
@@ -39,3 +41,27 @@ def test_an_already_seeded_catalog_is_left_untouched(seeded):
     seeded.expire_all()
     refreshed = seeded.get(Variant, variant.variant_id)
     assert refreshed.stock_qty == 999999
+
+
+def test_governorates_with_no_fee_get_the_default(seeded):
+    assert all(r.fee is None for r in seeded.query(ShippingRate).all())
+    seeded.rollback()
+
+    _ensure_shipping_fees_set()
+
+    seeded.expire_all()
+    fees = {r.fee for r in seeded.query(ShippingRate).all()}
+    assert fees == {Decimal("110")}
+
+
+def test_a_fee_staff_already_set_is_never_overwritten(seeded):
+    cairo = seeded.get(ShippingRate, "Cairo")
+    cairo.fee = Decimal("75")
+    seeded.commit()
+
+    _ensure_shipping_fees_set()
+
+    seeded.expire_all()
+    assert seeded.get(ShippingRate, "Cairo").fee == Decimal("75")
+    others = [r.fee for r in seeded.query(ShippingRate).all() if r.governorate != "Cairo"]
+    assert all(fee == Decimal("110") for fee in others)

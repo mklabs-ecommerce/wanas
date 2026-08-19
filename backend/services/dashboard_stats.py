@@ -41,11 +41,15 @@ class DateRange:
     end: datetime
 
     def as_query(self) -> str:
-        # The upper bound is the *end* of that day, not midnight at its
-        # start -- a bare date would exclude every order placed after
-        # 00:00:00 on the last day of the range, which is all of them.
+        # Both bounds explicit UTC. A bare date on the lower bound (no `Z`)
+        # is parsed by Shopify as midnight in the *store's* timezone, not
+        # UTC -- since `start`/`end` are computed from `datetime.now(UTC)`,
+        # that silently shifted the window by Cairo's UTC+2/+3 offset and
+        # made it asymmetric against the explicit-UTC upper bound, dropping
+        # orders placed in the first couple of hours of the range's first day.
+        start_of_day = f"{self.start.date().isoformat()}T00:00:00Z"
         end_of_day = f"{self.end.date().isoformat()}T23:59:59Z"
-        return f"created_at:>={self.start.date().isoformat()} AND created_at:<={end_of_day}"
+        return f"created_at:>={start_of_day} AND created_at:<={end_of_day}"
 
 
 def range_for_days(days: int) -> DateRange:
@@ -70,10 +74,30 @@ def fetch_orders_in_range(date_range: DateRange, *, max_pages: int = MAX_PAGES) 
     return orders, True
 
 
-def summarize(orders: list[dict]) -> dict:
+def _is_test_order(order: dict, exclude_phones: set[str]) -> bool:
+    if not exclude_phones:
+        return False
+    digits = "".join(ch for ch in (order.get("customer_phone") or "") if ch.isdigit())
+    return bool(digits) and digits in exclude_phones
+
+
+def summarize(orders: list[dict], *, exclude_phones: set[str] | None = None) -> dict:
     """The KPI cards and chart series, computed from an already-fetched page
     of orders. Kept separate from `fetch_orders_in_range` so the math is
-    testable without a fake network round trip for every case."""
+    testable without a fake network round trip for every case.
+
+    `exclude_phones` (from `backend/services/test_numbers.py`) drops a staff
+    number's own test purchases before anything else is computed -- not just
+    from revenue, from every figure below, the same way a cancelled order
+    already is excluded from all of them.
+    """
+    exclude_phones = exclude_phones or set()
+    excluded_count = 0
+    if exclude_phones:
+        kept = [o for o in orders if not _is_test_order(o, exclude_phones)]
+        excluded_count = len(orders) - len(kept)
+        orders = kept
+
     active = [o for o in orders if not o["cancelled"]]
     revenue = sum((Decimal(o["total"]) for o in active), Decimal("0"))
     order_count = len(active)
@@ -125,13 +149,14 @@ def summarize(orders: list[dict]) -> dict:
         ],
         "status_breakdown": dict(status_breakdown),
         "source_breakdown": dict(source_breakdown),
+        "excluded_test_orders": excluded_count,
     }
 
 
-def stats_for_days(days: int) -> dict:
+def stats_for_days(days: int, *, exclude_phones: set[str] | None = None) -> dict:
     date_range = range_for_days(days)
     orders, truncated = fetch_orders_in_range(date_range)
-    result = summarize(orders)
+    result = summarize(orders, exclude_phones=exclude_phones)
     result["range_days"] = days
     result["truncated"] = truncated
     return result

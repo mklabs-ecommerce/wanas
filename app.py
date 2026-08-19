@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import asynccontextmanager
+from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
@@ -23,7 +24,7 @@ from fastapi.responses import RedirectResponse
 from backend.config import settings
 from backend.db import engine, session_scope
 from backend.legal import router as legal_router
-from backend.models import Base, Product, Variant
+from backend.models import Base, Product, ShippingRate, Variant
 from backend.webhooks.shopify import router as shopify_router
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
@@ -78,6 +79,33 @@ def _ensure_catalog_seeded() -> None:
     )
 
 
+#: The flat rate the shop set for every governorate on 2026-08-20. Only ever
+#: applied to a governorate with no fee yet -- staff correcting one later
+#: through the dashboard is never overwritten by a later boot of this.
+_DEFAULT_SHIPPING_FEE = Decimal("110")
+
+
+def _ensure_shipping_fees_set() -> None:
+    """Fill any governorate still missing a shipping fee with the shop's flat
+    rate. Additive-only, same guarantee as `_ensure_catalog_seeded`: a
+    governorate that already has a fee -- from a previous run of this, or
+    from a staff edit -- is never touched.
+    """
+    with session_scope() as db:
+        rows = db.query(ShippingRate).filter(ShippingRate.fee.is_(None)).all()
+        if not rows:
+            return
+        for row in rows:
+            row.fee = _DEFAULT_SHIPPING_FEE
+        count = len(rows)
+
+    log.warning(
+        "set the default shipping fee (%s EGP) for %d governorate(s) that had none",
+        _DEFAULT_SHIPPING_FEE,
+        count,
+    )
+
+
 def _import_missing_shopify_products() -> None:
     """A product created straight in Shopify Admin -- not through the
     dashboard's own create panel -- gets no wanas.db row, and the bot's
@@ -113,6 +141,7 @@ def _import_missing_shopify_products() -> None:
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
     _ensure_catalog_seeded()
+    _ensure_shipping_fees_set()
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()

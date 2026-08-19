@@ -41,6 +41,13 @@ def _local_order_for(db, shopify_order_id: str) -> Order | None:
     return db.scalar(select(Order).where(Order.shopify_order_id == shopify_order_id))
 
 
+def _local_orders_for(db, shopify_order_ids: list[str]) -> dict[str, Order]:
+    if not shopify_order_ids:
+        return {}
+    rows = db.scalars(select(Order).where(Order.shopify_order_id.in_(shopify_order_ids))).all()
+    return {row.shopify_order_id: row for row in rows}
+
+
 def _local_ref(order: Order | None) -> dict | None:
     if order is None:
         return None
@@ -65,8 +72,9 @@ def list_orders(
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             return _outage(exc)
 
+        local_by_id = _local_orders_for(db, [item["id"] for item in result["orders"]])
         for item in result["orders"]:
-            item["local"] = _local_ref(_local_order_for(db, item["id"]))
+            item["local"] = _local_ref(local_by_id.get(item["id"]))
     return JSONResponse(result)
 
 
