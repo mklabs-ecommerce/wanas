@@ -40,6 +40,44 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 log = logging.getLogger("wanas")
 
 
+def _ensure_catalog_seeded() -> None:
+    """Import `data/products_seed.json` / `data/governorates.json` if the
+    catalog tables are still empty.
+
+    `python -m backend.cli seed` is the documented recovery step, but it is a
+    step someone has to remember to run by hand against the right database at
+    the right time -- and an unseeded production database is a silent, total
+    failure: the process is healthy, `/health` says everything is configured,
+    and every single customer search still comes back "we don't have that".
+    Both importers are idempotent -- an existing variant's stock and an
+    existing governorate's fee are never touched, only ever filled in when
+    missing -- so running this on every boot is safe; on an already-seeded
+    database it does nothing.
+    """
+    from backend.seed.governorates import import_governorates
+    from backend.seed.products import SeedError, import_products
+
+    try:
+        with session_scope() as db:
+            if db.query(Product).count() > 0:
+                return
+            product_stats = import_products(db)
+            gov_stats = import_governorates(db)
+    except SeedError:
+        log.exception("catalog was empty and the seed data failed its own consistency check")
+        return
+    except Exception:
+        log.exception("could not auto-seed the catalog")
+        return
+
+    log.warning(
+        "catalog was empty: seeded %s product(s) / %s variant(s) and %s governorate(s) automatically",
+        product_stats["products"],
+        product_stats["variants"],
+        gov_stats["governorates"],
+    )
+
+
 def _import_missing_shopify_products() -> None:
     """A product created straight in Shopify Admin -- not through the
     dashboard's own create panel -- gets no wanas.db row, and the bot's
@@ -74,6 +112,7 @@ def _import_missing_shopify_products() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
+    _ensure_catalog_seeded()
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()
