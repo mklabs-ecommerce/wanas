@@ -130,6 +130,8 @@ def run_turn(
     text: str,
     *,
     provider: LLMProvider | None = None,
+    images: list[str] | None = None,
+    audio: list[str] | None = None,
 ) -> AgentReply:
     provider = provider or get_provider()
     specs = tool_specs()
@@ -137,7 +139,11 @@ def run_turn(
 
     history = session_store.load(db, channel, external_id)
     sent_images = _sent_images(history)
-    history.append(msg.user(text))
+    # `images`/`audio` are the customer's own inbound photo(s)/voice note(s)
+    # for this turn -- kept on the stored message for the dashboard (see
+    # `chatbot/messages.py::user`), never sent to the provider itself, so
+    # this is not a second copy of what the model already read via `text`.
+    history.append(msg.user(text, images=images, audio=audio))
 
     # `history` is the same list object the loop below appends to, so the
     # tool layer's duplicate-call cache and image de-dup both see this turn's

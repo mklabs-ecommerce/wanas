@@ -137,6 +137,36 @@ def _import_missing_shopify_products() -> None:
         log.warning("Shopify product import: %s", problem)
 
 
+def _register_shopify_webhooks() -> None:
+    """Subscribe Shopify to push order-status changes to this app -- see
+    `backend/services/shopify_webhooks.py`. This closes the "nothing is even
+    subscribed" half of `SHOPIFY_WEBHOOK_SECRET is not set` on its own, the
+    moment both Shopify and a public URL are configured; the secret itself
+    still has to come from Shopify Admin by hand (docs/OPERATIONS.md) -- a
+    registered-but-unsigned webhook is refused by `backend/webhooks/shopify.py`
+    exactly as it should be, so registering early and safely is not a risk.
+    Idempotent, so safe to run on every boot; any failure is logged and
+    swallowed, same guarantee as the rest of this page.
+    """
+    if not settings.public_base_url:
+        log.info("PUBLIC_BASE_URL / RAILWAY_PUBLIC_DOMAIN not set: skipping Shopify webhook registration")
+        return
+
+    from backend.services.shopify_webhooks import register_missing
+
+    callback_url = f"{settings.public_base_url}/webhooks/shopify"
+    try:
+        report = register_missing(callback_url)
+    except Exception:
+        log.exception("Shopify webhook registration failed")
+        return
+
+    if report["created"]:
+        log.info("registered Shopify webhook subscription(s): %s", ", ".join(report["created"]))
+    for problem in report["problems"]:
+        log.warning("Shopify webhook registration: %s", problem)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
@@ -184,6 +214,11 @@ async def lifespan(_app: FastAPI):
         threading.Thread(
             target=_import_missing_shopify_products,
             name="shopify-product-import",
+            daemon=True,
+        ).start()
+        threading.Thread(
+            target=_register_shopify_webhooks,
+            name="shopify-webhook-register",
             daemon=True,
         ).start()
     yield

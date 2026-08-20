@@ -43,17 +43,33 @@ class Pending:
     """What has arrived for one conversation and not been answered yet."""
 
     texts: list[str] = field(default_factory=list)
+    #: Parallel to `texts` -- the WhatsApp message id each fragment arrived
+    #: as, so a later reply-to reference in this same batch can be resolved
+    #: back to which text it was replying to. See `reply_to` and
+    #: `chatbot/channels/whatsapp.py`'s `_annotate_replies`.
+    text_ids: list[str | None] = field(default_factory=list)
     image_paths: list[str] = field(default_factory=list)
+    image_ids: list[str | None] = field(default_factory=list)
     audio_paths: list[str] = field(default_factory=list)
+    audio_ids: list[str | None] = field(default_factory=list)
     #: The last inbound message id, so the adapter can mark the right one read.
     last_message_id: str | None = None
+    #: message id -> the id of the WhatsApp message it was a reply to (Meta's
+    #: `context.id`). Only ever resolved against another id in this same
+    #: debounced batch -- a reply to something from an earlier, already-
+    #: answered turn has nothing here to match and is left unannotated.
+    reply_to: dict[str, str] = field(default_factory=dict)
     extras: dict = field(default_factory=dict)
 
     def merge(self, other: Pending) -> None:
         self.texts.extend(other.texts)
+        self.text_ids.extend(other.text_ids)
         self.image_paths.extend(other.image_paths)
+        self.image_ids.extend(other.image_ids)
         self.audio_paths.extend(other.audio_paths)
+        self.audio_ids.extend(other.audio_ids)
         self.last_message_id = other.last_message_id or self.last_message_id
+        self.reply_to.update(other.reply_to)
         self.extras.update(other.extras)
 
     @property

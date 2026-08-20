@@ -26,8 +26,18 @@ ASSISTANT = "assistant"
 TOOL_RESULTS = "tool_results"
 
 
-def user(text: str) -> dict:
-    return {"role": USER, "content": text}
+def user(text: str, *, images: list[str] | None = None, audio: list[str] | None = None) -> dict:
+    message: dict = {"role": USER, "content": text}
+    if images:
+        # The actual photo(s) the customer sent, kept in history (not sent to
+        # the provider -- same reasoning and the same "unknown keys are
+        # ignored" translation-layer guarantee as `assistant()`'s
+        # `attachments` below) so the dashboard can show the real photo next
+        # to its transcribed/described text instead of text alone.
+        message["images"] = list(images)
+    if audio:
+        message["audio"] = list(audio)
+    return message
 
 
 def assistant(

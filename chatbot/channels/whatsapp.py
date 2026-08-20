@@ -143,24 +143,37 @@ def _accept(message: dict, contact_name: str | None) -> None:
     client.mark_as_read(message_id)
 
     pending = Pending(last_message_id=message_id)
+    # A long-pressed "reply to this" on a specific earlier message. Meta
+    # carries it as `context.id`; recorded here so `_annotate_replies` can
+    # tell the model which of several photos/messages this one was about.
+    reply_to_id = (message.get("context") or {}).get("id") or None
+    if reply_to_id and message_id:
+        pending.reply_to[message_id] = reply_to_id
 
     if message_type == "text":
         pending.texts.append((message.get("text") or {}).get("body", "") or "")
+        pending.text_ids.append(message_id)
     elif message_type == "image":
         image = message.get("image") or {}
         caption = image.get("caption", "") or ""
         if caption:
+            # The caption belongs to this same message, so it shares this
+            # image's own id -- a caption that is itself a reply-to (rare,
+            # but Meta allows it) resolves through the same mechanism.
             pending.texts.append(caption)
+            pending.text_ids.append(message_id)
         downloaded = client.download_media(image.get("id", ""), INBOUND_MEDIA_DIR)
         # Even if the download fails the photo still has to reach a person --
         # the media id is enough for staff to chase it.
         pending.image_paths.append(downloaded or f"whatsapp-media:{image.get('id')}")
+        pending.image_ids.append(message_id)
     elif message_type in AUDIO_TYPES:
         audio = message.get(message_type) or message.get("audio") or {}
         downloaded = client.download_media(
             audio.get("id", ""), INBOUND_MEDIA_DIR, default_extension=".ogg"
         )
         pending.audio_paths.append(downloaded or f"whatsapp-media:{audio.get('id')}")
+        pending.audio_ids.append(message_id)
     elif message_type == "interactive":
         interactive = message.get("interactive") or {}
         reply = interactive.get("button_reply") or interactive.get("list_reply") or {}
@@ -170,6 +183,7 @@ def _accept(message: dict, contact_name: str | None) -> None:
         picked = reply.get("id") or ""
         title = reply.get("title", "") or ""
         pending.texts.append(f"{title} ({picked})".strip() if picked and title else (title or picked))
+        pending.text_ids.append(message_id)
     elif message_type in UNSUPPORTED_TYPES:
         with session_scope() as session:
             raise_handoff(
@@ -197,11 +211,44 @@ def _accept(message: dict, contact_name: str | None) -> None:
 # --------------------------------------------------------------------------
 
 
+def _annotate_replies(pending: Pending) -> str:
+    """The batch's text fragments, each prefixed with which earlier item in
+    this same batch it was a WhatsApp "reply to" of, when Meta says so.
+
+    Needed because the neutral message format (`chatbot/messages.py`) only
+    ever carries plain text -- there is no structured "in reply to" field to
+    thread through the provider boundary, so this is where "the customer
+    replied to the second photo" becomes words the model can actually use:
+    `[replying to photo 2] a size M please`, folded straight into the text
+    the turn runs on.
+    """
+    if not pending.reply_to:
+        return pending.text
+
+    labels: dict[str, str] = {}
+    for index, mid in enumerate(pending.image_ids, start=1):
+        if mid:
+            labels[mid] = f"photo {index}"
+    for index, mid in enumerate(pending.audio_ids, start=1):
+        if mid:
+            labels[mid] = f"voice note {index}"
+
+    out = []
+    for index, text in enumerate(pending.texts):
+        mid = pending.text_ids[index] if index < len(pending.text_ids) else None
+        target = pending.reply_to.get(mid) if mid else None
+        label = labels.get(target) if target else None
+        annotated = f"[replying to {label}] {text}" if label else text
+        if annotated.strip():
+            out.append(annotated)
+    return "\n".join(out)
+
+
 def _deliver(external_id: str, pending: Pending) -> None:
     reply = handle_message(
         CHANNEL,
         external_id,
-        pending.text,
+        _annotate_replies(pending),
         image_paths=pending.image_paths or None,
         audio_paths=pending.audio_paths or None,
     )

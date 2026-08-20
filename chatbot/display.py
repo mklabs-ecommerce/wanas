@@ -52,7 +52,14 @@ def display_history(history: list[dict]) -> list[dict]:
     for message in history:
         role = message.get("role")
         if role == "user":
-            items.append({"kind": "user", "text": message.get("content", "")})
+            items.append(
+                {
+                    "kind": "user",
+                    "text": message.get("content", ""),
+                    "images": list(message.get("images") or []),
+                    "audio": list(message.get("audio") or []),
+                }
+            )
         elif role == "assistant":
             if message.get("content"):
                 items.append(

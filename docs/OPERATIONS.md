@@ -19,9 +19,12 @@ something looks wrong.
       dashboard's product/order management. A missing write scope shows up
       as a `store_unavailable` (config) refusal from the dashboard action
       that needed it, not a crash
-- [ ] `SHOPIFY_WEBHOOK_SECRET` set **and** the webhooks registered (below) —
-      without it orders stay `Confirmed` forever and no tracking message ever
-      goes out
+- [ ] `SHOPIFY_WEBHOOK_SECRET` set — without it orders stay `Confirmed`
+      forever and no tracking message ever goes out. The subscriptions
+      themselves register automatically on boot once `SHOPIFY_STORE_DOMAIN`
+      and a public URL (`PUBLIC_BASE_URL`, or `RAILWAY_PUBLIC_DOMAIN` which
+      Railway sets for you) are both configured -- see "Registering the
+      webhooks" below for the one step that still has to be done by hand
 - [ ] Meta webhook registered and verified
 - [ ] A real shipping fee set for every governorate you deliver to
       (`python -m backend.cli set-fee`) — an order for an unpriced governorate
@@ -59,8 +62,8 @@ something looks wrong.
 token = `WHATSAPP_VERIFY_TOKEN`. Subscribe to the `messages` field. The
 handshake is a `GET`; the app answers it only when the token matches.
 
-**Shopify → this app.** Notification URL `https://<host>/webhooks/shopify`,
-format JSON, and subscribe these topics:
+**Shopify → this app.** Callback URL `https://<host>/webhooks/shopify`,
+format JSON, four topics:
 
 | Topic | What it does here |
 | --- | --- |
@@ -69,9 +72,26 @@ format JSON, and subscribe these topics:
 | `fulfillments/update` | Order → `Delivered` when Shopify says `delivered` |
 | `orders/cancelled` | Order → `Cancelled`, stock returned locally |
 
-Every delivery is HMAC-verified against `SHOPIFY_WEBHOOK_SECRET`; with no
-secret configured the endpoint refuses everything, because an unauthenticated
-way to cancel orders is worse than no integration at all.
+**The subscriptions register themselves.** `app.py`'s
+`_register_shopify_webhooks` (`backend/services/shopify_webhooks.py`) runs on
+every boot once `SHOPIFY_STORE_DOMAIN`/`SHOPIFY_ADMIN_TOKEN` and a public URL
+are set, checks what is already subscribed against this exact callback URL,
+and creates whatever is missing — idempotent, safe to leave running
+permanently, nothing to click through in Shopify Admin for this part.
+
+**The signing secret is the one manual step left, and it cannot be
+automated:** every delivery is HMAC-verified against
+`SHOPIFY_WEBHOOK_SECRET`; with no secret configured the endpoint refuses
+everything, because an unauthenticated way to cancel orders is worse than no
+integration at all. For a webhook subscription created the way this app
+creates it — through the Admin API, using a custom app's own credentials —
+the matching secret is that app's **API secret key**, not the separate
+per-store key shown on the old Settings → Notifications → Webhooks page.
+Find it in Shopify Admin → **Settings → Apps and sales channels → Develop
+apps → (this app) → API credentials → API secret key** (sometimes labelled
+"Client secret"). Copy it into `SHOPIFY_WEBHOOK_SECRET` in Railway and
+redeploy or restart — no code change needed, and `/health`'s
+`shopify_webhooks_configured` flips to `true` the moment it takes effect.
 
 ## The staff dashboard
 

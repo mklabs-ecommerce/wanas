@@ -52,6 +52,23 @@ def _bool(name: str, default: bool = False) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _public_base_url() -> str:
+    """Where this app is reachable from the internet, for anything (Shopify
+    webhook registration, so far) that needs to hand Shopify a callback URL.
+
+    `PUBLIC_BASE_URL` if set explicitly; otherwise Railway already injects
+    `RAILWAY_PUBLIC_DOMAIN` into every deploy, so that is used without asking
+    anyone to duplicate it into a second variable. Blank off Railway and with
+    nothing set -- callers treat that as "nothing to register against", the
+    same off-by-default shape as every other optional integration here.
+    """
+    explicit = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+    return f"https://{domain}" if domain else ""
+
+
 @dataclass(frozen=True)
 class Settings:
     database_url: str
@@ -110,6 +127,9 @@ class Settings:
     #: The Shopify app's webhook signing secret. Without it the status webhook
     #: refuses every delivery rather than trusting an unsigned one.
     shopify_webhook_secret: str
+    #: See `_public_base_url`. Used only to register Shopify's webhook
+    #: subscriptions against; never required for anything to keep working.
+    public_base_url: str
 
     @property
     def shopify_configured(self) -> bool:
@@ -187,6 +207,7 @@ def load_settings() -> Settings:
         shopify_webhook_secret=_first_env(
             "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_API_SECRET", default=""
         ),
+        public_base_url=_public_base_url(),
     )
 
 

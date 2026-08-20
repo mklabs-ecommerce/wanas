@@ -219,6 +219,137 @@ def test_a_provider_that_cannot_see_hands_the_photo_over(seeded, photo):
     assert item.payload["images"] == [photo]
 
 
+def test_multiple_photos_are_all_read_not_just_the_first(seeded, tmp_path):
+    """image_paths[0] used to be the only one ever looked at -- a second
+    photo in the same batch was silently never shown to the model at all."""
+    photo1 = tmp_path / "a.jpg"
+    photo1.write_bytes(BLOB)
+    photo2 = tmp_path / "b.jpg"
+    photo2.write_bytes(BLOB)
+    provider = ScriptedProvider()
+    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي زيتي"))
+    provider.push_reading(ImageReading(product_id="worker-jacket", confidence=0.9, description="جاكيت"))
+    provider.push(ModelReply(text="تمام"))
+
+    reply = runtime.handle_message(
+        "whatsapp",
+        WHO,
+        "عايز ده وده",
+        image_paths=[str(photo1), str(photo2)],
+        db=seeded,
+        provider=provider,
+    )
+
+    assert reply.paused is False
+    assert len(provider.image_calls) == 2
+    _system, history, _tools = provider.calls[0]
+    asked = history[-1]["content"]
+    assert "عايز ده وده" in asked
+    assert "Photo 1:" in asked
+    assert "Photo 2:" in asked
+    assert "WANAS Hoodie" in asked
+    assert "Worker Jacket" in asked
+
+
+def test_a_single_photo_gets_no_numbered_label(seeded, photo):
+    """The common case must read exactly as it always did -- no "Photo 1:"
+    noise when there is only one."""
+    provider = ScriptedProvider()
+    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي"))
+    provider.push(ModelReply(text="تمام"))
+
+    runtime.handle_message("whatsapp", WHO, "", image_paths=[photo], db=seeded, provider=provider)
+
+    _system, history, _tools = provider.calls[0]
+    assert "Photo 1:" not in history[-1]["content"]
+
+
+def test_an_unreadable_photo_alongside_a_readable_one_is_silently_skipped(seeded, tmp_path):
+    photo2 = tmp_path / "b.jpg"
+    photo2.write_bytes(BLOB)
+    provider = ScriptedProvider()
+    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي"))
+    provider.push(ModelReply(text="تمام"))
+
+    reply = runtime.handle_message(
+        "whatsapp",
+        WHO,
+        "",
+        image_paths=["whatsapp-media:never-downloaded", str(photo2)],
+        db=seeded,
+        provider=provider,
+    )
+
+    assert reply.paused is False
+    assert len(provider.image_calls) == 1
+
+
+def test_multiple_voice_notes_are_all_transcribed(seeded, tmp_path):
+    voice1 = tmp_path / "a.ogg"
+    voice1.write_bytes(BLOB)
+    voice2 = tmp_path / "b.ogg"
+    voice2.write_bytes(BLOB)
+    provider = ScriptedProvider()
+    provider.push_transcript("عايز الهودي الزيتي")
+    provider.push_transcript("مقاس M لو سمحت")
+    provider.push(ModelReply(text="تمام"))
+
+    reply = runtime.handle_message(
+        "whatsapp", WHO, "", audio_paths=[str(voice1), str(voice2)], db=seeded, provider=provider
+    )
+
+    assert reply.paused is False
+    assert len(provider.audio_calls) == 2
+    assert reply.transcript == "عايز الهودي الزيتي\nمقاس M لو سمحت"
+
+
+# --- history keeps the real media, not just its text ----------------------
+
+
+def test_a_successful_voice_note_keeps_the_audio_in_history(seeded, voice):
+    from chatbot import session as session_store
+
+    provider = ScriptedProvider()
+    provider.push_transcript("عايز الهودي الزيتي")
+    provider.push(ModelReply(text="تمام"))
+
+    runtime.handle_message("whatsapp", WHO, "", audio_paths=[voice], db=seeded, provider=provider)
+
+    history = session_store.load(seeded, "whatsapp", WHO)
+    turn = next(m for m in history if m.get("role") == "user")
+    assert turn["audio"] == [voice]
+    # The audio is additional, never a replacement for the transcript text
+    # the model actually answered.
+    assert turn["content"] == "عايز الهودي الزيتي"
+
+
+def test_a_successful_photo_keeps_the_image_in_history(seeded, photo):
+    from chatbot import session as session_store
+
+    provider = ScriptedProvider()
+    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي"))
+    provider.push(ModelReply(text="تمام"))
+
+    runtime.handle_message("whatsapp", WHO, "", image_paths=[photo], db=seeded, provider=provider)
+
+    history = session_store.load(seeded, "whatsapp", WHO)
+    turn = next(m for m in history if m.get("role") == "user")
+    assert turn["images"] == [photo]
+
+
+def test_an_unreadable_photo_still_keeps_the_image_on_the_handoff_message(seeded, photo):
+    from chatbot import session as session_store
+
+    reply = runtime.handle_message(
+        "whatsapp", WHO, "زي كده", image_paths=[photo], db=seeded, provider=RehearsalProvider()
+    )
+    assert reply.paused is True
+
+    history = session_store.load(seeded, "whatsapp", WHO)
+    turn = next(m for m in history if m.get("role") == "user")
+    assert turn["images"] == [photo]
+
+
 def test_image_understanding_can_be_switched_off(seeded, photo, monkeypatch):
     monkeypatch.setattr(
         media, "settings", dataclasses.replace(settings, image_understanding_enabled=False)

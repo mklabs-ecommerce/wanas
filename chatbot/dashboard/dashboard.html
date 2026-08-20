@@ -287,6 +287,7 @@
   .in  .bubble { background:var(--in);  border-top-left-radius:2px; }
   .bubble .who-tag { display:block; font-size:.7rem; color:#ffe08a; margin-bottom:.15rem; font-weight:600; }
   .bubble img { display:block; max-width:100%; border-radius:6px; margin-top:.4rem; }
+  .bubble audio { display:block; max-width:100%; margin-bottom:.4rem; }
   .meta { align-self:center; max-width:min(90%,48rem); width:100%; }
   .chip {
     background:#1d2b33; border:1px solid var(--line); border-radius:6px;
@@ -1672,6 +1673,31 @@ function attachImages(bubbleEl, paths) {
   });
 }
 
+function attachAudio(bubbleEl, paths) {
+  (paths || []).forEach(p => {
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = mediaUrl(p);
+    audio.onerror = () => { audio.replaceWith(el('div', 'chip', '🎧 ' + p)); };
+    bubbleEl.appendChild(audio);
+  });
+}
+
+//: A customer's voice note: the real, playable audio -- never replaced by
+//: its transcript, only paired with it -- with the transcript underneath so
+//: staff can read at a glance and still listen when the words alone are not
+//: enough (tone, an unclear accent, background noise).
+function userBubble(item) {
+  const row = el('div', 'row in');
+  const b = el('div', 'bubble');
+  attachAudio(b, item.audio);
+  attachImages(b, item.images);
+  if (item.text) b.appendChild(document.createTextNode(item.text));
+  row.appendChild(b);
+  document.getElementById('log').appendChild(row);
+  return b;
+}
+
 async function openConversation(channel, externalId) {
   current = {channel, external_id: externalId};
   renderList();
@@ -1702,7 +1728,7 @@ function renderConversation(data) {
   const log = document.getElementById('log');
   log.innerHTML = '';
   data.history.forEach(item => {
-    if (item.kind === 'user') bubble('in', item.text);
+    if (item.kind === 'user') userBubble(item);
     else if (item.kind === 'bot') attachImages(bubble('out', item.text, item.by === 'staff' ? '👤 رد يدوي' : null), item.attachments);
     else if (item.kind === 'tools') {
       const wrap = el('div', 'meta');

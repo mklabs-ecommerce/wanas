@@ -27,6 +27,7 @@ from backend.services import (
     shopify_catalog,
     shopify_inventory,
     shopify_orders,
+    shopify_webhooks,
 )
 from backend.services.shopify_catalog import LiveVariant
 
@@ -50,6 +51,13 @@ class FakeShopify:
         # variant_id (sku) -> {"size","color","length"}
         self.variant_options: dict[str, dict] = {}
         self._product_seq = 0
+        # [{"id","topic","callbackUrl"}, ...]
+        self.webhook_subscriptions: list[dict] = []
+        self._webhook_seq = 0
+        #: Topics that raise WebhookRejected instead of registering, keyed by
+        #: Shopify's GraphQL enum name -- for testing the "Shopify refused
+        #: this one" path.
+        self.rejected_webhook_topics: set[str] = set()
 
     # -- seeding ---------------------------------------------------------
 
@@ -717,6 +725,26 @@ class FakeShopify:
         except Exception:
             return False
 
+    # -- webhook subscriptions ---------------------------------------------
+
+    def list_subscriptions(self):
+        self._guard()
+        return list(self.webhook_subscriptions)
+
+    def create_subscription(self, topic, callback_url):
+        self._guard()
+        if topic in self.rejected_webhook_topics:
+            raise shopify_webhooks.WebhookRejected(f"{topic} is not a valid topic for this app")
+        with self._lock:
+            self._webhook_seq += 1
+            self.webhook_subscriptions.append(
+                {
+                    "id": f"gid://shopify/WebhookSubscription/{self._webhook_seq}",
+                    "topic": topic,
+                    "callbackUrl": callback_url,
+                }
+            )
+
     # -- wiring ----------------------------------------------------------
 
     def install(self, monkeypatch):
@@ -751,4 +779,6 @@ class FakeShopify:
             shopify_admin_products, "shopify_update_product_fields", self.shopify_update_product_fields
         )
         monkeypatch.setattr(shopify_admin_products, "shopify_update_variants", self.shopify_update_variants)
+        monkeypatch.setattr(shopify_webhooks, "list_subscriptions", self.list_subscriptions)
+        monkeypatch.setattr(shopify_webhooks, "create_subscription", self.create_subscription)
         return self

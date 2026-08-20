@@ -63,6 +63,32 @@ def test_media_paths_survive_the_merge():
     assert handled[0].last_message_id == "wamid.2"
 
 
+def test_reply_to_and_per_item_ids_survive_the_merge():
+    """A reply-to id captured on one fragment must still be resolvable
+    against an image/audio id that arrived in an earlier fragment of the
+    same debounced batch -- see chatbot/channels/whatsapp.py's
+    `_annotate_replies`."""
+    handled: list[Pending] = []
+    dispatcher = MessageDispatcher(lambda key, item: handled.append(item), debounce_seconds=0.15)
+    try:
+        dispatcher.submit("2010", Pending(image_paths=["a.jpg"], image_ids=["wamid.img1"]))
+        dispatcher.submit(
+            "2010",
+            Pending(
+                texts=["مقاس M لو سمحت"],
+                text_ids=["wamid.txt1"],
+                reply_to={"wamid.txt1": "wamid.img1"},
+            ),
+        )
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert handled[0].image_ids == ["wamid.img1"]
+    assert handled[0].text_ids == ["wamid.txt1"]
+    assert handled[0].reply_to == {"wamid.txt1": "wamid.img1"}
+
+
 def test_one_conversation_is_never_answered_twice_at_once():
     """A second turn for the same customer waits for the first to finish.
 

@@ -162,12 +162,22 @@ def _handle(
     transcript: str | None = None
 
     if audio_paths:
-        transcript = media.transcribe_voice(db, provider, audio_paths[0], hint=text)
-        if not transcript:
+        # Every voice note in the batch, not just the first -- a customer who
+        # sends two in a row used to have the second one silently ignored.
+        transcripts = []
+        for path in audio_paths:
+            piece = media.transcribe_voice(db, provider, path, hint=text)
+            if piece:
+                transcripts.append(piece)
+
+        if not transcripts:
             # Unreadable, or no provider that can listen. The same fallback
             # this path has always had.
             session_store.append(
-                db, channel, external_id, msg.user(_stored_text(text, image_paths, audio_paths))
+                db,
+                channel,
+                external_id,
+                msg.user(_stored_text(text, image_paths, audio_paths), audio=list(audio_paths)),
             )
             raise_handoff(
                 db,
@@ -179,19 +189,42 @@ def _handle(
             )
             return RuntimeReply(text=VOICE_ACK, paused=True)
 
+        transcript = "\n".join(transcripts)
         log.info("transcribed a voice note for %s/%s (%s chars)", channel, external_id, len(transcript))
         # From here it is an ordinary text message. The tag stays on the
         # stored copy so staff reading the thread can tell it was spoken.
         text = f"{text.strip()} {transcript}".strip() if text.strip() else transcript
 
     if image_paths:
-        reading = media.read_photo(db, provider, image_paths[0])
-        if reading is None:
-            # Nothing could be read -- unconfigured, unsupported, or the file
-            # never arrived. A guess about a garment the shop may not make is
-            # worse than a handoff, which is what this path has always done.
+        # Every photo in the batch, not just the first -- a customer who
+        # sends two photos used to have the second one never looked at by the
+        # model at all, not even acknowledged.
+        readings: list[tuple] = []
+        for path in image_paths:
+            reading = media.read_photo(db, provider, path)
+            if reading is None:
+                continue
+            product = media.matched_product(db, reading)
+            log.info(
+                "read a photo for %s/%s: match=%s confidence=%.2f garment=%s",
+                channel,
+                external_id,
+                product.product_id if product else None,
+                reading.confidence,
+                reading.is_garment,
+            )
+            readings.append((reading, product))
+
+        if not readings:
+            # Nothing could be read from any of them -- unconfigured,
+            # unsupported, or the files never arrived. A guess about a
+            # garment the shop may not make is worse than a handoff, which is
+            # what this path has always done.
             session_store.append(
-                db, channel, external_id, msg.user(_stored_text(text, image_paths, audio_paths))
+                db,
+                channel,
+                external_id,
+                msg.user(_stored_text(text, image_paths, audio_paths), images=list(image_paths)),
             )
             raise_handoff(
                 db,
@@ -203,16 +236,21 @@ def _handle(
             )
             return RuntimeReply(text=IMAGE_ACK, paused=True)
 
-        product = media.matched_product(db, reading)
-        log.info(
-            "read a photo for %s/%s: match=%s confidence=%.2f garment=%s",
-            channel,
-            external_id,
-            product.product_id if product else None,
-            reading.confidence,
-            reading.is_garment,
-        )
-        text = media.photo_context(reading, product, caption=text)
+        if len(readings) == 1:
+            # Unchanged from before: the single-photo case reads exactly as
+            # it always did, caption folded straight into the one note.
+            reading, product = readings[0]
+            text = media.photo_context(reading, product, caption=text)
+        else:
+            # Multiple photos: the customer's own words go once, up front --
+            # they are a message about the batch, not about any one photo --
+            # then each reading gets its own numbered note so "the second
+            # one" in the customer's next message is something the model can
+            # actually resolve against.
+            parts = [text.strip()] if text.strip() else []
+            for index, (reading, product) in enumerate(readings, start=1):
+                parts.append(f"Photo {index}: " + media.photo_context(reading, product))
+            text = "\n".join(parts)
 
     if not (text or "").strip():
         return RuntimeReply()
@@ -222,7 +260,9 @@ def _handle(
     # inside the tools so the snapshot cannot outlive the message: the next one
     # asks Shopify again.
     with shopify_catalog.turn_scope():
-        reply = agent.run_turn(db, channel, external_id, text, provider=provider)
+        reply = agent.run_turn(
+            db, channel, external_id, text, provider=provider, images=image_paths, audio=audio_paths
+        )
     return RuntimeReply(
         text=reply.text,
         attachments=reply.attachments,

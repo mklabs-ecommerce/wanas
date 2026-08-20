@@ -78,7 +78,9 @@ def client(seeded):
         set_provider(None)
 
 
-def webhook_body(text: str, *, message_id: str = "wamid.1", message_type: str = "text") -> dict:
+def webhook_body(
+    text: str, *, message_id: str = "wamid.1", message_type: str = "text", reply_to: str | None = None
+) -> dict:
     content: dict = {"from": PHONE, "id": message_id, "type": message_type, "timestamp": "1"}
     if message_type == "text":
         content["text"] = {"body": text}
@@ -88,6 +90,9 @@ def webhook_body(text: str, *, message_id: str = "wamid.1", message_type: str = 
         content["audio"] = {"id": "audio-1"}
     elif message_type == "location":
         content["location"] = {"latitude": 30.0, "longitude": 31.0}
+    if reply_to:
+        # Meta's "long-pressed reply to a specific earlier message" marker.
+        content["context"] = {"id": reply_to}
     return {
         "object": "whatsapp_business_account",
         "entry": [
@@ -241,6 +246,98 @@ def test_an_unsupported_message_type_goes_to_a_person(client, configured, sent, 
     assert item.reason == "out_of_scope"
     assert item.payload["message_type"] == "location"
     assert len(sent) == 1
+
+
+def test_accept_captures_the_reply_to_id_from_meta_context(configured, seeded, monkeypatch):
+    """`context.id` is how Meta marks a long-pressed "reply to this specific
+    earlier message". It must reach the Pending batch the dispatcher merges,
+    or a reply to one of several photos has nothing to resolve against."""
+    captured = []
+    monkeypatch.setattr(adapter.dispatcher, "submit", lambda key, item: captured.append(item))
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
+
+    message = {
+        "from": PHONE,
+        "id": "wamid.reply",
+        "type": "text",
+        "timestamp": "1",
+        "text": {"body": "مقاس M لو سمحت"},
+        "context": {"id": "wamid.photo1"},
+    }
+    adapter._accept(message, None)
+
+    assert len(captured) == 1
+    pending = captured[0]
+    assert pending.reply_to == {"wamid.reply": "wamid.photo1"}
+    assert pending.text_ids == ["wamid.reply"]
+
+
+def test_accept_gives_each_image_its_own_id(configured, seeded, monkeypatch):
+    captured = []
+    monkeypatch.setattr(adapter.dispatcher, "submit", lambda key, item: captured.append(item))
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
+    monkeypatch.setattr(adapter.WhatsAppClient, "download_media", lambda self, *a, **k: "data/inbound/x.jpg")
+
+    message = {
+        "from": PHONE,
+        "id": "wamid.img1",
+        "type": "image",
+        "timestamp": "1",
+        "image": {"id": "media-1"},
+    }
+    adapter._accept(message, None)
+
+    assert captured[0].image_ids == ["wamid.img1"]
+
+
+# --- reply-to annotation ----------------------------------------------------
+
+
+def test_annotate_replies_labels_a_reply_to_a_photo():
+    from chatbot.dispatcher import Pending
+
+    pending = Pending(
+        image_paths=["data/inbound/a.jpg", "data/inbound/b.jpg"],
+        image_ids=["wamid.img1", "wamid.img2"],
+        texts=["a size M please"],
+        text_ids=["wamid.txt1"],
+        reply_to={"wamid.txt1": "wamid.img2"},
+    )
+    assert adapter._annotate_replies(pending) == "[replying to photo 2] a size M please"
+
+
+def test_annotate_replies_labels_a_reply_to_a_voice_note():
+    from chatbot.dispatcher import Pending
+
+    pending = Pending(
+        audio_paths=["data/inbound/a.ogg"],
+        audio_ids=["wamid.audio1"],
+        texts=["نفس اللون بس مقاس تاني"],
+        text_ids=["wamid.txt1"],
+        reply_to={"wamid.txt1": "wamid.audio1"},
+    )
+    assert adapter._annotate_replies(pending) == "[replying to voice note 1] نفس اللون بس مقاس تاني"
+
+
+def test_annotate_replies_leaves_a_reply_outside_the_batch_unannotated():
+    """A reply to something from an already-answered earlier turn has
+    nothing in this batch to resolve against -- left as plain text rather
+    than a confusing dangling reference."""
+    from chatbot.dispatcher import Pending
+
+    pending = Pending(
+        texts=["زي اللي قلتلي عليه امبارح"],
+        text_ids=["wamid.txt1"],
+        reply_to={"wamid.txt1": "wamid.from-a-week-ago"},
+    )
+    assert adapter._annotate_replies(pending) == "زي اللي قلتلي عليه امبارح"
+
+
+def test_annotate_replies_is_a_no_op_with_nothing_to_annotate():
+    from chatbot.dispatcher import Pending
+
+    pending = Pending(texts=["عايز هودي", "أسود"])
+    assert adapter._annotate_replies(pending) == pending.text
 
 
 def test_a_paused_conversation_gets_no_reply(client, configured, sent, seeded):
