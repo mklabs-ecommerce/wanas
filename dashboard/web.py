@@ -30,7 +30,7 @@ feature-flag settings. Rather than this one file growing to hold all of it,
 each area is a sibling router in this same package
 (`shopify_api.py`, `stats_api.py`, `queue_api.py`, `settings_api.py`,
 `customers_api.py`), each using the exact same staff-cookie guard defined in
-`chatbot/dashboard/guard.py`, each included separately in `app.py`. This file
+`dashboard/guard.py`, each included separately in `app.py`. This file
 stays scoped to auth and conversations, unchanged by any of that growth.
 """
 

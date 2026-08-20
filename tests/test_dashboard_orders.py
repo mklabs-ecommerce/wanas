@@ -4,7 +4,7 @@ Store-wide, not bot-only: a website order (no local `Order` row) has to show
 up in the list next to a bot order, and staff actions have to route through
 the right path for each -- the local order service (already transactional,
 already notifies) when a local row exists, straight to Shopify when it does
-not. See `chatbot/dashboard/shopify_api.py`'s docstring.
+not. See `dashboard/shopify_api.py`'s docstring.
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from fastapi.testclient import TestClient
 from backend.config import settings
 from backend.models import Order, OrderStatus
 from backend.services import auth, carts, orders
-from chatbot.dashboard import shopify_api
-from chatbot.dashboard import web as dashboard
+from dashboard import shopify_api
+from dashboard import web as dashboard
 
 SECRET = "test-dashboard-secret"
 VARIANT = "wanas-hoodie-s-olive"

@@ -1,6 +1,6 @@
 """The `item_swap` and `alert` review-queue panel -- the other half of
 `request_human`'s dashboard, for the two queue kinds that had full backend
-logic and no UI at all before this. See `chatbot/dashboard/queue_api.py`.
+logic and no UI at all before this. See `dashboard/queue_api.py`.
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ from backend.config import settings
 from backend.models import Order, OrderStatus
 from backend.services import auth, carts, orders
 from backend.services.notifications import item_swap_requested
-from chatbot.dashboard import queue_api
-from chatbot.dashboard import web as dashboard
+from dashboard import queue_api
+from dashboard import web as dashboard
 
 SECRET = "test-dashboard-secret"
 VARIANT_A = "wanas-hoodie-s-olive"

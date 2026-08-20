@@ -182,7 +182,7 @@ Not full coverage — the parts where a silent bug is expensive:
 ## The handoff has a UI now
 
 `request_human` pauses a conversation and writes a handoff record.
-`chatbot/dashboard/` (a staff login, `/dashboard`) lists what is waiting,
+`dashboard/` (a staff login, `/dashboard`) lists what is waiting,
 lets staff reply — which un-pauses the conversation and resolves the record
 in the same transaction — or resolve it without a reply. See "The staff
 dashboard" in `docs/ARCHITECTURE.md`.

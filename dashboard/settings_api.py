@@ -3,7 +3,7 @@
 Sits next to `web.py` rather than in it -- see that module's docstring for
 why the dashboard grew sibling files instead of one growing file. Every route
 here uses the same staff-cookie guard `web.py`'s own routes use
-(`chatbot.dashboard.guard`).
+(`dashboard.guard`).
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from backend.config import settings
 from backend.db import session_scope
 from backend.models import Staff
 from backend.services import runtime_flags, test_numbers
-from chatbot.dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/settings", tags=["dashboard-settings"])
 

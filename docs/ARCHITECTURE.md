@@ -155,7 +155,7 @@ note before this existed.
 | `chatbot/tools/` | The eighteen tools and their refusals. |
 | `chatbot/channels/whatsapp.py` | The only WhatsApp-specific code in the conversational path. |
 | `chatbot/harness/` | Dev-only chat UI. Unauthenticated by design; off unless `HARNESS_ENABLED=1`. |
-| `chatbot/dashboard/` | Staff dashboard: conversations, Shopify (products/orders/customers), statistics, the review queue, settings. See below. |
+| `dashboard/` | Staff dashboard: conversations, Shopify (products/orders/customers), statistics, the review queue, settings. See below. |
 | `chatbot/display.py` | Turning stored history into bubbles a person can read — shared by the harness and the dashboard. |
 | `data/` | Catalog metadata Shopify has no field for. Not a product database. |
 | `scripts/` | Shopify maintenance. All dry-run by default, idempotent, need `--apply`. |
@@ -166,7 +166,7 @@ note before this existed.
 conversation and written a `StaffQueueItem` of kind `handoff`. For a long
 stretch nothing read that queue back or un-paused the conversation except the
 dev harness's `/unpause` stand-in — a customer who triggered a handoff stayed
-stuck until someone edited the database by hand. `chatbot/dashboard/` is the
+stuck until someone edited the database by hand. `dashboard/` is the
 other half: `GET /dashboard` lists conversations (waiting-on-staff ones first,
 oldest wait first), shows one in full, and lets a logged-in staff member
 either reply to a **paused** one — which sends the customer a real WhatsApp
@@ -196,7 +196,7 @@ the same one — exactly one writer at a time, staff included.
 Conversations was the first section; it is no longer the only one. The same
 staff login now also covers:
 
-- **Shopify** (`chatbot/dashboard/shopify_api.py`) — products (view,
+- **Shopify** (`dashboard/shopify_api.py`) — products (view,
   create, edit), orders (view, fulfil, cancel, edit quantity), customers.
   Full read/write, not the read-only mirror the dashboard started as.
 - **Statistics** (`stats_api.py`, `backend/services/dashboard_stats.py`) —

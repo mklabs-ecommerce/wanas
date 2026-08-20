@@ -4,7 +4,7 @@ Store-wide -- a customer who has only ever ordered on the website has no
 `Client` row in wanas.db at all (see `backend/models.py`'s `Client`: it is
 created at *checkout*, and only the bot's own checkout writes one). Read-only
 on purpose: nothing here was asked to manage customer PII, only to show it
-alongside the WhatsApp-side view (`chatbot/dashboard/customers_api.py`).
+alongside the WhatsApp-side view (`dashboard/customers_api.py`).
 """
 
 from __future__ import annotations

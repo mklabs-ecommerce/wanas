@@ -71,22 +71,30 @@ chatbot/
   session.py                 DB-backed session storage
   display.py                 stored history -> bubbles a person can read;
                               shared by the harness and the dashboard
-  media_serving.py           the local-file path guard both of them serve through
+  media_serving.py           the local-file path guard both the harness and the
+                              dashboard serve through
   providers/                  gemini.py (real), fake.py (tests/rehearsal), base.py
   tools/                      cart_tools, catalog_tools, order_tools, support_tools
   channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
   harness/                    local dev-only chat UI (web + terminal), unauthenticated
                               by design and OFF unless HARNESS_ENABLED=1
-  dashboard/                  staff dashboard: conversations, Shopify (products/
-                              orders/customers), statistics, the review queue,
-                              and feature-flag settings; staff-login
-                              authenticated, ON by default
-                              (DASHBOARD_SESSION_SECRET gates login).
-                              web.py (auth + conversations) stays one file;
-                              shopify_api.py / stats_api.py / queue_api.py /
-                              settings_api.py / customers_api.py are sibling
-                              routers under the same guard, not a growing
-                              single file -- see web.py's own docstring
+dashboard/                 staff dashboard, its own top-level package:
+                            conversations, Shopify (products/
+                            orders/customers), statistics, the review queue,
+                            and feature-flag settings; staff-login
+                            authenticated, ON by default
+                            (DASHBOARD_SESSION_SECRET gates login).
+                            web.py (auth + conversations) stays one file;
+                            shopify_api.py / stats_api.py / queue_api.py /
+                            settings_api.py / customers_api.py are sibling
+                            routers under the same guard, not a growing
+                            single file -- see web.py's own docstring. To
+                            show conversations it reads chatbot/session.py,
+                            chatbot/display.py, chatbot/messages.py, and
+                            chatbot/media_serving.py directly -- the same
+                            read-only surface the harness reads through --
+                            plus backend/ services for everything else;
+                            chatbot/ never imports back from dashboard/.
 docs/                    ARCHITECTURE.md, OPERATIONS.md, MEDIA.md
 data/                    products_seed.json, size_charts.json, governorates.json,
                           merge_catalog.py, images/, size-charts/ — catalog
@@ -233,7 +241,7 @@ tracking message ever fires — is in `docs/OPERATIONS.md`.
   HMAC-SHA256, Shopify with base64; with no secret configured the Shopify
   endpoint refuses everything, and that is the correct behaviour.
 - Never expose `DASHBOARD_SESSION_SECRET`, and never weaken
-  `chatbot/dashboard/web.py`'s login so it signs a session without one —
+  `dashboard/web.py`'s login so it signs a session without one —
   same shape as the Shopify webhook rule above: no secret means refuse, not
   fall back to something guessable.
 
@@ -246,7 +254,7 @@ where products, inventory, and orders are managed by staff. Do not recreate
 the old website architecture unless explicitly requested.
 
 The one gap that removal left — `request_human` pausing a conversation with
-no UI to resolve it — is closed. `chatbot/dashboard/` is a new, purpose-built
+no UI to resolve it — is closed. `dashboard/` is a new, purpose-built
 staff dashboard: it lists conversations, shows one in full, and lets a
 logged-in staff member reply to a *paused* one or resolve it without a
 reply. See "The staff dashboard" in `docs/ARCHITECTURE.md`, and

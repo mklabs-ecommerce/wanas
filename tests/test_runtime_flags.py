@@ -19,9 +19,9 @@ from fastapi.testclient import TestClient
 from backend.config import settings
 from backend.services import auth, runtime_flags
 from chatbot import media
-from chatbot.dashboard import settings_api
-from chatbot.dashboard import web as dashboard
 from chatbot.providers.fake import ScriptedProvider
+from dashboard import settings_api
+from dashboard import web as dashboard
 
 SECRET = "test-dashboard-secret"
 

@@ -2,7 +2,7 @@
 customers in the phases after it.
 
 Sits next to `web.py` rather than growing it -- see that module's docstring.
-Every route uses the same staff-cookie guard (`chatbot.dashboard.guard`).
+Every route uses the same staff-cookie guard (`dashboard.guard`).
 
 Order actions route through the local order service
 (`backend/services/orders.py`) whenever a matching local `Order` row exists
@@ -28,7 +28,7 @@ from backend.services import (
     shopify_orders,
 )
 from backend.services.shopify_catalog import ShopifyConfigError, ShopifyUnavailable
-from chatbot.dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/shopify", tags=["dashboard-shopify"])
 
@@ -306,7 +306,7 @@ def edit_quantity(
 
 # --------------------------------------------------------------------------
 # customers: Shopify's own, store-wide -- read-only. See
-# chatbot/dashboard/customers_api.py for the separate WhatsApp-side view.
+# dashboard/customers_api.py for the separate WhatsApp-side view.
 # --------------------------------------------------------------------------
 
 

@@ -29,13 +29,13 @@ from backend.webhooks.shopify import router as shopify_router
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
 from chatbot.channels.whatsapp import router as whatsapp_router
-from chatbot.dashboard.customers_api import router as dashboard_customers_router
-from chatbot.dashboard.queue_api import router as dashboard_queue_router
-from chatbot.dashboard.settings_api import router as dashboard_settings_router
-from chatbot.dashboard.shopify_api import router as dashboard_shopify_router
-from chatbot.dashboard.stats_api import router as dashboard_stats_router
-from chatbot.dashboard.web import router as dashboard_router
 from chatbot.harness.web import router as harness_router
+from dashboard.customers_api import router as dashboard_customers_router
+from dashboard.queue_api import router as dashboard_queue_router
+from dashboard.settings_api import router as dashboard_settings_router
+from dashboard.shopify_api import router as dashboard_shopify_router
+from dashboard.stats_api import router as dashboard_stats_router
+from dashboard.web import router as dashboard_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("wanas")
@@ -272,7 +272,7 @@ if settings.dashboard_enabled:
     # Authenticated (a staff login), unlike the harness below -- safe to leave
     # mounted by default. `dashboard_configured` still gates whether login
     # actually works; see the lifespan warning above. Split into sibling
-    # routers (chatbot/dashboard/*_api.py) rather than one growing file, all
+    # routers (dashboard/*_api.py) rather than one growing file, all
     # under the same guard since they all sit behind the same staff login.
     app.include_router(dashboard_router)
     app.include_router(dashboard_settings_router)

@@ -18,7 +18,7 @@ from backend.db import session_scope
 from backend.models import Order, QueueKind, QueueStatus, StaffQueueItem
 from backend.services import orders as orders_service
 from backend.services import queues
-from chatbot.dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/queue", tags=["dashboard-queue"])
 

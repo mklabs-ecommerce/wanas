@@ -2,7 +2,7 @@
 
 Shared by the two things that show a conversation to a human rather than to
 the model: the local harness (`chatbot/harness/web.py`) and the staff
-dashboard (`chatbot/dashboard/web.py`). Neither owns this logic -- it reads
+dashboard (`dashboard/web.py`). Neither owns this logic -- it reads
 back out of the same neutral history (`chatbot/messages.py`) `handle_message`
 already wrote, rather than the agent growing a field that exists only so a UI
 has something to render.

@@ -22,7 +22,7 @@ from backend.models import QueueKind
 from backend.services import auth, identities, notifications, queues
 from chatbot import messages as msg
 from chatbot import session as session_store
-from chatbot.dashboard import web as dashboard
+from dashboard import web as dashboard
 
 SECRET = "test-dashboard-secret"
 CUSTOMER = "201555999111"
@@ -32,7 +32,7 @@ CHANNEL = "whatsapp"
 @pytest.fixture()
 def configured(monkeypatch):
     patched = dataclasses.replace(settings, dashboard_session_secret=SECRET)
-    # `chatbot.dashboard.web` gates login on this; `backend.services.auth`
+    # `dashboard.web` gates login on this; `backend.services.auth`
     # signs and verifies the session token with it. Two separate `settings`
     # names (each module bound its own at import time), so both need patching
     # -- the same reason `test_shopify_webhooks.py` patches the webhook

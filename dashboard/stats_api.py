@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from backend.db import session_scope
 from backend.services import dashboard_stats, test_numbers
 from backend.services.shopify_catalog import ShopifyConfigError, ShopifyUnavailable
-from chatbot.dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/stats", tags=["dashboard-stats"])
 

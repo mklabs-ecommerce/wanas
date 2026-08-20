@@ -1,6 +1,6 @@
 """The WhatsApp-side Customers view: local `Client` rows.
 
-Deliberately separate from `chatbot/dashboard/shopify_api.py`'s Shopify
+Deliberately separate from `dashboard/shopify_api.py`'s Shopify
 customers -- merging the two would silently under- or double-count exactly
 the way a Postgres-only revenue number would (see `docs/ARCHITECTURE.md`).
 A `Client` exists only once the bot's own checkout created one
@@ -18,7 +18,7 @@ from sqlalchemy import or_, select
 from backend.db import session_scope
 from backend.models import Client, Order
 from backend.money import money
-from chatbot.dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/customers", tags=["dashboard-customers"])
 

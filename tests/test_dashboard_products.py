@@ -16,8 +16,8 @@ from fastapi.testclient import TestClient
 
 from backend.config import settings
 from backend.services import auth
-from chatbot.dashboard import shopify_api
-from chatbot.dashboard import web as dashboard
+from dashboard import shopify_api
+from dashboard import web as dashboard
 
 SECRET = "test-dashboard-secret"
 VARIANT = "wanas-hoodie-s-olive"
