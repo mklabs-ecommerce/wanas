@@ -24,7 +24,8 @@ from fastapi import APIRouter, Request, Response
 from backend.config import PROJECT_ROOT, settings
 from backend.db import session_scope
 from backend.integrations.whatsapp_client import WhatsAppClient
-from backend.services import notifications, runtime_flags
+from backend.models import QueueKind
+from backend.services import notifications, queues, runtime_flags
 from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message
 from chatbot.tools.support_tools import raise_handoff
@@ -263,20 +264,55 @@ def _deliver(external_id: str, pending: Pending) -> None:
             db, "interactive_messages_enabled", settings.interactive_messages_enabled
         )
 
+    outcomes = []
     if reply.interactive and interactive_enabled:
         # The picker carries its own prompt, so the model's words go first and
         # the tappable list follows -- two messages, in the order a person
         # would send them.
         if reply.text:
-            client.send_text(external_id, reply.text)
-        client.send_interactive(external_id, reply.interactive, fallback=reply.text or "")
+            outcomes.append(client.send_text(external_id, reply.text))
+        outcomes.append(
+            client.send_interactive(external_id, reply.interactive, fallback=reply.text or "")
+        )
     elif reply.text:
-        client.send_text(external_id, reply.text)
+        outcomes.append(client.send_text(external_id, reply.text))
 
     for path in reply.attachments:
         # The model wrote the words; the adapter decides how the picture is
         # delivered. Text carries the answer, the image supports it.
-        client.send_image(external_id, path)
+        outcomes.append(client.send_image(external_id, path))
+
+    _flag_delivery_failures(external_id, outcomes)
+
+
+def _flag_delivery_failures(external_id: str, outcomes: list) -> None:
+    """The model composed a reply and Meta refused every attempt to send it.
+
+    `WhatsAppClient._post` already logs the rejection, but a log line nobody
+    is watching is indistinguishable from the bot silently ignoring the
+    customer -- which is exactly what an unverified test recipient, an
+    opted-out number, or a template requirement looks like from the outside.
+    Same pattern as `notifications._deliver_confirmation`: surface it as an
+    alert so staff see it, instead of the conversation just going quiet.
+    """
+    failed = [o for o in outcomes if not o.delivered]
+    if not failed:
+        return
+    log.error(
+        "outbound whatsapp delivery failed for %s: %s",
+        external_id,
+        "; ".join(o.error or "unknown error" for o in failed),
+    )
+    with session_scope() as db:
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason="reply_delivery_failed",
+            summary=f"WhatsApp reply to {external_id} failed to send",
+            channel=CHANNEL,
+            external_id=external_id,
+            payload={"errors": [o.error for o in failed]},
+        )
 
 
 #: One per process. Built at import time so the router and the tests share it.

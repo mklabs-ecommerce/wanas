@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from backend.config import settings
 from backend.models import Variant
-from backend.services import carts, catalog
+from backend.services import carts, catalog, waitlist
 from chatbot.tools.base import ToolContext, tool
 
 MAX_PER_LINE = settings.max_quantity_per_line
@@ -42,6 +42,11 @@ def add_to_cart(ctx: ToolContext, variant_id: str, quantity: int | None = None) 
         return {"error": "variant_not_found", "variant_id": variant_id}
 
     if variant.stock_qty <= 0:
+        # The only signal this app gets that someone wanted a sold-out
+        # variant -- there is no separate "notify me" button. Joining here
+        # (rather than a tool the model has to remember to call) means every
+        # customer who hits this gets waitlisted, not just the ones who ask.
+        waitlist.join(ctx.session, variant.variant_id, ctx.channel, ctx.external_id)
         return {
             "error": "out_of_stock",
             "variant": {

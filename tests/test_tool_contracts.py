@@ -170,6 +170,23 @@ def test_add_to_cart_out_of_stock_returns_alternatives(ctx):
         assert ctx.session.get(Variant, alt["variant_id"]).stock_qty > 0
 
 
+def test_add_to_cart_out_of_stock_joins_the_waitlist(ctx):
+    """The only signal this app gets that someone wanted a sold-out variant
+    -- see backend/services/waitlist.py."""
+    from backend.services import waitlist
+
+    call(ctx, "add_to_cart", variant_id=SOLD_OUT)
+    entries = waitlist.open_entries(ctx.session)
+    assert len(entries) == 1
+    assert entries[0].variant_id == SOLD_OUT
+    assert entries[0].channel == ctx.channel
+    assert entries[0].external_id == ctx.external_id
+
+    # A second failed attempt by the same customer does not duplicate the row.
+    call(ctx, "add_to_cart", variant_id=SOLD_OUT)
+    assert len(waitlist.open_entries(ctx.session)) == 1
+
+
 def test_add_to_cart_insufficient_stock(ctx):
     ctx.session.get(Variant, VARIANT).stock_qty = 3
     ctx.session.flush()

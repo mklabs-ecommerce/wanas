@@ -18,16 +18,23 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Protocol
 
 from sqlalchemy.orm import Session
 
+from backend.config import settings
 from backend.events import after_commit
-from backend.models import Order, QueueKind, Variant
+from backend.models import Order, QueueKind, Variant, utcnow
 from backend.money import money
-from backend.services import queues
+from backend.services import identities, queues
 
 log = logging.getLogger("wanas.notifications")
+
+#: Meta only allows free-form, business-initiated text inside this window of
+#: the customer's last message; outside it, only a pre-approved template may
+#: reopen the conversation (`send_proactive` below).
+CUSTOMER_SERVICE_WINDOW = timedelta(hours=24)
 
 
 @dataclass
@@ -45,6 +52,8 @@ class OutboundSender(Protocol):
     def send_text(self, to: str, text: str, *, template: str | None = None) -> OutboundMessage: ...
 
     def send_image(self, to: str, image_path: str, *, caption: str = "") -> OutboundMessage: ...
+
+    def send_template(self, to: str, template: str, *, language: str = "ar") -> OutboundMessage: ...
 
 
 @dataclass
@@ -70,6 +79,12 @@ class LogSender:
         message = OutboundMessage(to=to, text=payload.get("body") or fallback, kind="interactive")
         self.sent.append(message)
         log.info("[outbound:%s] interactive %s", to, payload.get("kind"))
+        return message
+
+    def send_template(self, to: str, template: str, *, language: str = "ar") -> OutboundMessage:
+        message = OutboundMessage(to=to, text=f"[template:{template}]", template=template)
+        self.sent.append(message)
+        log.info("[outbound:%s] template %s (%s)", to, template, language)
         return message
 
     def mark_as_read(self, message_id: str) -> bool:
@@ -236,6 +251,73 @@ def order_delivered(session: Session, order: Order) -> None:
         order.contact_phone,
         FEEDBACK_REQUEST_TEXT.format(order_id=customer_reference(order)),
         template="feedback_request",
+    )
+
+
+BACK_IN_STOCK_TEXT = "خبر حلو! {product_name} رجع متوفر تاني ✅ حابب تطلبه دلوقتي؟"
+ABANDONED_CART_TEXT = "لسه طلبك في السلة 🛒 حابب تكمله؟ لو محتاج مساعدة قولّلي."
+
+
+def send_proactive(
+    session: Session,
+    channel: str,
+    external_id: str,
+    text: str,
+    *,
+    template: str | None,
+    alert_reason: str,
+    alert_summary: str,
+    alert_payload: dict | None = None,
+) -> None:
+    """A message the shop starts, not a reply to one just received.
+
+    Free-form text only works inside Meta's 24-hour customer service window
+    (`CUSTOMER_SERVICE_WINDOW`), measured from `ChannelIdentity.last_seen_at`
+    -- the last time this identity actually messaged in. Outside it, only an
+    approved template may reopen the conversation; `template` is that
+    template's name, when one has been approved (none are yet -- see
+    docs/OPERATIONS.md). With no template configured, or if Meta refuses the
+    template send too, there is no other channel to this customer in Phase 1
+    (no email, no SMS) -- so the fallback is a staff alert, the same "a
+    person has to do it" shape as `_deliver_confirmation`'s failure path.
+    """
+    if channel != "whatsapp":
+        # Nothing else is wired to an outbound sender yet -- see
+        # `order_delivered`'s note on TikTok.
+        return
+
+    identity = identities.get(session, channel, external_id)
+    window_open = bool(
+        identity
+        and identity.last_seen_at
+        and utcnow() - identity.last_seen_at < CUSTOMER_SERVICE_WINDOW
+    )
+
+    message = None
+    if window_open:
+        message = _sender.send_text(external_id, text, template=template)
+    elif template:
+        message = _sender.send_template(
+            external_id, template, language=settings.whatsapp_template_language
+        )
+
+    if message is not None and message.delivered:
+        return
+
+    queues.enqueue(
+        session,
+        kind=QueueKind.ALERT.value,
+        reason=alert_reason,
+        summary=alert_summary,
+        channel=channel,
+        external_id=external_id,
+        payload={
+            **(alert_payload or {}),
+            "text": text,
+            "template": template,
+            "window_open": window_open,
+            "error": getattr(message, "error", None) or "no approved template configured",
+        },
     )
 
 

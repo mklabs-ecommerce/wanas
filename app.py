@@ -25,6 +25,7 @@ from backend.config import settings
 from backend.db import engine, session_scope
 from backend.legal import router as legal_router
 from backend.models import Base, Product, ShippingRate, Variant
+from backend.services.scheduler import scheduler
 from backend.webhooks.shopify import router as shopify_router
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
@@ -221,7 +222,9 @@ async def lifespan(_app: FastAPI):
             name="shopify-webhook-register",
             daemon=True,
         ).start()
+    scheduler.start()
     yield
+    scheduler.stop()
     # Let anything still buffered finish rather than dropping a customer's
     # message on a deploy.
     whatsapp_dispatcher.shutdown(wait=True)

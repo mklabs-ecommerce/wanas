@@ -104,7 +104,7 @@ HANDOFF_REASONS = (
     "out_of_scope",
 )
 ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancelled", "swap_requested",
-                 "confirmation_delivery_failed")
+                 "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed")
 
 
 # --------------------------------------------------------------------------
@@ -472,6 +472,47 @@ class TestPhoneNumber(Base):
     added_by: Mapped[int | None] = mapped_column(ForeignKey("staff.staff_id"), nullable=True)
 
 
+class StockWaitlistEntry(Base):
+    """A customer who tried to order a variant while it was out of stock.
+
+    One row per (variant, identity) -- re-armed rather than duplicated if the
+    same customer hits the same sold-out variant again after already being
+    notified once (`backend/services/waitlist.py`). `notified_at` null means
+    still waiting; the periodic re-engagement check (`backend/services/
+    reengagement.py`) is what fills it in, not a webhook -- Shopify does not
+    push inventory-level changes to this app.
+    """
+
+    __tablename__ = "stock_waitlist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    variant_id: Mapped[str] = mapped_column(ForeignKey("variants.variant_id"), nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("variant_id", "channel", "external_id", name="uq_waitlist_variant_identity"),
+    )
+
+
+class AbandonedCartNudge(Base):
+    """The last time a customer was checked in on about an idle cart.
+
+    Keyed by identity, not by cart -- there is no separate cart row to hang
+    this off (`carts.py`'s docstring: the identity *is* the cart key). A new
+    line added after `sent_at` re-arms the follow-up for the next idle
+    window; nothing here is ever deleted, only overwritten.
+    """
+
+    __tablename__ = "abandoned_cart_nudges"
+
+    channel: Mapped[str] = mapped_column(String(20), primary_key=True)
+    external_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class WhatsAppMedia(Base):
     """Cache of Meta media IDs for the 12 size-chart images.
 
@@ -506,6 +547,8 @@ __all__ = [
     "WebhookEvent",
     "Counter",
     "WhatsAppMedia",
+    "StockWaitlistEntry",
+    "AbandonedCartNudge",
     "OrderStatus",
     "Channel",
     "QueueKind",

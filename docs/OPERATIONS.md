@@ -32,9 +32,12 @@ something looks wrong.
 - [ ] SKUs linked (`python scripts/shopify_set_skus.py --apply`), then
       `python scripts/shopify_check_live.py` reports no disagreement
 - [ ] Meta templates approved for the proactive messages (order confirmation,
-      status pushes, feedback request). Until then they go out as free-form
-      text, which only works for verified test recipients and inside the
-      24-hour window.
+      status pushes, feedback request, back-in-stock, abandoned-cart nudge).
+      Until then they go out as free-form text, which only works for verified
+      test recipients and inside the 24-hour window; outside it,
+      `WHATSAPP_TEMPLATE_BACK_IN_STOCK` / `WHATSAPP_TEMPLATE_ABANDONED_CART`
+      unset means that message queues a staff alert instead of going out
+      automatically (`backend/services/notifications.py::send_proactive`)
 - [ ] `DASHBOARD_SESSION_SECRET` set (a long random string) **and** at least
       one staff account exists (`python -m backend.cli create-staff`) — without
       the secret, `/dashboard` cannot log anyone in, and a conversation that

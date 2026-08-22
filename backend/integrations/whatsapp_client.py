@@ -160,6 +160,28 @@ class WhatsAppClient:
             to=to, text=caption, kind="image", image_path=image_path, delivered=ok, error=error
         )
 
+    def send_template(self, to: str, template: str, *, language: str = "ar") -> OutboundMessage:
+        """A pre-approved template message -- the only kind Meta allows once
+        the customer's last message is more than 24 hours old.
+
+        No components/variables: every template this app sends today is a
+        static "here's what's new" nudge with the specifics already spoken
+        for in the approved copy, not filled in at send time. A template that
+        needs body parameters would extend this, not replace it.
+        """
+        ok, error = self._post(
+            {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": self.normalise_recipient(to),
+                "type": "template",
+                "template": {"name": template, "language": {"code": language}},
+            }
+        )
+        return OutboundMessage(
+            to=to, text=f"[template:{template}]", template=template, delivered=ok, error=error
+        )
+
     def send_interactive(self, to: str, payload: dict, *, fallback: str = "") -> OutboundMessage:
         """A tappable list or button row, from the neutral shape.
 

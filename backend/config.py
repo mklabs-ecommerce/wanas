@@ -131,6 +131,25 @@ class Settings:
     #: subscriptions against; never required for anything to keep working.
     public_base_url: str
 
+    #: How often the background job checks for back-in-stock waitlists and
+    #: idle carts (`backend/services/scheduler.py`). <= 0 disables the loop
+    #: entirely -- for tests, which call the checks directly instead.
+    reengagement_interval_seconds: float
+    #: How long a cart sits untouched before `check_abandoned_carts` sends the
+    #: "still interested?" nudge.
+    abandoned_cart_hours: float
+    #: Past this age a cart is treated as dead rather than abandoned -- an
+    #: ancient test cart must not get nudged on every restart forever.
+    abandoned_cart_max_age_hours: float
+    #: Meta template names for the two proactive message types Feature 3/4
+    #: need outside the 24-hour customer service window (`notifications.
+    #: send_proactive`). Blank until a real one is submitted and approved --
+    #: see docs/OPERATIONS.md, which is also where `order_confirmation` /
+    #: `status_*` / `feedback_request` are tracked as not yet approved either.
+    whatsapp_template_back_in_stock: str
+    whatsapp_template_abandoned_cart: str
+    whatsapp_template_language: str
+
     @property
     def shopify_configured(self) -> bool:
         """Without credentials the catalog serves wanas.db's own prices and
@@ -208,6 +227,12 @@ def load_settings() -> Settings:
             "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_API_SECRET", default=""
         ),
         public_base_url=_public_base_url(),
+        reengagement_interval_seconds=_float("REENGAGEMENT_INTERVAL_SECONDS", 1800.0),
+        abandoned_cart_hours=_float("ABANDONED_CART_HOURS", 6.0),
+        abandoned_cart_max_age_hours=_float("ABANDONED_CART_MAX_AGE_HOURS", 48.0),
+        whatsapp_template_back_in_stock=os.getenv("WHATSAPP_TEMPLATE_BACK_IN_STOCK", "").strip(),
+        whatsapp_template_abandoned_cart=os.getenv("WHATSAPP_TEMPLATE_ABANDONED_CART", "").strip(),
+        whatsapp_template_language=os.getenv("WHATSAPP_TEMPLATE_LANGUAGE", "ar").strip() or "ar",
     )
 
 
