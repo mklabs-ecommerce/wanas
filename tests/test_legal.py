@@ -33,7 +33,7 @@ def test_privacy_page_names_every_processor_and_a_contact():
     become untrue -- which is worse than not having one."""
     text = _client().get("/privacy").text
 
-    for processor in ("WhatsApp", "Google", "Shopify", "Railway"):
+    for processor in ("WhatsApp", "OpenRouter", "Shopify", "Railway"):
         assert processor in text
 
     assert legal.CONTACT_EMAIL in text

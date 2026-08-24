@@ -53,7 +53,7 @@ def client(seeded, configured):
 def outbox(monkeypatch):
     """Capture what the customer would be sent."""
     sender = notifications.LogSender()
-    monkeypatch.setattr(notifications, "_sender", sender)
+    monkeypatch.setitem(notifications._senders, "whatsapp", sender)
     return sender.sent
 
 

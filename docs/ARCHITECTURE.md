@@ -7,39 +7,47 @@ How the pieces fit, and why they are arranged this way. Business rules live in
 ## The shape of it
 
 ```
-                      ┌───────────────────────────────────────────────┐
+                       ┌───────────────────────────────────────────────┐
    WhatsApp  ────────►│  POST /webhooks/whatsapp                      │
    (Meta Cloud API)   │    verify signature → claim message id →      │
-                      │    download media → hand to the dispatcher    │
-                      │                             ↓ returns 200     │
-                      └───────────────────────────────────────────────┘
-                                                    │
-                              chatbot/dispatcher.py │ debounce ~6s,
-                              (worker threads)      │ one turn per conversation
-                                                    ▼
-                      ┌───────────────────────────────────────────────┐
-                      │  chatbot/runtime.py  handle_message()          │
-                      │    pause flag · voice → transcript             │
-                      │    photo → reading · one Shopify snapshot      │
-                      └───────────────────────────────────────────────┘
-                                                    ▼
-                      ┌───────────────────────────────────────────────┐
-                      │  chatbot/agent.py   the tool-use loop          │
-                      │    Gemini ⇄ 18 tools, capped at 8 rounds       │
-                      └───────────────────────────────────────────────┘
-                            │                              │
-              chatbot/tools/*                      backend/services/*
-              (the refusals)                       (the business rules)
-                                                           │
-                                    ┌──────────────────────┴─────────────┐
-                                    ▼                                    ▼
-                            PostgreSQL                              Shopify
-                    sessions · carts · clients               price · stock · orders
-                    orders · shipping rates                          │
-                    staff queue · webhook events                     │
-                                    ▲                                │
-                      POST /webhooks/shopify ◄───────────────────────┘
-                      fulfilled / cancelled → status → WhatsApp push
+                       │    download media → hand to the dispatcher    │
+                       │                             ↓ returns 200     │
+                       └───────────────────────────────────────────────┘
+                                                     │
+                       ┌───────────────────────────────────────────────┐
+   Instagram ────────►│  POST /webhooks/instagram                     │
+   (Instagram Login)  │    same shape as the WhatsApp box above:      │
+        DMs           │    signature (IG app secret) → claim `ig:` →  │
+        + comments    │    download attachments → own dispatcher      │
+                       │                             ↓ returns 200     │
+                       └───────────────────────────────────────────────┘
+                                                     │
+                               chatbot/dispatcher.py │ debounce ~6s,
+                               (worker threads)      │ one turn per conversation
+                                                     ▼
+                       ┌───────────────────────────────────────────────┐
+                       │  chatbot/runtime.py  handle_message()          │
+                       │    pause flag · voice → transcript             │
+                       │    photo → reading · one Shopify snapshot      │
+                       └───────────────────────────────────────────────┘
+                                                     ▼
+                       ┌───────────────────────────────────────────────┐
+                       │  chatbot/agent.py   the tool-use loop          │
+                        │    the LLM ⇄ 18 tools, capped at 8 rounds     │
+                       └───────────────────────────────────────────────┘
+                             │                              │
+               chatbot/tools/*                      backend/services/*
+               (the refusals)                       (the business rules)
+                                                            │
+                                     ┌──────────────────────┴─────────────┐
+                                     ▼                                    ▼
+                             PostgreSQL                              Shopify
+                     sessions · carts · clients               price · stock · orders
+                     orders · shipping rates                          │
+                     staff queue · webhook events                     │
+                                     ▲                                │
+                       POST /webhooks/shopify ◄───────────────────────┘
+                       fulfilled / cancelled → status → WhatsApp push
 ```
 
 One deployed process (`uvicorn app:app`), internal modules. At this volume five
@@ -96,14 +104,21 @@ simplest place for its own photos to live.
 
 ### 3. The provider is a boundary, not a dependency
 
-Nothing above `chatbot/providers/` imports a vendor SDK. Gemini is called over
-raw HTTPS. Swapping providers is one new class and one config value
-(`LLM_PROVIDER`), because cost is the reason it may change.
+Nothing above `chatbot/providers/` imports a vendor SDK; every provider is
+called over raw HTTPS. **OpenRouter** (`openrouter.py`) routes the
+conversation model by default and runs the whole shop on one model through
+one `chat/completions` endpoint: replies, voice-note transcription (an
+`input_audio` content part) and photo reading (an `image_url` content part)
+all use the same model on the same key -- no separate media model, no second
+credential. **Gemini** (`gemini.py`) stays fully configurable as an alternate
+provider (`LLM_PROVIDER=gemini`): chat, voice and photos all run on Gemini's
+own key in that mode. Swapping providers is one new class and one config
+value (`LLM_PROVIDER`), because cost is the reason it may change.
 
 The neutral message format (`chatbot/messages.py`) has three shapes and carries
 an opaque `signature` blob through the database untouched — that is what makes
 a second tool call in the same conversation work on models that demand their
-own signatures back.
+own signatures back. Providers that have no such concept simply ignore it.
 
 ### 4. The webhook accepts; the worker answers
 
@@ -144,7 +159,9 @@ note before this existed.
 | `backend/models.py` | The ORM. `Client`, `Product`, `Variant`, `Order`, `ShippingRate`, `StaffQueueItem`, `WebhookEvent`. |
 | `backend/services/` | Business rules. `orders.py` owns "can this order happen?". |
 | `backend/services/search_terms.py` | Arabic and franco vocabulary for catalog search. |
-| `backend/integrations/` | Outbound clients: Shopify GraphQL, Meta Cloud API. |
+| `backend/integrations/` | Outbound clients: Shopify GraphQL, Meta Cloud API (WhatsApp), Instagram Graph. |
+| `backend/security.py` | The shared Meta webhook-signature check both channel adapters use. |
+| `backend/public_media.py` | `GET /public/media/{token}/...` — the HMAC-gated public URL for catalog files Meta's fetcher has to be able to reach. |
 | `backend/webhooks/shopify.py` | Inbound from Shopify: fulfilments and cancellations. |
 | `chatbot/runtime.py` | `handle_message()` — the entry point every channel calls. |
 | `chatbot/dispatcher.py` | Debounce and worker threads. |
@@ -154,11 +171,60 @@ note before this existed.
 | `chatbot/interactive.py` | Tappable pickers, in a channel-neutral shape. |
 | `chatbot/tools/` | The eighteen tools and their refusals. |
 | `chatbot/channels/whatsapp.py` | The only WhatsApp-specific code in the conversational path. |
+| `chatbot/channels/instagram.py` | The Instagram twin: DMs plus comment ingest, same architecture. |
 | `chatbot/harness/` | Dev-only chat UI. Unauthenticated by design; off unless `HARNESS_ENABLED=1`. |
 | `dashboard/` | Staff dashboard: conversations, Shopify (products/orders/customers), statistics, the review queue, settings. See below. |
 | `chatbot/display.py` | Turning stored history into bubbles a person can read — shared by the harness and the dashboard. |
 | `data/` | Catalog metadata Shopify has no field for. Not a product database. |
 | `scripts/` | Shopify maintenance. All dry-run by default, idempotent, need `--apply`. |
+
+## A second channel: Instagram
+
+Instagram (`chatbot/channels/instagram.py` + `backend/integrations/instagram_client.py`)
+is a second first-class channel on the same machinery, not a fork of it. The
+channel-neutral seams — `runtime.handle_message`, `MessageDispatcher`,
+`Pending`, `session.py`, `identities.py`, `interactive.py`'s neutral shapes —
+take a channel string, and `"instagram_dm"` is simply another value. Three
+things are genuinely Instagram-specific:
+
+1. **The sender registry is per-channel** (`notifications._senders`). An
+   unregistered channel falls back to the log and *never* to another
+   channel's client — a staff reply to an Instagram conversation delivered
+   over WhatsApp, to an IGSID in the phone field, is the wrong-person bug the
+   registry exists to make impossible. Order confirmations and status pushes
+   go to `(order.source_channel, order.source_external_id)` — the thread the
+   order was actually placed in — falling back to the checkout phone over
+   WhatsApp only for orders that predate identity-aware delivery.
+2. **Outbound images are public URLs.** There is no Instagram upload
+   endpoint; Meta fetches what you send. Local catalog files (the size
+   charts) therefore go through `backend/public_media.py`: an HMAC path
+   token under `MEDIA_URL_SECRET`, deterministic per path so Meta's caching
+   works, 404 (never 403) on anything wrong, and `data/inbound` unreachable
+   through it even under a correctly computed token — customers' own photos
+   never become public because the bot needed to send a chart.
+3. **Text caps and no lists.** Replies are split client-side at ~950 bytes
+   (Arabic is two bytes per character); tappable lists degrade to quick
+   replies up to thirteen rows and a numbered plain-text list past that,
+   which lands back on `shipping.resolve`'s free-text handling. Templates do
+   not exist on this channel; proactive outreach outside a live conversation
+   becomes a staff alert by design.
+
+Comments are a surface, not a third channel. A comment webhook event runs a
+strict filter chain (disabled → own comment → threaded reply → duplicate →
+too old → rate-limited → emoji-only), and what survives gets one fixed public
+ack — deliberately **not** a model call — plus one private reply that opens
+the DM thread with the session already seeded so the customer's next message
+has context. One private reply per comment, ever, enforced by writing
+`InstagramCommentReply` before sending: a crash leaves a row that stops a
+retry, never a second DM. The shop's own comment is dropped first of all;
+answering it is the bot replying to itself publicly, forever. The whole
+surface ships with `INSTAGRAM_COMMENTS_ENABLED=0`.
+
+Instagram's long-lived token expires after 60 days with no symptom but auth
+errors, so `backend/services/instagram_token.py` refreshes it from the
+scheduler when it is within ten days of dying, stores the result in
+`integration_tokens` (which then wins over the env var), alerts staff if the
+refresh fails, and reports the expiry on `/health`.
 
 ## The staff dashboard
 

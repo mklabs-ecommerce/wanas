@@ -4,9 +4,11 @@ Instructions and context for Claude Code sessions working in this repository.
 
 ## Project Purpose
 
-A Shopify-connected e-commerce chatbot (WhatsApp) for **Wanas Gallery**, an
-Egyptian streetwear brand. The product is the chatbot, its backend, and the
-Shopify integration — not a general-purpose website or admin platform.
+A Shopify-connected e-commerce chatbot for **Wanas Gallery**, an Egyptian
+streetwear brand, on two first-class channels: **WhatsApp** (Meta Cloud API)
+and **Instagram** (`"instagram_dm"`, DMs plus — shipped off by default —
+public comments). The product is the chatbot, its backend, and the Shopify
+integration — not a general-purpose website or admin platform.
 
 ## Architecture
 
@@ -56,12 +58,17 @@ backend/
   services/                 Order/Inventory/Notification/Catalog services,
                             shopify_catalog.py, shopify_inventory.py,
                             shopify_orders.py (Shopify read/write paths)
-  integrations/
-    shopify_client.py        GraphQL client for the live Shopify path
-    whatsapp_client.py        Meta Cloud API client
-  webhooks/shopify.py       inbound from Shopify: fulfilments and cancellations
-                              -> order status -> the customer's tracking message
-  services/search_terms.py  Arabic + franco vocabulary for the catalog search
+   integrations/
+     shopify_client.py        GraphQL client for the live Shopify path
+     whatsapp_client.py        Meta Cloud API client
+     instagram_client.py       Instagram Graph client (chunked text, no
+                               templates, image-by-public-URL)
+   webhooks/shopify.py       inbound from Shopify: fulfilments and cancellations
+                               -> order status -> the customer's tracking message
+   security.py               shared Meta webhook-signature check (both adapters)
+   public_media.py           GET /public/media/{token}/... -- HMAC-gated public
+                               URL for catalog files Meta must fetch itself
+   services/search_terms.py  Arabic + franco vocabulary for the catalog search
 chatbot/
   runtime.py                entry point: handle_message(channel, external_id, text)
   dispatcher.py             debounce + worker threads; what keeps the webhook fast
@@ -75,7 +82,9 @@ chatbot/
                               dashboard serve through
   providers/                  gemini.py (real), fake.py (tests/rehearsal), base.py
   tools/                      cart_tools, catalog_tools, order_tools, support_tools
-  channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
+   channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
+   channels/instagram.py       the Instagram twin: DMs (text, attachments,
+                               quick replies) + comment ingest; comments ship OFF
   harness/                    local dev-only chat UI (web + terminal), unauthenticated
                               by design and OFF unless HARNESS_ENABLED=1
 dashboard/                 staff dashboard, its own top-level package:
@@ -203,7 +212,9 @@ reads a developer's `.env` by accident. Two markers opt out of the default:
 
 Run the suite against PostgreSQL before deploying — `tests/test_order_transaction.py`
 (the atomic-order concurrency test) is the one that depends on it most:
-`DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test`.
+`WANAS_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test`.
+Without that opt-in variable set, an ambient `DATABASE_URL` is ignored and the
+suite always runs on its own throwaway SQLite file (`tests/conftest.py`).
 
 Dependencies are **pinned** in `requirements.txt`. Railway rebuilds from it on
 every deploy, so an unpinned range means the build that ships is not the build
@@ -227,8 +238,23 @@ tracking message ever fires — is in `docs/OPERATIONS.md`.
 - Never commit `.env`. `.env.example` holds variable names and safe
   placeholders only.
 - Never expose API keys, the Gemini key, the Shopify Admin token, the
-  WhatsApp access token/app secret, or any other credential — not in code,
-  logs, commit messages, or chat output.
+  WhatsApp or Instagram access tokens/app secrets, or any other credential —
+  not in code, logs, commit messages, or chat output. The Instagram app
+  secret is a *different string* from `WHATSAPP_APP_SECRET` even inside the
+  same Meta app; never merge them.
+- Never answer the shop's own Instagram comments or messages — an echo, a
+  subscribed `message_echoes` delivery, or anything whose sender id equals
+  the shop's account id is dropped before everything else. The bot replying
+  to itself is the worst failure available on that channel.
+- One private reply per Instagram comment, ever: `InstagramCommentReply` is
+  written *before* the send precisely so a crash cannot permit a second one.
+- Instagram outbound images must be public HTTPS URLs (Meta fetches them);
+  local files go through the HMAC-gated `backend/public_media.py` route, and
+  `data/inbound` — customers' own photos and voice notes — must never be
+  servable through it.
+- The outbound sender registry is per-channel. `get_sender()` with no channel
+  is a bug in any new code: it silently means "the default channel", which is
+  WhatsApp.
 - Never replace production PostgreSQL with SQLite.
 - Never remove chat/session persistence.
 - Never modify production credentials or environment variables without

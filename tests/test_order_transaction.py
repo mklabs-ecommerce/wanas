@@ -3,8 +3,9 @@
 Two concurrent orders for the last unit: exactly one succeeds. A failure
 mid-transaction leaves no stock decremented and no order written.
 
-These run against whatever DATABASE_URL points at, so the same assertions can
-be re-run on PostgreSQL without editing anything here.
+These run against whatever WANAS_TEST_DATABASE_URL points at (the suite's own
+throwaway SQLite file unless it is set), so the same assertions can be re-run
+on PostgreSQL without editing anything here.
 """
 
 from __future__ import annotations

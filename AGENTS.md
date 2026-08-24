@@ -124,8 +124,15 @@ particular: a `variant_id` cannot be guessed, so the model must call
 re-checks stock (against Shopify) itself rather than trusting the
 conversation.
 
-**Provider: Gemini, behind a provider abstraction
-(`chatbot/providers/`).** Cost or availability is the reason it may change,
+**Providers sit behind a provider abstraction (`chatbot/providers/`); the
+default is OpenRouter (`chatbot/providers/openrouter.py`), called over raw
+HTTPS for chat, voice-note transcription and photos alike -- all three run on
+the same model ("google/gemini-3.1-flash-lite" unless `LLM_MODEL` says
+otherwise) through the same `chat/completions` call, keyed by
+`OPENROUTER_API_KEY` alone. Gemini
+(`chatbot/providers/gemini.py`) is kept as a fully configurable alternate
+provider (`LLM_PROVIDER=gemini`) that handles chat, voice and photos itself
+on its own key.** Cost or availability is the reason the provider may change,
 so nothing above that layer may import a vendor SDK, and swapping providers
 must mean writing one class and changing one config value. Treat this as a
 hard architectural boundary, not a nice-to-have.
@@ -156,6 +163,39 @@ the padding a spoken request carries. This is a rule below the model, not a
 habit the model has: before it existed `get_products(query="هودي أسود")`
 returned nothing, and the bot only worked because Gemini happened to translate
 first. Adding a word is one line in that file.
+
+## The Instagram surface
+
+Instagram (`"instagram_dm"`, `chatbot/channels/instagram.py` +
+`backend/integrations/instagram_client.py`) is a second first-class channel
+on the same agent, tools, carts, orders and dashboard. Its platform limits,
+all enforced below the model:
+
+- **≈1000-byte text cap** — Arabic is two bytes per character in UTF-8, so
+  the real limit is ~500 characters. The client splits long replies at
+  paragraph/sentence boundaries; the model is never told about it.
+- **No tappable lists** — quick replies only, max **13**, titles max **20
+  characters** (truncated by the client). The 27-governorate picker degrades
+  to a numbered plain-text list, which lands on `shipping.resolve`'s free-text
+  handling — no special inbound parsing exists or is needed.
+- **No templates** — proactive outreach outside a live conversation becomes a
+  staff alert by design (`error="instagram_has_no_templates"`); there is no
+  approved-template escape hatch to build against.
+- **24-hour messaging window** for free-form replies from staff; outside it a
+  send fails visibly (dashboard shows the warning).
+- **Images are public URLs, never uploads** — Meta fetches them itself;
+  local catalog files go through the HMAC-token route in
+  `backend/public_media.py`. `data/inbound` (customers' own photos/voice
+  notes) is never servable through that route, token or no token.
+- **Comments are a public surface, shipped OFF**
+  (`INSTAGRAM_COMMENTS_ENABLED=0`). One fixed public ack + one private reply
+  per comment, ever (written to `instagram_comment_replies` *before* the
+  send), inside Meta's **7-day private-reply window**; the shop's own
+  comments are dropped before anything else runs. The agent never runs on
+  comment text.
+- The long-lived token expires after **60 days**;
+  `backend/services/instagram_token.py` refreshes it automatically and alerts
+  staff when it cannot.
 
 ## What to test
 

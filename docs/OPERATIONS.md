@@ -9,8 +9,13 @@ something looks wrong.
 - [ ] `HARNESS_ENABLED` is **unset or 0** — it ships off; setting it to 1 in a
       reachable deployment exposes a chat UI that can converse as any customer
 - [ ] `CHATBOT_DEBUG=0` — raw provider errors must never reach a customer reply
-- [ ] `LLM_PROVIDER=gemini` and `LLM_API_KEY` set (otherwise the rehearsal
-      stand-in answers, and it is a keyword matcher, not the product)
+- [ ] `LLM_PROVIDER=openrouter` and `OPENROUTER_API_KEY` set (or
+      `LLM_PROVIDER=gemini` with `LLM_API_KEY`/`GEMINI_API_KEY`) — otherwise
+      the rehearsal stand-in answers, and it is a keyword matcher, not the
+      product. Under the default OpenRouter provider that one key covers
+      everything: chat, voice-note transcription and photo reading all run on
+      the same model; under `LLM_PROVIDER=gemini`, voice and photos both run
+      on the Gemini key instead
 - [ ] `SHOPIFY_STORE_DOMAIN` + `SHOPIFY_ADMIN_TOKEN` set, with the token's
       scopes covering **both** the chat path and the dashboard's Shopify
       section: `read_products`, `read_inventory`, `read_locations`,
@@ -48,9 +53,12 @@ something looks wrong.
 ```json
 {
   "status": "ok",
-  "llm_provider": "gemini",
+  "llm_provider": "openrouter",
   "llm_key_set": true,
   "whatsapp_configured": true,
+  "instagram_configured": false,
+  "instagram_comments": false,
+  "instagram_token_expires_at": null,
   "shopify_configured": true,
   "shopify_webhooks_configured": true,
   "voice_notes": true,
@@ -58,6 +66,60 @@ something looks wrong.
   "dashboard_configured": true
 }
 ```
+
+## Launching the Instagram channel
+
+The Instagram build is inert until credentials exist: `instagram_configured`
+false on `/health`, the webhook refuses with 503, and outbound is logged
+instead of sent. Nothing below is needed for the WhatsApp channel to keep
+working.
+
+**Meta side, once (STEP 0 of `INSTAGRAM_PLAN.md`):**
+
+- [ ] The shop's Instagram account is **Professional** (Business or Creator),
+      and Settings → Messages and story replies → Allow access to messages is
+      ON — without that the webhook never fires no matter what the app says.
+- [ ] Add the **Instagram product** to the existing Meta app (one app, two
+      products). With the Instagram Login flavour the host is
+      `graph.instagram.com` and the signing secret is the **Instagram app
+      secret — a different string from `WHATSAPP_APP_SECRET`**, even inside
+      the same app. Do not "simplify" one away.
+- [ ] Generate a long-lived **Instagram User Access Token**; note the numeric
+      professional-account ID (`INSTAGRAM_ACCOUNT_ID`, not the @handle), the
+      secret, a random verify token, and the @handle (`INSTAGRAM_USERNAME`,
+      used in copy only).
+- [ ] Permissions: `instagram_business_basic`,
+      `instagram_business_manage_messages`, `instagram_business_manage_comments`.
+      Advanced Access is required to serve accounts other than your own — i.e.
+      required at launch, not while testing against the shop's own account.
+- [ ] Webhook callback `{PUBLIC_BASE_URL}/webhooks/instagram`; subscribed
+      fields exactly: `messages`, `messaging_postbacks`, `messaging_seen`,
+      `comments`. **Do not subscribe `message_echoes`.**
+
+**Deploy sequence:** ship with comments OFF and no credentials, watch
+WhatsApp is unaffected, then add credentials and verify the handshake from
+Meta's dashboard. DM the shop from a personal account; check reply,
+`mark_seen`, dashboard badge. Send a photo, a voice note and a forwarded
+reel. Place one real order end to end and confirm the confirmation arrives
+in the DM. Only after days of quiet alerts: turn comments on.
+
+**The 60-day token — what its failure looks like.** Instagram long-lived
+tokens expire 60 days after issuance. There is no refresh-token flow; the
+token refreshes itself via `graph.instagram.com/refresh_access_token` while
+still valid. When it dies the symptom is *silence*: no crash, no failed
+deploy, just the webhook never being answered and 190-series auth errors in
+the logs. `backend/services/instagram_token.py` refreshes automatically when
+the stored expiry is within ten days (scheduler tick + boot, rate-limited to
+daily), stores the new token in `integration_tokens` — which then wins over
+the env var — and enqueues an `instagram_token_refresh_failed` alert when it
+cannot. `/health`'s `instagram_token_expires_at` should always be ~50–60 days
+out; if it stops moving, fix the refresh before it hits zero.
+
+**Turning comments off in a hurry:** set `INSTAGRAM_COMMENTS_ENABLED=0` and
+redeploy. The DM half keeps working; only the public surface goes dark.
+Comments also ship with a per-commenter rate limit and drop the shop's own
+comments before anything else runs — but if the bot is ever seen replying to
+itself under a post, that flag is the kill switch.
 
 ## Registering the webhooks
 
@@ -128,14 +190,14 @@ before a launch rather than after the first stuck customer.
 | `IMAGE_UNDERSTANDING_ENABLED` | `1` | Off sends every photo to a person. |
 | `IMAGE_MATCH_CONFIDENCE` | `0.6` | The dial between "the bot guesses" and "the bot asks". Raise it if customers are being shown the wrong product; lower it if it keeps asking about photos it clearly recognised. |
 | `INTERACTIVE_MESSAGES_ENABLED` | `1` | Off asks for the governorate in prose instead of sending a tappable list. |
-| `LLM_MEDIA_MODEL` | blank | A separate model for voice and photos. Blank reuses `LLM_MODEL`. |
+| `LLM_MEDIA_MODEL` | blank | A separate model for reading photos, honoured only by `LLM_PROVIDER=gemini` (blank lets Gemini pick its own). Under the default OpenRouter provider it does nothing: chat, voice notes and photos all run on the one conversation model (`LLM_MODEL`, else the pinned default). |
 
 ## Reading the logs
 
 The logger names say where you are: `wanas.runtime`, `wanas.agent`,
 `wanas.tools`, `wanas.dispatcher`, `wanas.media`, `wanas.channel.whatsapp`,
-`wanas.webhooks.shopify`, `wanas.shopify`, `wanas.provider.gemini`,
-`wanas.dashboard`.
+`wanas.webhooks.shopify`, `wanas.shopify`, `wanas.provider.openrouter`,
+`wanas.provider.gemini`, `wanas.dashboard`.
 
 Lines worth alerting on:
 
@@ -145,7 +207,7 @@ Lines worth alerting on:
 | `Refusing an order: Shopify unreachable` | Orders are being refused. Real revenue, right now. |
 | `N Shopify variants have no SKU` | Run `scripts/shopify_set_skus.py --apply`; those variants cannot be sold. |
 | `tool loop cap hit` | The model is looping instead of answering. |
-| `rate limited or out of quota on model` | Gemini quota. Customers are seeing "الضغط عالي شوية". |
+| `rate limited or out of quota on model` | Provider quota (OpenRouter's shared model, or Gemini under the alternate provider). Customers are seeing "الضغط عالي شوية". |
 | `CHATBOT_DEBUG is ON` | Someone shipped a development `.env`. |
 | `SHOPIFY_WEBHOOK_SECRET is not set` | Tracking messages will never fire, silently. |
 | `failed to handle buffered messages` | A worker swallowed an exception; a customer got no reply. |
@@ -165,7 +227,7 @@ webhook is not registered, or `SHOPIFY_WEBHOOK_SECRET` is wrong. Both show as
 silence, not as an error.
 
 **"Replies take forever."** `MESSAGE_DEBOUNCE_SECONDS` is added to every reply
-by design. Beyond that, look at the Gemini timeout and whether the Shopify
+by design. Beyond that, look at the provider timeout and whether the Shopify
 snapshot is timing out at eight seconds per turn.
 
 **A conversation has gone silent.** It is probably paused on a handoff — check
@@ -181,6 +243,45 @@ Tables are created at startup from the models (`Base.metadata.create_all`).
 That adds missing *tables*, never missing *columns* on an existing one — see
 `scripts/migrate_add_shopify_order_columns.py` for what that costs when it
 happens. Seed a fresh database with `python -m backend.cli seed`.
+
+### Database durability
+
+**`DATABASE_URL` must be PostgreSQL in production**
+(`postgresql+psycopg://user:password@host:5432/db`). Railway's bare
+`postgres://…` / `postgresql://…` URLs are rewritten onto the psycopg 3
+dialect automatically at engine creation (`backend/db.py`) — nothing to
+convert by hand, and the URL itself is never logged, only its scheme.
+
+A deployed container's disk is ephemeral: **SQLite there means every session,
+client, order and queue row is wiped on the next redeploy**, while the
+startup seed refills catalog and shipping fees — so the shop looks alive with
+nobody's history in it. That is exactly how all chat history vanished once.
+The app therefore **refuses to start** when it finds itself in a deployment
+(any of `RAILWAY_ENVIRONMENT` / `RAILWAY_PROJECT_ID` /
+`RAILWAY_PUBLIC_DOMAIN` set) and the resolved URL is still `sqlite:`. The fix
+is the first checklist item above: set `DATABASE_URL` to PostgreSQL and
+redeploy. If you genuinely mean to run SQLite in a container (you almost
+certainly do not), `ALLOW_SQLITE_IN_DEPLOY=1` lifts the refusal. Either way,
+a WARNING is logged at boot whenever SQLite backs the engine, because its
+data is not durable.
+
+**The test suite drops and recreates the whole schema on every pytest run**,
+so by default it cannot point anywhere but its own throwaway
+`test_wanas.db`: `tests/conftest.py` overwrites `DATABASE_URL`, ignoring any
+exported value, and a guard in front of the drop refuses to run unless the
+engine provably points at that file. To run the suite against PostgreSQL
+deliberately — worth doing before deploying, since
+`tests/test_order_transaction.py` depends on it most — set the opt-in
+variable:
+
+```bash
+WANAS_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test
+```
+
+An ambient `DATABASE_URL` is never picked up either way; the guard likewise
+refuses any target that is neither the suite's file nor the deliberately
+named one (and refuses a production-looking database name even then). It
+raises a clear error instead of dropping someone's data.
 
 ## Maintenance scripts
 

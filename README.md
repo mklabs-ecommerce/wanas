@@ -19,8 +19,13 @@ PostgreSQL        chat history, carts, clients, shipping rates, staff queue
 - **PostgreSQL** is not a duplicate product database. It holds what Shopify has
   no field for — style, department, collection, size charts, per-colour photos
   — plus everything conversational.
-- **Gemini** sits behind a provider abstraction; nothing above
-  `chatbot/providers/` imports a vendor SDK.
+- **OpenRouter** (the default) runs the whole LLM side on one model and one
+  key: chat replies, voice-note transcription (audio sent as an `input_audio`
+  content part) and photo reading (`image_url`) all go through its
+  `chat/completions` endpoint. **Gemini** stays fully configurable as
+  an alternate provider (`LLM_PROVIDER=gemini`) that handles chat, voice and
+  photos itself. Every provider sits behind the same abstraction; nothing
+  above `chatbot/providers/` imports a vendor SDK.
 
 Business rules (variant/pricing maths, shipping, sizing) are in
 [`AGENTS.md`](AGENTS.md). Repository conventions are in
@@ -45,7 +50,8 @@ make test
 
 With no LLM key the harness runs a rehearsal stand-in that maps typed commands
 (`products hoodie`, `variants wanas-hoodie`, `gov`, `add <variant_id>`) to tool
-calls. Set `LLM_PROVIDER=gemini` and a key to get the real agent.
+calls. Set `OPENROUTER_API_KEY` (the default `LLM_PROVIDER` is `openrouter`) —
+or `LLM_PROVIDER=gemini` plus a Gemini key — to get the real agent.
 
 `make help` lists the rest. Useful CLI:
 `python -m backend.cli <seed|set-fee|create-staff|catalog-report>`.
@@ -84,7 +90,7 @@ Against PostgreSQL — worth doing before deploying, since the concurrency test
 is the one that depends most on the database:
 
 ```bash
-DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test
+WANAS_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test
 ```
 
 Opt-in live-model tests (these cost real quota and are skipped by default):
@@ -114,7 +120,9 @@ missing, is in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 See [`.env.example`](.env.example) for every variable with its default and the
 behaviour when it is unset. Required for a real deployment: `DATABASE_URL`,
-`LLM_PROVIDER`, `LLM_API_KEY`, `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`,
+`OPENROUTER_API_KEY` (the only key the default provider needs — chat, voice
+and photos all run on it; or `LLM_PROVIDER=gemini` and `LLM_API_KEY`),
+`SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`,
 `SHOPIFY_WEBHOOK_SECRET`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
 `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `DASHBOARD_SESSION_SECRET`.
 

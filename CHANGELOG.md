@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.1.0 — Instagram, a second first-class channel
+
+Instagram DMs (`"instagram_dm"`) run on the same agent, tools, carts, orders
+and staff dashboard as WhatsApp. Everything channel-specific lives in two
+files — the inbound adapter (`chatbot/channels/instagram.py`) and the
+outbound client (`backend/integrations/instagram_client.py`) — plugged into
+machinery that was already channel-neutral.
+
+- **Per-channel sender registry.** The Notification service's single module
+  global became a registry keyed by channel; an unregistered channel falls
+  back to logging and *never* to another channel's client. This is what makes
+  "a staff reply to an Instagram conversation posted over WhatsApp, to an
+  IGSID used as a phone number" structurally impossible rather than a bug to
+  avoid. Orders now remember `(source_channel, source_external_id)` so their
+  confirmations and status pushes go down the thread they were placed in.
+- **Public media route.** Instagram cannot receive an upload; Meta fetches
+  URLs itself. `backend/public_media.py` serves catalog files (the size
+  charts) behind a deterministic HMAC path token — 404 on anything wrong,
+  `data/inbound` unreachable even under a correct token for another path.
+- **Platform limits enforced below the model:** replies split at ~950 bytes
+  of UTF-8 (Arabic is two bytes per character); quick replies capped at 13
+  with 20-character titles; the 27-governorate picker degrades to a numbered
+  plain-text list that lands on `shipping.resolve`'s free-text handling; no
+  templates, so proactive outreach outside a live conversation becomes a
+  staff alert by design.
+- **Comments, shipped OFF** (`INSTAGRAM_COMMENTS_ENABLED=0`). A strict filter
+  chain drops the shop's own comments first of all, then threaded replies,
+  duplicates, old comments, floods and emoji-only noise; what survives gets
+  one fixed public ack plus one private reply that seeds the DM session.
+  One private reply per comment, ever — recorded before it is sent.
+- **The 60-day token.** Instagram tokens expire silently after 60 days;
+  `backend/services/instagram_token.py` refreshes them from the scheduler
+  within ten days of expiry, stores the result where the client reads it,
+  alerts staff when it fails, and reports the expiry on `/health`.
+- Dashboard: channel badges (WA/IG), a channel filter, and a visible warning
+  when replying to an Instagram conversation whose 24-hour window may have
+  closed. Prompt: surface-aware — WhatsApp's system prompt byte-identical,
+  Instagram gets its own lines. Docs: `docs/OPERATIONS.md` has the launch
+  checklist and the kill switch.
+
 ## 1.0.0
 
 The release that made the bot safe to point at real customers. Five things
