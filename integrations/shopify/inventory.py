@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import threading
 
-from backend.integrations.shopify_client import (
+from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
     get_client,

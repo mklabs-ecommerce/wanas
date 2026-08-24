@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from backend.services import shopify_admin_orders
+from integrations.shopify import admin_orders as shopify_admin_orders
 
 #: Hard ceiling on pages fetched for one stats request. At 50 orders/page
 #: this is 5,000 orders -- past that, the page still returns, just capped,

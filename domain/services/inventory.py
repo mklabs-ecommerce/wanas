@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from sqlalchemy import case, update
 from sqlalchemy.orm import Session
 
-from backend.services import shopify_catalog, shopify_inventory
 from domain.models import Variant
+from integrations.shopify import catalog as shopify_catalog, inventory as shopify_inventory
 
 log = logging.getLogger("wanas.inventory")
 

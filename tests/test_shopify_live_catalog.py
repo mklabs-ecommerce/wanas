@@ -16,13 +16,13 @@ from decimal import Decimal
 
 import pytest
 
-from backend.services import shopify_catalog
-from backend.services.shopify_catalog import LiveVariant
 from domain.models import Variant
 from domain.services import (
     catalog,
     inventory,
 )
+from integrations.shopify import catalog as shopify_catalog
+from integrations.shopify.catalog import LiveVariant
 
 
 def live(variant_id, price, stock, *, compare=None, active=True, image_url=None):

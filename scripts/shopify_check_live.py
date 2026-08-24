@@ -26,16 +26,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from backend.integrations.shopify_client import (  # noqa: E402
-    ShopifyConfigError,
-    ShopifyUnavailable,
-    get_client,
-)
-from backend.services import shopify_catalog  # noqa: E402
 from config.settings import settings  # noqa: E402
 from domain.db import session_scope  # noqa: E402
 from domain.models import Product, Variant  # noqa: E402
 from domain.services import catalog  # noqa: E402
+from integrations.shopify import catalog as shopify_catalog  # noqa: E402
+from integrations.shopify.client import (  # noqa: E402
+    ShopifyConfigError,
+    ShopifyUnavailable,
+    get_client,
+)
 
 
 def head(text: str) -> None:
@@ -186,7 +186,7 @@ def check_write(variant_id: str) -> bool:
     proves it now, and leaves the shelf exactly as it found it.
     """
     head("5. WRITE PERMISSION")
-    from backend.services import shopify_inventory
+    from integrations.shopify import inventory as shopify_inventory
 
     live = shopify_catalog.fetch_skus([variant_id]).get(variant_id)
     if live is None:
@@ -265,7 +265,7 @@ def check_order(variant_id: str) -> bool:
     trace beats a silent one -- and the stock comes back with it.
     """
     head("6. ORDER PATH")
-    from backend.services import shopify_orders
+    from integrations.shopify import orders as shopify_orders
 
     live = shopify_catalog.fetch_skus([variant_id]).get(variant_id)
     if live is None:

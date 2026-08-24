@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from backend.services.shopify_product_import import import_missing_products
 from domain.models import Product, Variant
 from domain.services.catalog import get_products
+from integrations.shopify.product_import import import_missing_products
 
 
 def _seed_manual_product(shopify, *, title="Loose Cargo Pants", category="Joggers & Sweatpants", sku=""):

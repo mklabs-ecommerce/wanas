@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import pytest
 
-from backend.services import shopify_orders
 from domain.models import Order, ShippingRate
 from domain.services import (
     carts,
     orders,
 )
+from integrations.shopify import orders as shopify_orders
 
 VARIANT = "wanas-hoodie-s-olive"
 OTHER = "wanas-hoodie-m-black"

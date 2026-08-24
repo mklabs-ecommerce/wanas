@@ -19,17 +19,17 @@ import threading
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from backend.services import (
-    shopify_admin_customers,
-    shopify_admin_orders,
-    shopify_admin_products,
-    shopify_catalog,
-    shopify_inventory,
-    shopify_orders,
-    shopify_webhooks,
-)
-from backend.services.shopify_catalog import LiveVariant
 from domain.models import Product, Variant
+from integrations.shopify import (
+    admin_customers as shopify_admin_customers,
+    admin_orders as shopify_admin_orders,
+    admin_products as shopify_admin_products,
+    catalog as shopify_catalog,
+    inventory as shopify_inventory,
+    orders as shopify_orders,
+    webhook_registration as shopify_webhooks,
+)
+from integrations.shopify.catalog import LiveVariant
 
 
 class FakeShopify:

@@ -17,8 +17,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from chatbot import messages as msg
-from chatbot import session as session_store
+from chatbot import messages as msg, session as session_store
 from config.settings import settings
 from dashboard import web as dashboard
 from domain.models import QueueKind

@@ -52,4 +52,5 @@ ignore = [
 "data/merge_catalog.py" = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend", "chatbot", "dashboard"]
+known-first-party = ["common", "config", "domain", "integrations", "api", "backend", "chatbot", "dashboard"]
+combine-as-imports = true

@@ -10,13 +10,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Cookie, Query
 from fastapi.responses import JSONResponse
 
-from backend.services.shopify_catalog import ShopifyConfigError, ShopifyUnavailable
 from dashboard.guard import staff_for, unauthenticated
 from domain.db import session_scope
 from domain.services import (
     dashboard_stats,
     test_numbers,
 )
+from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
 
 router = APIRouter(prefix="/dashboard/api/stats", tags=["dashboard-stats"])
 

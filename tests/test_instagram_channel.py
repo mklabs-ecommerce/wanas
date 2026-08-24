@@ -19,8 +19,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from chatbot.channels import instagram as adapter
-from chatbot.channels import whatsapp as whatsapp_adapter
+from chatbot.channels import instagram as adapter, whatsapp as whatsapp_adapter
 from chatbot.providers import set_provider
 from chatbot.providers.fake import RehearsalProvider
 from config.settings import settings

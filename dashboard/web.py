@@ -43,8 +43,7 @@ from fastapi import APIRouter, Body, Cookie, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import and_, or_, select
 
-from chatbot import messages as msg
-from chatbot import session as session_store
+from chatbot import messages as msg, session as session_store
 from chatbot.display import display_history
 from chatbot.media_serving import resolve_servable_path
 from config.settings import settings

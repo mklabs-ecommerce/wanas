@@ -25,15 +25,13 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.services import shopify_catalog
-from chatbot import agent, media
-from chatbot import messages as msg
-from chatbot import session as session_store
+from chatbot import agent, media, messages as msg, session as session_store
 from chatbot.providers import LLMProvider, get_provider
 from chatbot.tools.support_tools import raise_handoff
 from domain.db import session_scope
 from domain.models import QueueKind, StaffQueueItem, WebhookEvent, utcnow
 from domain.services import identities
+from integrations.shopify import catalog as shopify_catalog
 
 log = logging.getLogger("wanas.runtime")
 

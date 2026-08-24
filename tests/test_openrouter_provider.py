@@ -24,10 +24,8 @@ import logging
 import httpx
 import pytest
 
-from chatbot import agent
-from chatbot import messages as msg
-from chatbot.providers import build_provider
-from chatbot.providers import openrouter as openrouter_module
+from chatbot import agent, messages as msg
+from chatbot.providers import build_provider, openrouter as openrouter_module
 from chatbot.providers.base import ProviderError
 from chatbot.providers.openrouter import (
     DEFAULT_MODEL,

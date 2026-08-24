@@ -22,12 +22,13 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from backend.public_media import router as public_media_router
-from backend.webhooks.shopify import router as shopify_router
 from chatbot import session as assistant_session
 from chatbot.channels import instagram as instagram_channel
-from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
-from chatbot.channels.whatsapp import register_outbound_sender
-from chatbot.channels.whatsapp import router as whatsapp_router
+from chatbot.channels.whatsapp import (
+    dispatcher as whatsapp_dispatcher,
+    register_outbound_sender,
+    router as whatsapp_router,
+)
 from chatbot.harness.web import router as harness_router
 from config.settings import settings
 from dashboard.customers_api import router as dashboard_customers_router
@@ -41,6 +42,7 @@ from domain.legal import router as legal_router
 from domain.models import Base, Product, ShippingRate, Variant
 from domain.services import conversation_reset
 from domain.services.scheduler import scheduler
+from integrations.shopify.webhooks import router as shopify_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("wanas")
@@ -123,7 +125,7 @@ def _import_missing_shopify_products() -> None:
     function, the same guarantee every other optional piece of startup config
     on this page gets.
     """
-    from backend.services.shopify_product_import import import_missing_products
+    from integrations.shopify.product_import import import_missing_products
 
     try:
         with session_scope() as db:
@@ -157,7 +159,7 @@ def _register_shopify_webhooks() -> None:
         log.info("PUBLIC_BASE_URL / RAILWAY_PUBLIC_DOMAIN not set: skipping Shopify webhook registration")
         return
 
-    from backend.services.shopify_webhooks import register_missing
+    from integrations.shopify.webhook_registration import register_missing
 
     callback_url = f"{settings.public_base_url}/webhooks/shopify"
     try:

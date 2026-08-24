@@ -16,8 +16,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import create_engine
 
-from domain.db import _DEPLOY_MARKERS, normalise_database_url, resolve_database_url
-from domain.db import engine as suite_engine
+from domain.db import _DEPLOY_MARKERS, engine as suite_engine, normalise_database_url, resolve_database_url
 from tests.conftest import SUITE_SQLITE_URL, assert_safe_to_drop, resolve_test_database_url
 
 

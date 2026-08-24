@@ -12,10 +12,6 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.services import (
-    shopify_catalog,
-    shopify_orders,
-)
 from common.events import after_commit
 from common.money import money, to_decimal
 from domain.models import (
@@ -35,8 +31,11 @@ from domain.services import (
     notifications,
 )
 from domain.services.ids import next_order_id
-from domain.services.shipping import get_fee
-from domain.services.shipping import resolve as resolve_governorate
+from domain.services.shipping import get_fee, resolve as resolve_governorate
+from integrations.shopify import (
+    catalog as shopify_catalog,
+    orders as shopify_orders,
+)
 
 log = logging.getLogger("wanas.orders")
 

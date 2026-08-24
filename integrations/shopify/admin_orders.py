@@ -25,12 +25,12 @@ from __future__ import annotations
 
 import logging
 
-from backend.integrations.shopify_client import (
+from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
     get_admin_client,
 )
-from backend.services.shopify_orders import OrderRejected
+from integrations.shopify.orders import OrderRejected
 
 log = logging.getLogger("wanas.shopify.admin_orders")
 

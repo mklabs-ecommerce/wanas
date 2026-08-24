@@ -19,8 +19,7 @@ from fastapi.testclient import TestClient
 from chatbot import media
 from chatbot.providers.fake import ScriptedProvider
 from config.settings import settings
-from dashboard import settings_api
-from dashboard import web as dashboard
+from dashboard import settings_api, web as dashboard
 from domain.services import (
     auth,
     runtime_flags,

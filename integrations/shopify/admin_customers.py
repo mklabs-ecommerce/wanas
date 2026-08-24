@@ -9,7 +9,7 @@ alongside the WhatsApp-side view (`dashboard/customers_api.py`).
 
 from __future__ import annotations
 
-from backend.integrations.shopify_client import (  # noqa: F401  (re-exported)
+from integrations.shopify.client import (  # noqa: F401  (re-exported)
     ShopifyConfigError,
     ShopifyUnavailable,
     get_admin_client,

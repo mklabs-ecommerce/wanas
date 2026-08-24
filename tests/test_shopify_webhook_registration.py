@@ -11,7 +11,7 @@ in the first place.
 
 from __future__ import annotations
 
-from backend.services import shopify_webhooks
+from integrations.shopify import webhook_registration as shopify_webhooks
 
 URL = "https://wanas-production.up.railway.app/webhooks/shopify"
 
@@ -72,7 +72,7 @@ def test_a_total_outage_propagates_for_the_caller_to_handle(shopify):
     this follows)."""
     import pytest
 
-    from backend.services.shopify_catalog import ShopifyUnavailable
+    from integrations.shopify.catalog import ShopifyUnavailable
 
     shopify.down = True
     with pytest.raises(ShopifyUnavailable):

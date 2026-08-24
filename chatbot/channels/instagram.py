@@ -34,8 +34,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Request, Response
 
 from backend.integrations.instagram_client import InstagramClient
-from chatbot import messages as msg
-from chatbot import session as session_store
+from chatbot import messages as msg, session as session_store
 from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff

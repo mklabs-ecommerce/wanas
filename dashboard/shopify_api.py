@@ -5,7 +5,7 @@ Sits next to `web.py` rather than growing it -- see that module's docstring.
 Every route uses the same staff-cookie guard (`dashboard.guard`).
 
 Order actions route through the local order service
-(`backend/services/orders.py`) whenever a matching local `Order` row exists
+(`domain/services/orders.py`) whenever a matching local `Order` row exists
 -- that path is already transactional and already notifies the customer.
 Only for an order with no local row (placed on the website, never touched by
 the bot) does this module call `shopify_admin_orders` / `shopify_orders`
@@ -18,17 +18,17 @@ from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from backend.services import (
-    shopify_admin_customers,
-    shopify_admin_orders,
-    shopify_admin_products,
-    shopify_orders,
-)
-from backend.services.shopify_catalog import ShopifyConfigError, ShopifyUnavailable
 from dashboard.guard import staff_for, unauthenticated
 from domain.db import session_scope
 from domain.models import Order, Product, Variant
 from domain.services import orders as orders_service
+from integrations.shopify import (
+    admin_customers as shopify_admin_customers,
+    admin_orders as shopify_admin_orders,
+    admin_products as shopify_admin_products,
+    orders as shopify_orders,
+)
+from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
 
 router = APIRouter(prefix="/dashboard/api/shopify", tags=["dashboard-shopify"])
 

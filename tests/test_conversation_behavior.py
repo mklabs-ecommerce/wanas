@@ -18,8 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from chatbot import agent
-from chatbot import session as session_store
+from chatbot import agent, session as session_store
 from chatbot.prompt import SYSTEM_PROMPT
 from chatbot.providers.base import ModelReply
 from chatbot.providers.fake import ScriptedProvider

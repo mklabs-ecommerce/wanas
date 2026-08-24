@@ -149,7 +149,7 @@ def test_stock_that_moved_between_the_check_and_the_write_is_not_oversold(
     The storefront sells the last one in the gap between our read and our
     write, which is the window no amount of checking beforehand can close.
     """
-    from backend.services import shopify_orders
+    from integrations.shopify import orders as shopify_orders
 
     shopify.set(VARIANT, qty=1)
     carts.add(priced, "whatsapp", WHO, VARIANT, 1)
@@ -242,7 +242,7 @@ def test_a_rejected_write_that_is_not_a_lost_race_never_reads_as_sold_out(
     reaches the customer as "sold out" about a shirt that is on the shelf, and
     sends them somewhere else to buy it.
     """
-    from backend.services import shopify_orders
+    from integrations.shopify import orders as shopify_orders
 
     shopify.set(VARIANT, qty=5)
     carts.add(priced, "whatsapp", WHO, VARIANT, 1)

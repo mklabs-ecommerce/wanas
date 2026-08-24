@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 
-from backend.integrations.shopify_client import (  # noqa: F401  (re-exported)
+from integrations.shopify.client import (  # noqa: F401  (re-exported)
     ShopifyConfigError,
     ShopifyUnavailable,
     get_client,

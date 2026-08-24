@@ -21,7 +21,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.webhooks import shopify as hook
 from config.settings import settings
 from domain.models import Order, OrderStatus, ShippingRate
 from domain.services import (
@@ -29,6 +28,7 @@ from domain.services import (
     notifications,
     orders,
 )
+from integrations.shopify import webhooks as hook
 
 SECRET = "test-shopify-secret"
 SHOP = "wanas-test.myshopify.com"
@@ -234,7 +234,7 @@ def test_a_cancellation_in_the_admin_closes_the_local_order(post, placed, seeded
 
 def test_a_cancellation_does_not_ask_shopify_to_cancel_again(post, placed, monkeypatch):
     """Shopify already cancelled and restocked. Calling it back can only fail."""
-    from backend.services import shopify_orders
+    from integrations.shopify import orders as shopify_orders
 
     called = []
     monkeypatch.setattr(shopify_orders, "cancel_order", lambda *a, **kw: called.append(a))

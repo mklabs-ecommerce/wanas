@@ -37,9 +37,9 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.services import shopify_admin_products as admin
-from backend.services.shopify_admin_products import _mirror_local, _unique_product_id, _variant_id
 from domain.models import Variant
+from integrations.shopify import admin_products as admin
+from integrations.shopify.admin_products import _mirror_local, _unique_product_id, _variant_id
 
 log = logging.getLogger("wanas.shopify.product_import")
 

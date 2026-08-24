@@ -13,8 +13,8 @@ from decimal import Decimal
 
 import pytest
 
-from backend.services import shopify_admin_products as sap
 from domain.models import Product, Variant
+from integrations.shopify import admin_products as sap
 
 VARIANT = "wanas-hoodie-s-olive"  # a seeded variant, for product_gid resolution
 

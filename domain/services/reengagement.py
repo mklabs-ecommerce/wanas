@@ -16,7 +16,6 @@ from datetime import timedelta
 
 from sqlalchemy import func, select
 
-from backend.services import shopify_catalog
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import (
@@ -31,6 +30,7 @@ from domain.services import (
     notifications,
     waitlist,
 )
+from integrations.shopify import catalog as shopify_catalog
 
 log = logging.getLogger("wanas.reengagement")
 

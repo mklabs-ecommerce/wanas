@@ -17,8 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from config.settings import settings
-from dashboard import settings_api
-from dashboard import web as dashboard
+from dashboard import settings_api, web as dashboard
 from domain.services import (
     auth,
     dashboard_stats,

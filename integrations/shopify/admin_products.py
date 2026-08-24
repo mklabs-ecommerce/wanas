@@ -29,13 +29,13 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from backend.integrations.shopify_client import (
+from domain.models import Product, Variant
+from integrations.shopify import catalog as shopify_catalog, inventory as shopify_inventory
+from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
     get_admin_client,
 )
-from backend.services import shopify_catalog, shopify_inventory
-from domain.models import Product, Variant
 
 log = logging.getLogger("wanas.shopify.admin_products")
 

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 
-from backend.integrations.shopify_client import get_admin_client
+from integrations.shopify.client import get_admin_client
 
 log = logging.getLogger("wanas.shopify.webhooks")
 

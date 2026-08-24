@@ -12,8 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from config.settings import settings
-from dashboard import queue_api
-from dashboard import web as dashboard
+from dashboard import queue_api, web as dashboard
 from domain.models import Order, OrderStatus
 from domain.services import (
     auth,

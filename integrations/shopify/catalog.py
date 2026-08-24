@@ -30,7 +30,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
 
-from backend.integrations.shopify_client import (
+from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
     get_client,
