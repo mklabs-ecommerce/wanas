@@ -18,10 +18,11 @@ row exists yet.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, timedelta
+from datetime import timedelta
 
 import httpx
 
+from common.timeutil import as_aware
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import IntegrationToken, QueueKind, utcnow
@@ -50,16 +51,6 @@ class TokenRefreshFailed(Exception):
     pass
 
 
-def _aware(value):
-    """SQLite hands naive datetimes back out of DateTime(timezone=True)
-    columns; PostgreSQL returns aware ones. New code normalises instead of
-    assuming -- see the standing note on the pre-existing reengagement
-    failures for what happens otherwise."""
-    if value is not None and value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value
-
-
 def stored_token() -> str | None:
     """The credential outbound sends should use, or None.
 
@@ -84,7 +75,7 @@ def expires_at():
     try:
         with session_scope() as session:
             row = session.get(IntegrationToken, PROVIDER)
-            return _aware(row.expires_at) if row else None
+            return as_aware(row.expires_at) if row else None
     except Exception:
         return None
 
@@ -97,7 +88,7 @@ def _due(row: IntegrationToken | None) -> bool:
     if row.expires_at is None:
         # Unknown expiry is treated as urgent -- there is nothing to wait for.
         return True
-    return (_aware(row.expires_at) - utcnow()) < REFRESH_AHEAD
+    return (as_aware(row.expires_at) - utcnow()) < REFRESH_AHEAD
 
 
 def maybe_refresh(*, force: bool = False) -> bool:

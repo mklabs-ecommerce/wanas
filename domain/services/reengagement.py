@@ -16,6 +16,7 @@ from datetime import timedelta
 
 from sqlalchemy import func, select
 
+from common.timeutil import as_aware
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import (
@@ -121,14 +122,14 @@ def check_abandoned_carts() -> int:
     due = [
         (channel, external_id, last_activity)
         for channel, external_id, last_activity in rows
-        if min_idle <= now - last_activity < max_idle
+        if min_idle <= now - as_aware(last_activity) < max_idle
     ]
 
     nudged = 0
     for channel, external_id, last_activity in due:
         with session_scope() as session:
             nudge = session.get(AbandonedCartNudge, (channel, external_id))
-            if nudge is not None and nudge.sent_at >= last_activity:
+            if nudge is not None and as_aware(nudge.sent_at) >= as_aware(last_activity):
                 # Already nudged for this exact idle spell; a new line after
                 # the nudge would have moved `last_activity` past it.
                 continue

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import enum
 import json
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -30,9 +30,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
+#: `utcnow` is imported here, not defined here, and re-exported so that every
+#: existing `from domain.models import utcnow` keeps working. `common/timeutil.py`
+#: owns it together with `as_aware` -- the function every *read* of one of the
+#: `DateTime(timezone=True)` columns below has to go through before it can be
+#: compared with `utcnow()`, because SQLite hands those columns back naive.
+from common.timeutil import utcnow  # noqa: F401  (re-export)
 
 
 class Base(DeclarativeBase):

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from common.events import after_commit
 from common.money import money
+from common.timeutil import as_aware
 from config.settings import settings
 from domain.models import Order, QueueKind, Variant, utcnow
 from domain.services import (
@@ -341,11 +342,8 @@ def send_proactive(
         return
 
     identity = identities.get(session, channel, external_id)
-    window_open = bool(
-        identity
-        and identity.last_seen_at
-        and utcnow() - identity.last_seen_at < CUSTOMER_SERVICE_WINDOW
-    )
+    last_seen = as_aware(identity.last_seen_at) if identity else None
+    window_open = bool(last_seen and utcnow() - last_seen < CUSTOMER_SERVICE_WINDOW)
 
     message = None
     sender = get_sender(channel)

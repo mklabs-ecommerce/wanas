@@ -40,6 +40,7 @@ from assistant.providers.base import ProviderError
 from assistant.runtime import claim_message, handle_message, release_claims
 from assistant.tools.support_tools import raise_handoff
 from common.security import verify_signature
+from common.timeutil import as_aware
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
 from domain.models import Channel, QueueKind, utcnow
@@ -403,14 +404,6 @@ def _classify(text: str) -> str:
         return "important"
 
 
-def _aware(value: datetime) -> datetime:
-    """SQLite hands naive datetimes back out of DateTime(timezone=True)
-    columns; PostgreSQL returns aware ones. Normalise instead of assuming."""
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value
-
-
 def _parse_comment_timestamp(raw) -> datetime | None:
     """Meta sends ISO strings on comments; entry times are epoch seconds."""
     if raw is None:
@@ -503,7 +496,7 @@ def _accept_comment(value: dict, entry_time=None) -> None:
             1
             for row in rows
             if row.created_at is not None
-            and _aware(row.created_at) >= cutoff
+            and as_aware(row.created_at) >= cutoff
         )
         if recent >= settings.instagram_comment_rate_limit:
             log.warning(

@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from common.timeutil import as_aware
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import IntegrationToken, QueueKind, utcnow
@@ -102,7 +103,7 @@ def test_a_token_nine_days_from_expiry_refreshes_and_the_row_updates(fake_graph,
     with session_scope() as session:
         row = session.get(IntegrationToken, instagram_token.PROVIDER)
         assert row.access_token == "refreshed-token"
-        assert (instagram_token._aware(row.expires_at) - utcnow()) > timedelta(days=59)
+        assert (as_aware(row.expires_at) - utcnow()) > timedelta(days=59)
 
     # And the client now sends what was stored.
     from integrations.instagram.client import InstagramClient

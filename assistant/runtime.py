@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from assistant import agent, media, messages as msg, session as session_store
 from assistant.providers import LLMProvider, get_provider
 from assistant.tools.support_tools import raise_handoff
+from common.timeutil import as_aware
 from domain.db import session_scope
 from domain.models import QueueKind, StaffQueueItem, WebhookEvent, utcnow
 from domain.services import identities
@@ -129,11 +130,7 @@ def _paused_note(db: Session, channel: str, external_id: str) -> str:
     )
     if item is None or item.created_at is None:
         return "no handoff record (manual takeover?)"
-    started = item.created_at
-    now = utcnow()
-    if started.tzinfo is None:  # SQLite hands back naive datetimes
-        started = started.replace(tzinfo=now.tzinfo)
-    hours = (now - started).total_seconds() / 3600
+    hours = (utcnow() - as_aware(item.created_at)).total_seconds() / 3600
     return (
         f"handoff {item.queue_id} ({item.status}, reason={item.reason}) created "
         f"{item.created_at.isoformat()}, {hours:.1f}h ago"

@@ -16,6 +16,7 @@ from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from assistant.messages import USER
+from common.timeutil import as_aware
 from config.settings import settings
 from domain.models import UNREADABLE_HISTORY, SessionRow, utcnow
 
@@ -54,11 +55,9 @@ def trim(history: list[dict], cap: int | None = None) -> list[dict]:
 def _expired(row: SessionRow) -> bool:
     if row.updated_at is None:
         return False
-    updated = row.updated_at
-    now = utcnow()
-    if updated.tzinfo is None:  # SQLite hands back naive datetimes
-        updated = updated.replace(tzinfo=now.tzinfo)
-    return now - updated > timedelta(hours=settings.session_expiry_hours)
+    return utcnow() - as_aware(row.updated_at) > timedelta(
+        hours=settings.session_expiry_hours
+    )
 
 
 def load(session: Session, channel: str, external_id: str) -> list[dict]:
