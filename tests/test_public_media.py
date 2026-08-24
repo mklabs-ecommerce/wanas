@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend import public_media
-from backend.config import settings
+from config.settings import settings
 
 SECRET = "test-media-secret"
 BASE = "https://wanas.example.com"

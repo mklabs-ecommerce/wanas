@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from backend.config import settings
 from backend.db import engine, session_scope
 from backend.models import Channel, Client, Order
 from backend.services import carts, identities, notifications, orders
 from backend.services.reengagement import check_abandoned_carts, check_back_in_stock
+from config.settings import settings
 
 IGSID = "98765432109876543"
 PHONE = "01000000123"

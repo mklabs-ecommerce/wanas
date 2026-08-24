@@ -21,10 +21,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.config import settings
 from backend.models import Order, OrderStatus, ShippingRate
 from backend.services import carts, notifications, orders
 from backend.webhooks import shopify as hook
+from config.settings import settings
 
 SECRET = "test-shopify-secret"
 SHOP = "wanas-test.myshopify.com"

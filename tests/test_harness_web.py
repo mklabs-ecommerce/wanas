@@ -216,7 +216,7 @@ def test_the_harness_can_be_switched_off(monkeypatch):
     # Off unless a developer asks for it: forgetting an environment variable
     # must not be what exposes an unauthenticated chat surface. (This suite
     # switches it on explicitly -- see tests/conftest.py.)
-    from backend.config import load_settings, settings
+    from config.settings import load_settings, settings
 
     monkeypatch.delenv("HARNESS_ENABLED", raising=False)
     assert load_settings().harness_enabled is False

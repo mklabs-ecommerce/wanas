@@ -11,7 +11,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from backend.config import DATA_DIR
+from config.settings import DATA_DIR
 
 CHARTS_PATH = DATA_DIR / "size_charts.json"
 

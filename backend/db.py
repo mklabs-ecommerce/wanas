@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.config import settings
+from config.settings import settings
 
 log = logging.getLogger("wanas.db")
 

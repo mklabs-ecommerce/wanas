@@ -14,8 +14,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.config import settings
 from backend.services import auth
+from config.settings import settings
 from dashboard import shopify_api
 from dashboard import web as dashboard
 

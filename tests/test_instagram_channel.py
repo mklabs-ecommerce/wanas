@@ -19,7 +19,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.config import settings
 from backend.db import SessionLocal
 from backend.models import Channel, QueueKind, WebhookEvent
 from backend.services import queues
@@ -27,6 +26,7 @@ from chatbot.channels import instagram as adapter
 from chatbot.channels import whatsapp as whatsapp_adapter
 from chatbot.providers import set_provider
 from chatbot.providers.fake import RehearsalProvider
+from config.settings import settings
 
 APP_SECRET = "ig-test-app-secret"
 VERIFY_TOKEN = "ig-verify-token"

@@ -11,10 +11,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Cookie
 from fastapi.responses import JSONResponse
 
-from backend.config import settings
 from backend.db import session_scope
 from backend.models import Staff
 from backend.services import runtime_flags, test_numbers
+from config.settings import settings
 from dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/settings", tags=["dashboard-settings"])

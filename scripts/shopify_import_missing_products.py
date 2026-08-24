@@ -25,9 +25,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from backend.config import settings  # noqa: E402
 from backend.db import session_scope  # noqa: E402
 from backend.services.shopify_product_import import import_missing_products  # noqa: E402
+from config.settings import settings  # noqa: E402
 
 
 def main() -> None:

@@ -45,10 +45,10 @@ import logging
 
 import httpx
 
-from backend.config import settings
 from chatbot.messages import ASSISTANT, TOOL_RESULTS, USER
 from chatbot.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
 from chatbot.providers.gemini import mask_key
+from config.settings import settings
 
 log = logging.getLogger("wanas.provider.openrouter")
 

@@ -42,8 +42,8 @@ import logging
 from fastapi import APIRouter, Response
 from fastapi.responses import FileResponse
 
-from backend.config import settings
 from common.servable_paths import resolve_public_path
+from config.settings import settings
 
 log = logging.getLogger("wanas.public_media")
 

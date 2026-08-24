@@ -16,7 +16,6 @@ from datetime import timedelta
 
 from sqlalchemy import func, select
 
-from backend.config import settings
 from backend.db import session_scope
 from backend.models import (
     AbandonedCartNudge,
@@ -27,6 +26,7 @@ from backend.models import (
     utcnow,
 )
 from backend.services import notifications, shopify_catalog, waitlist
+from config.settings import settings
 
 log = logging.getLogger("wanas.reengagement")
 

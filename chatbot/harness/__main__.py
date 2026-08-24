@@ -17,12 +17,12 @@ import argparse
 import logging
 import sys
 
-from backend.config import settings
 from backend.db import engine, session_scope
 from backend.models import Base
 from backend.services import identities, notifications
 from chatbot import session as session_store
 from chatbot.runtime import handle_message
+from config.settings import settings
 
 BANNER = """
 ┌─ Wanas Gallery — local chat harness ──────────────────────────────────┐

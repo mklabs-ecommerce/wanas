@@ -16,12 +16,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.config import settings
 from backend.models import Order, QueueKind, ShippingRate
 from backend.services import queues
 from chatbot.channels import whatsapp as adapter
 from chatbot.providers import set_provider
 from chatbot.providers.fake import RehearsalProvider
+from config.settings import settings
 
 APP_SECRET = "test-app-secret"
 VERIFY_TOKEN = "test-verify-token"

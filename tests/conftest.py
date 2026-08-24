@@ -23,7 +23,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Must be set before backend.config is imported anywhere. Assigned, not
+# Must be set before config.settings is imported anywhere. Assigned, not
 # setdefault: the fixture below drops the entire schema, so nothing ambient --
 # a shell export or the repo's own .env (python-dotenv skips names already
 # present) -- may decide what the suite runs on. Default is this suite's own

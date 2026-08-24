@@ -15,8 +15,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import DATA_DIR
 from backend.models import Product, Variant
+from config.settings import DATA_DIR
 
 SEED_PATH = DATA_DIR / "products_seed.json"
 

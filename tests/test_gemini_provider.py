@@ -16,7 +16,6 @@ import json
 
 import pytest
 
-from backend.config import settings
 from chatbot import agent
 from chatbot import messages as msg
 from chatbot import session as session_store
@@ -24,6 +23,7 @@ from chatbot.providers import gemini as gemini_module
 from chatbot.providers.base import ProviderError
 from chatbot.providers.gemini import GeminiProvider, is_gemini_3, mask_key
 from chatbot.tools.base import tool_specs
+from config.settings import settings
 
 CHANNEL = "whatsapp"
 WHO = "201000000001"
@@ -111,7 +111,7 @@ def test_masking_does_not_assume_a_shape(key, expected):
 def test_gemini_key_env_alias_is_accepted(monkeypatch):
     """A key present under the name a Gemini-only .env already uses must not
     look like a missing key."""
-    from backend.config import load_settings
+    from config.settings import load_settings
 
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "AQ.Ab-alias-key")
@@ -431,7 +431,7 @@ def test_raw_provider_text_never_reaches_the_customer_by_default(seeded, capture
 
 def test_committed_env_example_ships_both_debug_flags_off():
     """The deployed-with-DEBUG-on failure has to be hard to reach by accident."""
-    from backend.config import PROJECT_ROOT
+    from config.settings import PROJECT_ROOT
 
     example = (PROJECT_ROOT / ".env.example").read_text(encoding="utf-8")
     assert "CHATBOT_DEBUG=0" in example
@@ -449,7 +449,7 @@ def test_the_size_axis_is_identified_by_its_values_not_its_position():
     inspecting values, and raises rather than degrading."""
     import importlib.util
 
-    from backend.config import PROJECT_ROOT
+    from config.settings import PROJECT_ROOT
 
     spec = importlib.util.spec_from_file_location("merge_catalog", PROJECT_ROOT / "data" / "merge_catalog.py")
     merge = importlib.util.module_from_spec(spec)
@@ -465,7 +465,7 @@ def test_the_size_axis_is_identified_by_its_values_not_its_position():
 def test_an_unknown_size_vocabulary_raises_rather_than_silently_nulling():
     import importlib.util
 
-    from backend.config import PROJECT_ROOT
+    from config.settings import PROJECT_ROOT
 
     spec = importlib.util.spec_from_file_location("merge_catalog", PROJECT_ROOT / "data" / "merge_catalog.py")
     merge = importlib.util.module_from_spec(spec)

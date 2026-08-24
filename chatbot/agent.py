@@ -20,12 +20,12 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from backend.config import settings
 from chatbot import messages as msg
 from chatbot import session as session_store
 from chatbot.prompt import build_system_prompt
 from chatbot.providers import LLMProvider, ProviderError, get_provider
 from chatbot.tools.base import REGISTRY, ToolContext, call_tool, load_all, tool_specs
+from config.settings import settings
 
 log = logging.getLogger("wanas.agent")
 

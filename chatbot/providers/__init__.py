@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 
-from backend.config import settings
 from chatbot.providers.base import LLMProvider, ModelReply, ProviderError
+from config.settings import settings
 
 log = logging.getLogger("wanas.provider")
 

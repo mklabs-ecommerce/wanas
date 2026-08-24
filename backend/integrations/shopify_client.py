@@ -25,7 +25,7 @@ import time
 import urllib.error
 import urllib.request
 
-from backend.config import settings
+from config.settings import settings
 
 try:
     import certifi

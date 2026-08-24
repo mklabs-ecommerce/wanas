@@ -23,11 +23,11 @@ from typing import Protocol
 
 from sqlalchemy.orm import Session
 
-from backend.config import settings
 from backend.models import Order, QueueKind, Variant, utcnow
 from backend.services import identities, queues
 from common.events import after_commit
 from common.money import money
+from config.settings import settings
 
 log = logging.getLogger("wanas.notifications")
 

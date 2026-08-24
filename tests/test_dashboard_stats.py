@@ -11,8 +11,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.config import settings
 from backend.services import auth, carts, dashboard_stats, orders
+from config.settings import settings
 from dashboard import stats_api
 from dashboard import web as dashboard
 

@@ -21,7 +21,6 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
-from backend.config import settings
 from backend.db import engine, session_scope
 from backend.legal import router as legal_router
 from backend.models import Base, Product, ShippingRate, Variant
@@ -33,6 +32,7 @@ from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
 from chatbot.channels.whatsapp import router as whatsapp_router
 from chatbot.harness.web import router as harness_router
+from config.settings import settings
 from dashboard.customers_api import router as dashboard_customers_router
 from dashboard.queue_api import router as dashboard_queue_router
 from dashboard.settings_api import router as dashboard_settings_router

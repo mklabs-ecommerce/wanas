@@ -14,7 +14,7 @@ import logging
 
 import pytest
 
-from backend.config import settings
+from config.settings import settings
 from tests.fake_instagram import FakeInstagram
 
 GRAPH_MESSAGES = "https://graph.instagram.com/v23.0/17841400000000000/messages"

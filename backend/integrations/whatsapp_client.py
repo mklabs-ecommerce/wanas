@@ -20,10 +20,10 @@ from pathlib import Path
 
 import httpx
 
-from backend.config import PROJECT_ROOT, settings
 from backend.db import session_scope
 from backend.models import WhatsAppMedia
 from backend.services.notifications import OutboundMessage
+from config.settings import PROJECT_ROOT, settings
 
 log = logging.getLogger("wanas.whatsapp")
 

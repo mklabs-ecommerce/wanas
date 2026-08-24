@@ -24,7 +24,6 @@ import logging
 import httpx
 import pytest
 
-from backend.config import load_settings, settings
 from chatbot import agent
 from chatbot import messages as msg
 from chatbot.providers import build_provider
@@ -35,6 +34,7 @@ from chatbot.providers.openrouter import (
     OpenRouterProvider,
 )
 from chatbot.tools.base import tool_specs
+from config.settings import load_settings, settings
 
 CHANNEL = "whatsapp"
 WHO = "201000000002"

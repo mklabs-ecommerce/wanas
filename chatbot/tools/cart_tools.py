@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from backend.config import settings
 from backend.models import Variant
 from backend.services import carts, catalog, waitlist
 from chatbot.tools.base import ToolContext, tool
+from config.settings import settings
 
 MAX_PER_LINE = settings.max_quantity_per_line
 

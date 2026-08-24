@@ -19,8 +19,8 @@ import time
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import settings
 from backend.models import Staff
+from config.settings import settings
 
 _ALGO = "sha256"
 _ITERATIONS = 240_000

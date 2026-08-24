@@ -33,7 +33,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
-from backend.config import settings
+from config.settings import settings
 
 log = logging.getLogger("wanas.dispatcher")
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.config import PROJECT_ROOT
+from config.settings import PROJECT_ROOT
 
 #: Only these roots may be served, so a crafted path cannot walk out of the
 #: project. `data/inbound` is what a customer's own photo or voice note
@@ -25,7 +25,7 @@ from backend.config import PROJECT_ROOT
 SERVABLE_ROOTS = ("data/size-charts", "data/images", "data/inbound")
 
 #: What may be served to the public internet -- i.e. to Meta's own fetcher,
-#: which has no cookie and no token (`backend/public_media.py`). Deliberately
+#: which has no cookie and no token (`api/public_media.py`). Deliberately
 #: narrower than SERVABLE_ROOTS: `data/inbound` holds customers' own photos
 #: and voice notes and must never be reachable without a login.
 PUBLIC_ROOTS = ("data/size-charts", "data/images")

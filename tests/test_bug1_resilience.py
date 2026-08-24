@@ -16,7 +16,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from backend.config import settings
 from backend.db import SessionLocal
 from backend.models import ChannelIdentity, SessionRow, StaffQueueItem, WebhookEvent
 from backend.services import identities
@@ -26,6 +25,7 @@ from chatbot.dispatcher import Pending
 from chatbot.providers.fake import RehearsalProvider
 from chatbot.runtime import RuntimeReply, claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff
+from config.settings import settings
 
 CHANNEL = "whatsapp"
 WHO = "201066976593"

@@ -22,9 +22,9 @@ from datetime import UTC, timedelta
 
 import httpx
 
-from backend.config import settings
 from backend.db import session_scope
 from backend.models import IntegrationToken, QueueKind, utcnow
+from config.settings import settings
 
 log = logging.getLogger("wanas.instagram_token")
 

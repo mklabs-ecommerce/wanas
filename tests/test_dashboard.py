@@ -17,11 +17,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.config import settings
 from backend.models import QueueKind
 from backend.services import auth, identities, notifications, queues
 from chatbot import messages as msg
 from chatbot import session as session_store
+from config.settings import settings
 from dashboard import web as dashboard
 
 SECRET = "test-dashboard-secret"
@@ -32,11 +32,11 @@ CHANNEL = "whatsapp"
 @pytest.fixture()
 def configured(monkeypatch):
     patched = dataclasses.replace(settings, dashboard_session_secret=SECRET)
-    # `dashboard.web` gates login on this; `backend.services.auth`
+    # `dashboard.web` gates login on this; `domain.services.auth`
     # signs and verifies the session token with it. Two separate `settings`
     # names (each module bound its own at import time), so both need patching
     # -- the same reason `test_shopify_webhooks.py` patches the webhook
-    # module's own `settings` rather than `backend.config.settings`.
+    # module's own `settings` rather than the shared `config.settings.settings`.
     monkeypatch.setattr(dashboard, "settings", patched)
     monkeypatch.setattr(auth, "settings", patched)
 

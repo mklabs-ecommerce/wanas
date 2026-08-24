@@ -33,7 +33,6 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request, Response
 
-from backend.config import PROJECT_ROOT, settings
 from backend.db import session_scope
 from backend.integrations.instagram_client import InstagramClient
 from backend.models import Channel, QueueKind, utcnow
@@ -44,6 +43,7 @@ from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff
 from common.security import verify_signature
+from config.settings import PROJECT_ROOT, settings
 
 log = logging.getLogger("wanas.channel.instagram")
 

@@ -15,7 +15,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.config import settings
 from backend.db import SessionLocal, session_scope
 from backend.models import (
     InstagramCommentReply,
@@ -25,6 +24,7 @@ from backend.models import (
 )
 from backend.services import queues
 from chatbot.channels import instagram as adapter
+from config.settings import settings
 
 APP_SECRET = "ig-test-app-secret"
 VERIFY_TOKEN = "ig-verify-token"
