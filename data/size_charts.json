@@ -1,0 +1,209 @@
+{
+  "wide-leg-sweatpants": {
+    "chart_id": "wide-leg-sweatpants",
+    "title": "Wide-leg sweatpants",
+    "image": "data/size-charts/wide-leg-sweatpants.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "waist", "label_en": "Waist", "label_ar": "الوسط", "marker": "A" },
+      { "key": "total_length", "label_en": "Total length", "label_ar": "الطول الكلي", "marker": "B" },
+      { "key": "leg_opening", "label_en": "Leg opening", "label_ar": "فتحة الرجل", "marker": "C" }
+    ],
+    "sizes": {
+      "S":  { "waist": 31, "total_length": 106, "leg_opening": 30 },
+      "M":  { "waist": 34, "total_length": 108, "leg_opening": 32 },
+      "L":  { "waist": 36, "total_length": 110, "leg_opening": 34 },
+      "XL": { "waist": 37, "total_length": 112, "leg_opening": 36 }
+    }
+  },
+
+  "ringer-boxy-tee": {
+    "chart_id": "ringer-boxy-tee",
+    "title": "Ringer / boxy-fit t-shirt",
+    "image": "data/size-charts/ringer-boxy-tee.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "width", "label_en": "Width", "label_ar": "العرض" },
+      { "key": "length", "label_en": "Length", "label_ar": "الطول" }
+    ],
+    "sizes": {
+      "S":  { "width": 54, "length": 65 },
+      "M":  { "width": 56, "length": 67 },
+      "L":  { "width": 58, "length": 69 },
+      "XL": { "width": 60, "length": 71 }
+    }
+  },
+
+  "oversized-hoodie": {
+    "chart_id": "oversized-hoodie",
+    "title": "Over-sized hoodie",
+    "image": "data/size-charts/oversized-hoodie.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "width", "label_en": "Width", "label_ar": "العرض", "marker": "W" },
+      { "key": "length", "label_en": "Length", "label_ar": "الطول", "marker": "L" }
+    ],
+    "sizes": {
+      "S":  { "width": 58, "length": 68 },
+      "M":  { "width": 61, "length": 71 },
+      "L":  { "width": 64, "length": 74 },
+      "XL": { "width": 68, "length": 80 }
+    }
+  },
+
+  "wanas-zip-hoodie": {
+    "chart_id": "wanas-zip-hoodie",
+    "title": "WANAS zip-hoodie",
+    "image": "data/size-charts/wanas-zip-hoodie.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "chest_width", "label_en": "Chest width", "label_ar": "عرض الصدر", "marker": "A" },
+      { "key": "total_length", "label_en": "Total length", "label_ar": "الطول الكلي", "marker": "B" }
+    ],
+    "sizes": {
+      "S":  { "chest_width": 60, "total_length": 66 },
+      "M":  { "chest_width": 62, "total_length": 68 },
+      "L":  { "chest_width": 64, "total_length": 70 },
+      "XL": { "chest_width": 68, "total_length": 72 }
+    }
+  },
+
+  "zipup": {
+    "chart_id": "zipup",
+    "title": "Zip-up hoodie",
+    "image": "data/size-charts/zipup.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "chest_width", "label_en": "Chest width", "label_ar": "عرض الصدر", "marker": "A" },
+      { "key": "total_length", "label_en": "Total length", "label_ar": "الطول الكلي", "marker": "B" },
+      { "key": "arm_length", "label_en": "Arm length", "label_ar": "طول الكم", "marker": "C" }
+    ],
+    "sizes": {
+      "S":  { "chest_width": 57, "total_length": 61, "arm_length": 56 },
+      "M":  { "chest_width": 60, "total_length": 64, "arm_length": 58 },
+      "L":  { "chest_width": 63, "total_length": 67, "arm_length": 60 },
+      "XL": { "chest_width": 66, "total_length": 70, "arm_length": 62 }
+    }
+  },
+
+  "oversized-polo": {
+    "chart_id": "oversized-polo",
+    "title": "Over-sized polo",
+    "image": "data/size-charts/oversized-polo.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "chest_width", "label_en": "Chest width", "label_ar": "عرض الصدر" },
+      { "key": "total_length", "label_en": "Total length", "label_ar": "الطول الكلي" }
+    ],
+    "sizes": {
+      "S":  { "chest_width": 60, "total_length": 68 },
+      "M":  { "chest_width": 62, "total_length": 70 },
+      "L":  { "chest_width": 64, "total_length": 72 },
+      "XL": { "chest_width": 68, "total_length": 74 }
+    }
+  },
+
+  "knitted-polo": {
+    "chart_id": "knitted-polo",
+    "title": "Knitted polo",
+    "image": "data/size-charts/knitted-polo.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "width", "label_en": "Width", "label_ar": "العرض" },
+      { "key": "length", "label_en": "Length", "label_ar": "الطول" }
+    ],
+    "sizes": {
+      "S":  { "width": 54, "length": 65 },
+      "M":  { "width": 56, "length": 67 },
+      "L":  { "width": 58, "length": 69 },
+      "XL": { "width": 60, "length": 71 }
+    }
+  },
+
+  "oversized-crewneck": {
+    "chart_id": "oversized-crewneck",
+    "title": "Over-sized crewneck",
+    "image": "data/size-charts/oversized-crewneck.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "chest_width", "label_en": "Chest width", "label_ar": "عرض الصدر" },
+      { "key": "total_length", "label_en": "Total length", "label_ar": "الطول الكلي" }
+    ],
+    "sizes": {
+      "S":  { "chest_width": 60, "total_length": 68 },
+      "M":  { "chest_width": 62, "total_length": 70 },
+      "L":  { "chest_width": 64, "total_length": 72 },
+      "XL": { "chest_width": 68, "total_length": 74 }
+    }
+  },
+
+  "quarter-zip": {
+    "chart_id": "quarter-zip",
+    "title": "Quarter-zip",
+    "image": "data/size-charts/quarter-zip.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "chest_width", "label_en": "Chest width", "label_ar": "عرض الصدر", "marker": "W" },
+      { "key": "total_length", "label_en": "Total length", "label_ar": "الطول الكلي", "marker": "L" }
+    ],
+    "sizes": {
+      "S":  { "chest_width": 58, "total_length": 68 },
+      "M":  { "chest_width": 62, "total_length": 71 },
+      "L":  { "chest_width": 64, "total_length": 74 },
+      "XL": { "chest_width": 68, "total_length": 77 }
+    }
+  },
+
+  "oversized-graphic-tee": {
+    "chart_id": "oversized-graphic-tee",
+    "title": "Oversized t-shirt",
+    "image": "data/size-charts/oversized-graphic-tee.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "width", "label_en": "Width", "label_ar": "العرض" },
+      { "key": "length", "label_en": "Length", "label_ar": "الطول" }
+    ],
+    "sizes": {
+      "S":  { "width": 56, "length": 70 },
+      "M":  { "width": 58, "length": 73 },
+      "L":  { "width": 60, "length": 76 },
+      "XL": { "width": 62, "length": 79 }
+    }
+  },
+
+  "worker-jacket": {
+    "chart_id": "worker-jacket",
+    "title": "Worker jacket",
+    "image": "data/size-charts/worker-jacket.png",
+    "unit": "cm",
+    "length_specific": true,
+    "measurements": [
+      { "key": "chest_width", "label_en": "Chest width", "label_ar": "عرض الصدر", "marker": "A" },
+      { "key": "total_length", "label_en": "Total length", "label_ar": "الطول الكلي", "marker": "B" },
+      { "key": "short_sleeve", "label_en": "Short sleeve", "label_ar": "الكم القصير", "marker": "C", "applies_to_length": "Short" },
+      { "key": "long_sleeve", "label_en": "Long sleeve", "label_ar": "الكم الطويل", "marker": "D", "applies_to_length": "Long" }
+    ],
+    "sizes": {
+      "S":  { "chest_width": 58, "total_length": 68, "short_sleeve": 22, "long_sleeve": 56 },
+      "M":  { "chest_width": 60, "total_length": 70, "short_sleeve": 23, "long_sleeve": 58 },
+      "L":  { "chest_width": 62, "total_length": 72, "short_sleeve": 24, "long_sleeve": 60 },
+      "XL": { "chest_width": 64, "total_length": 74, "short_sleeve": 25, "long_sleeve": 62 }
+    }
+  },
+
+  "wns-tops": {
+    "chart_id": "wns-tops",
+    "title": "WNS tops",
+    "image": "data/size-charts/wns-tops.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "length", "label_en": "Length", "label_ar": "الطول" },
+      { "key": "width", "label_en": "Width", "label_ar": "العرض" }
+    ],
+    "sizes": {
+      "S": { "length": 38, "width": 50 },
+      "M": { "length": 40, "width": 52 },
+      "L": { "length": 42, "width": 54 }
+    }
+  }
+}

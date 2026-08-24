@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wanas — staff login</title>
+<style>
+  :root {
+    --bg:#0b141a; --panel:#111b21; --header:#202c33; --line:#2a3942;
+    --out:#005c4b; --ink:#e9edef; --muted:#8696a0; --bad:#f2637d;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:var(--bg); color:var(--ink);
+    font:15px/1.55 "Segoe UI","Noto Naskh Arabic",Tahoma,system-ui,sans-serif;
+  }
+  form {
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:2rem; width:min(90vw, 22rem); display:flex; flex-direction:column; gap:.9rem;
+  }
+  h1 { margin:0 0 .2rem; font-size:1.2rem; }
+  .sub { color:var(--muted); font-size:.85rem; margin:0 0 .4rem; }
+  label { font-size:.85rem; color:var(--muted); display:flex; flex-direction:column; gap:.3rem; }
+  input {
+    background:var(--header); color:var(--ink); border:1px solid var(--line);
+    border-radius:6px; padding:.55rem .7rem; font:inherit;
+  }
+  button {
+    background:var(--out); color:var(--ink); border:none; border-radius:6px;
+    padding:.6rem; font:inherit; font-weight:600; cursor:pointer; margin-top:.3rem;
+  }
+  button:disabled { opacity:.6; cursor:default; }
+  #error { color:var(--bad); font-size:.85rem; min-height:1.1em; }
+</style>
+</head>
+<body>
+<form id="login">
+  <div>
+    <h1>Wanas Gallery — لوحة الفريق</h1>
+    <p class="sub">سجّل دخولك لمتابعة المحادثات والرد على اللي محتاج حد فعلاً.</p>
+  </div>
+  <label>اسم المستخدم <input id="username" autocomplete="username" required></label>
+  <label>كلمة السر <input id="password" type="password" autocomplete="current-password" required></label>
+  <div id="error"></div>
+  <button id="submit" type="submit">دخول</button>
+</form>
+<script>
+const form = document.getElementById('login');
+const errorEl = document.getElementById('error');
+const submitBtn = document.getElementById('submit');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorEl.textContent = '';
+  submitBtn.disabled = true;
+  try {
+    const res = await fetch('/dashboard/api/login', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    if (res.ok) { window.location.href = '/dashboard'; return; }
+    if (res.status === 503) errorEl.textContent = 'اللوحة مش متفعّلة على السيرفر ده لسه (DASHBOARD_SESSION_SECRET).';
+    else errorEl.textContent = 'اسم المستخدم أو كلمة السر غلط.';
+  } catch (err) {
+    errorEl.textContent = 'مفيش اتصال بالسيرفر دلوقتي.';
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

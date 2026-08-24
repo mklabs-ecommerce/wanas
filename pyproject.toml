@@ -1,0 +1,56 @@
+[project]
+name = "wanas-shopify-chatbot"
+version = "1.0.0"
+description = "WhatsApp sales agent for Wanas Gallery, selling a Shopify catalog"
+requires-python = ">=3.11"
+readme = "README.md"
+
+# Dependencies are pinned in requirements.txt rather than declared here: this
+# is a deployed application, not a library, and Railway installs from that
+# file. Keeping one list avoids the two drifting.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "no_shopify: run without the in-memory Shopify shelf, to exercise the outage path",
+    "live: costs real model quota; skipped unless RUN_LIVE_TESTS=1",
+]
+filterwarnings = ["error::DeprecationWarning:domain.*", "error::DeprecationWarning:assistant.*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["data/images", "data/size-charts"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+]
+ignore = [
+    # The codebase explains itself in prose comments above the code rather
+    # than in one-line docstrings on every function; D-rules are not enabled
+    # for that reason.
+    "B008",  # FastAPI's Depends()/Body() defaults are the framework's idiom
+    "SIM105",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests say what they mean at whatever length that takes.
+"tests/*" = ["E501"]
+# The system prompt is an Arabic document that happens to live in a .py file.
+# Re-wrapping its lines changes what the model reads, and Arabic counted in
+# characters trips a limit that was chosen for code.
+"assistant/prompt.py" = ["E501"]
+# The seed data merge is a data file with a program attached.
+"data/merge_catalog.py" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["common", "config", "domain", "integrations", "api", "assistant", "dashboard"]
+combine-as-imports = true
