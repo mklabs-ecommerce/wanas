@@ -1,12 +1,13 @@
-"""Operational commands.
+"""Operational commands. A composition root, like app.py -- run directly,
+never imported by the rest of the app.
 
-    python -m backend.cli init-db
-    python -m backend.cli seed
-    python -m backend.cli create-staff <username>
-    python -m backend.cli set-fee <governorate> <fee>
-    python -m backend.cli catalog-report
-    python -m backend.cli inspect-conversation <external_id> [--channel whatsapp]
-    python -m backend.cli release-conversation <external_id> [--channel whatsapp]
+    python manage.py init-db
+    python manage.py seed
+    python manage.py create-staff <username>
+    python manage.py set-fee <governorate> <fee>
+    python manage.py catalog-report
+    python manage.py inspect-conversation <external_id> [--channel whatsapp]
+    python manage.py release-conversation <external_id> [--channel whatsapp]
 """
 
 from __future__ import annotations
@@ -201,7 +202,7 @@ def cmd_release_conversation(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="backend.cli")
+    parser = argparse.ArgumentParser(prog="manage.py")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("init-db", help="create the schema").set_defaults(func=cmd_init_db)

@@ -17,7 +17,7 @@ dev:  ## Runtime + test + lint dependencies
 	$(PYTHON) -m pip install -r requirements-dev.txt
 
 seed:  ## Import the catalog and the governorate list into the database
-	$(PYTHON) -m backend.cli seed
+	$(PYTHON) manage.py seed
 
 test:  ## The full suite
 	$(PYTHON) -m pytest tests/

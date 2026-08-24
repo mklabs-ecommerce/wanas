@@ -16,7 +16,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend import public_media
+from api import public_media
 from config.settings import settings
 
 SECRET = "test-media-secret"

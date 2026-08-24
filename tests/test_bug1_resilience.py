@@ -246,7 +246,7 @@ def test_load_leaves_the_poisoned_value_in_place(seeded, caplog):
 
 
 def test_cli_inspect_shows_a_stuck_conversation(seeded, capsys):
-    from backend import cli
+    import manage as cli
 
     identities.pause(seeded, CHANNEL, WHO)
     raise_handoff(seeded, CHANNEL, WHO, "complaint", "damaged item")
@@ -267,7 +267,7 @@ def test_cli_inspect_shows_a_stuck_conversation(seeded, capsys):
 
 
 def test_cli_release_clears_the_pause_and_resolves_handoffs(seeded, capsys):
-    from backend import cli
+    import manage as cli
 
     identities.pause(seeded, CHANNEL, WHO)
     item = raise_handoff(seeded, CHANNEL, WHO, "customer_asked", "wants a human")

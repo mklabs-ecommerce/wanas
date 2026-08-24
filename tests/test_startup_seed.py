@@ -3,7 +3,7 @@
 An unseeded production database is a silent, total failure: the process is
 healthy, `/health` says everything is configured, and every customer search
 still comes back "we don't have that" -- because nobody ran the documented
-`python -m backend.cli seed` step against it. `app._ensure_catalog_seeded`
+`python manage.py seed` step against it. `app._ensure_catalog_seeded`
 recovers from exactly that, and only that: on an already-seeded database it
 must not touch a single row.
 """

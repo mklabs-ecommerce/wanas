@@ -17,7 +17,7 @@ model both writing into the same live turn is exactly the race the debounce
 lock (`chatbot/dispatcher.py`) exists to prevent.
 
 Authenticated, unlike the harness: `Staff` already existed
-(`backend/services/auth.py`, `python -m backend.cli create-staff`) with
+(`domain/services/auth.py`, `python manage.py create-staff`) with
 nowhere to log in. Session is a signed cookie, not a table -- see
 `auth.issue_session_token`. With no `DASHBOARD_SESSION_SECRET` configured,
 login refuses outright (503) rather than signing cookies with a secret that

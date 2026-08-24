@@ -21,7 +21,7 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
-from backend.public_media import router as public_media_router
+from api.public_media import router as public_media_router
 from chatbot import session as assistant_session
 from chatbot.channels import instagram as instagram_channel
 from chatbot.channels.whatsapp import (
@@ -52,7 +52,7 @@ def _ensure_catalog_seeded() -> None:
     """Import `data/products_seed.json` / `data/governorates.json` if the
     catalog tables are still empty.
 
-    `python -m backend.cli seed` is the documented recovery step, but it is a
+    `python manage.py seed` is the documented recovery step, but it is a
     step someone has to remember to run by hand against the right database at
     the right time -- and an unseeded production database is a silent, total
     failure: the process is healthy, `/health` says everything is configured,

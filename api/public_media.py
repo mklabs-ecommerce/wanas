@@ -21,7 +21,7 @@ Properties, all deliberate:
   outside; confirming that *something* exists at a guessed path is worth
   nothing to anyone.
 * **`data/inbound` is unreachable through this route even with a correctly
-  computed token for it** (`backend/servable_paths.py::PUBLIC_ROOTS`). Those
+  computed token for it** (`common/servable_paths.py::PUBLIC_ROOTS`). Those
   are customers' own photos and voice notes; the public internet never gets
   them, whatever else this route might otherwise be convenient for.
 * With no secret configured every request 404s and `public_url_for` returns

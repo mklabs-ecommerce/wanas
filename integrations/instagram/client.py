@@ -306,7 +306,7 @@ class InstagramClient:
         as a separate text message *before* the image, so a size chart still
         arrives with its explanation, in the order a person would send them.
         """
-        from backend.public_media import public_url_for
+        from api.public_media import public_url_for
 
         if _is_url(image_path):
             url = image_path
