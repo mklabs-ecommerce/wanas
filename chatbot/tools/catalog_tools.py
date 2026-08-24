@@ -30,6 +30,9 @@ def get_categories(ctx: ToolContext) -> dict:
     "'olive hoodie' resolves even though colour is not part of any product name. All arguments "
     "are optional; with none it returns the whole catalog. price_from/price_to are the real "
     "min and max of that product's variant prices -- quote 'from X' when they differ. "
+    "`colors` lists every colourway the product comes in including sold-out ones -- it describes "
+    "the product, it is not an offer; `in_stock_colors` is the only list you may present as "
+    "available. Never deny a colour that is in `in_stock_colors`, and never offer one that is not. "
     "Search for what the customer actually asked for, not for a product name you happen to know. "
     "The result is what you may choose from, not what you should list: for a vague request, offer "
     "two or three that fit and let them narrow it down.",

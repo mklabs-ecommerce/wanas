@@ -112,6 +112,7 @@ SYSTEM_PROMPT = """انت بتشتغل خدمة عملاء ومبيعات في W
 
 # حاجات في البضاعة لازم تعرفها
 - كل المنتجات ليها ألوان، فاللون اختيار لازم مع المقاس في كل حاجة.
+- في get_products، حقل colors بيوصف المنتج بكل ألوانه حتى اللي خلص خلاص — ده وصف مش توفر. المتوفر فعلاً هو in_stock_colors بس. فسؤال «عندك رمادي؟» وسؤال «إيه الألوان عندك؟» ليهم نفس المصدر: in_stock_colors. متتنفيش لون موجود فيها ومتعرضش لون مش فيها.
 - Worker Jacket بس فيه اختيار تالت: Long ولا Short.
 - معظم البضاعة عليها خصم، فالسعر القديم والجديد الاتنين يستحقوا الذكر.
 - في منتجات سعرها بيختلف حسب اللون. متقولش سعر واحد للمنتج كله — لو الأسعار مختلفة قول «من كذا».
@@ -135,5 +136,45 @@ request_human هو آخر حل، مش أول رد على غموض. رسالة ق
 """
 
 
-def build_system_prompt(extra: str | None = None) -> str:
-    return f"{SYSTEM_PROMPT}\n\n{extra}" if extra else SYSTEM_PROMPT
+#: The Instagram surface's opening line. Everything else in the prompt is
+#: shared on purpose -- the rules about tools, sizes and money are the shop's,
+#: not WhatsApp's.
+INSTAGRAM_SURFACE_LINE = "بتتكلم مع الزباين على الانستجرام في الدايركت"
+
+_WHATSAPP_SURFACE_LINE = "بتتكلم مع الزباين على واتساب"
+
+#: Extra instructions only an Instagram conversation gets. The byte cap is a
+#: client-side split, but shorter replies read better anyway; there are no
+#: tappable lists, so anything `ask_governorate` does has to work in prose
+#: (the numbered fallback and free-text answers both land on
+#: `shipping.resolve`); and a customer who arrived from a comment may open
+#: mid-thought, still looking at a post the bot has to ask about.
+_INSTAGRAM_PARAGRAPH = """
+# لو بتتكلم على الانستجرام
+- ردودك أقصر من الواتساب: في حد للطول عندنا، والرسالة الطويلة ممكن تتقسم. جملة أو اتنين كفاية.
+- مفيش قوايم بتتداس هنا. لو المحافظة مطلوبة، اسأل بالكلام العادي والزبون هيكتبها.
+- الزبون ممكن يكون جاي من كومنت على بوست أو ستوري، فأول رسالته ممكن تكون حاجة زي «بكام ده؟» من غير ما يوضح — اسأله عن القطعة اللي يقصدها قبل ما تتجاوب بأي رقم.
+""".strip()
+
+
+def build_system_prompt(extra: str | None = None, *, channel: str = "whatsapp") -> str:
+    """The system prompt for one surface.
+
+    The default (`channel="whatsapp"`) returns the string above untouched --
+    byte-for-byte what it has always been, because it is pinned by tests and
+    tuned against real WhatsApp conversations. An Instagram turn swaps the
+    surface line and appends the Instagram paragraph; nothing else moves.
+    """
+    base = SYSTEM_PROMPT
+    if channel == "instagram_dm":
+        # Guard against silent drift: if someone rewords the surface line in
+        # SYSTEM_PROMPT without updating the constant, fail loudly rather
+        # than send an Instagram customer a prompt that says WhatsApp.
+        if _WHATSAPP_SURFACE_LINE not in SYSTEM_PROMPT:  # pragma: no cover - guards drift
+            raise RuntimeError("the WhatsApp surface line drifted out of SYSTEM_PROMPT")
+        base = (
+            SYSTEM_PROMPT.replace(_WHATSAPP_SURFACE_LINE, INSTAGRAM_SURFACE_LINE)
+            + "\n\n"
+            + _INSTAGRAM_PARAGRAPH
+        )
+    return f"{base}\n\n{extra}" if extra else base

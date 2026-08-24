@@ -133,6 +133,13 @@ def _product_summary(product: Product, live_map=None) -> dict:
     variants = [_overlay(v, live_map) for v in product.variants]
     prices = [v.price for v in variants]
     originals = [v.original_price for v in variants]
+    # Same overlay pass as every other live number here, so no second Shopify
+    # call: which colourways have at least one buyable size right now.
+    stocked = {
+        v.color
+        for v, priced in zip(product.variants, variants, strict=True)
+        if v.color and priced.stock_qty > 0
+    }
     return {
         "product_id": product.product_id,
         "name": product.name,
@@ -156,6 +163,10 @@ def _product_summary(product: Product, live_map=None) -> dict:
         # top of a range. Not to be confused with price_to.
         "original_price_to": money(max(originals)) if originals else 0,
         "on_sale": any(v.on_sale for v in variants),
+        # The offer list, ordered like `colors` but only with the colourways a
+        # size can actually be bought in right now. `colors` describes the
+        # product; this is the slice of it that is for sale.
+        "in_stock_colors": [c for c in (product.colors or []) if c in stocked],
         "any_in_stock": any(v.stock_qty > 0 for v in variants),
         "description": product.description,
     }
