@@ -31,6 +31,10 @@ def build_provider(name: str | None = None) -> LLMProvider:
         from chatbot.providers.gemini import GeminiProvider
 
         return GeminiProvider()
+    if name == "openrouter":
+        from chatbot.providers.openrouter import OpenRouterProvider
+
+        return OpenRouterProvider()
 
     raise ProviderError(f"unknown LLM_PROVIDER {name!r}")
 

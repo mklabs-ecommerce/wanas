@@ -80,12 +80,42 @@ class Settings:
     llm_media_model: str
     llm_api_key: str
     llm_debug_payload: bool
+    #: OpenRouter routes the conversation model by default. Its own variable,
+    #: deliberately not an alias of `llm_api_key` above: sharing one would
+    #: hand a routed-inference key to Google (or a Google key to OpenRouter),
+    #: which only surfaces later as an auth failure far from its cause.
+    openrouter_api_key: str
 
     whatsapp_phone_number_id: str
     whatsapp_access_token: str
     whatsapp_app_secret: str
     whatsapp_verify_token: str
     whatsapp_api_version: str
+
+    instagram_account_id: str      # INSTAGRAM_ACCOUNT_ID -- the numeric IG_ID, not the @handle
+    instagram_access_token: str    # INSTAGRAM_ACCESS_TOKEN
+    # The *Instagram* app secret, not WHATSAPP_APP_SECRET.
+    instagram_app_secret: str      # INSTAGRAM_APP_SECRET
+    instagram_verify_token: str    # INSTAGRAM_VERIFY_TOKEN
+    instagram_api_version: str     # INSTAGRAM_API_VERSION, default "v23.0"
+    instagram_username: str        # INSTAGRAM_USERNAME -- only ever used in customer-facing copy
+
+    #: Comments are a public surface. Off by default so the DM half can ship
+    #: and be watched for a week before anything the bot writes is visible to
+    #: everyone who scrolls past the post.
+    instagram_comments_enabled: bool       # INSTAGRAM_COMMENTS_ENABLED, default False
+    #: Whether the bot writes a visible reply under the comment at all, or
+    #: only slides into the DM.
+    instagram_public_reply_enabled: bool   # INSTAGRAM_PUBLIC_REPLY_ENABLED, default True
+    #: A comment older than this is ignored -- Meta's private-reply window is
+    #: 7 days and a reply to a month-old post is noise, not service.
+    instagram_comment_max_age_hours: float  # INSTAGRAM_COMMENT_MAX_AGE_HOURS, default 48.0
+    #: Per-commenter cap inside a rolling hour, so one person spamming a post
+    #: cannot cost 40 model calls.
+    instagram_comment_rate_limit: int      # INSTAGRAM_COMMENT_RATE_LIMIT, default 3
+    #: Signs the public media URLs Meta fetches attachments from (STEP 5).
+    #: Falls back to DASHBOARD_SESSION_SECRET so one less secret has to be set.
+    media_url_secret: str                  # MEDIA_URL_SECRET
 
     history_cap: int
     session_expiry_hours: int
@@ -179,11 +209,23 @@ class Settings:
         """
         return bool(self.whatsapp_phone_number_id and self.whatsapp_access_token)
 
+    @property
+    def instagram_configured(self) -> bool:
+        """The adapter is inert until Instagram credentials exist.
+
+        Same contract as `whatsapp_configured`: the webhook refuses with 503
+        and outbound is logged, rather than the app failing to start.
+        """
+        return bool(self.instagram_account_id and self.instagram_access_token)
+
 
 def load_settings() -> Settings:
     return Settings(
         database_url=os.getenv("DATABASE_URL", "sqlite:///./wanas.db"),
-        llm_provider=os.getenv("LLM_PROVIDER", "fake").strip().lower(),
+        # Default is openrouter; the test suite pins LLM_PROVIDER=fake in
+        # tests/conftest.py before this module is imported anywhere, so the
+        # suite never depends on the production default.
+        llm_provider=os.getenv("LLM_PROVIDER", "openrouter").strip().lower(),
         # `GEMINI_*` accepted as aliases: that is what a Gemini-only .env
         # already calls them, and a key that is present under the "wrong" name
         # presents as an auth failure, which is a slow thing to diagnose.
@@ -194,11 +236,23 @@ def load_settings() -> Settings:
         llm_media_model=_first_env("LLM_MEDIA_MODEL", "GEMINI_MEDIA_MODEL", default=""),
         llm_api_key=_first_env("LLM_API_KEY", "GEMINI_API_KEY", default=""),
         llm_debug_payload=_bool("LLM_DEBUG_PAYLOAD", False),
+        openrouter_api_key=_first_env("OPENROUTER_API_KEY", default=""),
         whatsapp_phone_number_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),
         whatsapp_access_token=os.getenv("WHATSAPP_ACCESS_TOKEN", ""),
         whatsapp_app_secret=os.getenv("WHATSAPP_APP_SECRET", ""),
         whatsapp_verify_token=os.getenv("WHATSAPP_VERIFY_TOKEN", ""),
         whatsapp_api_version=os.getenv("WHATSAPP_API_VERSION", "v21.0"),
+        instagram_account_id=os.getenv("INSTAGRAM_ACCOUNT_ID", ""),
+        instagram_access_token=os.getenv("INSTAGRAM_ACCESS_TOKEN", ""),
+        instagram_app_secret=os.getenv("INSTAGRAM_APP_SECRET", ""),
+        instagram_verify_token=os.getenv("INSTAGRAM_VERIFY_TOKEN", ""),
+        instagram_api_version=os.getenv("INSTAGRAM_API_VERSION", "v23.0"),
+        instagram_username=os.getenv("INSTAGRAM_USERNAME", ""),
+        instagram_comments_enabled=_bool("INSTAGRAM_COMMENTS_ENABLED", False),
+        instagram_public_reply_enabled=_bool("INSTAGRAM_PUBLIC_REPLY_ENABLED", True),
+        instagram_comment_max_age_hours=_float("INSTAGRAM_COMMENT_MAX_AGE_HOURS", 48.0),
+        instagram_comment_rate_limit=_int("INSTAGRAM_COMMENT_RATE_LIMIT", 3),
+        media_url_secret=_first_env("MEDIA_URL_SECRET", "DASHBOARD_SESSION_SECRET", default=""),
         history_cap=_int("HISTORY_CAP", 40),
         session_expiry_hours=_int("SESSION_EXPIRY_HOURS", 6),
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),

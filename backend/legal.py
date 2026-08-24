@@ -7,9 +7,10 @@ credential, no signature check and no database access.
 
 The text is kept here, next to the code, rather than in a CMS or a Notion page
 someone can quietly edit: what it claims about where customer data goes is
-only true as long as it matches `chatbot/providers/gemini.py`,
-`backend/integrations/shopify_client.py` and `backend/models.py`. When one of
-those changes, this changes in the same commit.
+only true as long as it matches `chatbot/providers/openrouter.py`,
+`chatbot/providers/gemini.py`, `backend/integrations/shopify_client.py` and
+`backend/models.py`. When one of those changes, this changes in the same
+commit.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ router = APIRouter(tags=["legal"])
 
 #: Shown on the page and sent to Meta. Bump it whenever the text below changes
 #: in a way a customer would care about.
-LAST_UPDATED = "19 August 2026"
+LAST_UPDATED = "23 August 2026"
 
 CONTACT_EMAIL = "mklabsecommerce@gmail.com"
 
@@ -95,10 +96,12 @@ purpose:</p>
   <tr><th>WhatsApp (Meta Platforms)</th>
       <td>Carries messages between you and us. Your use of WhatsApp is also
           governed by Meta's own privacy policy.</td></tr>
-  <tr><th>Google (Gemini API)</th>
-      <td>Generates the assistant's replies. The text of your messages is sent
-          to Google to be processed; voice notes are sent to be transcribed and
-          photos to be recognised, when you send them.</td></tr>
+  <tr><th>OpenRouter</th>
+      <td>Routes the AI model that generates the assistant's replies,
+          transcribes your voice notes into text so the assistant can read
+          what you said, and compares photos you send against our product
+          catalogue. The relevant message content is sent through OpenRouter's
+          service in order to produce these.</td></tr>
   <tr><th>Shopify</th>
       <td>Holds our product catalogue and our orders. When you place an order,
           your name, phone number, delivery address and items are stored there.</td></tr>
