@@ -193,6 +193,48 @@ def test_mark_as_read_is_the_protocol_no_op(fake):
     assert fake.calls == []
 
 
+# --- get_media (post context, fetched fresh, never cached) -----------------
+
+
+def test_get_media_reads_the_caption(fake):
+    fake.get_json_body = {"caption": "الهودي الزيتي 🖤", "media_type": "IMAGE"}
+    client = make_client()
+
+    media = client.get_media("17900000000000123")
+
+    assert media == {"caption": "الهودي الزيتي 🖤", "media_type": "IMAGE"}
+    gets = [c for c in fake.calls if c["method"] == "GET"]
+    assert len(gets) == 1
+    assert gets[0]["url"].endswith("/17900000000000123")
+
+
+def test_get_media_returns_none_for_an_unreadable_post(fake):
+    fake.download_status = 404
+    fake.get_json_body = {}
+    client = make_client()
+
+    assert client.get_media("deleted-post") is None
+
+
+def test_get_media_returns_none_on_a_network_failure(fake):
+    import httpx
+
+    fake.download_raise = httpx.ConnectError("boom")
+    client = make_client()
+
+    assert client.get_media("story-9") is None
+
+
+def test_get_media_on_an_unconfigured_client_makes_no_call(fake, monkeypatch):
+    blank = dataclasses.replace(settings, instagram_account_id="", instagram_access_token="")
+    monkeypatch.setattr("integrations.instagram.client.settings", blank)
+    from integrations.instagram.client import InstagramClient
+
+    client = InstagramClient()
+    assert client.get_media("story-9") is None
+    assert fake.calls == []
+
+
 # --- quick replies (STEP 8) -------------------------------------------------
 
 

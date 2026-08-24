@@ -39,7 +39,14 @@ import logging
 import httpx
 
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
-from assistant.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
+from assistant.providers.base import (
+    COMMENT_CATEGORIES,
+    CommentClassification,
+    ImageReading,
+    LLMProvider,
+    ModelReply,
+    ProviderError,
+)
 from config.settings import settings
 
 log = logging.getLogger("wanas.provider.gemini")
@@ -528,6 +535,44 @@ class GeminiProvider(LLMProvider):
             description=str(parsed.get("description") or "").strip(),
             is_garment=bool(parsed.get("is_garment", True)),
         )
+
+    # -- comments: classification (cheap, no tools, no history) -----------
+
+    _COMMENT_SCHEMA = {
+        "type": "object",
+        "properties": {"category": {"type": "string", "enum": list(COMMENT_CATEGORIES)}},
+        "required": ["category"],
+    }
+
+    def classify_comment(self, text: str) -> CommentClassification:
+        instruction = (
+            "دي كومنت وصل على بوست أو ريل لمحل هدوم على انستجرام. صنّفه لحاجة واحدة بس من دول:\n"
+            '- "important": بيسأل سؤال فعلي عن المنتج، السعر، المقاس، التوفر، أو أوردر.\n'
+            '- "positive": إعجاب أو تعليق إيجابي (قلوب، إيموچي حلوة، مدح) من غير سؤال فعلي.\n'
+            '- "negative": شكوى أو تعليق سلبي.\n'
+            '- "neither": حاجة تانية -- سبام، أو بس بيمنشن صاحبه («@صاحبته شوفي دي») من غير '
+            "سؤال حقيقي من الكاتب نفسه.\n\n"
+            f"الكومنت:\n{text}"
+        )
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": instruction}]}],
+            "generationConfig": {
+                "temperature": 0.0,
+                "responseMimeType": "application/json",
+                "responseSchema": self._COMMENT_SCHEMA,
+            },
+        }
+        raw = self._first_text(self._generate_media(payload, self._media_model()))
+        try:
+            parsed = json.loads(raw or "{}")
+        except json.JSONDecodeError as exc:
+            raise ProviderError(f"classification reply was not JSON: {raw[:200]}") from exc
+
+        category = str(parsed.get("category") or "").strip().lower()
+        if category not in COMMENT_CATEGORIES:
+            log.warning("classify_comment returned an unknown category %r; treating as neither", category)
+            category = "neither"
+        return CommentClassification(category=category)
 
 
 def _debug_dump(payload: dict) -> str:

@@ -65,6 +65,22 @@ class ImageReading:
     is_garment: bool = True
 
 
+#: The four buckets a public Instagram comment sorts into. Deliberately this
+#: narrow -- an "important" comment gets a DM handoff, "positive" gets a like,
+#: "negative" gets a silent internal alert, "neither" (spam, a bare @mention
+#: pointing a friend at the post) gets nothing. Nothing here writes to the
+#: comment publicly; that stays fixed wording the caller owns.
+COMMENT_CATEGORIES = ("important", "positive", "negative", "neither")
+
+
+@dataclass
+class CommentClassification:
+    #: One of COMMENT_CATEGORIES. Anything else the provider returns is
+    #: coerced to "neither" by the caller -- silence is the safe default for
+    #: an answer that does not parse, not a guess at engagement.
+    category: str = "neither"
+
+
 class LLMProvider:
     name = "base"
 
@@ -97,3 +113,14 @@ class LLMProvider:
         a product the shop does not have.
         """
         raise ProviderError(f"{self.name} cannot read images", kind="unsupported")
+
+    def classify_comment(self, text: str) -> CommentClassification:
+        """Sort one public Instagram comment into COMMENT_CATEGORIES.
+
+        Cheap and fast on purpose: a single JSON-only call with no tools and
+        no conversation history, the same pattern `inspect_image` uses --
+        comment volume can run far higher than DM volume, so this must never
+        route through the multi-round tool-calling agent. The caller decides
+        what each category *does*; this only classifies.
+        """
+        raise ProviderError(f"{self.name} cannot classify comments", kind="unsupported")

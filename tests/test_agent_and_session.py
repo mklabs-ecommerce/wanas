@@ -204,6 +204,36 @@ def test_an_empty_model_reply_does_not_send_an_empty_message(seeded):
     assert reply.text == agent.GENERIC_FAILURE
 
 
+def test_a_dangling_promise_is_retried_instead_of_sent(seeded):
+    """A reply that promises to look something up ("هقولك المتاح بالظبط") with
+    no tool call behind it must not reach the customer as-is -- the exact
+    real-world bug where the bot said this and then the turn just ended."""
+    provider = ScriptedProvider(
+        [
+            ModelReply(text="هقولك المتاح بالظبط"),
+            reply_with("get_categories"),
+            ModelReply(text="عندنا Joggers & Sweatpants"),
+        ]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "قولي ايه المتاح", provider=provider)
+    assert reply.text == "عندنا Joggers & Sweatpants"
+    assert reply.tool_calls == ["get_categories"]
+    # The dangling promise itself never entered history -- only the real answer.
+    roles = [m["role"] for m in session_store.load(seeded, CHANNEL, WHO)]
+    assert roles == ["user", "assistant", "tool_results", "assistant"]
+
+
+def test_a_short_reply_that_only_looks_like_a_promise_is_retried_once_then_sent(seeded):
+    """If the model keeps dangling a promise on retry, it is sent rather than
+    looping forever -- the retry is a nudge, not a guarantee."""
+    provider = ScriptedProvider(
+        [ModelReply(text="هقولك دلوقتي"), ModelReply(text="هقولك تاني")]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "ايه المتاح", provider=provider)
+    assert reply.text == "هقولك تاني"
+    assert len(provider.calls) == 2
+
+
 # --- runtime --------------------------------------------------------------
 
 

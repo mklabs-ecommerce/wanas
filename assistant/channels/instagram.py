@@ -35,6 +35,8 @@ from fastapi import APIRouter, Request, Response
 
 from assistant import messages as msg, session as session_store
 from assistant.dispatcher import MessageDispatcher, Pending
+from assistant.providers import get_provider
+from assistant.providers.base import ProviderError
 from assistant.runtime import claim_message, handle_message, release_claims
 from assistant.tools.support_tools import raise_handoff
 from common.security import verify_signature
@@ -362,6 +364,45 @@ def _comment_says_nothing(text: str) -> bool:
     return len(stripped) < 3
 
 
+def _post_context_note(media: dict | None) -> str:
+    """A short, honest note about the post a comment or DM is tied to.
+
+    Caption only, fetched fresh by the caller right before this is built --
+    never cached, never a separate post -> product table (see
+    `InstagramClient.get_media`). Framed the same way `assistant/media.py`
+    frames a photo reading: a hint about which product the agent should
+    check, never a claim about price or stock on its own.
+    """
+    if not media:
+        return ""
+    caption = (media.get("caption") or "").strip()
+    if not caption:
+        return ""
+    return (
+        f'سياق: البوست ده كابشنه "{caption[:300]}". لو الزبون بيسأل من غير ما يحدد منتج، '
+        "ممكن يكون بيقصد اللي في البوست ده -- اتأكد بالأدوات قبل أي سعر أو توفر."
+    )
+
+
+def _classify(text: str) -> str:
+    """important | positive | negative | neither, from the cheap classifier.
+
+    Unavailable (no key, RehearsalProvider, a transient failure) falls back to
+    "important" rather than dropping the comment silently -- that is exactly
+    what every comment got before this classifier existed, so a provider that
+    cannot classify degrades to the old, safe behaviour instead of a new,
+    worse one.
+    """
+    try:
+        return get_provider().classify_comment(text).category
+    except ProviderError as exc:
+        log.info("comment classification unavailable (%s); treating as important", exc.kind)
+        return "important"
+    except Exception:
+        log.exception("comment classification failed; treating as important")
+        return "important"
+
+
 def _aware(value: datetime) -> datetime:
     """SQLite hands naive datetimes back out of DateTime(timezone=True)
     columns; PostgreSQL returns aware ones. Normalise instead of assuming."""
@@ -510,6 +551,34 @@ def _accept_comment(value: dict, entry_time=None) -> None:
 
     client = InstagramClient()
 
+    # 8. Classify: important gets the DM handoff below; positive gets a like
+    #    and nothing else; negative gets a silent internal alert and no public
+    #    engagement; neither (spam, a bare @mention pointing a friend at the
+    #    post) gets nothing at all. Only "important" falls through past here.
+    category = _classify(text)
+
+    if category == "positive":
+        if client.like_comment(comment_id):
+            _mark_comment(comment_id, public_replied=True)
+        return
+
+    if category == "negative":
+        with session_scope() as db:
+            queues.enqueue(
+                db,
+                kind=QueueKind.ALERT.value,
+                reason="negative_comment",
+                summary=f"Negative comment from {commenter} on media {media_id}: {text[:200]}",
+                channel=CHANNEL,
+                external_id=commenter,
+                payload={"comment_id": comment_id, "media_id": media_id, "text": text},
+            )
+        return
+
+    if category == "neither":
+        log.info("dropping comment %s: classified as neither", comment_id)
+        return
+
     # a) The public ack -- deterministic per comment id (crc32; Python's hash()
     #    is salted per process and would pick differently on a retry).
     if settings.instagram_public_reply_enabled:
@@ -534,14 +603,23 @@ def _accept_comment(value: dict, entry_time=None) -> None:
         return
 
     # Seed the thread so the customer's next message lands mid-conversation,
-    # with what they commented on already in it.
+    # with what they commented on already in it -- including the post's own
+    # caption, fetched fresh right now (never cached; see
+    # InstagramClient.get_media), so the agent has something to infer the
+    # product from instead of asking cold.
+    seed_text = f"[كومنت على بوست {media_id}] {text}"
+    if media_id:
+        note = _post_context_note(client.get_media(media_id))
+        if note:
+            seed_text = f"{seed_text}\n{note}"
+
     with session_scope() as db:
         identities.get_or_create(db, CHANNEL, igsid)
         session_store.append(
             db,
             CHANNEL,
             igsid,
-            msg.user(f"[كومنت على بوست {media_id}] {text}"),
+            msg.user(seed_text),
             msg.assistant(opener),
         )
 
@@ -562,11 +640,24 @@ def _mark_comment(comment_id: str, **flags: bool) -> None:
 
 
 def _deliver(external_id: str, pending: Pending) -> None:
+    text = pending.annotated_text()
+
+    # A reply to a live story is tied to a specific post id (`story_id`,
+    # captured in `_collect_message`) the same way a comment is tied to
+    # `media_id` -- fetched fresh here, right before the turn runs, never
+    # cached. Only fires when the customer actually replied to a story; an
+    # ordinary DM has no story_id and this is a no-op.
+    story_id = pending.extras.get("story_id")
+    if story_id:
+        note = _post_context_note(InstagramClient().get_media(story_id))
+        if note:
+            text = f"{text}\n{note}" if text else note
+
     try:
         reply = handle_message(
             CHANNEL,
             external_id,
-            pending.annotated_text(),
+            text,
             image_paths=pending.image_paths or None,
             audio_paths=pending.audio_paths or None,
         )

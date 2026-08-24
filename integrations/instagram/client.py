@@ -448,6 +448,17 @@ class InstagramClient:
         )
         return OutboundMessage(to=f"comment:{comment_id}", text=text, delivered=ok, error=error)
 
+    def like_comment(self, comment_id: str) -> bool:
+        """Like a comment -- the whole public action a "positive" comment
+        gets. No messaging-window implications, safe to call any time."""
+        ok, error, _body = self._post_json(
+            f"{GRAPH}/{self.api_version}/{comment_id}/likes",
+            {},
+        )
+        if not ok:
+            log.warning("could not like comment %s: %s", comment_id, error)
+        return ok
+
     def hide_comment(self, comment_id: str) -> bool:
         """Hide a comment from the post's public view.
 
@@ -505,6 +516,41 @@ class InstagramClient:
         # commenter's IGSID, which is what keys the DM thread that follows.
         recipient_id = str(body.get("recipient_id") or "")
         return OutboundMessage(to=recipient_id, text=text, delivered=ok, error=error)
+
+    def get_media(self, media_id: str) -> dict | None:
+        """A post/reel's own caption, fetched fresh, right when it is needed.
+
+        There is deliberately no cache and no table behind this: the caller
+        (`assistant/channels/instagram.py`) folds the caption straight into
+        the turn's text, the same way a photo reading is folded in
+        (`assistant/media.py::photo_context`) -- nothing here is a stored
+        post -> product mapping, and nothing needs an expiry because nothing
+        outlives the one call that used it.
+
+        None for anything that cannot be read: not configured, the post was
+        deleted or is private, the id belongs to an expired story, or the
+        call failed outright. Every one of those must fall back to no post
+        context rather than a guess -- the caller already treats a missing
+        result as "say nothing about it".
+        """
+        if not self._configured:
+            return None
+        url = f"{GRAPH}/{self.api_version}/{media_id}"
+        params = {"fields": "caption,media_type,media_url,permalink,timestamp"}
+        try:
+            response = httpx.get(url, params=params, headers=self._headers, timeout=self.timeout)
+        except httpx.HTTPError as exc:
+            log.warning("could not fetch media %s: %s", media_id, exc)
+            return None
+        if response.status_code >= 400:
+            log.info(
+                "media %s not readable (%s): %s", media_id, response.status_code, response.text[:200]
+            )
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
     # -- media ------------------------------------------------------------
 

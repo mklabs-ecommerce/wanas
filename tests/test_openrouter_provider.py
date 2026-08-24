@@ -582,6 +582,33 @@ def test_vision_auth_rejection_names_its_kind(captured, provider, status):
     assert excinfo.value.kind == "auth"
 
 
+# --------------------------------------------------------------------------
+# 7. classify_comment
+# --------------------------------------------------------------------------
+
+
+def test_classify_comment_reads_the_category(captured, provider):
+    captured["queue"].append(text_reply(json.dumps({"category": "important"})))
+    result = provider.classify_comment("بكام الهودي ده؟")
+    assert result.category == "important"
+
+    sent = captured["sent"][0]
+    assert sent["body"]["response_format"] == {"type": "json_object"}
+    assert "بكام الهودي ده؟" in sent["body"]["messages"][0]["content"]
+
+
+def test_classify_comment_coerces_an_unknown_category_to_neither(captured, provider):
+    captured["queue"].append(text_reply(json.dumps({"category": "sarcastic"})))
+    assert provider.classify_comment("...").category == "neither"
+
+
+def test_classify_comment_rejects_a_non_json_reply(captured, provider):
+    captured["queue"].append(text_reply("مش JSON خالص"))
+    with pytest.raises(ProviderError) as excinfo:
+        provider.classify_comment("...")
+    assert "not JSON" in str(excinfo.value)
+
+
 def test_vision_rate_limit_names_its_kind(captured, provider):
     captured["queue"].append(FakeResponse({}, status_code=429, text="slow down"))
     with pytest.raises(ProviderError) as excinfo:

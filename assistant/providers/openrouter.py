@@ -46,7 +46,14 @@ import logging
 import httpx
 
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
-from assistant.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
+from assistant.providers.base import (
+    COMMENT_CATEGORIES,
+    CommentClassification,
+    ImageReading,
+    LLMProvider,
+    ModelReply,
+    ProviderError,
+)
 from assistant.providers.gemini import mask_key
 from config.settings import settings
 
@@ -454,6 +461,61 @@ class OpenRouterProvider(LLMProvider):
             description=str(parsed.get("description") or "").strip(),
             is_garment=bool(parsed.get("is_garment", True)),
         )
+
+    # -- comments: classification (cheap, no tools, no history) -----------
+
+    _COMMENT_INSTRUCTION = (
+        "دي كومنت وصل على بوست أو ريل لمحل هدوم على انستجرام. صنّفه لحاجة واحدة بس من دول:\n"
+        '- "important": بيسأل سؤال فعلي عن المنتج، السعر، المقاس، التوفر، أو أوردر.\n'
+        '- "positive": إعجاب أو تعليق إيجابي (قلوب، إيموچي حلوة، مدح) من غير سؤال فعلي.\n'
+        '- "negative": شكوى أو تعليق سلبي.\n'
+        '- "neither": حاجة تانية -- سبام، أو بس بيمنشن صاحبه («@صاحبته شوفي دي») من غير '
+        "سؤال حقيقي من الكاتب نفسه.\n\n"
+        "الكومنت:\n{comment}\n\n"
+        'رد بـ JSON بس، بالشكل ده بالظبط: {{"category": "important|positive|negative|neither"}}'
+    )
+
+    def classify_comment(self, text: str) -> CommentClassification:
+        instruction = self._COMMENT_INSTRUCTION.format(comment=text)
+        payload = {
+            "model": self.model,
+            "temperature": 0.0,
+            "max_tokens": 64,
+            "response_format": {"type": "json_object"},
+            "messages": [{"role": "user", "content": instruction}],
+        }
+
+        response = self._post(payload)
+        if response.status_code == 429:
+            raise ProviderError(
+                f"rate limited on model {self.model!r}: {response.text[:300]}",
+                kind="rate_limit",
+            )
+        if response.status_code in (401, 403):
+            raise ProviderError(
+                f"auth rejected ({response.status_code}) for key {mask_key(self.api_key)}: "
+                f"{response.text[:300]}",
+                kind="auth",
+            )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"openrouter classification error {response.status_code} on model "
+                f"{self.model!r}: {response.text[:500]}"
+            )
+
+        body = response.json()
+        choices = body.get("choices") or []
+        raw = (choices[0].get("message") or {}).get("content") if choices else None
+        try:
+            parsed = json.loads(str(raw or "").strip() or "{}")
+        except json.JSONDecodeError as exc:
+            raise ProviderError(f"classification reply was not JSON: {raw!r:.200}") from exc
+
+        category = str(parsed.get("category") or "").strip().lower()
+        if category not in COMMENT_CATEGORIES:
+            log.warning("classify_comment returned an unknown category %r; treating as neither", category)
+            category = "neither"
+        return CommentClassification(category=category)
 
 
 def _debug_dump(payload: dict) -> str:

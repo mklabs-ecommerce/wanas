@@ -112,6 +112,8 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "جوجر": ("joggers", "sweatpant"),
     "جوجرز": ("joggers", "sweatpant"),
     "سويت بانت": ("sweatpant",),
+    "سويت بانتس": ("sweatpant", "joggers"),
+    "بانتس": ("sweatpant", "joggers"),
     "pantalon": ("sweatpant",),
     "جاكيت": ("jacket", "jackets"),
     "جاكت": ("jacket", "jackets"),

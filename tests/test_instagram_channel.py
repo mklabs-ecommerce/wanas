@@ -432,6 +432,65 @@ def test_a_failed_download_still_leaves_a_chaseable_path(
     assert pending.image_paths == [f"instagram-media:{LOOKASIDE}"]
 
 
+def test_a_story_reply_folds_the_story_s_caption_into_the_turn(client, configured, sent, monkeypatch):
+    """The story a customer replied to is fetched fresh (never cached, no
+    table) and its caption folded into the turn -- the same mechanism a
+    comment's media_id already uses (tests/test_instagram_comments.py)."""
+    from assistant.runtime import RuntimeReply
+
+    monkeypatch.setattr(
+        adapter.InstagramClient,
+        "get_media",
+        lambda self, media_id: {"caption": "الجاكيت الشتوي الجديد"} if media_id == "story-9" else None,
+    )
+    captured: dict = {}
+
+    def fake_handle_message(channel, external_id, text, **kwargs):
+        captured["text"] = text
+        return RuntimeReply(text="تمام، هرد عليك دلوقتي")
+
+    monkeypatch.setattr(adapter, "handle_message", fake_handle_message)
+
+    assert post_message(
+        client,
+        {
+            "text": "بكام ده؟",
+            "reply_to": {"story": {"id": "story-9", "url": "https://example.com/story.jpg"}},
+        },
+        mid="aWdzdG9yeXJlcGx5",
+    ).status_code == 200
+
+    assert "الجاكيت الشتوي الجديد" in captured["text"]
+
+
+def test_a_story_whose_media_cannot_be_read_still_delivers_the_turn(
+    client, configured, sent, monkeypatch
+):
+    """get_media returning None (expired story, API error) must not block the
+    turn -- only the caption note is skipped."""
+    from assistant.runtime import RuntimeReply
+
+    monkeypatch.setattr(adapter.InstagramClient, "get_media", lambda self, media_id: None)
+    captured: dict = {}
+
+    def fake_handle_message(channel, external_id, text, **kwargs):
+        captured["text"] = text
+        return RuntimeReply(text="تمام")
+
+    monkeypatch.setattr(adapter, "handle_message", fake_handle_message)
+
+    assert post_message(
+        client,
+        {
+            "text": "بكام ده؟",
+            "reply_to": {"story": {"id": "story-9", "url": "https://example.com/story.jpg"}},
+        },
+        mid="aWdzdG9yeWZhaWw=",
+    ).status_code == 200
+
+    assert captured["text"].strip().endswith("بكام ده؟")
+
+
 def test_a_story_reply_keeps_its_context(client, configured, sent, submitted):
     assert post_message(
         client,

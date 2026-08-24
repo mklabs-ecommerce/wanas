@@ -58,6 +58,10 @@ class FakeInstagram:
         self.download_content = b"binary-bytes"
         self.download_content_type = "image/jpeg"
         self.download_raise: Exception | None = None
+        #: When set, GET answers with this JSON body instead of binary content
+        #: -- what `InstagramClient.get_media` reads. None (the default) keeps
+        #: every GET answering like an attachment download, unchanged.
+        self.get_json_body: dict | None = None
 
     # -- install ----------------------------------------------------------
 
@@ -84,6 +88,8 @@ class FakeInstagram:
         self.calls.append({"method": "GET", "url": url, **kwargs})
         if self.download_raise is not None:
             raise self.download_raise
+        if self.get_json_body is not None:
+            return FakeResponse(status_code=self.download_status, body=self.get_json_body)
         return FakeResponse(
             status_code=self.download_status,
             content=self.download_content,

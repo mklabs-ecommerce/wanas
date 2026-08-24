@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 
 from assistant.messages import TOOL_RESULTS, USER
-from assistant.providers.base import ImageReading, LLMProvider, ModelReply
+from assistant.providers.base import CommentClassification, ImageReading, LLMProvider, ModelReply
 
 
 class ScriptedProvider(LLMProvider):
@@ -39,9 +39,11 @@ class ScriptedProvider(LLMProvider):
         self.calls: list[tuple[str, list[dict], list]] = []
         self.transcripts: list[str] = []
         self.readings: list[ImageReading] = []
+        self.classifications: list[CommentClassification] = []
         #: What was actually handed to the media calls, for assertions.
         self.audio_calls: list[tuple[bytes, str]] = []
         self.image_calls: list[tuple[bytes, str, list[dict]]] = []
+        self.comment_calls: list[str] = []
 
     def push(self, reply: ModelReply) -> None:
         self.script.append(reply)
@@ -51,6 +53,9 @@ class ScriptedProvider(LLMProvider):
 
     def push_reading(self, reading: ImageReading) -> None:
         self.readings.append(reading)
+
+    def push_classification(self, category: str) -> None:
+        self.classifications.append(CommentClassification(category=category))
 
     def generate(self, system_prompt: str, history: list[dict], tools: list) -> ModelReply:
         self.calls.append((system_prompt, list(history), tools))
@@ -65,6 +70,10 @@ class ScriptedProvider(LLMProvider):
     def inspect_image(self, image: bytes, mime_type: str, *, catalog: list[dict]) -> ImageReading:
         self.image_calls.append((image, mime_type, list(catalog)))
         return self.readings.pop(0) if self.readings else ImageReading()
+
+    def classify_comment(self, text: str) -> CommentClassification:
+        self.comment_calls.append(text)
+        return self.classifications.pop(0) if self.classifications else CommentClassification()
 
 
 HELP = (

@@ -306,6 +306,134 @@ def test_over_the_rate_limit_drops_and_raises_exactly_one_flood_alert(
     assert len(alerts) == 1
 
 
+# --- classification routing (positive / negative / neither) ----------------
+
+
+def _push_classification(monkeypatch, category):
+    from assistant.providers.fake import ScriptedProvider
+
+    provider = ScriptedProvider()
+    provider.push_classification(category)
+    monkeypatch.setattr(adapter, "get_provider", lambda: provider)
+    return provider
+
+
+def test_a_positive_comment_gets_liked_not_dmed(client, comments_on, fake_graph, monkeypatch):
+    _push_classification(monkeypatch, "positive")
+    assert post_comment(client, comment_body("حلو جداً 🖤")).status_code == 200
+
+    assert public_replies(fake_graph) == []
+    assert private_replies(fake_graph) == []
+    likes = [c for c in fake_graph.posts if c["url"].endswith("/likes")]
+    assert len(likes) == 1
+    with session_scope() as session:
+        row = session.get(InstagramCommentReply, COMMENT_ID)
+        assert row is not None and row.public_replied is True
+
+
+def test_a_negative_comment_gets_a_silent_alert_not_a_public_reply(
+    client, comments_on, fake_graph, monkeypatch
+):
+    _push_classification(monkeypatch, "negative")
+    assert post_comment(client, comment_body("الخدمة وحشة قوي")).status_code == 200
+
+    assert public_replies(fake_graph) == []
+    assert private_replies(fake_graph) == []
+    likes = [c for c in fake_graph.posts if c["url"].endswith("/likes")]
+    assert likes == []
+    with session_scope() as session:
+        alerts = [
+            i
+            for i in queues.open_items(session, QueueKind.ALERT.value)
+            if i.reason == "negative_comment"
+        ]
+    assert len(alerts) == 1
+    assert alerts[0].payload["comment_id"] == COMMENT_ID
+
+
+def test_a_neither_comment_gets_no_action_at_all(client, comments_on, fake_graph, monkeypatch):
+    """A bare @mention pointing a friend at the post -- the tagger is not
+    asking anything themselves."""
+    _push_classification(monkeypatch, "neither")
+    assert post_comment(client, comment_body("@sara شوفي دي")).status_code == 200
+
+    assert public_replies(fake_graph) == []
+    assert private_replies(fake_graph) == []
+    assert [c for c in fake_graph.posts if c["url"].endswith("/likes")] == []
+    with session_scope() as session:
+        assert queues.open_items(session, QueueKind.ALERT.value) == []
+
+
+def test_an_important_comment_still_gets_the_dm_handoff(
+    client, comments_on, fake_graph, monkeypatch
+):
+    _push_classification(monkeypatch, "important")
+    assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
+
+    assert len(public_replies(fake_graph)) == 1
+    assert len(private_replies(fake_graph)) == 1
+
+
+def test_classification_unsupported_falls_back_to_important(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """RehearsalProvider (no LLM key) cannot classify -- must not silently
+    drop every comment, since that is a worse outcome than the classifier
+    never having existed."""
+    from assistant.providers.fake import RehearsalProvider
+
+    monkeypatch.setattr(adapter, "get_provider", RehearsalProvider)
+    assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
+
+    assert len(public_replies(fake_graph)) == 1
+    assert len(private_replies(fake_graph)) == 1
+
+
+# --- post context (caption fetched fresh, never cached) ---------------------
+
+
+def test_the_seeded_session_carries_the_post_s_caption(client, comments_on, fake_graph):
+    fake_graph.get_json_body = {"caption": "الهودي الزيتي الجديد وصل 🖤 #wanas"}
+    assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
+
+    with session_scope() as session:
+        row = session.get(SessionRow, ("instagram_dm", COMMENTER))
+        seeded = row.history[0]["content"]
+    assert "الهودي الزيتي الجديد وصل" in seeded
+    # The fetch itself hit the media id, not a stored/cached lookup.
+    media_gets = [c for c in fake_graph.calls if c["method"] == "GET" and c["url"].endswith(f"/{MEDIA_ID}")]
+    assert len(media_gets) == 1
+
+
+def test_a_deleted_or_unreadable_post_seeds_the_session_with_no_note(
+    client, comments_on, fake_graph
+):
+    """get_media failing (deleted post, private, API error) must not break
+    the ack/DM flow -- it only means no caption context is added."""
+    fake_graph.fail_next_posts = 0  # posts (ack + private reply) still succeed
+    fake_graph.download_status = 404  # the GET for the media fails
+    fake_graph.get_json_body = {}
+
+    assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
+    assert len(public_replies(fake_graph)) == 1
+    assert len(private_replies(fake_graph)) == 1
+
+    with session_scope() as session:
+        row = session.get(SessionRow, ("instagram_dm", COMMENTER))
+        seeded = row.history[0]["content"]
+    assert seeded == f"[كومنت على بوست {MEDIA_ID}] بكام ده؟"
+
+
+def test_a_post_with_no_caption_seeds_the_session_with_no_note(client, comments_on, fake_graph):
+    fake_graph.get_json_body = {"caption": ""}
+    assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
+
+    with session_scope() as session:
+        row = session.get(SessionRow, ("instagram_dm", COMMENTER))
+        seeded = row.history[0]["content"]
+    assert seeded == f"[كومنت على بوست {MEDIA_ID}] بكام ده؟"
+
+
 def test_hide_comment_exists_shipped_unused(client, comments_on, fake_graph):
     """`hide_comment` ships with a test and no caller: for a future staff
     action and the abuse path, not for the agent."""
@@ -316,3 +444,20 @@ def test_hide_comment_exists_shipped_unused(client, comments_on, fake_graph):
     hides = [c for c in fake_graph.posts if c["url"] == expected_url]
     assert len(hides) == 1
     assert hides[0]["json"] == {"hide": True}
+
+
+def test_like_comment_posts_to_the_likes_endpoint(client, comments_on, fake_graph):
+    from integrations.instagram.client import InstagramClient
+
+    assert InstagramClient().like_comment(COMMENT_ID) is True
+    expected_url = f"{GRAPH}/{comments_on.instagram_api_version}/{COMMENT_ID}/likes"
+    likes = [c for c in fake_graph.posts if c["url"] == expected_url]
+    assert len(likes) == 1
+
+
+def test_like_comment_failure_is_logged_not_raised(client, comments_on, fake_graph, caplog):
+    from integrations.instagram.client import InstagramClient
+
+    fake_graph.fail_next_posts = 1
+    assert InstagramClient().like_comment(COMMENT_ID) is False
+    assert "could not like comment" in caplog.text

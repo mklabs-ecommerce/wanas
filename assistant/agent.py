@@ -93,6 +93,38 @@ def strip_markdown(text: str) -> tuple[str, bool]:
     return cleaned.strip(), True
 
 
+#: "I'll tell you now" / "let me get back to you" said as the entire reply,
+#: with no tool call behind it -- the exact bug this guards: the model
+#: promises a follow-up («هقولك دلوقتي», «هبعتلك التفاصيل») and then the turn
+#: just ends, because a reply with no tool_calls *is* the final answer as far
+#: as the loop in run_turn is concerned. Matched only against short replies:
+#: a longer one that happens to use "هقولك" while also stating the real
+#: answer ("هقولك إن السعر 500 جنيه") is not the dangling case this exists for.
+_PROMISE_PATTERN = re.compile(
+    r"ه(ا)?(قول|رد\s*عليك|بعتلك|جيبلك|وضحلك|رجعلك|أكدلك|اكدلك|عرفلك|كلمك)"
+    r"|i'?ll (get back|check and|tell you|let you know)"
+    r"|let me (check|get back)"
+)
+
+
+def _is_dangling_promise(text: str) -> bool:
+    if not text or len(text.split()) > 12:
+        return False
+    return bool(_PROMISE_PATTERN.search(text.lower()))
+
+
+#: Appended to the system prompt, once, when a dangling promise is caught --
+#: never stored in history, since the point is the model should not see its
+#: own bad reply and repeat the pattern, only be told to actually act.
+_PROMISE_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات كان مجرد وعد (زي 'هقولك دلوقتي') من غير ما "
+    "تكون فعلاً ناديت أداة أو قلت المعلومة الحقيقية. ممنوع ترسل وعد من غير "
+    "تنفيذه في نفس الرد. نادي الأداة المناسبة دلوقتي (زي get_products أو "
+    "get_categories) وجاوب بالمعلومة الحقيقية على طول، من غير ما تقول هتقول "
+    "أو هتبعت تاني."
+)
+
+
 def _sent_images(history: list[dict]) -> set[str]:
     """Every image already delivered earlier in this conversation.
 
@@ -158,6 +190,7 @@ def run_turn(
         history=history,
     )
     called: list[str] = []
+    promise_retried = False
 
     for _turn in range(settings.tool_loop_cap):
         try:
@@ -200,6 +233,22 @@ def run_turn(
             text_out, path_leaked = strip_paths(reply.text)
             text_out, tool_leaked = strip_tool_leaks(text_out)
             text_out, _ = strip_markdown(text_out)
+
+            if not promise_retried and _is_dangling_promise(text_out):
+                # Send it back once instead of letting a promise with nothing
+                # behind it reach the customer -- the model never sees this
+                # reply (it is not appended to history), only a nudge telling
+                # it to actually call the tool this time.
+                log.warning(
+                    "dangling promise from provider %s for %s/%s, forcing a retry",
+                    provider.name,
+                    channel,
+                    external_id,
+                )
+                promise_retried = True
+                system_prompt = f"{system_prompt}{_PROMISE_NUDGE}"
+                continue
+
             if path_leaked or tool_leaked:
                 # Worth logging: it means the prompt or the tool descriptions
                 # have drifted, and it is the earliest signal of that. A tool

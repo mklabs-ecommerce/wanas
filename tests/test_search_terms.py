@@ -74,6 +74,10 @@ def test_prefixes_still_match():
         ("الهودي الزيتي", "WANAS Hoodie"),
         ("hoodi olive", "WANAS Hoodie"),
         ("بنطلون رمادي", "WANAS Sweatpant"),
+        # Regression: "سويت بانتس" (plural, with the extra س) used to fall
+        # through the phrase-substitution merge and match nothing -- the bot
+        # denied the category existed before falling back to browsing it.
+        ("سويت بانتس رصاصي", "WANAS Sweatpant"),
         ("جاكيت", "Worker Jacket"),
         ("كايروكي", "Cairokee T-shirt"),
         ("توب حريمي", "Heart Top"),
