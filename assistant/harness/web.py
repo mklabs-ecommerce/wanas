@@ -23,10 +23,10 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from chatbot import session as session_store
-from chatbot.display import display_history, turn_detail
-from chatbot.media_serving import resolve_servable_path
-from chatbot.runtime import handle_message
+from assistant import session as session_store
+from assistant.display import display_history, turn_detail
+from assistant.media_serving import resolve_servable_path
+from assistant.runtime import handle_message
 from domain.db import session_scope
 from domain.services import (
     carts,
@@ -167,12 +167,12 @@ def media(path: str = Query(...)):
 
 
 def _main() -> int:  # pragma: no cover - operational helper
-    """python -m chatbot.harness.web — serve the app and print the URL."""
+    """python -m assistant.harness.web — serve the app and print the URL."""
     import argparse
 
     import uvicorn
 
-    parser = argparse.ArgumentParser(prog="chatbot.harness.web")
+    parser = argparse.ArgumentParser(prog="assistant.harness.web")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true")

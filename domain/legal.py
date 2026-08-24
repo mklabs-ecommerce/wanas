@@ -7,8 +7,8 @@ credential, no signature check and no database access.
 
 The text is kept here, next to the code, rather than in a CMS or a Notion page
 someone can quietly edit: what it claims about where customer data goes is
-only true as long as it matches `chatbot/providers/openrouter.py`,
-`chatbot/providers/gemini.py`, `backend/integrations/shopify_client.py` and
+only true as long as it matches `assistant/providers/openrouter.py`,
+`assistant/providers/gemini.py`, `backend/integrations/shopify_client.py` and
 `backend/models.py`. When one of those changes, this changes in the same
 commit.
 """

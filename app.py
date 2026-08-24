@@ -6,7 +6,7 @@ than the problem needs.
 
 This is the only file that wires the pieces together: it is where the WhatsApp
 client is registered as the Notification service's outbound sender, which is
-what keeps /backend/ free of any import from /chatbot/.
+what keeps /backend/ free of any import from /assistant/.
 
     uvicorn app:app --reload
 """
@@ -22,14 +22,14 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from api.public_media import router as public_media_router
-from chatbot import session as assistant_session
-from chatbot.channels import instagram as instagram_channel
-from chatbot.channels.whatsapp import (
+from assistant import session as assistant_session
+from assistant.channels import instagram as instagram_channel
+from assistant.channels.whatsapp import (
     dispatcher as whatsapp_dispatcher,
     register_outbound_sender,
     router as whatsapp_router,
 )
-from chatbot.harness.web import router as harness_router
+from assistant.harness.web import router as harness_router
 from config.settings import settings
 from dashboard.customers_api import router as dashboard_customers_router
 from dashboard.queue_api import router as dashboard_queue_router

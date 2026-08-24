@@ -24,14 +24,14 @@ import logging
 import httpx
 import pytest
 
-from chatbot import agent, messages as msg
-from chatbot.providers import build_provider, openrouter as openrouter_module
-from chatbot.providers.base import ProviderError
-from chatbot.providers.openrouter import (
+from assistant import agent, messages as msg
+from assistant.providers import build_provider, openrouter as openrouter_module
+from assistant.providers.base import ProviderError
+from assistant.providers.openrouter import (
     DEFAULT_MODEL,
     OpenRouterProvider,
 )
-from chatbot.tools.base import tool_specs
+from assistant.tools.base import tool_specs
 from config.settings import load_settings, settings
 
 CHANNEL = "whatsapp"

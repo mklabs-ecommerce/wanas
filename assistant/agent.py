@@ -20,10 +20,10 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from chatbot import messages as msg, session as session_store
-from chatbot.prompt import build_system_prompt
-from chatbot.providers import LLMProvider, ProviderError, get_provider
-from chatbot.tools.base import REGISTRY, ToolContext, call_tool, load_all, tool_specs
+from assistant import messages as msg, session as session_store
+from assistant.prompt import build_system_prompt
+from assistant.providers import LLMProvider, ProviderError, get_provider
+from assistant.tools.base import REGISTRY, ToolContext, call_tool, load_all, tool_specs
 from config.settings import settings
 
 log = logging.getLogger("wanas.agent")
@@ -113,7 +113,7 @@ class AgentReply:
     text: str
     attachments: list[str] = field(default_factory=list)
     #: A tappable picker a tool asked for, in the neutral shape
-    #: `chatbot/interactive.py` defines. The adapter decides whether it can
+    #: `assistant/interactive.py` defines. The adapter decides whether it can
     #: send one; a channel that cannot just sends the text.
     interactive: dict | None = None
     #: Tool names called this turn, in order. Logged, and what the tests and
@@ -136,14 +136,14 @@ def run_turn(
     specs = tool_specs()
     # The surface shapes the prompt: WhatsApp's wording stays byte-identical
     # to what it has always been; Instagram gets its own lines (see
-    # chatbot/prompt.py).
+    # assistant/prompt.py).
     system_prompt = build_system_prompt(channel=channel)
 
     history = session_store.load(db, channel, external_id)
     sent_images = _sent_images(history)
     # `images`/`audio` are the customer's own inbound photo(s)/voice note(s)
     # for this turn -- kept on the stored message for the dashboard (see
-    # `chatbot/messages.py::user`), never sent to the provider itself, so
+    # `assistant/messages.py::user`), never sent to the provider itself, so
     # this is not a second copy of what the model already read via `text`.
     history.append(msg.user(text, images=images, audio=audio))
 

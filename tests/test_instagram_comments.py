@@ -15,7 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from chatbot.channels import instagram as adapter
+from assistant.channels import instagram as adapter
 from config.settings import settings
 from domain.db import SessionLocal, session_scope
 from domain.models import (

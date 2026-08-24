@@ -4,7 +4,7 @@ settings panel built on top of it.
 `backend/config.py`'s `Settings` stays env-only and frozen; these are the
 tests that pin down the separate, staff-writable overlay
 (`backend/services/runtime_flags.py`) and the fact that it actually changes
-what `chatbot/media.py` and the WhatsApp adapter do -- an override that only
+what `assistant/media.py` and the WhatsApp adapter do -- an override that only
 changed a database row and nothing else would be worse than not building it.
 """
 
@@ -16,8 +16,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from chatbot import media
-from chatbot.providers.fake import ScriptedProvider
+from assistant import media
+from assistant.providers.fake import ScriptedProvider
 from config.settings import settings
 from dashboard import settings_api, web as dashboard
 from domain.services import (

@@ -1,6 +1,6 @@
 """Local chat harness.
 
-    python -m chatbot.harness [--id 201000000001] [--channel whatsapp]
+    python -m assistant.harness [--id 201000000001] [--channel whatsapp]
 
 Throwaway scaffolding for the flow, not a product surface. It calls the same
 `handle_message(channel, external_id, text)` entry point the WhatsApp adapter
@@ -17,8 +17,8 @@ import argparse
 import logging
 import sys
 
-from chatbot import session as session_store
-from chatbot.runtime import handle_message
+from assistant import session as session_store
+from assistant.runtime import handle_message
 from config.settings import settings
 from domain.db import engine, session_scope
 from domain.models import Base
@@ -60,7 +60,7 @@ def _drain_outbound() -> list:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="chatbot.harness")
+    parser = argparse.ArgumentParser(prog="assistant.harness")
     parser.add_argument("--id", dest="external_id", default="201000000001", help="fake channel identity")
     parser.add_argument("--channel", default="whatsapp")
     parser.add_argument("--verbose", "-v", action="store_true", help="show tool calls and logs")

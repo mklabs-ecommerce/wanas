@@ -88,7 +88,7 @@ for _name in (
 
 from sqlalchemy.engine import make_url  # noqa: E402
 
-from chatbot import session as assistant_session  # noqa: E402
+from assistant import session as assistant_session  # noqa: E402
 from domain.db import SessionLocal, engine, normalise_database_url  # noqa: E402
 from domain.models import Base  # noqa: E402
 from domain.seed.governorates import import_governorates  # noqa: E402

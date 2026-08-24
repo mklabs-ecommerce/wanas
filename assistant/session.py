@@ -15,7 +15,7 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
-from chatbot.messages import USER
+from assistant.messages import USER
 from config.settings import settings
 from domain.models import UNREADABLE_HISTORY, SessionRow, utcnow
 

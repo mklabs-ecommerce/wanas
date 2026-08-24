@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import pytest
 
-from chatbot import agent, session as session_store
-from chatbot.prompt import SYSTEM_PROMPT
-from chatbot.providers.base import ModelReply
-from chatbot.providers.fake import ScriptedProvider
-from chatbot.tools.base import MAX_EXTRA_IMAGES, MAX_PRODUCT_IMAGES, ToolContext, call_tool
+from assistant import agent, session as session_store
+from assistant.prompt import SYSTEM_PROMPT
+from assistant.providers.base import ModelReply
+from assistant.providers.fake import ScriptedProvider
+from assistant.tools.base import MAX_EXTRA_IMAGES, MAX_PRODUCT_IMAGES, ToolContext, call_tool
 
 CHANNEL = "whatsapp"
 WHO = "201000000001"
@@ -428,7 +428,7 @@ def test_the_agent_strips_markdown_the_model_produced(seeded):
 def test_a_repeated_get_variants_call_is_not_re_fetched(seeded, monkeypatch):
     """"XL موجود؟" then "طب L؟" should not cost a second database read for the
     same product -- the answer is already in the conversation."""
-    from chatbot.tools import catalog_tools
+    from assistant.tools import catalog_tools
 
     calls = []
     original = catalog_tools.catalog.get_variants
@@ -454,7 +454,7 @@ def test_a_repeated_get_variants_call_is_not_re_fetched(seeded, monkeypatch):
 
 
 def test_a_call_for_a_different_product_is_not_served_from_cache(seeded, monkeypatch):
-    from chatbot.tools import catalog_tools
+    from assistant.tools import catalog_tools
 
     calls = []
     original = catalog_tools.catalog.get_variants

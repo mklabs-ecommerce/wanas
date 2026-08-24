@@ -1,9 +1,9 @@
 """The Instagram channel adapter -- inbound.
 
-Same architecture as the WhatsApp adapter (`chatbot/channels/whatsapp.py`),
+Same architecture as the WhatsApp adapter (`assistant/channels/whatsapp.py`),
 which is the template this mirrors deliberately: parse Meta's webhook, claim
 the message id, download anything short-lived, answer 200 -- and run the agent
-turn later, on a worker thread, through `chatbot/dispatcher.py`. There is no
+turn later, on a worker thread, through `assistant/dispatcher.py`. There is no
 Instagram-specific conversational logic beyond the platform integration
 itself; everything downstream is the same `handle_message(channel,
 external_id, text)` the harness calls.
@@ -33,10 +33,10 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request, Response
 
-from chatbot import messages as msg, session as session_store
-from chatbot.dispatcher import MessageDispatcher, Pending
-from chatbot.runtime import claim_message, handle_message, release_claims
-from chatbot.tools.support_tools import raise_handoff
+from assistant import messages as msg, session as session_store
+from assistant.dispatcher import MessageDispatcher, Pending
+from assistant.runtime import claim_message, handle_message, release_claims
+from assistant.tools.support_tools import raise_handoff
 from common.security import verify_signature
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
@@ -287,7 +287,7 @@ def _collect_message(
         if att_type == "audio":
             # Instagram voice notes are audio/mp4, not ogg like WhatsApp's --
             # the default extension is what makes the file name one the
-            # transcriber accepts (chatbot/media.py::_AUDIO_MIME).
+            # transcriber accepts (assistant/media.py::_AUDIO_MIME).
             downloaded = client.download_attachment(
                 url, INBOUND_MEDIA_DIR, default_extension=".mp4"
             )

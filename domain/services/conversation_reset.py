@@ -9,11 +9,10 @@ erase a real sale. See `domain/services/identities.py`'s module docstring
 for why the link exists in the first place.
 
 Clearing the chat *history* itself lives in `assistant/session.py`, one
-layer up (domain/ must never import assistant/, same rule that keeps
-`backend/` from importing `chatbot/` before this restructure). The
-assistant registers its own clearer here at startup -- the same
-registration-callback shape `domain/services/notifications.py` already uses
-for outbound senders -- so this module can call it without depending on it.
+layer up -- domain/ must never import the assistant layer. The assistant
+registers its own clearer here at startup -- the same registration-callback
+shape `domain/services/notifications.py` already uses for outbound senders
+-- so this module can call it without depending on it.
 """
 
 from __future__ import annotations

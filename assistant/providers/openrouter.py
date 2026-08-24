@@ -45,9 +45,9 @@ import logging
 
 import httpx
 
-from chatbot.messages import ASSISTANT, TOOL_RESULTS, USER
-from chatbot.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
-from chatbot.providers.gemini import mask_key
+from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
+from assistant.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
+from assistant.providers.gemini import mask_key
 from config.settings import settings
 
 log = logging.getLogger("wanas.provider.openrouter")

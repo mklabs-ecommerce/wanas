@@ -11,7 +11,7 @@ itself out of.
 
 from __future__ import annotations
 
-from chatbot.tools.base import ToolContext, tool
+from assistant.tools.base import ToolContext, tool
 from domain.models import Variant
 from domain.services import orders
 from domain.services.notifications import item_swap_requested

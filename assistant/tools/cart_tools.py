@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chatbot.tools.base import ToolContext, tool
+from assistant.tools.base import ToolContext, tool
 from config.settings import settings
 from domain.models import Variant
 from domain.services import (

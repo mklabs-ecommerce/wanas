@@ -11,7 +11,7 @@ Swapping the harness for WhatsApp changes the adapter and nothing else.
 The media rules are the part that moved. A voice note and a photo used to be
 handled by the *adapter*, which meant WhatsApp knew something about
 conversational policy that no other channel could share. They are decided
-here now, from `chatbot/media.py`, so the harness exercises the same paths the
+here now, from `assistant/media.py`, so the harness exercises the same paths the
 real channel does -- and so "what happens to a photo" is one answer rather than
 one per channel.
 """
@@ -25,9 +25,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from chatbot import agent, media, messages as msg, session as session_store
-from chatbot.providers import LLMProvider, get_provider
-from chatbot.tools.support_tools import raise_handoff
+from assistant import agent, media, messages as msg, session as session_store
+from assistant.providers import LLMProvider, get_provider
+from assistant.tools.support_tools import raise_handoff
 from domain.db import session_scope
 from domain.models import QueueKind, StaffQueueItem, WebhookEvent, utcnow
 from domain.services import identities

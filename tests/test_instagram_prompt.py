@@ -8,7 +8,7 @@ variant adds instead.
 
 from __future__ import annotations
 
-from chatbot.prompt import (
+from assistant.prompt import (
     INSTAGRAM_SURFACE_LINE,
     SYSTEM_PROMPT,
     build_system_prompt,
@@ -58,7 +58,7 @@ def test_run_turn_builds_the_prompt_for_its_own_channel(seeded):
     """The agent threads `channel` through, so an Instagram turn never reads
     a WhatsApp-shaped prompt."""
     captured = {}
-    import chatbot.agent as agent_module
+    import assistant.agent as agent_module
 
     class RecordingProvider:
         name = "recording"
@@ -67,7 +67,7 @@ def test_run_turn_builds_the_prompt_for_its_own_channel(seeded):
 
         def generate(self, system_prompt, history, specs):
             captured["system_prompt"] = system_prompt
-            from chatbot.providers.base import ProviderReply
+            from assistant.providers.base import ProviderReply
 
             return ProviderReply(text="تمام")
 

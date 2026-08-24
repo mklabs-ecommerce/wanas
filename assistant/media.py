@@ -28,8 +28,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from chatbot.providers import LLMProvider, ProviderError
-from chatbot.providers.base import ImageReading
+from assistant.providers import LLMProvider, ProviderError
+from assistant.providers.base import ImageReading
 from config.settings import settings
 from domain.models import Product
 from domain.services import runtime_flags

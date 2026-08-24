@@ -19,9 +19,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from chatbot.channels import instagram as adapter, whatsapp as whatsapp_adapter
-from chatbot.providers import set_provider
-from chatbot.providers.fake import RehearsalProvider
+from assistant.channels import instagram as adapter, whatsapp as whatsapp_adapter
+from assistant.providers import set_provider
+from assistant.providers.fake import RehearsalProvider
 from config.settings import settings
 from domain.db import SessionLocal
 from domain.models import Channel, QueueKind, WebhookEvent
@@ -385,8 +385,8 @@ def test_the_provider_chain_accepts_instagram_audio_mime():
     import tempfile
     from pathlib import Path
 
-    from chatbot.media import _read
-    from chatbot.providers.openrouter import _AUDIO_FORMATS
+    from assistant.media import _read
+    from assistant.providers.openrouter import _AUDIO_FORMATS
 
     assert _AUDIO_FORMATS.get("audio/mp4") == "mp4"
 
@@ -467,7 +467,7 @@ def test_a_reply_to_an_earlier_photo_in_the_same_batch_gets_the_photo_label(
     never registers an id can never be labelled, no matter what `reply_to`
     says. Regression test for a real gap: the id-less lists let `reply_to`
     populate correctly while the label silently never resolved."""
-    from chatbot.dispatcher import Pending
+    from assistant.dispatcher import Pending
 
     client = adapter.InstagramClient()
     pending = Pending()
@@ -493,7 +493,7 @@ def test_a_reply_to_an_earlier_voice_note_in_the_same_batch_gets_the_voice_label
 ):
     """Same fix, the audio side: a voice note's mid has to land in
     `pending.audio_ids` for a later reply to it to resolve to "voice note N"."""
-    from chatbot.dispatcher import Pending
+    from assistant.dispatcher import Pending
 
     client = adapter.InstagramClient()
     pending = Pending()

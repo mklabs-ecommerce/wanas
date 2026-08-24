@@ -100,7 +100,7 @@ def check_abandoned_carts() -> int:
     max_idle = timedelta(hours=settings.abandoned_cart_max_age_hours)
 
     # The comparison happens in Python, not the WHERE clause -- the same
-    # choice `chatbot/session.py`'s expiry check makes, because nothing else
+    # choice `assistant/session.py`'s expiry check makes, because nothing else
     # in this codebase relies on a database comparing a tz-aware Python value
     # against a stored `DateTime(timezone=True)` column, and this is not the
     # place to find out whether SQLite's string-typed storage agrees with

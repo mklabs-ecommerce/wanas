@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pytest
 
-from chatbot import interactive
-from chatbot.tools.base import ToolContext, call_tool, load_all
+from assistant import interactive
+from assistant.tools.base import ToolContext, call_tool, load_all
 from domain.services import shipping
 from domain.services.notifications import LogSender
 

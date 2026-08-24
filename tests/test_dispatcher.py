@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 import time
 
-from chatbot.dispatcher import MessageDispatcher, Pending
+from assistant.dispatcher import MessageDispatcher, Pending
 
 
 def test_fragments_of_one_sentence_become_one_turn():
@@ -66,7 +66,7 @@ def test_media_paths_survive_the_merge():
 def test_reply_to_and_per_item_ids_survive_the_merge():
     """A reply-to id captured on one fragment must still be resolvable
     against an image/audio id that arrived in an earlier fragment of the
-    same debounced batch -- see chatbot/channels/whatsapp.py's
+    same debounced batch -- see assistant/channels/whatsapp.py's
     `_annotate_replies`."""
     handled: list[Pending] = []
     dispatcher = MessageDispatcher(lambda key, item: handled.append(item), debounce_seconds=0.15)

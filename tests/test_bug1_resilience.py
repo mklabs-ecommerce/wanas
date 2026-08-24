@@ -16,12 +16,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from chatbot import session as session_store
-from chatbot.channels import whatsapp as adapter
-from chatbot.dispatcher import Pending
-from chatbot.providers.fake import RehearsalProvider
-from chatbot.runtime import RuntimeReply, claim_message, handle_message, release_claims
-from chatbot.tools.support_tools import raise_handoff
+from assistant import session as session_store
+from assistant.channels import whatsapp as adapter
+from assistant.dispatcher import Pending
+from assistant.providers.fake import RehearsalProvider
+from assistant.runtime import RuntimeReply, claim_message, handle_message, release_claims
+from assistant.tools.support_tools import raise_handoff
 from config.settings import settings
 from domain.db import SessionLocal
 from domain.models import ChannelIdentity, SessionRow, StaffQueueItem, WebhookEvent
@@ -57,7 +57,7 @@ def wa_client(seeded, monkeypatch):
     )
     monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
     set_provider = RehearsalProvider()
-    from chatbot.providers import set_provider as _set
+    from assistant.providers import set_provider as _set
 
     _set(set_provider)
     app = FastAPI()

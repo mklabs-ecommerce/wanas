@@ -8,7 +8,7 @@ already something a browser can load directly.
 
 The roots and the containment check live in `backend/servable_paths.py` so
 the public media route (`backend/public_media.py`) can share the exact same
-guard without /backend/ importing /chatbot/. Re-exported here under the
+guard without /backend/ importing /assistant/. Re-exported here under the
 names every consumer has always used.
 """
 

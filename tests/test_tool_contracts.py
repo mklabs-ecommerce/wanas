@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
-from chatbot.tools.base import REGISTRY, ToolContext, call_tool, load_all
+from assistant.tools.base import REGISTRY, ToolContext, call_tool, load_all
 from domain.models import Client, Order, QueueKind, ShippingRate, Variant
 from domain.services import (
     carts,
@@ -104,7 +104,7 @@ def test_unknown_tool(ctx):
 def test_a_crashing_tool_returns_an_error_not_an_exception(ctx, monkeypatch):
     """A crash inside a tool ends the customer's conversation, which is worse
     than any error message."""
-    from chatbot.tools import catalog_tools
+    from assistant.tools import catalog_tools
 
     def boom(*_a, **_k):
         raise RuntimeError("catalog exploded")

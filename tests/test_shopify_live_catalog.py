@@ -232,7 +232,7 @@ def test_a_shopify_photo_does_not_fragment_a_gallery_the_local_data_never_split_
     """cairokee-tee's photos are one undifferentiated set (`color_images` is
     empty in wanas.db). A Shopify photo for its Black variant must overlay
     onto that shared set, not invent a partial `color_images` split that would
-    make `_candidate_images` (chatbot/tools/base.py) show Black's photo and
+    make `_candidate_images` (assistant/tools/base.py) show Black's photo and
     silently drop Brown's out of the gallery for everyone else."""
     target = seeded.query(Variant).filter_by(product_id="cairokee-tee", color="Black").first()
     url = "https://cdn.shopify.com/s/files/1/cairokee-black.jpg"

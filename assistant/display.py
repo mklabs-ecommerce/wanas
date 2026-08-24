@@ -1,9 +1,9 @@
 """Turning a stored conversation back into something a person can read.
 
 Shared by the two things that show a conversation to a human rather than to
-the model: the local harness (`chatbot/harness/web.py`) and the staff
+the model: the local harness (`assistant/harness/web.py`) and the staff
 dashboard (`dashboard/web.py`). Neither owns this logic -- it reads
-back out of the same neutral history (`chatbot/messages.py`) `handle_message`
+back out of the same neutral history (`assistant/messages.py`) `handle_message`
 already wrote, rather than the agent growing a field that exists only so a UI
 has something to render.
 """
@@ -43,7 +43,7 @@ def display_history(history: list[dict]) -> list[dict]:
     """The stored conversation as bubbles, so a reload is not a fresh start.
 
     `by` on an assistant message distinguishes a staff reply
-    (`chatbot/messages.py::assistant(..., by="staff")`, written from the
+    (`assistant/messages.py::assistant(..., by="staff")`, written from the
     dashboard) from the model's own words -- the two must never look
     identical, or a staff member reading the transcript back cannot tell who
     actually promised the customer something.

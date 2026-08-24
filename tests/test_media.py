@@ -17,9 +17,9 @@ import dataclasses
 
 import pytest
 
-from chatbot import media, runtime
-from chatbot.providers.base import ImageReading, ModelReply
-from chatbot.providers.fake import RehearsalProvider, ScriptedProvider
+from assistant import media, runtime
+from assistant.providers.base import ImageReading, ModelReply
+from assistant.providers.fake import RehearsalProvider, ScriptedProvider
 from config.settings import settings
 from domain.models import QueueKind
 from domain.services import queues
@@ -307,7 +307,7 @@ def test_multiple_voice_notes_are_all_transcribed(seeded, tmp_path):
 
 
 def test_a_successful_voice_note_keeps_the_audio_in_history(seeded, voice):
-    from chatbot import session as session_store
+    from assistant import session as session_store
 
     provider = ScriptedProvider()
     provider.push_transcript("عايز الهودي الزيتي")
@@ -324,7 +324,7 @@ def test_a_successful_voice_note_keeps_the_audio_in_history(seeded, voice):
 
 
 def test_a_successful_photo_keeps_the_image_in_history(seeded, photo):
-    from chatbot import session as session_store
+    from assistant import session as session_store
 
     provider = ScriptedProvider()
     provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي"))
@@ -338,7 +338,7 @@ def test_a_successful_photo_keeps_the_image_in_history(seeded, photo):
 
 
 def test_an_unreadable_photo_still_keeps_the_image_on_the_handoff_message(seeded, photo):
-    from chatbot import session as session_store
+    from assistant import session as session_store
 
     reply = runtime.handle_message(
         "whatsapp", WHO, "زي كده", image_paths=[photo], db=seeded, provider=RehearsalProvider()

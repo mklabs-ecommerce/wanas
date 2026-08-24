@@ -63,7 +63,7 @@ def assistant(
         # while the conversation was paused. Absent (equivalent to "bot") for
         # everything the model itself said -- also never sent to the
         # provider, same reasoning as `attachments`, but here it is what lets
-        # `chatbot/display.py` show a staff member's own words as
+        # `assistant/display.py` show a staff member's own words as
         # unmistakably theirs rather than the model's.
         message["by"] = by
     return message

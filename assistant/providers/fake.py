@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import re
 
-from chatbot.messages import TOOL_RESULTS, USER
-from chatbot.providers.base import ImageReading, LLMProvider, ModelReply
+from assistant.messages import TOOL_RESULTS, USER
+from assistant.providers.base import ImageReading, LLMProvider, ModelReply
 
 
 class ScriptedProvider(LLMProvider):

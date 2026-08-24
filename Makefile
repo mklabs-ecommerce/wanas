@@ -31,7 +31,7 @@ run:  ## The real app, with reload
 	$(PYTHON) -m uvicorn app:app --reload
 
 harness:  ## The local chat UI (unauthenticated; never expose it)
-	HARNESS_ENABLED=1 $(PYTHON) -m chatbot.harness.web
+	HARNESS_ENABLED=1 $(PYTHON) -m assistant.harness.web
 
 clean:  ## Remove caches and local databases
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

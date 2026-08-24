@@ -38,8 +38,8 @@ import logging
 
 import httpx
 
-from chatbot.messages import ASSISTANT, TOOL_RESULTS, USER
-from chatbot.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
+from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
+from assistant.providers.base import ImageReading, LLMProvider, ModelReply, ProviderError
 from config.settings import settings
 
 log = logging.getLogger("wanas.provider.gemini")
@@ -535,7 +535,7 @@ def _debug_dump(payload: dict) -> str:
 
 
 def _main() -> int:  # pragma: no cover - operational helper
-    """python -m chatbot.providers.gemini — what can this key actually call?"""
+    """python -m assistant.providers.gemini — what can this key actually call?"""
     import sys
 
     try:

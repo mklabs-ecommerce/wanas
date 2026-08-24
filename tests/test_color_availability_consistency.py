@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from chatbot.tools.base import ToolContext, call_tool, load_all
+from assistant.tools.base import ToolContext, call_tool, load_all
 
 load_all()
 

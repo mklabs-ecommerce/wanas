@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from chatbot.providers.base import LLMProvider, ModelReply, ProviderError
+from assistant.providers.base import LLMProvider, ModelReply, ProviderError
 from config.settings import settings
 
 log = logging.getLogger("wanas.provider")
@@ -20,19 +20,19 @@ def build_provider(name: str | None = None) -> LLMProvider:
     name = (name or settings.llm_provider or "fake").lower()
 
     if name in {"fake", "rehearsal"}:
-        from chatbot.providers.fake import RehearsalProvider
+        from assistant.providers.fake import RehearsalProvider
 
         return RehearsalProvider()
     if name == "scripted":
-        from chatbot.providers.fake import ScriptedProvider
+        from assistant.providers.fake import ScriptedProvider
 
         return ScriptedProvider()
     if name == "gemini":
-        from chatbot.providers.gemini import GeminiProvider
+        from assistant.providers.gemini import GeminiProvider
 
         return GeminiProvider()
     if name == "openrouter":
-        from chatbot.providers.openrouter import OpenRouterProvider
+        from assistant.providers.openrouter import OpenRouterProvider
 
         return OpenRouterProvider()
 
@@ -52,7 +52,7 @@ def get_provider() -> LLMProvider:
         return build_provider()
     except ProviderError as exc:
         log.error("provider unavailable (%s); falling back to rehearsal mode", exc)
-        from chatbot.providers.fake import RehearsalProvider
+        from assistant.providers.fake import RehearsalProvider
 
         return RehearsalProvider()
 

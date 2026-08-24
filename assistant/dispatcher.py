@@ -84,7 +84,7 @@ class Pending:
         """The batch's text fragments, each prefixed with which earlier item in
         this same batch it was a WhatsApp "reply to" of, when Meta says so.
 
-        Needed because the neutral message format (`chatbot/messages.py`) only
+        Needed because the neutral message format (`assistant/messages.py`) only
         ever carries plain text -- there is no structured "in reply to" field to
         thread through the provider boundary, so this is where "the customer
         replied to the second photo" becomes words the model can actually use:

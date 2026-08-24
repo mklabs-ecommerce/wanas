@@ -275,7 +275,7 @@ def _overlay_images(
     A colour only ever gets a Shopify photo swapped in if `color_images`
     already had an entry for it -- never a new key. `merge_catalog.py` keeps
     that dict all-or-nothing per product (every colour or none), and a partial
-    one would make `_candidate_images` (chatbot/tools/base.py) show a photo for
+    one would make `_candidate_images` (assistant/tools/base.py) show a photo for
     some colours and silently drop the rest of the product's gallery for
     everyone else. Products with no colour split at all (`color_images` is
     empty) overlay onto the shared `images` list instead, on the same logic:

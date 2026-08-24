@@ -1,11 +1,11 @@
-"""Stored history -> bubbles a person can read (chatbot/display.py), shared
+"""Stored history -> bubbles a person can read (assistant/display.py), shared
 by the harness and the staff dashboard.
 """
 
 from __future__ import annotations
 
-from chatbot import messages as msg
-from chatbot.display import display_history
+from assistant import messages as msg
+from assistant.display import display_history
 
 
 def test_a_plain_user_message_has_no_media():

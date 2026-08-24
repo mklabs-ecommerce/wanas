@@ -6,10 +6,10 @@ the real tools, with no network and nothing non-deterministic.
 
 from __future__ import annotations
 
-from chatbot import agent, messages as msg, session as session_store
-from chatbot.providers.base import ModelReply, ProviderError
-from chatbot.providers.fake import RehearsalProvider, ScriptedProvider
-from chatbot.runtime import handle_message, staff_reply
+from assistant import agent, messages as msg, session as session_store
+from assistant.providers.base import ModelReply, ProviderError
+from assistant.providers.fake import RehearsalProvider, ScriptedProvider
+from assistant.runtime import handle_message, staff_reply
 from config.settings import settings
 from domain.models import ChannelIdentity, Order, QueueKind, SessionRow, ShippingRate, utcnow
 from domain.services import (

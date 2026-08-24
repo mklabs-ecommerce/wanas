@@ -10,8 +10,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from chatbot.providers import set_provider
-from chatbot.providers.fake import RehearsalProvider
+from assistant.providers import set_provider
+from assistant.providers.fake import RehearsalProvider
 from domain.db import SessionLocal
 from domain.models import Order, QueueKind, ShippingRate, Variant
 from domain.services import queues
@@ -47,7 +47,7 @@ def send(client, text, **extra):
 def test_it_calls_the_real_entry_point(seeded, client, monkeypatch):
     """Guards against the harness ever growing its own reply logic."""
     calls = []
-    import chatbot.harness.web as web
+    import assistant.harness.web as web
 
     real = web.handle_message
 

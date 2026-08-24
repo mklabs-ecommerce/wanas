@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chatbot.tools.base import ToolContext, tool
+from assistant.tools.base import ToolContext, tool
 from domain.models import HANDOFF_REASONS, Client, QueueKind
 from domain.services import (
     identities,

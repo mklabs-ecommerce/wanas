@@ -8,11 +8,11 @@ nothing but credentials the shop itself owns. Swapping flavours later -- or
 routing through a BSP -- touches the host, the auth header and the signature
 check, and nothing else, provided the adapter stays behind this interface.
 
-This lives in /backend/ and not /chatbot/ on purpose, exactly as its WhatsApp
+This lives in /backend/ and not /assistant/ on purpose, exactly as its WhatsApp
 sibling does. The Notification service has to send confirmations and status
-pushes, and /backend/ must never import /chatbot/ -- the dependency direction
+pushes, and /backend/ must never import /assistant/ -- the dependency direction
 is one-way. Inbound message handling is the adapter's job and lives in
-chatbot/channels/instagram.py.
+assistant/channels/instagram.py.
 
 Two things this channel does not have, both deliberate:
 
@@ -369,7 +369,7 @@ class InstagramClient:
     def send_interactive(self, to: str, payload: dict, *, fallback: str = "") -> OutboundMessage:
         """A tappable picker, from the neutral shape.
 
-        Translation (`chatbot/interactive.py`'s shapes -> Instagram):
+        Translation (`assistant/interactive.py`'s shapes -> Instagram):
 
         * `buttons` (never more than 3) -> one quick reply per button,
           `payload` = the button id.

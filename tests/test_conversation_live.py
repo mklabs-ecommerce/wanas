@@ -22,8 +22,8 @@ import os
 
 import pytest
 
-from chatbot import agent
-from chatbot.providers.gemini import GeminiProvider
+from assistant import agent
+from assistant.providers.gemini import GeminiProvider
 from tests.conftest import REAL_LLM_KEY, REAL_LLM_MODEL
 
 CHANNEL = "whatsapp"

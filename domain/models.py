@@ -407,7 +407,7 @@ class SessionRow(Base):
 
     channel: Mapped[str] = mapped_column(String(20), primary_key=True)
     external_id: Mapped[str] = mapped_column(String(120), primary_key=True)
-    # The neutral message list from 02-chatbot.md. In the database rather than
+    # The neutral message list from 02-assistant.md. In the database rather than
     # process memory so the server can restart, and so more than one instance
     # can run behind a load balancer. Lenient on read: see LenientJSON.
     history: Mapped[list] = mapped_column(LenientJSON, nullable=False, default=list)

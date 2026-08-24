@@ -3,7 +3,7 @@
 Both re-engagement checks (`backend/services/reengagement.py`) are polls: a
 variant coming back in stock and a cart going idle are both things nothing
 tells this app about, so something has to periodically ask. In-process and
-single-instance, the same scope note as `chatbot/dispatcher.py`: this fits
+single-instance, the same scope note as `assistant/dispatcher.py`: this fits
 one Railway instance. Two instances would each run their own copy of this
 loop -- both jobs are idempotent against a duplicate pass (the waitlist
 entry's `notified_at`, the nudge row's `sent_at`), so that degrades to "maybe
@@ -77,5 +77,5 @@ class Scheduler:
             self._thread = None
 
 
-#: One per process, same shape as `chatbot.channels.whatsapp.dispatcher`.
+#: One per process, same shape as `assistant.channels.whatsapp.dispatcher`.
 scheduler = Scheduler()

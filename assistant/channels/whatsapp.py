@@ -7,7 +7,7 @@ conversational logic beyond the platform integration itself.
 
 What the endpoint does **not** do any more is the work. Parsing, the signature
 check and the idempotency claim happen in the request; the agent turn happens
-on a worker thread, after the debounce window, through `chatbot/dispatcher.py`.
+on a worker thread, after the debounce window, through `assistant/dispatcher.py`.
 The reason is in that module's docstring, and the consequence is here: this
 handler returns 200 in milliseconds instead of holding the event loop for the
 length of a model call.
@@ -19,9 +19,9 @@ import logging
 
 from fastapi import APIRouter, Request, Response
 
-from chatbot.dispatcher import MessageDispatcher, Pending
-from chatbot.runtime import claim_message, handle_message, release_claims
-from chatbot.tools.support_tools import raise_handoff
+from assistant.dispatcher import MessageDispatcher, Pending
+from assistant.runtime import claim_message, handle_message, release_claims
+from assistant.tools.support_tools import raise_handoff
 from common.security import verify_signature  # noqa: F401 -- re-exported; tests import it from here
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
@@ -144,7 +144,7 @@ def _accept(message: dict, contact_name: str | None) -> None:
     pending = Pending(last_message_id=message_id)
     # A long-pressed "reply to this" on a specific earlier message. Meta
     # carries it as `context.id`; recorded here so `Pending.annotated_text`
-    # (chatbot/dispatcher.py) can tell the model which of several
+    # (assistant/dispatcher.py) can tell the model which of several
     # photos/messages this one was about.
     reply_to_id = (message.get("context") or {}).get("id") or None
     if reply_to_id and message_id:
@@ -213,7 +213,7 @@ def _accept(message: dict, contact_name: str | None) -> None:
 
 def _annotate_replies(pending: Pending) -> str:
     """Kept as a name for existing tests and callers; the logic itself lives
-    on `Pending.annotated_text` in chatbot/dispatcher.py, where Instagram's
+    on `Pending.annotated_text` in assistant/dispatcher.py, where Instagram's
     adapter reaches it too."""
     return pending.annotated_text()
 

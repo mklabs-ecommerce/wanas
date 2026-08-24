@@ -1,7 +1,7 @@
 """The staff dashboard: the other half of `request_human`.
 
 A conversation has been able to pause itself and write a `StaffQueueItem`
-since Phase 1 (`chatbot/tools/support_tools.py`); nothing ever read the queue
+since Phase 1 (`assistant/tools/support_tools.py`); nothing ever read the queue
 back or un-paused the conversation except the harness's `/unpause`
 stand-in. These tests are the guarantee that a paused conversation actually
 reaches a person and comes back -- login, the conversation list, the reply
@@ -17,7 +17,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from chatbot import messages as msg, session as session_store
+from assistant import messages as msg, session as session_store
 from config.settings import settings
 from dashboard import web as dashboard
 from domain.models import QueueKind
@@ -222,7 +222,7 @@ def test_conversation_detail_carries_the_handoff_reason_and_history(logged_in, s
 
 def test_conversation_detail_exposes_the_handoff_payload(logged_in, seeded):
     """`voice_received` / `image_received` carry the actual file
-    (`chatbot/runtime.py`) -- the dashboard has to hand it back, or a staff
+    (`assistant/runtime.py`) -- the dashboard has to hand it back, or a staff
     member sees "reply to this person" with nothing to listen to or look at."""
     session_store.append(seeded, CHANNEL, CUSTOMER, msg.user("[صورة]"))
     identities.pause(seeded, CHANNEL, CUSTOMER)
@@ -316,7 +316,7 @@ def test_an_empty_reply_is_refused(logged_in, seeded):
 
 
 def test_replying_to_a_conversation_the_bot_still_owns_is_refused(logged_in, seeded):
-    """The debounce lock (chatbot/dispatcher.py) exists so exactly one writer
+    """The debounce lock (assistant/dispatcher.py) exists so exactly one writer
     ever runs a turn at a time -- a staff reply into a live conversation would
     be the second writer."""
     session_store.append(seeded, CHANNEL, CUSTOMER, msg.user("عايز أشوف الكتالوج"))

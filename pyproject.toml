@@ -16,7 +16,7 @@ markers = [
     "no_shopify: run without the in-memory Shopify shelf, to exercise the outage path",
     "live: costs real model quota; skipped unless RUN_LIVE_TESTS=1",
 ]
-filterwarnings = ["error::DeprecationWarning:backend.*", "error::DeprecationWarning:chatbot.*"]
+filterwarnings = ["error::DeprecationWarning:domain.*", "error::DeprecationWarning:assistant.*"]
 
 [tool.ruff]
 line-length = 110
@@ -47,10 +47,10 @@ ignore = [
 # The system prompt is an Arabic document that happens to live in a .py file.
 # Re-wrapping its lines changes what the model reads, and Arabic counted in
 # characters trips a limit that was chosen for code.
-"chatbot/prompt.py" = ["E501"]
+"assistant/prompt.py" = ["E501"]
 # The seed data merge is a data file with a program attached.
 "data/merge_catalog.py" = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["common", "config", "domain", "integrations", "api", "backend", "chatbot", "dashboard"]
+known-first-party = ["common", "config", "domain", "integrations", "api", "assistant", "dashboard"]
 combine-as-imports = true

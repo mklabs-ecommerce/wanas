@@ -14,7 +14,7 @@ the conversation) or resolve it without a reply (a false alarm, or one worked
 by phone). It cannot inject a message into a conversation the bot still owns
 -- see the `not_paused` guard on `reply` below -- because a person and the
 model both writing into the same live turn is exactly the race the debounce
-lock (`chatbot/dispatcher.py`) exists to prevent.
+lock (`assistant/dispatcher.py`) exists to prevent.
 
 Authenticated, unlike the harness: `Staff` already existed
 (`domain/services/auth.py`, `python manage.py create-staff`) with
@@ -43,9 +43,9 @@ from fastapi import APIRouter, Body, Cookie, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import and_, or_, select
 
-from chatbot import messages as msg, session as session_store
-from chatbot.display import display_history
-from chatbot.media_serving import resolve_servable_path
+from assistant import messages as msg, session as session_store
+from assistant.display import display_history
+from assistant.media_serving import resolve_servable_path
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import ChannelIdentity, QueueKind, SessionRow

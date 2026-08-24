@@ -16,11 +16,11 @@ import json
 
 import pytest
 
-from chatbot import agent, messages as msg, session as session_store
-from chatbot.providers import gemini as gemini_module
-from chatbot.providers.base import ProviderError
-from chatbot.providers.gemini import GeminiProvider, is_gemini_3, mask_key
-from chatbot.tools.base import tool_specs
+from assistant import agent, messages as msg, session as session_store
+from assistant.providers import gemini as gemini_module
+from assistant.providers.base import ProviderError
+from assistant.providers.gemini import GeminiProvider, is_gemini_3, mask_key
+from assistant.tools.base import tool_specs
 from config.settings import settings
 
 CHANNEL = "whatsapp"

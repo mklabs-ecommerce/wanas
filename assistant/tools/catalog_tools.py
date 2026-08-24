@@ -3,8 +3,8 @@ get_size_chart, get_shipping_fee, ask_governorate."""
 
 from __future__ import annotations
 
-from chatbot import interactive
-from chatbot.tools.base import ToolContext, tool
+from assistant import interactive
+from assistant.tools.base import ToolContext, tool
 from common.money import money
 from config.settings import settings
 from domain.models import Product
