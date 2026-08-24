@@ -55,5 +55,8 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: pytest tests/ -q
         env:
-          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/wanas
+          # The deliberate opt-in that lets the suite run on (and drop the
+          # schema of) this job's own throwaway PostgreSQL service. A plain
+          # DATABASE_URL is ignored by tests/conftest.py by design.
+          WANAS_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/wanas
           LLM_PROVIDER: fake

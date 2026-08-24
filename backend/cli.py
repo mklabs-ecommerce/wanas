@@ -5,6 +5,8 @@
     python -m backend.cli create-staff <username>
     python -m backend.cli set-fee <governorate> <fee>
     python -m backend.cli catalog-report
+    python -m backend.cli inspect-conversation <external_id> [--channel whatsapp]
+    python -m backend.cli release-conversation <external_id> [--channel whatsapp]
 """
 
 from __future__ import annotations
@@ -16,9 +18,20 @@ import sys
 from sqlalchemy import func, select
 
 from backend.db import engine, session_scope
-from backend.models import Base, Product, ShippingRate, Variant
+from backend.models import (
+    Base,
+    ChannelIdentity,
+    Product,
+    QueueKind,
+    QueueStatus,
+    SessionRow,
+    ShippingRate,
+    StaffQueueItem,
+    Variant,
+)
 from backend.seed.governorates import import_governorates
 from backend.seed.products import import_products
+from backend.services import identities, queues
 from backend.services.auth import create_staff
 from backend.services.size_charts import all_charts
 
@@ -118,6 +131,72 @@ def cmd_catalog_report(_args) -> int:
     return 0
 
 
+def cmd_inspect_conversation(args) -> int:
+    """Everything an operator needs to decide whether a conversation is stuck."""
+    with session_scope() as session:
+        identity = session.get(ChannelIdentity, (args.channel, args.external_id))
+        if identity is None:
+            print(f"no conversation for {args.channel}/{args.external_id}", file=sys.stderr)
+            return 1
+        print(f"conversation {identity.channel}/{identity.external_id}")
+        print(f"paused_until_staff_reply: {identity.paused_until_staff_reply}")
+        print(f"client_id: {identity.client_id}")
+        print(f"last_seen_at: {identity.last_seen_at.isoformat() if identity.last_seen_at else None}")
+        row = session.get(SessionRow, (identity.channel, identity.external_id))
+        try:
+            history_len = len(row.history) if row is not None else 0
+        except Exception:
+            history_len = "UNREADABLE (not valid JSON)"
+        print(f"history messages: {history_len}")
+        items = session.scalars(
+            select(StaffQueueItem)
+            .where(
+                StaffQueueItem.channel == identity.channel,
+                StaffQueueItem.external_id == identity.external_id,
+                StaffQueueItem.status == QueueStatus.OPEN.value,
+            )
+            .order_by(StaffQueueItem.created_at.desc())
+        ).all()
+        print(f"open staff_queue items: {len(items)}")
+        for item in items:
+            print(
+                f"  {item.queue_id}  {item.kind:<8} reason={item.reason or '-':<16} "
+                f"created {item.created_at.isoformat() if item.created_at else '-'}"
+            )
+    return 0
+
+
+def cmd_release_conversation(args) -> int:
+    """The manual escape hatch for a latched pause.
+
+    Clears `paused_until_staff_reply` and resolves the open handoff items, so
+    the bot answers the next message again. Never runs on its own -- only a
+    person decides a conversation leaves a person.
+    """
+    with session_scope() as session:
+        identity = session.get(ChannelIdentity, (args.channel, args.external_id))
+        if identity is None:
+            print(f"no conversation for {args.channel}/{args.external_id}", file=sys.stderr)
+            return 1
+        was_paused = identity.paused_until_staff_reply
+        identities.unpause(session, identity.channel, identity.external_id)
+        items = session.scalars(
+            select(StaffQueueItem).where(
+                StaffQueueItem.channel == identity.channel,
+                StaffQueueItem.external_id == identity.external_id,
+                StaffQueueItem.kind == QueueKind.HANDOFF.value,
+                StaffQueueItem.status == QueueStatus.OPEN.value,
+            )
+        ).all()
+        for item in items:
+            # No staff account to attribute this to; the column stays null.
+            queues.resolve(session, item.queue_id, None)
+        print(f"conversation {identity.channel}/{identity.external_id}")
+        print(f"paused_until_staff_reply: {was_paused} -> False")
+        print(f"resolved open handoff items: {len(items)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backend.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -137,6 +216,22 @@ def main(argv: list[str] | None = None) -> int:
     p_fee.set_defaults(func=cmd_set_fee)
 
     sub.add_parser("catalog-report", help="print catalog counts").set_defaults(func=cmd_catalog_report)
+
+    p_inspect = sub.add_parser(
+        "inspect-conversation",
+        help="show the pause flag, last seen, history size and open queue items for one conversation",
+    )
+    p_inspect.add_argument("external_id")
+    p_inspect.add_argument("--channel", default="whatsapp")
+    p_inspect.set_defaults(func=cmd_inspect_conversation)
+
+    p_release = sub.add_parser(
+        "release-conversation",
+        help="clear paused_until_staff_reply and resolve open handoff items (manual escape hatch)",
+    )
+    p_release.add_argument("external_id")
+    p_release.add_argument("--channel", default="whatsapp")
+    p_release.set_defaults(func=cmd_release_conversation)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -10,13 +10,16 @@ survives.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
 from backend.config import settings
-from backend.models import SessionRow, utcnow
+from backend.models import UNREADABLE_HISTORY, SessionRow, utcnow
 from chatbot.messages import USER
+
+log = logging.getLogger("wanas.session")
 
 
 def trim(history: list[dict], cap: int | None = None) -> list[dict]:
@@ -59,7 +62,16 @@ def _expired(row: SessionRow) -> bool:
 
 
 def load(session: Session, channel: str, external_id: str) -> list[dict]:
-    """History for this identity, or a fresh one after 6 hours of silence."""
+    """History for this identity, or a fresh one after 6 hours of silence.
+
+    A row written outside the app -- a manual edit or a restore -- can hold
+    text that is not JSON at all. The decode happens while the row is loaded,
+    inside `session.get`, and is guarded there (`LenientJSON`): a poisoned
+    column arrives here as `UNREADABLE_HISTORY` instead of raising on every
+    turn. Answer with an empty history and leave the stored value untouched:
+    it stays exactly as it is until the next successful save overwrites it,
+    so nothing here silently deletes data.
+    """
     row = session.get(SessionRow, (channel, external_id))
     if row is None:
         return []
@@ -68,7 +80,17 @@ def load(session: Session, channel: str, external_id: str) -> list[dict]:
         row.updated_at = utcnow()
         session.flush()
         return []
-    return list(row.history or [])
+    history = row.history
+    if history is UNREADABLE_HISTORY or not isinstance(history, list):
+        log.error(
+            "session %s/%s has unreadable history (%s); this turn starts empty "
+            "(stored value left in place until the next save)",
+            channel,
+            external_id,
+            type(history).__name__,
+        )
+        return []
+    return list(history)
 
 
 def save(session: Session, channel: str, external_id: str, history: list[dict]) -> list[dict]:

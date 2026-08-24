@@ -335,17 +335,25 @@ def reply(
             # lock exists to prevent.
             return JSONResponse({"error": "not_paused"}, status_code=409)
 
-        sent = notifications.get_sender().send_text(external_id, text)
+        sent = notifications.get_sender(channel).send_text(external_id, text)
         if not sent.delivered:
             return JSONResponse({"error": "send_failed", "detail": sent.error}, status_code=502)
 
         session_store.append(db, channel, external_id, msg.assistant(text, by="staff"))
         if handoff is not None:
             # The thing that needed attention has been answered; the queue
-            # item's job is done. The pause itself is a separate, longer-
-            # lived state -- staff may still send several more messages
-            # before handing control back, see `/release`.
+            # item's job is done.
             queues.resolve(db, handoff.queue_id, staff.staff_id)
+
+        # Hand control straight back to the bot. The pause used to outlive
+        # the reply so staff could send several messages before calling
+        # `/release`, but a pause nothing auto-clears is exactly how a
+        # conversation goes permanently silent when someone forgets that
+        # last step -- see the WhatsApp silence investigation in
+        # OPENCODE_PROGRESS.md. Answering IS the release now; staff who
+        # want to keep control take the conversation over again
+        # (`/takeover`), which is idempotent and one click away.
+        identities.unpause(db, channel, external_id)
 
     return JSONResponse({"ok": True})
 

@@ -15,8 +15,6 @@ length of a model call.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import logging
 
 from fastapi import APIRouter, Request, Response
@@ -25,9 +23,10 @@ from backend.config import PROJECT_ROOT, settings
 from backend.db import session_scope
 from backend.integrations.whatsapp_client import WhatsAppClient
 from backend.models import QueueKind
+from backend.security import verify_signature  # noqa: F401 -- re-exported; tests import it from here
 from backend.services import notifications, queues, runtime_flags
 from chatbot.dispatcher import MessageDispatcher, Pending
-from chatbot.runtime import claim_message, handle_message
+from chatbot.runtime import claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff
 
 log = logging.getLogger("wanas.channel.whatsapp")
@@ -46,15 +45,6 @@ UNSUPPORTED_TYPES = {"video", "document", "sticker", "location", "contacts"}
 AUDIO_TYPES = {"audio", "voice", "ptt"}
 
 UNSUPPORTED_ACK = "وصلتني رسالتك، حد من الفريق هيرد عليك حالاً 🙏"
-
-
-def verify_signature(app_secret: str, raw_body: bytes, header: str | None) -> bool:
-    """Confirms the request genuinely came from Meta, not "any request that
-    showed up"."""
-    if not header or not header.startswith("sha256="):
-        return False
-    expected = hmac.new(app_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, header.split("=", 1)[1])
 
 
 @router.get("")
@@ -93,6 +83,10 @@ async def inbound(request: Request) -> Response:
         try:
             _accept(message, contact_name)
         except Exception:  # never let one bad message stop the batch
+            # `_accept` claimed the id before any work, so without giving it
+            # back this message -- and every Meta retry of it -- would be
+            # suppressed forever. Release the claim and let the retry through.
+            release_claims([message.get("id")])
             log.exception("failed to accept inbound message %s", message.get("id"))
 
     # Always 200: Meta retries anything else, and the idempotency claim taken
@@ -145,8 +139,9 @@ def _accept(message: dict, contact_name: str | None) -> None:
 
     pending = Pending(last_message_id=message_id)
     # A long-pressed "reply to this" on a specific earlier message. Meta
-    # carries it as `context.id`; recorded here so `_annotate_replies` can
-    # tell the model which of several photos/messages this one was about.
+    # carries it as `context.id`; recorded here so `Pending.annotated_text`
+    # (chatbot/dispatcher.py) can tell the model which of several
+    # photos/messages this one was about.
     reply_to_id = (message.get("context") or {}).get("id") or None
     if reply_to_id and message_id:
         pending.reply_to[message_id] = reply_to_id
@@ -213,46 +208,29 @@ def _accept(message: dict, contact_name: str | None) -> None:
 
 
 def _annotate_replies(pending: Pending) -> str:
-    """The batch's text fragments, each prefixed with which earlier item in
-    this same batch it was a WhatsApp "reply to" of, when Meta says so.
-
-    Needed because the neutral message format (`chatbot/messages.py`) only
-    ever carries plain text -- there is no structured "in reply to" field to
-    thread through the provider boundary, so this is where "the customer
-    replied to the second photo" becomes words the model can actually use:
-    `[replying to photo 2] a size M please`, folded straight into the text
-    the turn runs on.
-    """
-    if not pending.reply_to:
-        return pending.text
-
-    labels: dict[str, str] = {}
-    for index, mid in enumerate(pending.image_ids, start=1):
-        if mid:
-            labels[mid] = f"photo {index}"
-    for index, mid in enumerate(pending.audio_ids, start=1):
-        if mid:
-            labels[mid] = f"voice note {index}"
-
-    out = []
-    for index, text in enumerate(pending.texts):
-        mid = pending.text_ids[index] if index < len(pending.text_ids) else None
-        target = pending.reply_to.get(mid) if mid else None
-        label = labels.get(target) if target else None
-        annotated = f"[replying to {label}] {text}" if label else text
-        if annotated.strip():
-            out.append(annotated)
-    return "\n".join(out)
+    """Kept as a name for existing tests and callers; the logic itself lives
+    on `Pending.annotated_text` in chatbot/dispatcher.py, where Instagram's
+    adapter reaches it too."""
+    return pending.annotated_text()
 
 
 def _deliver(external_id: str, pending: Pending) -> None:
-    reply = handle_message(
-        CHANNEL,
-        external_id,
-        _annotate_replies(pending),
-        image_paths=pending.image_paths or None,
-        audio_paths=pending.audio_paths or None,
-    )
+    try:
+        reply = handle_message(
+            CHANNEL,
+            external_id,
+            pending.annotated_text(),
+            image_paths=pending.image_paths or None,
+            audio_paths=pending.audio_paths or None,
+        )
+    except Exception:
+        # The turn died before the message was handled, and every id in the
+        # batch was claimed at ingest. Release them so Meta's retry is
+        # processed instead of suppressed forever. A turn that *succeeded*
+        # never gets here, so a handled message still cannot be processed
+        # twice.
+        release_claims(pending.text_ids + pending.image_ids + pending.audio_ids)
+        raise
 
     if reply.duplicate or not (reply.text or reply.interactive):
         return
@@ -325,6 +303,6 @@ def register_outbound_sender() -> bool:
     if not settings.whatsapp_configured:
         log.warning("WhatsApp credentials not set: outbound messages will be logged, not sent")
         return False
-    notifications.register_sender(WhatsAppClient())
+    notifications.register_sender(WhatsAppClient(), channel="whatsapp")
     log.info("WhatsApp outbound sender registered")
     return True

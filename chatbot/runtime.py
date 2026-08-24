@@ -21,11 +21,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.db import session_scope
-from backend.models import WebhookEvent
+from backend.models import QueueKind, StaffQueueItem, WebhookEvent, utcnow
 from backend.services import identities, shopify_catalog
 from chatbot import agent, media
 from chatbot import messages as msg
@@ -80,6 +81,64 @@ def claim_message(platform_message_id: str | None, *, db: Session | None = None)
         return not _already_processed(db, platform_message_id)
     with session_scope() as session:
         return not _already_processed(session, platform_message_id)
+
+
+def release_claims(platform_message_ids: list[str] | str | None) -> int:
+    """Give back message ids claimed by a delivery that was never handled.
+
+    The claim exists so a platform retry cannot double-process a message while
+    the first copy is still being answered. The price used to be that a copy
+    which *crashed* mid-turn kept its claim forever, so every retry of it was
+    then suppressed by design -- silence with no way back in. Deleting the row
+    restores the retry; the success path never calls this, so a handled
+    message still cannot be processed twice.
+
+    Runs in its own committed transaction, because by the time this is called
+    the failed unit of work has already rolled back or been abandoned.
+    """
+    if isinstance(platform_message_ids, str):
+        platform_message_ids = [platform_message_ids]
+    ids = [i for i in (platform_message_ids or []) if i]
+    if not ids:
+        return 0
+    with session_scope() as session:
+        deleted = session.execute(
+            delete(WebhookEvent).where(WebhookEvent.platform_message_id.in_(ids))
+        ).rowcount
+    if deleted:
+        log.warning(
+            "released %d webhook claim(s) after a failed turn (%s); platform retries will be processed",
+            deleted,
+            ", ".join(ids),
+        )
+    return deleted
+
+
+def _paused_note(db: Session, channel: str, external_id: str) -> str:
+    """How long this conversation has been waiting on a person, as far as the
+    data can say. There is no paused-at column; the newest handoff item for
+    the identity is the best available marker. Its absence means a manual
+    takeover from the dashboard -- say so rather than guess."""
+    item = db.scalar(
+        select(StaffQueueItem)
+        .where(
+            StaffQueueItem.channel == channel,
+            StaffQueueItem.external_id == external_id,
+            StaffQueueItem.kind == QueueKind.HANDOFF.value,
+        )
+        .order_by(StaffQueueItem.created_at.desc())
+    )
+    if item is None or item.created_at is None:
+        return "no handoff record (manual takeover?)"
+    started = item.created_at
+    now = utcnow()
+    if started.tzinfo is None:  # SQLite hands back naive datetimes
+        started = started.replace(tzinfo=now.tzinfo)
+    hours = (now - started).total_seconds() / 3600
+    return (
+        f"handoff {item.queue_id} ({item.status}, reason={item.reason}) created "
+        f"{item.created_at.isoformat()}, {hours:.1f}h ago"
+    )
 
 
 def _already_processed(db: Session, platform_message_id: str | None) -> bool:
@@ -149,10 +208,18 @@ def _handle(
 
     # A paused conversation is being handled by a person. The message is
     # stored so staff have the full thread, and the model is not called at
-    # all -- only a staff action clears the flag.
+    # all -- only a staff action clears the flag. This drop used to be
+    # completely silent, which is how a latched pause looked like the bot
+    # ignoring one number; make it observable without changing the semantics.
     if identity.paused_until_staff_reply:
         session_store.append(db, channel, external_id, msg.user(_stored_text(text, image_paths, audio_paths)))
-        log.info("conversation %s/%s is paused; message stored, not answered", channel, external_id)
+        log.warning(
+            "dropping inbound message: conversation %s/%s is paused for staff reply (%s); "
+            "message stored, no reply will be sent until a staff member releases it",
+            channel,
+            external_id,
+            _paused_note(db, channel, external_id),
+        )
         return RuntimeReply(paused=True)
 
     # Resolved once, and used for the media passes as well as the turn, so a

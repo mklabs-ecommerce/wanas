@@ -1,8 +1,15 @@
 """Shared fixtures.
 
 Every test runs against a real database created from the same models the app
-uses. `DATABASE_URL` is honoured, so the whole suite -- including the
-concurrency test -- can be pointed at PostgreSQL without editing a test.
+uses. By default that database is this suite's own throwaway SQLite file: the
+`db` fixture drops and recreates the whole schema on every test, so an
+exported `DATABASE_URL` must never be able to aim that drop at anything else.
+
+The one deliberate way to run the suite against PostgreSQL instead -- which
+`tests/test_order_transaction.py` wants before a deploy -- is to set
+WANAS_TEST_DATABASE_URL to the target URL. An ambient `DATABASE_URL` is
+ignored either way; see `assert_safe_to_drop` for the second half of the
+seatbelt.
 """
 
 from __future__ import annotations
@@ -16,8 +23,25 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Must be set before backend.config is imported anywhere.
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{PROJECT_ROOT / 'test_wanas.db'}")
+# Must be set before backend.config is imported anywhere. Assigned, not
+# setdefault: the fixture below drops the entire schema, so nothing ambient --
+# a shell export or the repo's own .env (python-dotenv skips names already
+# present) -- may decide what the suite runs on. Default is this suite's own
+# throwaway SQLite file. The one deliberate way to aim the suite at
+# PostgreSQL instead is WANAS_TEST_DATABASE_URL, read here and nowhere else;
+# a plain exported DATABASE_URL is ignored in both modes.
+SUITE_SQLITE_URL = f"sqlite:///{PROJECT_ROOT / 'test_wanas.db'}"
+
+
+def resolve_test_database_url() -> str:
+    """The DATABASE_URL the suite forces, per the contract above."""
+    opted_in = os.environ.get("WANAS_TEST_DATABASE_URL", "").strip()
+    if opted_in:
+        return opted_in
+    return SUITE_SQLITE_URL
+
+
+os.environ["DATABASE_URL"] = resolve_test_database_url()
 os.environ.setdefault("LLM_PROVIDER", "fake")
 # The dispatcher runs inline at zero, so a webhook test can assert on the reply
 # on the line after the request instead of sleeping through the debounce window.
@@ -40,6 +64,7 @@ REAL_LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("GEMINI_MODEL") or ""
 for _name in (
     "LLM_API_KEY",
     "GEMINI_API_KEY",
+    "OPENROUTER_API_KEY",
     "LLM_MODEL",
     "GEMINI_MODEL",
     "CHATBOT_DEBUG",
@@ -61,16 +86,69 @@ for _name in (
 ):
     os.environ[_name] = ""
 
-from backend.db import SessionLocal, engine  # noqa: E402
+from sqlalchemy.engine import make_url  # noqa: E402
+
+from backend.db import SessionLocal, engine, normalise_database_url  # noqa: E402
 from backend.models import Base  # noqa: E402
 from backend.seed.governorates import import_governorates  # noqa: E402
 from backend.seed.products import import_products  # noqa: E402
+
+#: Database names that are never a scratch database, however deliberate the
+#: opt-in looked. The shop's own database name ("wanas") is fine to allow --
+#: dropping it is exactly what the opt-in guard exists to make deliberate.
+_PRODUCTION_LIKE_DB_NAMES = {"prod", "production", "live"}
+
+
+def _looks_like_production(url) -> bool:
+    name = (url.database or "").strip().lower()
+    return (
+        name in _PRODUCTION_LIKE_DB_NAMES
+        or name.endswith(("_prod", "_production", "_live"))
+    )
+
+
+def assert_safe_to_drop(engine) -> None:
+    """The seatbelt in front of `Base.metadata.drop_all`.
+
+    The `db` fixture drops everything, so it may run only when the engine
+    provably points at this suite's own throwaway SQLite file, or at the one
+    database named deliberately via WANAS_TEST_DATABASE_URL. Anything else --
+    including a PostgreSQL URL inherited from the environment, which the suite
+    ignores wholesale -- raises rather than dropping. Even the opt-in target is
+    refused when its database name looks like production.
+    """
+    url = engine.url
+    expected = os.path.abspath(str(PROJECT_ROOT / "test_wanas.db"))
+    actual = os.path.abspath(url.database) if url.drivername == "sqlite" and url.database else ""
+    if actual == expected:
+        return
+    opted_in = os.environ.get("WANAS_TEST_DATABASE_URL", "").strip()
+    if opted_in and url == make_url(normalise_database_url(opted_in)):
+        if _looks_like_production(url):
+            raise RuntimeError(
+                "Refusing to drop the schema: WANAS_TEST_DATABASE_URL points at "
+                f"a database named {url.database!r}, which looks like production "
+                "rather than a scratch database for the suite to drop. Point the "
+                "opt-in at a disposable database."
+            )
+        return
+    raise RuntimeError(
+        "Refusing to drop the schema: the test engine points at "
+        f"{url.render_as_string(hide_password=True)} instead of this suite's "
+        f"own test database ({expected}) or the database named by the "
+        "WANAS_TEST_DATABASE_URL opt-in. Every pytest run drops and recreates "
+        "every table it touches; pointing it anywhere else destroys that "
+        "database. To run the suite against PostgreSQL, set "
+        "WANAS_TEST_DATABASE_URL=<url> -- an ambient DATABASE_URL is ignored "
+        "by design. Do not bypass this guard."
+    )
 
 
 @pytest.fixture(scope="function")
 def db():
     """A fresh schema per test. Cheap at this size, and it keeps a failing
     test from poisoning the next one's stock counts."""
+    assert_safe_to_drop(engine)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     session = SessionLocal()

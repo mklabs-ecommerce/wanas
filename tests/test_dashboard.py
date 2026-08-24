@@ -51,7 +51,7 @@ def client(configured):
 @pytest.fixture()
 def outbox(monkeypatch):
     sender = notifications.LogSender()
-    monkeypatch.setattr(notifications, "_sender", sender)
+    monkeypatch.setitem(notifications._senders, "whatsapp", sender)
     return sender.sent
 
 
@@ -252,17 +252,18 @@ def test_a_staff_reply_already_in_history_is_labelled_as_such(logged_in, seeded)
 # --------------------------------------------------------------------------
 
 
-def test_replying_to_a_paused_conversation_sends_appends_and_stays_paused(logged_in, seeded, outbox):
-    """A reply resolves the handoff queue item (the thing that needed
-    attention has been answered) but must NOT hand control back to the bot
-    by itself -- staff may send several more messages before releasing."""
+def test_replying_to_a_paused_conversation_sends_appends_and_resumes_the_bot(logged_in, seeded, outbox):
+    """A reply resolves the handoff queue item AND hands control back to the
+    bot. A pause that nothing auto-clears is how a conversation goes
+    permanently silent when staff forget to release it, so answering is the
+    release; staff who want to keep control call `/takeover` again."""
     make_paused(seeded)
 
     res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً، إزاي أقدر أساعدك؟"})
     assert res.status_code == 200
 
     assert any(m.text == "أهلاً، إزاي أقدر أساعدك؟" and m.to == CUSTOMER for m in outbox)
-    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
     assert queues.open_items(seeded, QueueKind.HANDOFF.value) == []
 
     history = session_store.load(seeded, CHANNEL, CUSTOMER)
@@ -270,17 +271,23 @@ def test_replying_to_a_paused_conversation_sends_appends_and_stays_paused(logged
     assert history[-1]["by"] == "staff"
 
 
-def test_several_replies_in_a_row_never_return_control_to_the_bot(logged_in, seeded, outbox):
+def test_a_second_reply_needs_a_fresh_takeover_now_that_replying_resumes_the_bot(logged_in, seeded, outbox):
+    """The cost of auto-unpause: staff who want to send several messages in a
+    row must re-take the conversation between them, because the first reply
+    already handed it back. `/takeover` is idempotent and one click."""
     make_paused(seeded)
 
     for text in ("لحظة واحدة", "شكلك عايز مقاس L", "تمام، هظبطلك الطلب"):
         res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": text})
         assert res.status_code == 200
-        assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
+        assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
         # That read took a write lock (BEGIN IMMEDIATE on every SQLite
         # transaction, see backend/db.py); release it before the next
         # request opens its own session, or the two deadlock.
         seeded.rollback()
+
+        # Without this the next reply is refused with 409 not_paused.
+        logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/takeover")
 
     assert [m.text for m in outbox] == ["لحظة واحدة", "شكلك عايز مقاس L", "تمام، هظبطلك الطلب"]
 
@@ -324,7 +331,7 @@ def test_a_failed_delivery_does_not_unpause_or_resolve(logged_in, seeded, monkey
 
             return OutboundMessage(to=to, text=text, delivered=False, error="boom")
 
-    monkeypatch.setattr(notifications, "_sender", Refusing())
+    monkeypatch.setitem(notifications._senders, "whatsapp", Refusing())
 
     res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً"})
     assert res.status_code == 502
@@ -388,17 +395,24 @@ def test_releasing_a_conversation_that_was_never_paused_is_refused(logged_in, se
     assert res.status_code == 409
 
 
-def test_reply_then_release_is_the_full_multi_message_takeover_flow(logged_in, seeded, outbox):
+def test_takeover_between_replies_is_the_full_multi_message_flow(logged_in, seeded, outbox):
+    """The multi-message flow now runs takeover -> reply -> takeover -> reply,
+    and needs no closing `/release`: the last reply already resumed the bot."""
     make_paused(seeded)
     logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً"})
-    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "تمام كده"})
-    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
     seeded.rollback()
 
-    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
-    assert res.status_code == 200
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/takeover")
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "تمام كده"})
+    seeded.rollback()
+
     assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
     assert [m.text for m in outbox] == ["أهلاً", "تمام كده"]
+    seeded.rollback()
+
+    # Nothing left to release -- the bot is already back in control.
+    res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
+    assert res.status_code == 409
 
 
 # --------------------------------------------------------------------------
@@ -475,3 +489,46 @@ def test_a_catalog_file_is_actually_servable(logged_in):
 def test_the_login_and_app_pages_are_reachable_unauthenticated(client):
     assert client.get("/dashboard/login").status_code == 200
     assert client.get("/dashboard").status_code == 200
+
+
+# --------------------------------------------------------------------------
+# a second channel (STEP 12): staff replies go down the conversation's own
+# channel, and the registry -- not the caller -- decides which client that is
+# --------------------------------------------------------------------------
+
+
+def test_a_staff_reply_to_an_instagram_conversation_goes_through_the_instagram_sender(
+    logged_in, seeded, monkeypatch
+):
+    """The wrong-person test, from the other side: replying to an Instagram
+    conversation must reach Instagram's sender, never WhatsApp's client with
+    an IGSID in the phone field."""
+    ig_channel = "instagram_dm"
+    ig_customer = "98765432109876543"
+
+    ig_sender = notifications.LogSender()
+    wa_sender = notifications.LogSender()
+    monkeypatch.setitem(notifications._senders, ig_channel, ig_sender)
+    monkeypatch.setitem(notifications._senders, "whatsapp", wa_sender)
+
+    session_store.append(seeded, ig_channel, ig_customer, msg.user("بكام الهودي؟"))
+    identities.pause(seeded, ig_channel, ig_customer)
+    queues.enqueue(
+        seeded,
+        kind=QueueKind.HANDOFF.value,
+        reason="customer_asked",
+        summary="سعر على انستجرام",
+        channel=ig_channel,
+        external_id=ig_customer,
+        payload={"text": "بكام الهودي؟"},
+    )
+    seeded.commit()
+
+    res = logged_in.post(
+        f"/dashboard/api/conversations/{ig_channel}/{ig_customer}/reply",
+        json={"text": "650 جنيه، هبعتلك الصور"},
+    )
+    assert res.status_code == 200
+
+    assert [m.to for m in ig_sender.sent] == [ig_customer]
+    assert wa_sender.sent == []
