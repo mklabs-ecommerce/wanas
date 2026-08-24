@@ -8,10 +8,10 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import func, select
 
-from backend.models import Product, ShippingRate, Variant
-from backend.seed.governorates import import_governorates
-from backend.seed.products import import_products
-from backend.services.size_charts import all_charts, get_chart
+from domain.models import Product, ShippingRate, Variant
+from domain.seed.governorates import import_governorates
+from domain.seed.products import import_products
+from domain.services.size_charts import all_charts, get_chart
 
 EXPECTED_CATEGORY_COUNTS = {
     "T-Shirts": (5, 48),
@@ -168,14 +168,14 @@ def test_variant_status_is_computed(seeded):
 
 @pytest.mark.parametrize("username,password", [("", "longenough"), ("staff", "short")])
 def test_create_staff_rejects_bad_input(db, username, password):
-    from backend.services.auth import create_staff
+    from domain.services.auth import create_staff
 
     with pytest.raises(ValueError):
         create_staff(db, username, password)
 
 
 def test_staff_password_round_trip(db):
-    from backend.services.auth import authenticate, create_staff
+    from domain.services.auth import authenticate, create_staff
 
     create_staff(db, "amira", "correct-horse")
     db.commit()
@@ -185,7 +185,7 @@ def test_staff_password_round_trip(db):
 
 
 def test_order_and_queue_ids(db):
-    from backend.services.ids import next_order_id, next_queue_id
+    from domain.services.ids import next_order_id, next_queue_id
 
     assert next_order_id(db) == "WNS-1001"
     assert next_order_id(db) == "WNS-1002"

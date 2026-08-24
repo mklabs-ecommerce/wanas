@@ -45,10 +45,10 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.db import session_scope
-from backend.models import STATUS_SEQUENCE, Order, OrderStatus, WebhookEvent
-from backend.services import orders as order_service
 from config.settings import settings
+from domain.db import session_scope
+from domain.models import STATUS_SEQUENCE, Order, OrderStatus, WebhookEvent
+from domain.services import orders as order_service
 
 log = logging.getLogger("wanas.webhooks.shopify")
 

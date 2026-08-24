@@ -6,8 +6,6 @@ the real tools, with no network and nothing non-deterministic.
 
 from __future__ import annotations
 
-from backend.models import ChannelIdentity, Order, QueueKind, SessionRow, ShippingRate, utcnow
-from backend.services import identities, queues
 from chatbot import agent
 from chatbot import messages as msg
 from chatbot import session as session_store
@@ -15,6 +13,11 @@ from chatbot.providers.base import ModelReply, ProviderError
 from chatbot.providers.fake import RehearsalProvider, ScriptedProvider
 from chatbot.runtime import handle_message, staff_reply
 from config.settings import settings
+from domain.models import ChannelIdentity, Order, QueueKind, SessionRow, ShippingRate, utcnow
+from domain.services import (
+    identities,
+    queues,
+)
 
 CHANNEL = "whatsapp"
 WHO = "201000000001"

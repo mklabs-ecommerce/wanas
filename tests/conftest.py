@@ -88,10 +88,18 @@ for _name in (
 
 from sqlalchemy.engine import make_url  # noqa: E402
 
-from backend.db import SessionLocal, engine, normalise_database_url  # noqa: E402
-from backend.models import Base  # noqa: E402
-from backend.seed.governorates import import_governorates  # noqa: E402
-from backend.seed.products import import_products  # noqa: E402
+from chatbot import session as assistant_session  # noqa: E402
+from domain.db import SessionLocal, engine, normalise_database_url  # noqa: E402
+from domain.models import Base  # noqa: E402
+from domain.seed.governorates import import_governorates  # noqa: E402
+from domain.seed.products import import_products  # noqa: E402
+from domain.services import conversation_reset  # noqa: E402
+
+# Same registration app.py's lifespan does at startup -- the suite never runs
+# app.py's lifespan (dashboard/harness tests mount bare routers), so without
+# this, domain/services/conversation_reset.py's reset() would silently skip
+# clearing chat history in every test.
+conversation_reset.register_history_clearer(assistant_session.clear)
 
 #: Database names that are never a scratch database, however deliberate the
 #: opt-in looked. The shop's own database name ("wanas") is fine to allow --
@@ -193,7 +201,7 @@ def shopify(request, monkeypatch):
 def cairo_rate(seeded):
     """Shipping fees ship blank on purpose; tests that need a priced
     governorate set one explicitly rather than assuming."""
-    from backend.models import ShippingRate
+    from domain.models import ShippingRate
 
     rate = seeded.get(ShippingRate, "Cairo")
     rate.fee = 60

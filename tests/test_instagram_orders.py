@@ -16,11 +16,16 @@ from pathlib import Path
 
 import pytest
 
-from backend.db import engine, session_scope
-from backend.models import Channel, Client, Order
-from backend.services import carts, identities, notifications, orders
-from backend.services.reengagement import check_abandoned_carts, check_back_in_stock
 from config.settings import settings
+from domain.db import engine, session_scope
+from domain.models import Channel, Client, Order
+from domain.services import (
+    carts,
+    identities,
+    notifications,
+    orders,
+)
+from domain.services.reengagement import check_abandoned_carts, check_back_in_stock
 
 IGSID = "98765432109876543"
 PHONE = "01000000123"
@@ -149,7 +154,7 @@ def test_status_and_feedback_pushes_follow_the_order_channel_too(seeded, cairo_r
 
 @needs_real_datetime_db
 def test_an_abandoned_instagram_cart_is_nudged(seeded, cairo_rate, senders):
-    from backend.models import CartItem, utcnow
+    from domain.models import CartItem, utcnow
 
     ig, wa = senders
     with session_scope() as session:
@@ -172,7 +177,7 @@ def test_an_abandoned_instagram_cart_is_nudged(seeded, cairo_rate, senders):
 def test_check_back_in_stock_reads_the_channel_off_the_waitlist_row(seeded, senders):
     """Plan: 'check_back_in_stock already reads the channel off the waitlist
     row -- verify with a test, change nothing.'"""
-    from backend.models import StockWaitlistEntry, Variant, utcnow
+    from domain.models import StockWaitlistEntry, Variant, utcnow
 
     ig, _wa = senders
     with session_scope() as session:

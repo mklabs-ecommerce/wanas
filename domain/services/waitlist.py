@@ -11,7 +11,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import StockWaitlistEntry, utcnow
+from domain.models import StockWaitlistEntry, utcnow
 
 
 def join(session: Session, variant_id: str, channel: str, external_id: str) -> StockWaitlistEntry:

@@ -143,7 +143,7 @@ def test_explicit_purchase_intent_adds_to_the_cart(bot, seeded):
     bot("عايز Cairokee T-shirt أسود XL")
     reply = bot("خلاص حطهولي")
 
-    from backend.services import carts
+    from domain.services import carts
 
     cart = carts.cart_payload(seeded, CHANNEL, WHO)
     assert cart["item_count"] >= 1, f"purchase intent did not reach the cart: {reply.text}"

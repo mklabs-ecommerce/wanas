@@ -17,8 +17,8 @@ import sys
 
 from sqlalchemy import func, select
 
-from backend.db import engine, session_scope
-from backend.models import (
+from domain.db import engine, session_scope
+from domain.models import (
     Base,
     ChannelIdentity,
     Product,
@@ -29,11 +29,14 @@ from backend.models import (
     StaffQueueItem,
     Variant,
 )
-from backend.seed.governorates import import_governorates
-from backend.seed.products import import_products
-from backend.services import identities, queues
-from backend.services.auth import create_staff
-from backend.services.size_charts import all_charts
+from domain.seed.governorates import import_governorates
+from domain.seed.products import import_products
+from domain.services import (
+    identities,
+    queues,
+)
+from domain.services.auth import create_staff
+from domain.services.size_charts import all_charts
 
 
 def cmd_init_db(_args) -> int:

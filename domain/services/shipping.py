@@ -13,7 +13,7 @@ import unicodedata
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import ShippingRate
+from domain.models import ShippingRate
 
 #: Common ways a customer writes a governorate that are not its stored key or
 #: its Arabic label: districts that sit inside a governorate, missing hamza

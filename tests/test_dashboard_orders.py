@@ -15,11 +15,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.models import Order, OrderStatus
-from backend.services import auth, carts, orders
 from config.settings import settings
 from dashboard import shopify_api
 from dashboard import web as dashboard
+from domain.models import Order, OrderStatus
+from domain.services import (
+    auth,
+    carts,
+    orders,
+)
 
 SECRET = "test-dashboard-secret"
 VARIANT = "wanas-hoodie-s-olive"
@@ -70,7 +74,7 @@ def bot_order(cairo_rate, seeded) -> Order:
         contact_phone="01055566677",
     )
     assert "error" not in result, result
-    # Fetched *before* the commit below, not after: `backend.db` opens every
+    # Fetched *before* the commit below, not after: `domain.db` opens every
     # SQLite transaction with BEGIN IMMEDIATE (a write lock) even for a read,
     # and a read issued after the commit would leave that lock held for the
     # rest of the test -- deadlocking the dashboard's own session_scope().

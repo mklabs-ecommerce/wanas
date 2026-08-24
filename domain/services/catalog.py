@@ -17,9 +17,10 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.models import Product, Variant
-from backend.services import search_terms, shopify_catalog
+from backend.services import shopify_catalog
 from common.money import money
+from domain.models import Product, Variant
+from domain.services import search_terms
 
 #: Categories come first and collections last, labelled optional: 8 of the 18
 #: products have no collection, so a reply that opens with collections has

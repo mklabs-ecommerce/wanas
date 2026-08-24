@@ -11,7 +11,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend import legal
+from domain import legal
 
 
 def _client() -> TestClient:

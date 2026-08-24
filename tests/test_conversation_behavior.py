@@ -74,7 +74,7 @@ def test_more_images_prefers_colour_variety_and_is_capped(ctx):
     colours = {
         colour
         for colour, paths in ctx.session.get(
-            __import__("backend.models", fromlist=["Product"]).Product, "wanas-hoodie"
+            __import__("domain.models", fromlist=["Product"]).Product, "wanas-hoodie"
         ).color_images.items()
         for path in paths
         if path in ctx.attachments
@@ -128,7 +128,7 @@ def test_attachments_reach_the_agent_reply(seeded):
 def test_a_product_with_no_photos_attaches_nothing(ctx, monkeypatch):
     """Honest: no pictures means no pictures, not a claim that some were
     sent."""
-    from backend.models import Product
+    from domain.models import Product
 
     product = ctx.session.get(Product, "wanas-hoodie")
     product.images = []
@@ -203,7 +203,7 @@ def test_product_colour_size_and_quantity_in_one_message_needs_one_pass(seeded):
 
     assert reply.tool_calls == ["get_variants", "add_to_cart"]
     assert reply.error is None
-    from backend.services import carts
+    from domain.services import carts
 
     cart = carts.cart_payload(seeded, CHANNEL, WHO)
     assert cart["item_count"] == 2
@@ -221,7 +221,7 @@ def test_buying_intent_adds_without_a_second_confirmation(seeded):
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "خلاص حطهولي", provider=provider)
     assert reply.tool_calls == ["add_to_cart"]
-    from backend.services import carts
+    from domain.services import carts
 
     assert carts.cart_payload(seeded, CHANNEL, WHO)["item_count"] == 1
 
@@ -493,7 +493,7 @@ def test_a_tool_with_side_effects_is_never_cached(seeded):
     agent.run_turn(seeded, CHANNEL, WHO, "ضيف واحد", provider=provider)
     agent.run_turn(seeded, CHANNEL, WHO, "ضيف واحد كمان", provider=provider)
 
-    from backend.services import carts
+    from domain.services import carts
 
     assert carts.cart_payload(seeded, CHANNEL, WHO)["item_count"] == 2
 

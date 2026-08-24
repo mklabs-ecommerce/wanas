@@ -19,15 +19,19 @@ import logging
 
 from fastapi import APIRouter, Request, Response
 
-from backend.db import session_scope
 from backend.integrations.whatsapp_client import WhatsAppClient
-from backend.models import QueueKind
-from backend.services import notifications, queues, runtime_flags
 from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff
 from common.security import verify_signature  # noqa: F401 -- re-exported; tests import it from here
 from config.settings import PROJECT_ROOT, settings
+from domain.db import session_scope
+from domain.models import QueueKind
+from domain.services import (
+    notifications,
+    queues,
+    runtime_flags,
+)
 
 log = logging.getLogger("wanas.channel.whatsapp")
 

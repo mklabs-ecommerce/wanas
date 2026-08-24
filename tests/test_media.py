@@ -17,12 +17,12 @@ import dataclasses
 
 import pytest
 
-from backend.models import QueueKind
-from backend.services import queues
 from chatbot import media, runtime
 from chatbot.providers.base import ImageReading, ModelReply
 from chatbot.providers.fake import RehearsalProvider, ScriptedProvider
 from config.settings import settings
+from domain.models import QueueKind
+from domain.services import queues
 
 WHO = "201555222333"
 

@@ -15,8 +15,11 @@ from __future__ import annotations
 
 import pytest
 
-from backend.models import Order, ShippingRate, Variant
-from backend.services import carts, orders
+from domain.models import Order, ShippingRate, Variant
+from domain.services import (
+    carts,
+    orders,
+)
 
 VARIANT = "wanas-hoodie-s-olive"
 OTHER = "wanas-hoodie-m-black"

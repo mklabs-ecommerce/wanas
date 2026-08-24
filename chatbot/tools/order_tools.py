@@ -11,10 +11,10 @@ itself out of.
 
 from __future__ import annotations
 
-from backend.models import Variant
-from backend.services import orders
-from backend.services.notifications import item_swap_requested
 from chatbot.tools.base import ToolContext, tool
+from domain.models import Variant
+from domain.services import orders
+from domain.services.notifications import item_swap_requested
 
 
 @tool(

@@ -15,10 +15,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.db import session_scope
-from backend.models import IntegrationToken, QueueKind, utcnow
-from backend.services import instagram_token, queues
+from backend.services import instagram_token
 from config.settings import settings
+from domain.db import session_scope
+from domain.models import IntegrationToken, QueueKind, utcnow
+from domain.services import queues
 
 
 @pytest.fixture(autouse=True)

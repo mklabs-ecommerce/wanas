@@ -11,12 +11,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.models import Order, OrderStatus
-from backend.services import auth, carts, orders
-from backend.services.notifications import item_swap_requested
 from config.settings import settings
 from dashboard import queue_api
 from dashboard import web as dashboard
+from domain.models import Order, OrderStatus
+from domain.services import (
+    auth,
+    carts,
+    orders,
+)
+from domain.services.notifications import item_swap_requested
 
 SECRET = "test-dashboard-secret"
 VARIANT_A = "wanas-hoodie-s-olive"

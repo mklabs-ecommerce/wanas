@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from backend.models import HANDOFF_REASONS, Client, QueueKind
-from backend.services import identities, queues
 from chatbot.tools.base import ToolContext, tool
+from domain.models import HANDOFF_REASONS, Client, QueueKind
+from domain.services import (
+    identities,
+    queues,
+)
 
 
 def raise_handoff(

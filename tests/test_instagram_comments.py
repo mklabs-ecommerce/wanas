@@ -15,16 +15,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.db import SessionLocal, session_scope
-from backend.models import (
+from chatbot.channels import instagram as adapter
+from config.settings import settings
+from domain.db import SessionLocal, session_scope
+from domain.models import (
     InstagramCommentReply,
     QueueKind,
     SessionRow,
     utcnow,
 )
-from backend.services import queues
-from chatbot.channels import instagram as adapter
-from config.settings import settings
+from domain.services import queues
 
 APP_SECRET = "ig-test-app-secret"
 VERIFY_TOKEN = "ig-verify-token"

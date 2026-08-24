@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import pytest
 
-from backend.services import shipping
-from backend.services.notifications import LogSender
 from chatbot import interactive
 from chatbot.tools.base import ToolContext, call_tool, load_all
+from domain.services import shipping
+from domain.services.notifications import LogSender
 
 load_all()
 

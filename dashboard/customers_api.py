@@ -15,10 +15,10 @@ from fastapi import APIRouter, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 
-from backend.db import session_scope
-from backend.models import Client, Order
 from common.money import money
 from dashboard.guard import staff_for, unauthenticated
+from domain.db import session_scope
+from domain.models import Client, Order
 
 router = APIRouter(prefix="/dashboard/api/customers", tags=["dashboard-customers"])
 

@@ -13,8 +13,8 @@ from decimal import Decimal
 
 import pytest
 
-from backend.models import Product, Variant
 from backend.services import shopify_admin_products as sap
+from domain.models import Product, Variant
 
 VARIANT = "wanas-hoodie-s-olive"  # a seeded variant, for product_gid resolution
 
@@ -160,7 +160,7 @@ def test_update_product_on_an_unknown_product_id_is_refused(seeded):
 def test_update_product_still_applies_local_fields_with_no_shopify_variants(seeded):
     """A product row with no variants at all (should not happen in practice,
     but nothing here may crash on it) still takes the local-only edit."""
-    from backend.models import Product as ProductModel
+    from domain.models import Product as ProductModel
 
     orphan = ProductModel(
         product_id="orphan",

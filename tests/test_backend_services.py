@@ -4,9 +4,18 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from backend.db import SessionLocal, session_scope
-from backend.models import Client, Order, QueueKind, ShippingRate, StaffQueueItem, Variant
-from backend.services import carts, catalog, identities, inventory, notifications, orders, queues, shipping
+from domain.db import SessionLocal, session_scope
+from domain.models import Client, Order, QueueKind, ShippingRate, StaffQueueItem, Variant
+from domain.services import (
+    carts,
+    catalog,
+    identities,
+    inventory,
+    notifications,
+    orders,
+    queues,
+    shipping,
+)
 
 VARIANT = "wanas-hoodie-s-olive"
 
@@ -61,7 +70,7 @@ def test_local_decrement_sql_is_portable_to_postgres():
     """
     from sqlalchemy.dialects import postgresql
 
-    from backend.services.inventory import _local_decrement
+    from domain.services.inventory import _local_decrement
 
     captured = {}
 

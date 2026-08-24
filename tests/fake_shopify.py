@@ -19,7 +19,6 @@ import threading
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from backend.models import Product, Variant
 from backend.services import (
     shopify_admin_customers,
     shopify_admin_orders,
@@ -30,6 +29,7 @@ from backend.services import (
     shopify_webhooks,
 )
 from backend.services.shopify_catalog import LiveVariant
+from domain.models import Product, Variant
 
 
 class FakeShopify:
@@ -91,7 +91,7 @@ class FakeShopify:
             for v in variants
         ]
         products = {p.product_id: (p.name, p.category) for p in session.query(Product).all()}
-        # `backend.db` opens every SQLite transaction with BEGIN IMMEDIATE, so
+        # `domain.db` opens every SQLite transaction with BEGIN IMMEDIATE, so
         # even this read takes a write lock. Left open, it deadlocks the very
         # next thing the test does.
         session.rollback()

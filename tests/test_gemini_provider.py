@@ -478,7 +478,7 @@ def test_an_unknown_size_vocabulary_raises_rather_than_silently_nulling():
 def test_the_runtime_never_reads_an_option_position(seeded):
     """The app reads explicit size/color/length columns; nothing downstream
     could regress if the catalog is re-merged."""
-    from backend.models import Variant
+    from domain.models import Variant
 
     variant = seeded.get(Variant, "worker-jacket-m-black-long")
     if variant is None:  # id shape differs; take any Worker Jacket variant

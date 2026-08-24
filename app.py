@@ -21,12 +21,9 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
-from backend.db import engine, session_scope
-from backend.legal import router as legal_router
-from backend.models import Base, Product, ShippingRate, Variant
 from backend.public_media import router as public_media_router
-from backend.services.scheduler import scheduler
 from backend.webhooks.shopify import router as shopify_router
+from chatbot import session as assistant_session
 from chatbot.channels import instagram as instagram_channel
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
@@ -39,6 +36,11 @@ from dashboard.settings_api import router as dashboard_settings_router
 from dashboard.shopify_api import router as dashboard_shopify_router
 from dashboard.stats_api import router as dashboard_stats_router
 from dashboard.web import router as dashboard_router
+from domain.db import engine, session_scope
+from domain.legal import router as legal_router
+from domain.models import Base, Product, ShippingRate, Variant
+from domain.services import conversation_reset
+from domain.services.scheduler import scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("wanas")
@@ -58,8 +60,8 @@ def _ensure_catalog_seeded() -> None:
     missing -- so running this on every boot is safe; on an already-seeded
     database it does nothing.
     """
-    from backend.seed.governorates import import_governorates
-    from backend.seed.products import SeedError, import_products
+    from domain.seed.governorates import import_governorates
+    from domain.seed.products import SeedError, import_products
 
     try:
         with session_scope() as db:
@@ -175,6 +177,9 @@ async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
     _ensure_catalog_seeded()
     _ensure_shipping_fees_set()
+    # The one place domain/services/conversation_reset.py learns how to clear
+    # chat history, without domain/ ever importing the assistant layer.
+    conversation_reset.register_history_clearer(assistant_session.clear)
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()

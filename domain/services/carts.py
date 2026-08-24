@@ -10,9 +10,9 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.models import CartItem, Variant
 from common.money import money, to_decimal
 from config.settings import settings
+from domain.models import CartItem, Variant
 
 
 def _lines(session: Session, channel: str, external_id: str) -> list[CartItem]:

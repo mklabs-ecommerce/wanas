@@ -3,13 +3,17 @@ get_size_chart, get_shipping_fee, ask_governorate."""
 
 from __future__ import annotations
 
-from backend.models import Product
-from backend.services import catalog, runtime_flags, shipping
-from backend.services.size_charts import MEASUREMENT_NOTE, get_chart
 from chatbot import interactive
 from chatbot.tools.base import ToolContext, tool
 from common.money import money
 from config.settings import settings
+from domain.models import Product
+from domain.services import (
+    catalog,
+    runtime_flags,
+    shipping,
+)
+from domain.services.size_charts import MEASUREMENT_NOTE, get_chart
 
 
 @tool(

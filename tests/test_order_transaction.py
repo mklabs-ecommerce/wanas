@@ -15,16 +15,19 @@ import threading
 import pytest
 from sqlalchemy import func, select
 
-from backend.db import SessionLocal, session_scope
-from backend.models import Order, OrderItem, ShippingRate, Variant
-from backend.services import carts, orders
+from domain.db import SessionLocal, session_scope
+from domain.models import Order, OrderItem, ShippingRate, Variant
+from domain.services import (
+    carts,
+    orders,
+)
 
 VARIANT = "wanas-hoodie-s-olive"
 
 
 @pytest.fixture()
 def last_unit(cairo_rate, shopify):
-    from backend.db import SessionLocal as _SL
+    from domain.db import SessionLocal as _SL
 
     with _SL() as s:
         variant = s.get(Variant, VARIANT)

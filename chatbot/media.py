@@ -28,11 +28,11 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import Product
-from backend.services import runtime_flags
 from chatbot.providers import LLMProvider, ProviderError
 from chatbot.providers.base import ImageReading
 from config.settings import settings
+from domain.models import Product
+from domain.services import runtime_flags
 
 log = logging.getLogger("wanas.media")
 

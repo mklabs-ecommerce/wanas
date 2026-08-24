@@ -13,8 +13,12 @@ from __future__ import annotations
 
 import pytest
 
-from backend.models import Order, ShippingRate
-from backend.services import carts, orders, shopify_orders
+from backend.services import shopify_orders
+from domain.models import Order, ShippingRate
+from domain.services import (
+    carts,
+    orders,
+)
 
 VARIANT = "wanas-hoodie-s-olive"
 OTHER = "wanas-hoodie-m-black"
@@ -86,7 +90,7 @@ def test_the_stock_is_taken_once_not_twice(priced, shopify):
 
 
 def test_the_local_row_follows_without_double_counting(priced, shopify):
-    from backend.models import Variant
+    from domain.models import Variant
 
     shopify.set(VARIANT, qty=5)
     priced.get(Variant, VARIANT).stock_qty = 5
@@ -223,7 +227,7 @@ def test_a_failed_local_write_cancels_the_shopify_order(priced, shopify, monkeyp
 
 
 def test_cancelling_cancels_on_shopify_and_restocks_once(priced, shopify):
-    from backend.models import Variant
+    from domain.models import Variant
 
     shopify.set(VARIANT, qty=5)
     priced.get(Variant, VARIANT).stock_qty = 5
@@ -303,7 +307,7 @@ def test_a_swap_moves_the_line_on_shopify_too(priced, shopify):
 def test_an_order_with_no_shopify_id_still_cancels_the_old_way(priced, shopify):
     """Three orders predate this work. They have no remote order to cancel, and
     their stock only ever moved locally."""
-    from backend.models import Variant
+    from domain.models import Variant
 
     shopify.set(VARIANT, qty=5)
     carts.add(priced, "whatsapp", WHO, VARIANT, 2)

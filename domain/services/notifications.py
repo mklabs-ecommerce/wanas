@@ -23,11 +23,14 @@ from typing import Protocol
 
 from sqlalchemy.orm import Session
 
-from backend.models import Order, QueueKind, Variant, utcnow
-from backend.services import identities, queues
 from common.events import after_commit
 from common.money import money
 from config.settings import settings
+from domain.models import Order, QueueKind, Variant, utcnow
+from domain.services import (
+    identities,
+    queues,
+)
 
 log = logging.getLogger("wanas.notifications")
 
@@ -269,7 +272,7 @@ def _deliver_confirmation(to: str, text: str, order_id: str, *, channel: str = "
     # With no email in Phase 1 a failed confirmation means the
     # customer gets nothing at all, so someone has to call them. Its own
     # transaction, because the order it refers to has already committed.
-    from backend.db import session_scope
+    from domain.db import session_scope
 
     with session_scope() as session:
         queues.enqueue(

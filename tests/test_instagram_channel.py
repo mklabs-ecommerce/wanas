@@ -19,14 +19,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.db import SessionLocal
-from backend.models import Channel, QueueKind, WebhookEvent
-from backend.services import queues
 from chatbot.channels import instagram as adapter
 from chatbot.channels import whatsapp as whatsapp_adapter
 from chatbot.providers import set_provider
 from chatbot.providers.fake import RehearsalProvider
 from config.settings import settings
+from domain.db import SessionLocal
+from domain.models import Channel, QueueKind, WebhookEvent
+from domain.services import queues
 
 APP_SECRET = "ig-test-app-secret"
 VERIFY_TOKEN = "ig-verify-token"
@@ -272,7 +272,7 @@ def test_the_reply_goes_through_the_registered_instagram_sender_not_whatsapps(
     """The registry contract, exercised through the boot path: after
     `register_outbound_sender`, the Notification service's instagram_dm key
     holds an InstagramClient and the whatsapp key still holds WhatsApp's."""
-    from backend.services import notifications
+    from domain.services import notifications
 
     notifications.register_sender(notifications.LogSender(), channel="whatsapp")
     try:
@@ -284,7 +284,7 @@ def test_the_reply_goes_through_the_registered_instagram_sender_not_whatsapps(
 
 
 def test_register_outbound_sender_is_inert_when_unconfigured(monkeypatch):
-    from backend.services import notifications
+    from domain.services import notifications
 
     monkeypatch.setattr(
         adapter,

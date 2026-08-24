@@ -16,8 +16,9 @@ from __future__ import annotations
 import logging
 import threading
 
-from backend.services import instagram_token, reengagement
+from backend.services import instagram_token
 from config.settings import settings
+from domain.services import reengagement
 
 log = logging.getLogger("wanas.scheduler")
 

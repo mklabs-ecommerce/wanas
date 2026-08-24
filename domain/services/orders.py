@@ -12,7 +12,13 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import (
+from backend.services import (
+    shopify_catalog,
+    shopify_orders,
+)
+from common.events import after_commit
+from common.money import money, to_decimal
+from domain.models import (
     MODIFIABLE_STATUSES,
     STATUS_SEQUENCE,
     Client,
@@ -22,19 +28,15 @@ from backend.models import (
     Variant,
     utcnow,
 )
-from backend.services import (
+from domain.services import (
     carts,
     identities,
     inventory,
     notifications,
-    shopify_catalog,
-    shopify_orders,
 )
-from backend.services.ids import next_order_id
-from backend.services.shipping import get_fee
-from backend.services.shipping import resolve as resolve_governorate
-from common.events import after_commit
-from common.money import money, to_decimal
+from domain.services.ids import next_order_id
+from domain.services.shipping import get_fee
+from domain.services.shipping import resolve as resolve_governorate
 
 log = logging.getLogger("wanas.orders")
 
@@ -218,7 +220,7 @@ def place_order(
         # confirm_order contract, and it is literally true that no rate is
         # set, so the documented refusal is used with the valid list attached
         # so the model can re-ask instead of guessing.
-        from backend.services.shipping import valid_governorates
+        from domain.services.shipping import valid_governorates
 
         return {
             "error": "no_rate_set",
@@ -385,7 +387,7 @@ def place_order(
         session.add(order)
         session.flush()
 
-        from backend.models import OrderItem
+        from domain.models import OrderItem
 
         for line in lines:
             variant = session.get(Variant, line.variant_id)

@@ -14,10 +14,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.services import auth
 from config.settings import settings
 from dashboard import shopify_api
 from dashboard import web as dashboard
+from domain.services import auth
 
 SECRET = "test-dashboard-secret"
 VARIANT = "wanas-hoodie-s-olive"

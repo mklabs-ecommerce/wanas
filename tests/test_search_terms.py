@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from backend.services import catalog
-from backend.services.search_terms import matches, normalize, query_tokens
+from domain.services import catalog
+from domain.services.search_terms import matches, normalize, query_tokens
 
 # --- normalisation --------------------------------------------------------
 

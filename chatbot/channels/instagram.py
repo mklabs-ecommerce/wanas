@@ -33,10 +33,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request, Response
 
-from backend.db import session_scope
 from backend.integrations.instagram_client import InstagramClient
-from backend.models import Channel, QueueKind, utcnow
-from backend.services import identities, notifications, queues
 from chatbot import messages as msg
 from chatbot import session as session_store
 from chatbot.dispatcher import MessageDispatcher, Pending
@@ -44,6 +41,13 @@ from chatbot.runtime import claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff
 from common.security import verify_signature
 from config.settings import PROJECT_ROOT, settings
+from domain.db import session_scope
+from domain.models import Channel, QueueKind, utcnow
+from domain.services import (
+    identities,
+    notifications,
+    queues,
+)
 
 log = logging.getLogger("wanas.channel.instagram")
 
@@ -397,7 +401,7 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     The agent never runs on comment text: a full turn on "بكام؟" with no
     product context answers worse than an opener inviting them to say it.
     """
-    from backend.models import InstagramCommentReply
+    from domain.models import InstagramCommentReply
 
     comment_id = str(value.get("id") or "")
     commenter = (value.get("from") or {}).get("id")
@@ -544,7 +548,7 @@ def _accept_comment(value: dict, entry_time=None) -> None:
 
 
 def _mark_comment(comment_id: str, **flags: bool) -> None:
-    from backend.models import InstagramCommentReply
+    from domain.models import InstagramCommentReply
 
     with session_scope() as db:
         row = db.get(InstagramCommentReply, comment_id)
@@ -604,7 +608,7 @@ def _deliver(external_id: str, pending: Pending) -> None:
 
 
 def runtime_flags_enabled(db) -> bool:
-    from backend.services import runtime_flags
+    from domain.services import runtime_flags
 
     return runtime_flags.get(db, "interactive_messages_enabled", settings.interactive_messages_enabled)
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from backend.models import ChannelIdentity, Client, utcnow
+from domain.models import ChannelIdentity, Client, utcnow
 
 
 def get_or_create(session: Session, channel: str, external_id: str) -> ChannelIdentity:

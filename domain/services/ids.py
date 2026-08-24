@@ -13,7 +13,7 @@ from __future__ import annotations
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from backend.models import Counter, QueueKind
+from domain.models import Counter, QueueKind
 
 ORDER_COUNTER = "order_id"
 QUEUE_COUNTER = "queue_id"

@@ -43,14 +43,20 @@ from fastapi import APIRouter, Body, Cookie, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import and_, or_, select
 
-from backend.db import session_scope
-from backend.models import ChannelIdentity, QueueKind, SessionRow
-from backend.services import auth, conversation_reset, identities, notifications, queues
 from chatbot import messages as msg
 from chatbot import session as session_store
 from chatbot.display import display_history
 from chatbot.media_serving import resolve_servable_path
 from config.settings import settings
+from domain.db import session_scope
+from domain.models import ChannelIdentity, QueueKind, SessionRow
+from domain.services import (
+    auth,
+    conversation_reset,
+    identities,
+    notifications,
+    queues,
+)
 
 log = logging.getLogger("wanas.dashboard")
 

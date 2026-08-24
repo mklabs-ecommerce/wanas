@@ -9,9 +9,14 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
-from backend.models import Client, Order, QueueKind, ShippingRate, Variant
-from backend.services import carts, identities, orders, queues
 from chatbot.tools.base import REGISTRY, ToolContext, call_tool, load_all
+from domain.models import Client, Order, QueueKind, ShippingRate, Variant
+from domain.services import (
+    carts,
+    identities,
+    orders,
+    queues,
+)
 
 load_all()
 
@@ -173,7 +178,7 @@ def test_add_to_cart_out_of_stock_returns_alternatives(ctx):
 def test_add_to_cart_out_of_stock_joins_the_waitlist(ctx):
     """The only signal this app gets that someone wanted a sold-out variant
     -- see backend/services/waitlist.py."""
-    from backend.services import waitlist
+    from domain.services import waitlist
 
     call(ctx, "add_to_cart", variant_id=SOLD_OUT)
     entries = waitlist.open_entries(ctx.session)
@@ -264,7 +269,7 @@ def test_size_chart_image_becomes_an_attachment(ctx):
 def test_no_chart_returns_that_and_nothing_else(ctx):
     """Returning a neighbouring product's chart is the failure this shape
     exists to prevent."""
-    product = ctx.session.get(__import__("backend.models", fromlist=["Product"]).Product, "wanas-hoodie")
+    product = ctx.session.get(__import__("domain.models", fromlist=["Product"]).Product, "wanas-hoodie")
     product.size_chart = None
     ctx.session.flush()
     assert call(ctx, "get_size_chart", product_id="wanas-hoodie") == {

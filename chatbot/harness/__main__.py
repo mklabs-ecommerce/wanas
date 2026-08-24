@@ -17,12 +17,15 @@ import argparse
 import logging
 import sys
 
-from backend.db import engine, session_scope
-from backend.models import Base
-from backend.services import identities, notifications
 from chatbot import session as session_store
 from chatbot.runtime import handle_message
 from config.settings import settings
+from domain.db import engine, session_scope
+from domain.models import Base
+from domain.services import (
+    identities,
+    notifications,
+)
 
 BANNER = """
 ┌─ Wanas Gallery — local chat harness ──────────────────────────────────┐
@@ -101,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             print("· conversation un-paused (this is a staff action in the dashboard)\n")
             continue
         if text == "/cart":
-            from backend.services import carts
+            from domain.services import carts
 
             with session_scope() as db:
                 print(carts.cart_payload(db, args.channel, args.external_id), "\n")

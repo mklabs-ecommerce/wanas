@@ -10,11 +10,11 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.db import SessionLocal
-from backend.models import Order, QueueKind, ShippingRate, Variant
-from backend.services import queues
 from chatbot.providers import set_provider
 from chatbot.providers.fake import RehearsalProvider
+from domain.db import SessionLocal
+from domain.models import Order, QueueKind, ShippingRate, Variant
+from domain.services import queues
 
 WHO = "201000000001"
 VARIANT = "wanas-hoodie-s-olive"

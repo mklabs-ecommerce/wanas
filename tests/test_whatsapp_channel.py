@@ -16,12 +16,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.models import Order, QueueKind, ShippingRate
-from backend.services import queues
 from chatbot.channels import whatsapp as adapter
 from chatbot.providers import set_provider
 from chatbot.providers.fake import RehearsalProvider
 from config.settings import settings
+from domain.models import Order, QueueKind, ShippingRate
+from domain.services import queues
 
 APP_SECRET = "test-app-secret"
 VERIFY_TOKEN = "test-verify-token"
@@ -419,7 +419,7 @@ def test_a_local_photo_still_goes_through_the_cached_upload(configured, monkeypa
 
 
 def test_the_notification_sender_is_only_registered_when_configured(monkeypatch):
-    from backend.services import notifications
+    from domain.services import notifications
 
     monkeypatch.setattr(adapter, "settings", dataclasses.replace(settings, whatsapp_access_token=""))
     assert adapter.register_outbound_sender() is False

@@ -12,8 +12,8 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from backend.models import ShippingRate
 from config.settings import DATA_DIR
+from domain.models import ShippingRate
 
 GOVERNORATES_PATH = DATA_DIR / "governorates.json"
 EXPECTED_GOVERNORATES = 27

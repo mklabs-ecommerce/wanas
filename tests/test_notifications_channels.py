@@ -10,9 +10,12 @@ channel's client.
 
 from __future__ import annotations
 
-from backend.db import SessionLocal, session_scope
-from backend.models import Channel, QueueKind
-from backend.services import notifications, queues
+from domain.db import SessionLocal, session_scope
+from domain.models import Channel, QueueKind
+from domain.services import (
+    notifications,
+    queues,
+)
 
 INSTAGRAM = Channel.INSTAGRAM_DM.value  # "instagram_dm" -- the plan's constant
 

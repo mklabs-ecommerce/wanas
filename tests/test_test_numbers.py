@@ -16,10 +16,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.services import auth, dashboard_stats, test_numbers
 from config.settings import settings
 from dashboard import settings_api
 from dashboard import web as dashboard
+from domain.services import (
+    auth,
+    dashboard_stats,
+    test_numbers,
+)
 
 SECRET = "test-dashboard-secret"
 
@@ -90,7 +94,7 @@ def test_summarize_excludes_orders_from_a_marked_number():
 def test_summarize_matches_regardless_of_which_egyptian_spelling_shopify_stored():
     # Staff marked "01009999999"; Shopify happens to have stored the order
     # under the "20"-prefixed international form.
-    from backend.services.identities import phone_variants
+    from domain.services.identities import phone_variants
 
     orders_in = [_order(total=9999, customer_phone="201009999999")]
     result = dashboard_stats.summarize(orders_in, exclude_phones=set(phone_variants("01009999999")))

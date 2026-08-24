@@ -8,8 +8,8 @@ from __future__ import annotations
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from backend.models import Staff
-from backend.services import auth
+from domain.models import Staff
+from domain.services import auth
 
 
 def staff_for(db: Session, token: str | None) -> Staff | None:

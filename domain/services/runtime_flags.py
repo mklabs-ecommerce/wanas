@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import RuntimeSetting, utcnow
+from domain.models import RuntimeSetting, utcnow
 
 
 @dataclass(frozen=True)

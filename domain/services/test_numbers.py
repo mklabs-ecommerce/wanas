@@ -15,8 +15,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import TestPhoneNumber, utcnow
-from backend.services.identities import phone_variants
+from domain.models import TestPhoneNumber, utcnow
+from domain.services.identities import phone_variants
 
 
 def list_numbers(session: Session) -> list[TestPhoneNumber]:

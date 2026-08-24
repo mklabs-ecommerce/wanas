@@ -15,9 +15,9 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
-from backend.models import UNREADABLE_HISTORY, SessionRow, utcnow
 from chatbot.messages import USER
 from config.settings import settings
+from domain.models import UNREADABLE_HISTORY, SessionRow, utcnow
 
 log = logging.getLogger("wanas.session")
 

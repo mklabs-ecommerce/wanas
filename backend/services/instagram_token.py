@@ -22,9 +22,9 @@ from datetime import UTC, timedelta
 
 import httpx
 
-from backend.db import session_scope
-from backend.models import IntegrationToken, QueueKind, utcnow
 from config.settings import settings
+from domain.db import session_scope
+from domain.models import IntegrationToken, QueueKind, utcnow
 
 log = logging.getLogger("wanas.instagram_token")
 
@@ -172,7 +172,7 @@ def _alert(detail: str) -> None:
     """A token nine days from death is a staff problem, not a silent one."""
     try:
         with session_scope() as session:
-            from backend.services import queues
+            from domain.services import queues
 
             queues.enqueue(
                 session,

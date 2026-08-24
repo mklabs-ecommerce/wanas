@@ -34,8 +34,8 @@ from backend.integrations.shopify_client import (
     ShopifyUnavailable,
     get_admin_client,
 )
-from backend.models import Product, Variant
 from backend.services import shopify_catalog, shopify_inventory
+from domain.models import Product, Variant
 
 log = logging.getLogger("wanas.shopify.admin_products")
 

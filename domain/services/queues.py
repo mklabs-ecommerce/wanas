@@ -10,8 +10,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import QueueStatus, StaffQueueItem, utcnow
-from backend.services.ids import next_queue_id
+from domain.models import QueueStatus, StaffQueueItem, utcnow
+from domain.services.ids import next_queue_id
 
 
 def enqueue(

@@ -26,15 +26,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from backend.db import session_scope  # noqa: E402
 from backend.integrations.shopify_client import (  # noqa: E402
     ShopifyConfigError,
     ShopifyUnavailable,
     get_client,
 )
-from backend.models import Product, Variant  # noqa: E402
-from backend.services import catalog, shopify_catalog  # noqa: E402
+from backend.services import shopify_catalog  # noqa: E402
 from config.settings import settings  # noqa: E402
+from domain.db import session_scope  # noqa: E402
+from domain.models import Product, Variant  # noqa: E402
+from domain.services import catalog  # noqa: E402
 
 
 def head(text: str) -> None:

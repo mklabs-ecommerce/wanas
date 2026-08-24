@@ -11,15 +11,21 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from backend.db import SessionLocal, session_scope
-from backend.models import (
+from domain.db import SessionLocal, session_scope
+from domain.models import (
     AbandonedCartNudge,
     CartItem,
     QueueKind,
     StockWaitlistEntry,
     utcnow,
 )
-from backend.services import identities, notifications, queues, reengagement, waitlist
+from domain.services import (
+    identities,
+    notifications,
+    queues,
+    reengagement,
+    waitlist,
+)
 
 VARIANT = "wanas-hoodie-s-olive"
 SOLD_OUT = "wanas-hoodie-m-olive"

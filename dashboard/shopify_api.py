@@ -18,9 +18,6 @@ from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from backend.db import session_scope
-from backend.models import Order, Product, Variant
-from backend.services import orders as orders_service
 from backend.services import (
     shopify_admin_customers,
     shopify_admin_orders,
@@ -29,6 +26,9 @@ from backend.services import (
 )
 from backend.services.shopify_catalog import ShopifyConfigError, ShopifyUnavailable
 from dashboard.guard import staff_for, unauthenticated
+from domain.db import session_scope
+from domain.models import Order, Product, Variant
+from domain.services import orders as orders_service
 
 router = APIRouter(prefix="/dashboard/api/shopify", tags=["dashboard-shopify"])
 

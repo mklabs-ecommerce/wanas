@@ -14,11 +14,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 
-from backend.db import session_scope
-from backend.models import Order, QueueKind, QueueStatus, StaffQueueItem
-from backend.services import orders as orders_service
-from backend.services import queues
 from dashboard.guard import staff_for, unauthenticated
+from domain.db import session_scope
+from domain.models import Order, QueueKind, QueueStatus, StaffQueueItem
+from domain.services import orders as orders_service
+from domain.services import queues
 
 router = APIRouter(prefix="/dashboard/api/queue", tags=["dashboard-queue"])
 

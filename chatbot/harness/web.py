@@ -23,12 +23,16 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from backend.db import session_scope
-from backend.services import carts, identities, notifications
 from chatbot import session as session_store
 from chatbot.display import display_history, turn_detail
 from chatbot.media_serving import resolve_servable_path
 from chatbot.runtime import handle_message
+from domain.db import session_scope
+from domain.services import (
+    carts,
+    identities,
+    notifications,
+)
 
 log = logging.getLogger("wanas.harness.web")
 

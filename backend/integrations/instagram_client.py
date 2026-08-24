@@ -39,8 +39,8 @@ from pathlib import Path
 
 import httpx
 
-from backend.services.notifications import OutboundMessage
 from config.settings import PROJECT_ROOT, settings
+from domain.services.notifications import OutboundMessage
 
 log = logging.getLogger("wanas.instagram")
 
@@ -480,8 +480,8 @@ class InstagramClient:
         `recipient_id` -- that is the commenter's IGSID and how the DM thread
         that follows is keyed. It is returned as the message's `to`.
         """
-        from backend.db import session_scope
-        from backend.models import InstagramCommentReply
+        from domain.db import session_scope
+        from domain.models import InstagramCommentReply
 
         with session_scope() as session:
             row = session.get(InstagramCommentReply, comment_id)

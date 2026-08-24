@@ -17,12 +17,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.models import QueueKind
-from backend.services import auth, identities, notifications, queues
 from chatbot import messages as msg
 from chatbot import session as session_store
 from config.settings import settings
 from dashboard import web as dashboard
+from domain.models import QueueKind
+from domain.services import (
+    auth,
+    identities,
+    notifications,
+    queues,
+)
 
 SECRET = "test-dashboard-secret"
 CUSTOMER = "201555999111"
@@ -298,7 +303,7 @@ def test_the_reply_is_attributed_to_the_staff_member_who_sent_it(logged_in, seed
 
     resolved = queues.open_items(seeded, QueueKind.HANDOFF.value)
     assert resolved == []  # already resolved
-    from backend.models import StaffQueueItem
+    from domain.models import StaffQueueItem
 
     item = seeded.query(StaffQueueItem).filter_by(channel=CHANNEL, external_id=CUSTOMER).first()
     assert item.resolved_by == staff.staff_id
@@ -327,7 +332,7 @@ def test_a_failed_delivery_does_not_unpause_or_resolve(logged_in, seeded, monkey
 
     class Refusing:
         def send_text(self, to, text, *, template=None):
-            from backend.services.notifications import OutboundMessage
+            from domain.services.notifications import OutboundMessage
 
             return OutboundMessage(to=to, text=text, delivered=False, error="boom")
 
@@ -421,7 +426,7 @@ def test_takeover_between_replies_is_the_full_multi_message_flow(logged_in, seed
 
 
 def test_reset_clears_history_pause_and_cart(logged_in, seeded):
-    from backend.models import CartItem
+    from domain.models import CartItem
 
     make_paused(seeded)
     seeded.add(CartItem(channel=CHANNEL, external_id=CUSTOMER, variant_id="wanas-hoodie-s-olive", quantity=1))
@@ -437,8 +442,8 @@ def test_reset_clears_history_pause_and_cart(logged_in, seeded):
 
 
 def test_reset_unlinks_the_client_but_never_touches_the_client_record(logged_in, seeded):
-    from backend.models import Client
-    from backend.services import identities as identities_service
+    from domain.models import Client
+    from domain.services import identities as identities_service
 
     client = Client(full_name="Test Customer", phone=CUSTOMER)
     seeded.add(client)
