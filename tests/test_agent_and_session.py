@@ -223,15 +223,66 @@ def test_a_dangling_promise_is_retried_instead_of_sent(seeded):
     assert roles == ["user", "assistant", "tool_results", "assistant"]
 
 
-def test_a_short_reply_that_only_looks_like_a_promise_is_retried_once_then_sent(seeded):
-    """If the model keeps dangling a promise on retry, it is sent rather than
-    looping forever -- the retry is a nudge, not a guarantee."""
+def test_a_model_that_keeps_promising_gets_the_fallback_not_dead_air(seeded):
+    """The retry is a nudge, not a guarantee -- but a promise must never reach
+    the customer. Nothing produces a second message for a turn, so a promise
+    that is sent *is* the dead air. After the retries it becomes a question
+    that stands on its own."""
     provider = ScriptedProvider(
-        [ModelReply(text="هقولك دلوقتي"), ModelReply(text="هقولك تاني")]
+        [
+            ModelReply(text="هقولك دلوقتي"),
+            ModelReply(text="ثواني هشوفلك"),
+            ModelReply(text="لحظة هتأكدلك"),
+        ]
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "ايه المتاح", provider=provider)
-    assert reply.text == "هقولك تاني"
-    assert len(provider.calls) == 2
+    assert reply.text == agent.PROMISE_FALLBACK
+    assert reply.error == "dangling_promise"
+    assert len(provider.calls) == 3
+
+
+def test_a_stock_check_promise_never_ends_the_turn(seeded):
+    """The recurring production bug, in its real wording: the customer asks
+    whether one colour is available, the model answers only "one second, I'll
+    check for you" and calls nothing. The turn must not end there."""
+    provider = ScriptedProvider(
+        [
+            ModelReply(text="تمام يا فندم، ثواني بس هشوفلك المتاح في اللون ده وأقولك"),
+            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            ModelReply(text="الزيتي متاح في S و M بـ 750 جنيه"),
+        ]
+    )
+    reply = agent.run_turn(
+        seeded, CHANNEL, WHO, "الهودي الزيتي متاح؟", provider=provider
+    )
+    assert "get_variants" in reply.tool_calls
+    assert not agent._is_dangling_promise(reply.text, tools_called=bool(reply.tool_calls))
+    assert "750" in reply.text
+
+
+def test_a_promise_after_a_tool_call_is_still_caught(seeded):
+    """The variant the old detector could never see: the model *did* look
+    something up and then still ended the turn on "I'll get back to you"."""
+    provider = ScriptedProvider(
+        [
+            reply_with("get_categories"),
+            ModelReply(text="ثانية واحدة وهراجعلك المخزن"),
+            ModelReply(text="عندنا Joggers & Sweatpants متاحة دلوقتي"),
+        ]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "ايه المتاح", provider=provider)
+    assert reply.text == "عندنا Joggers & Sweatpants متاحة دلوقتي"
+
+
+def test_a_real_answer_that_mentions_a_promise_word_is_sent_untouched(seeded):
+    """The guard must not eat an actual answer. This one delivers the numbers
+    and only then offers to follow up."""
+    answer = (
+        "الأسود متاح في L و XL بـ 850 جنيه، ولو حبيت أي لون تاني قولي وأشوفلك"
+    )
+    provider = ScriptedProvider([reply_with("get_categories"), ModelReply(text=answer)])
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "الأسود؟", provider=provider)
+    assert reply.text == answer
 
 
 # --- runtime --------------------------------------------------------------

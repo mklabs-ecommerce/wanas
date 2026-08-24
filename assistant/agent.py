@@ -94,34 +94,99 @@ def strip_markdown(text: str) -> tuple[str, bool]:
 
 
 #: "I'll tell you now" / "let me get back to you" said as the entire reply,
-#: with no tool call behind it -- the exact bug this guards: the model
-#: promises a follow-up («هقولك دلوقتي», «هبعتلك التفاصيل») and then the turn
-#: just ends, because a reply with no tool_calls *is* the final answer as far
-#: as the loop in run_turn is concerned. Matched only against short replies:
-#: a longer one that happens to use "هقولك" while also stating the real
-#: answer ("هقولك إن السعر 500 جنيه") is not the dangling case this exists for.
+#: with nothing behind it -- the exact bug this guards: the model promises a
+#: follow-up («ثواني هشوفلك المتاح», «هقولك دلوقتي») and then the turn just
+#: ends, because a reply with no tool_calls *is* the final answer as far as
+#: the loop in run_turn is concerned. There is no second turn: nothing in this
+#: system ever wakes up to finish a promise, so a promise that reaches the
+#: customer is dead air by construction.
+#:
+#: Two families, because the model phrases it both ways: an explicit future
+#: verb («هشوفلك», «هراجع», «هتأكدلك», "I'll check") and a bare waiting marker
+#: with no verb at all («ثواني», «لحظة», "one moment"). The old pattern only
+#: listed a handful of future verbs and matched none of the stock-check
+#: wordings the bot actually uses, which is why this kept happening.
+_PROMISE_VERBS = (
+    r"(?:قول|شوف|بص|راجع|تأكد|تاكد|أكد|اكد|رد|بعت|جيب|وضح|رجع|عرف|كلم|شيك|تشيك|دور|سأل|اسأل|جبلك)"
+)
 _PROMISE_PATTERN = re.compile(
-    r"ه(ا)?(قول|رد\s*عليك|بعتلك|جيبلك|وضحلك|رجعلك|أكدلك|اكدلك|عرفلك|كلمك)"
-    r"|i'?ll (get back|check and|tell you|let you know)"
-    r"|let me (check|get back)"
+    # ه/ها/هت + verb («هشوفلك», «هتأكدلك», «هاقولك»), and the present-tense
+    # «بشوف/بتأكد» form that means the same thing.
+    rf"\bه[اأ]?ت?{_PROMISE_VERBS}"
+    rf"|\bب{_PROMISE_VERBS}لك"
+    rf"|\bأ{_PROMISE_VERBS}لك"
+    # Bare waiting markers, no verb needed.
+    r"|ثوان|ثانية|لحظة|لحظه|دقيقة واحدة|استنى|إستنى|انتظر|جاري ال"
+    r"|i'?ll (get back|check|tell you|let you know|find out|confirm)"
+    r"|let me (check|get back|see|find out|confirm)"
+    r"|(one|just a) (moment|sec|second)|hold on|checking (now|on that)|bear with me"
+)
+
+#: A reply that actually delivered something: a number (a price, a quantity, a
+#: size), or a verdict the customer can act on. Used only to keep a *long*
+#: substantive reply that happens to contain «هقولك» from being treated as a
+#: promise.
+_SUBSTANCE = re.compile(r"\d|مش متاح|مش متوفر|خلص|نفد|sold out|out of stock")
+
+#: How many times a dangling promise is sent back to the model before the
+#: deterministic fallback is used instead. Never 0 retries (the model usually
+#: gets it right when told) and never unbounded (a customer is waiting).
+_PROMISE_RETRY_LIMIT = 2
+
+#: The last resort, when the model will not stop promising. Sent *instead of*
+#: the promise: it asks for the one thing that lets the next turn answer for
+#: real, and -- unlike the promise -- it needs no follow-up from us to make
+#: sense. Dead air is the failure; a question is not.
+PROMISE_FALLBACK = (
+    "معلش، قولي اسم المنتج واللون والمقاس اللي عايزه بالظبط وأقولك المتاح منه فورًا."
 )
 
 
-def _is_dangling_promise(text: str) -> bool:
-    if not text or len(text.split()) > 12:
+def _is_dangling_promise(text: str, *, tools_called: bool) -> bool:
+    """A final reply that promises a follow-up which will never come.
+
+    The structural signal, not the wording, is what makes this reliable: a
+    promise-shaped reply in a turn where **no tool ran** cannot possibly
+    contain a looked-up answer, whatever it says. Widening the phrase list was
+    the previous fix and it kept missing new phrasings; this fires on the
+    invariant instead and uses the phrase list only to decide "promise-shaped".
+    """
+    if not text:
         return False
-    return bool(_PROMISE_PATTERN.search(text.lower()))
+    words = len(text.split())
+    if words > 40:
+        # Long enough that it is a real answer with a courtesy line in it.
+        return False
+    if not _PROMISE_PATTERN.search(text.lower()):
+        return False
+    if not _SUBSTANCE.search(text.lower()):
+        # Promise-shaped and nothing concrete in it: dead air whether or not a
+        # tool ran, because the customer is left with no answer either way.
+        return True
+    # It does carry something concrete. Only treat it as dangling when it is
+    # also very short *and* nothing was looked up -- "ثواني هشوفلك الـ 3
+    # ألوان" is still a promise; a real answer that ends with a courtesy
+    # line is not.
+    return not tools_called and words <= 12
 
 
-#: Appended to the system prompt, once, when a dangling promise is caught --
-#: never stored in history, since the point is the model should not see its
-#: own bad reply and repeat the pattern, only be told to actually act.
+#: Appended to the system prompt when a dangling promise is caught -- never
+#: stored in history, since the point is the model should not see its own bad
+#: reply and repeat the pattern, only be told to actually act.
 _PROMISE_NUDGE = (
-    "\n\nتنبيه داخلي: ردك اللي فات كان مجرد وعد (زي 'هقولك دلوقتي') من غير ما "
-    "تكون فعلاً ناديت أداة أو قلت المعلومة الحقيقية. ممنوع ترسل وعد من غير "
-    "تنفيذه في نفس الرد. نادي الأداة المناسبة دلوقتي (زي get_products أو "
-    "get_categories) وجاوب بالمعلومة الحقيقية على طول، من غير ما تقول هتقول "
-    "أو هتبعت تاني."
+    "\n\nتنبيه داخلي: ردك اللي فات كان مجرد وعد (زي 'ثواني هشوفلك' أو 'هقولك "
+    "دلوقتي') من غير ما تقول المعلومة الحقيقية. مفيش رسالة تانية هتتبعت بعد "
+    "ردك -- الرد ده هو آخر حاجة العميل هيشوفها في الدور ده، فالوعد معناه سكوت "
+    "تام. نادي الأداة المناسبة دلوقتي (get_products أو get_variants للمتاح "
+    "والمقاسات والألوان) وجاوب بالمعلومة نفسها في نفس الرد."
+)
+
+#: The second, blunter attempt. Same content, no room left for a polite
+#: "one moment" in front of it.
+_PROMISE_NUDGE_FINAL = (
+    "\n\nتنبيه أخير: ممنوع تمامًا أي جملة انتظار أو وعد ('ثواني'، 'هشوفلك'، "
+    "'هقولك'، 'لحظة'). لازم ردك الجاي يبدأ بالمعلومة نفسها بعد ما تنادي "
+    "get_variants/get_products، أو يسأل العميل سؤال محدد لو ناقصك بيانات."
 )
 
 
@@ -190,7 +255,7 @@ def run_turn(
         history=history,
     )
     called: list[str] = []
-    promise_retried = False
+    promise_retries = 0
 
     for _turn in range(settings.tool_loop_cap):
         try:
@@ -234,20 +299,52 @@ def run_turn(
             text_out, tool_leaked = strip_tool_leaks(text_out)
             text_out, _ = strip_markdown(text_out)
 
-            if not promise_retried and _is_dangling_promise(text_out):
-                # Send it back once instead of letting a promise with nothing
-                # behind it reach the customer -- the model never sees this
-                # reply (it is not appended to history), only a nudge telling
-                # it to actually call the tool this time.
-                log.warning(
-                    "dangling promise from provider %s for %s/%s, forcing a retry",
+            if _is_dangling_promise(text_out, tools_called=bool(called)):
+                # A promise is never sent. Nothing in this system produces a
+                # second message for a turn that already answered, so a
+                # promise reaching the customer *is* the dead air. Retry with
+                # a nudge the model can act on; if it still will not answer,
+                # send the deterministic question instead of the promise.
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "dangling promise from provider %s for %s/%s "
+                        "(tools this turn: %s), retry %d/%d",
+                        provider.name,
+                        channel,
+                        external_id,
+                        called or "none",
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    nudge = (
+                        _PROMISE_NUDGE
+                        if promise_retries == 1
+                        else _PROMISE_NUDGE_FINAL
+                    )
+                    # The model never sees its own bad reply (it is not
+                    # appended to history), only the instruction to act.
+                    system_prompt = f"{system_prompt}{nudge}"
+                    continue
+
+                log.error(
+                    "provider %s kept promising a follow-up for %s/%s after %d retries; "
+                    "sending the fallback question instead of dead air",
                     provider.name,
                     channel,
                     external_id,
+                    _PROMISE_RETRY_LIMIT,
                 )
-                promise_retried = True
-                system_prompt = f"{system_prompt}{_PROMISE_NUDGE}"
-                continue
+                text_out = PROMISE_FALLBACK
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    error="dangling_promise",
+                )
 
             if path_leaked or tool_leaked:
                 # Worth logging: it means the prompt or the tool descriptions
