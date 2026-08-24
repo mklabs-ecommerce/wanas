@@ -1,7 +1,7 @@
 """A product added straight in Shopify Admin -- not through the dashboard's
 own create panel -- gets no wanas.db row, and `catalog.get_products` (the
 bot's search) only ever reads wanas.db. See
-`backend/services/shopify_product_import.py` for the full story.
+`integrations/shopify/product_import.py` for the full story.
 """
 
 from __future__ import annotations

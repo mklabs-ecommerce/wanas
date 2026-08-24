@@ -2,12 +2,12 @@
 
 Shopify owns price, stock and the variant list; wanas.db owns `category`,
 `department`, `style`, `collection` and `size_chart` -- fields Shopify has no
-place for (see `backend/services/catalog.py`'s module docstring). A product
+place for (see `domain/services/catalog.py`'s module docstring). A product
 created only on Shopify through this module would be invisible to the bot's
 own search, which reads those fields from Postgres -- so every write here
 pushes to Shopify first (the source of truth) and then mirrors the result
 into local `Product` / `Variant`, using the same variant_id/SKU convention
-`backend/seed/products.py` already writes.
+`domain/seed/products.py` already writes.
 
 **No new column stores a Shopify product id.** Nothing in this codebase
 matches a product by anything other than SKU (`shopify_catalog.py`'s own

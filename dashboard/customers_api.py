@@ -4,7 +4,7 @@ Deliberately separate from `dashboard/shopify_api.py`'s Shopify
 customers -- merging the two would silently under- or double-count exactly
 the way a Postgres-only revenue number would (see `docs/ARCHITECTURE.md`).
 A `Client` exists only once the bot's own checkout created one
-(`backend/services/orders.py::_client_for_order`); a customer who has only
+(`domain/services/orders.py::_client_for_order`); a customer who has only
 ever ordered on the website has no row here at all, and that is correct, not
 a bug to fix by inventing one.
 """

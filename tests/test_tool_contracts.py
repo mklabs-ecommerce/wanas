@@ -177,7 +177,7 @@ def test_add_to_cart_out_of_stock_returns_alternatives(ctx):
 
 def test_add_to_cart_out_of_stock_joins_the_waitlist(ctx):
     """The only signal this app gets that someone wanted a sold-out variant
-    -- see backend/services/waitlist.py."""
+    -- see domain/services/waitlist.py."""
     from domain.services import waitlist
 
     call(ctx, "add_to_cart", variant_id=SOLD_OUT)

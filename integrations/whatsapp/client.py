@@ -6,10 +6,11 @@ flow end to end before business verification completes. Swapping to a BSP later
 touches the send call, the signature check and template submission, and nothing
 else, provided the adapter stays behind this interface.
 
-This lives in /backend/ and not /assistant/ on purpose. The Notification service
-has to send confirmations and status pushes, and /backend/ must never import
-/assistant/ -- the dependency direction is one-way. Inbound message handling is
-the adapter's job and lives in assistant/channels/whatsapp.py.
+This lives in integrations/ and not assistant/ on purpose. The Notification
+service (domain/services/notifications.py) has to send confirmations and
+status pushes, and domain/ must never import assistant/ -- the dependency
+direction is one-way. Inbound message handling is the adapter's job and
+lives in assistant/channels/whatsapp.py.
 """
 
 from __future__ import annotations

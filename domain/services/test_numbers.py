@@ -1,6 +1,6 @@
 """Staff-marked "this is me testing" phone numbers.
 
-Exists for one reason: `backend/services/dashboard_stats.py` reads live from
+Exists for one reason: `domain/services/dashboard_stats.py` reads live from
 Shopify, and a store owner testing the bot from their own WhatsApp number
 places real Shopify orders indistinguishable from a customer's -- every
 order the bot creates carries the same tags (`shopify_orders.ORDER_TAGS`)

@@ -10,8 +10,8 @@ never collects an email.
 Outbound delivery is a port, not an import. `LogSender` is the default, so
 every proactive message is produced, formatted and observable before any Meta
 credential exists; registering the real client at startup is the only change.
-This is also what keeps the dependency direction one-way: /backend/ knows the
-interface, and never imports /assistant/.
+This is also what keeps the dependency direction one-way: domain/ knows the
+interface, and never imports assistant/.
 """
 
 from __future__ import annotations

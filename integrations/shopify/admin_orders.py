@@ -1,6 +1,6 @@
 """Order management for the staff dashboard: list, detail, and fulfilment.
 
-`backend/services/shopify_orders.py` already creates, cancels and edits an
+`integrations/shopify/orders.py` already creates, cancels and edits an
 order the *bot* placed. This module adds what nothing needed before staff
 could see the whole store from one place: a paginated list of every order
 (bot **and** website -- see `docs/ARCHITECTURE.md`, this shop sells through
@@ -10,13 +10,13 @@ order today.
 Deliberately thin on cancel/edit: those already exist, correctly, in
 `shopify_orders.py`. This module's `cancel_order`/`edit_quantity` are only
 the "prefer the local order service when a local row exists" routing --
-`backend/services/orders.py`'s `cancel()` / `modify_quantity()` are already
+`domain/services/orders.py`'s `cancel()` / `modify_quantity()` are already
 transactional and already notify the customer; calling `shopify_orders`
 directly a second way for the same order would be the two-writers problem in
 a different shape.
 
 Uses `get_admin_client()`, not `get_client()` -- see
-`backend/integrations/shopify_client.py`: a dashboard page paginating through
+`integrations/shopify/client.py`: a dashboard page paginating through
 orders can wait longer than a customer mid-conversation, and the two must not
 share a throttle-pause state.
 """

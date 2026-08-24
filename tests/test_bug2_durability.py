@@ -87,7 +87,7 @@ def test_the_opt_in_variable_is_honoured_over_an_ambient_url(monkeypatch):
     monkeypatch.setenv("WANAS_TEST_DATABASE_URL", opt_in)
     assert resolve_test_database_url() == opt_in
     # And the guard then accepts an engine aimed exactly there (normalised,
-    # the same way backend/db.py normalises it at engine creation).
+    # the same way domain/db.py normalises it at engine creation).
     engine = create_engine(normalise_database_url(opt_in))
     assert_safe_to_drop(engine)
 

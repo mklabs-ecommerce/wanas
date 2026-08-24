@@ -8,7 +8,7 @@ adapter can drift from the other; a signature check that drifts is a webhook
 that either refuses real traffic or accepts forged requests.
 
 Shopify signs differently (base64 HMAC-SHA256) and keeps its own check in
-`backend/webhooks/shopify.py`.
+`integrations/shopify/webhooks.py`.
 """
 
 from __future__ import annotations

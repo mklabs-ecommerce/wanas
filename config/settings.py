@@ -162,7 +162,7 @@ class Settings:
     public_base_url: str
 
     #: How often the background job checks for back-in-stock waitlists and
-    #: idle carts (`backend/services/scheduler.py`). <= 0 disables the loop
+    #: idle carts (`domain/services/scheduler.py`). <= 0 disables the loop
     #: entirely -- for tests, which call the checks directly instead.
     reengagement_interval_seconds: float
     #: How long a cart sits untouched before `check_abandoned_carts` sends the

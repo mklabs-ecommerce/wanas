@@ -6,7 +6,7 @@ than the problem needs.
 
 This is the only file that wires the pieces together: it is where the WhatsApp
 client is registered as the Notification service's outbound sender, which is
-what keeps /backend/ free of any import from /assistant/.
+what keeps /domain/ free of any import from /assistant/.
 
     uvicorn app:app --reload
 """
@@ -117,7 +117,7 @@ def _import_missing_shopify_products() -> None:
     """A product created straight in Shopify Admin -- not through the
     dashboard's own create panel -- gets no wanas.db row, and the bot's
     search only ever reads wanas.db; see
-    `backend/services/shopify_product_import.py`. Run once per boot, off the
+    `integrations/shopify/product_import.py`. Run once per boot, off the
     request path, so a slow or unreachable Shopify never delays startup or a
     customer's reply. Additive-only and idempotent (a product already
     imported is skipped every later run), so re-running it on every deploy is
@@ -146,11 +146,11 @@ def _import_missing_shopify_products() -> None:
 
 def _register_shopify_webhooks() -> None:
     """Subscribe Shopify to push order-status changes to this app -- see
-    `backend/services/shopify_webhooks.py`. This closes the "nothing is even
+    `integrations/shopify/webhook_registration.py`. This closes the "nothing is even
     subscribed" half of `SHOPIFY_WEBHOOK_SECRET is not set` on its own, the
     moment both Shopify and a public URL are configured; the secret itself
     still has to come from Shopify Admin by hand (docs/OPERATIONS.md) -- a
-    registered-but-unsigned webhook is refused by `backend/webhooks/shopify.py`
+    registered-but-unsigned webhook is refused by `integrations/shopify/webhooks.py`
     exactly as it should be, so registering early and safely is not a risk.
     Idempotent, so safe to run on every boot; any failure is logged and
     swallowed, same guarantee as the rest of this page.
@@ -310,7 +310,7 @@ app.include_router(whatsapp_router)
 # webhook. Inert until Meta credentials exist (see the lifespan warning).
 app.include_router(instagram_channel.router)
 # Public, unauthenticated, and safe by construction: catalog assets only,
-# behind an HMAC path token (`backend/public_media.py`). Meta's own fetcher
+# behind an HMAC path token (`api/public_media.py`). Meta's own fetcher
 # has no cookie and no session -- this is how Instagram gets a size chart.
 app.include_router(public_media_router)
 app.include_router(shopify_router)

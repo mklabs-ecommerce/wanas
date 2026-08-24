@@ -1,6 +1,6 @@
 """The one place anything in this app runs on a clock rather than a request.
 
-Both re-engagement checks (`backend/services/reengagement.py`) are polls: a
+Both re-engagement checks (`domain/services/reengagement.py`) are polls: a
 variant coming back in stock and a cart going idle are both things nothing
 tells this app about, so something has to periodically ask. In-process and
 single-instance, the same scope note as `assistant/dispatcher.py`: this fits

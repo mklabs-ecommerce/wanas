@@ -3,7 +3,7 @@
 Nothing tells this app "that variant is back in stock" or "six hours passed"
 -- Shopify pushes order-status webhooks, not inventory ones, and an idle cart
 is defined by the *absence* of a message. Both checks are therefore polls,
-run periodically by `backend/services/scheduler.py`, and both are written to
+run periodically by `domain/services/scheduler.py`, and both are written to
 be safe to run twice: a re-run before the last one's commit lands just finds
 the same open row again and no second message goes out, because the row that
 marks "handled" is written in the same pass that sends.

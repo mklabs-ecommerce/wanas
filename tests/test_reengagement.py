@@ -3,7 +3,7 @@
 Feature 1 (status pushes) and Feature 2 (feedback request) already have
 coverage in test_backend_services.py::test_status_pushes_and_feedback_request
 -- both were fully wired before this file existed. This covers what was
-actually new: `backend/services/waitlist.py`, `backend/services/
+actually new: `domain/services/waitlist.py`, `domain/services/
 reengagement.py`, and `notifications.send_proactive`'s 24-hour window logic.
 """
 

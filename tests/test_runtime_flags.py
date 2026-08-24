@@ -1,9 +1,9 @@
 """Runtime feature-flag overrides: the service layer, and the dashboard
 settings panel built on top of it.
 
-`backend/config.py`'s `Settings` stays env-only and frozen; these are the
+`config/settings.py`'s `Settings` stays env-only and frozen; these are the
 tests that pin down the separate, staff-writable overlay
-(`backend/services/runtime_flags.py`) and the fact that it actually changes
+(`domain/services/runtime_flags.py`) and the fact that it actually changes
 what `assistant/media.py` and the WhatsApp adapter do -- an override that only
 changed a database row and nothing else would be worse than not building it.
 """

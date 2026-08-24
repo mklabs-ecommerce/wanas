@@ -3,7 +3,7 @@
 A customer's failed `add_to_cart` is the only signal this app ever gets that
 someone wanted a variant while it was at zero -- there is no separate "notify
 me" button. `assistant/tools/cart_tools.py` calls `join` from that exact
-moment. `backend/services/reengagement.py` is what later closes the loop.
+moment. `domain/services/reengagement.py` is what later closes the loop.
 """
 
 from __future__ import annotations

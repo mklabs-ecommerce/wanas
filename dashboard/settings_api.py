@@ -83,7 +83,7 @@ def _number_payload(session, row) -> dict:
 @router.get("/test-numbers")
 def list_test_numbers(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Numbers marked as staff testing the bot -- excluded from the
-    Statistics page's totals. See `backend/services/test_numbers.py`."""
+    Statistics page's totals. See `domain/services/test_numbers.py`."""
     with session_scope() as db:
         if staff_for(db, wanas_staff) is None:
             return unauthenticated()

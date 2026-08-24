@@ -8,11 +8,11 @@ nothing but credentials the shop itself owns. Swapping flavours later -- or
 routing through a BSP -- touches the host, the auth header and the signature
 check, and nothing else, provided the adapter stays behind this interface.
 
-This lives in /backend/ and not /assistant/ on purpose, exactly as its WhatsApp
-sibling does. The Notification service has to send confirmations and status
-pushes, and /backend/ must never import /assistant/ -- the dependency direction
-is one-way. Inbound message handling is the adapter's job and lives in
-assistant/channels/instagram.py.
+This lives in integrations/ and not assistant/ on purpose, exactly as its
+WhatsApp sibling does. The Notification service has to send confirmations
+and status pushes, and domain/ must never import assistant/ -- the
+dependency direction is one-way. Inbound message handling is the adapter's
+job and lives in assistant/channels/instagram.py.
 
 Two things this channel does not have, both deliberate:
 
@@ -25,7 +25,7 @@ Two things this channel does not have, both deliberate:
   name.
 * **No media upload.** There is no upload endpoint; an outbound image is a
   **public HTTPS URL** Meta fetches itself. Local files go through
-  `backend/public_media.py::public_url_for` (STEP 5), which is why that route
+  `api/public_media.py::public_url_for` (STEP 5), which is why that route
   exists at all.
 """
 
@@ -214,7 +214,7 @@ class InstagramClient:
             self.access_token = access_token
         else:
             # A refreshed token is stored in the database
-            # (`backend/services/instagram_token.py`); once a row exists it is
+            # (`integrations/instagram/token.py`); once a row exists it is
             # authoritative -- reading only the env var here would make every
             # refresh a write to nowhere.
             from integrations.instagram.token import stored_token
@@ -299,7 +299,7 @@ class InstagramClient:
 
         Instagram has no media-upload endpoint: Meta fetches the URL itself,
         so a local file has to be published through
-        `backend/public_media.py::public_url_for` first. A Shopify CDN link
+        `api/public_media.py::public_url_for` first. A Shopify CDN link
         (`http(s)://...`) is already hosted and is sent as-is.
 
         Instagram attachments carry **no caption field** -- a caption is sent
@@ -378,7 +378,7 @@ class InstagramClient:
         * `list` with more than 13 rows -- in practice the 27-governorate
           picker, which Meta would reject outright -> a **numbered
           plain-text** list instead. The inbound side needs no special
-          parsing for this: `backend/services/shipping.py::resolve` already
+          parsing for this: `domain/services/shipping.py::resolve` already
           handles free text and aliases, which is exactly the path this
           falls back to. Logged at INFO so a degraded picker is visible
           rather than mysterious.
@@ -470,7 +470,7 @@ class InstagramClient:
         window from when the comment was posted. Two layers make that a fact
         rather than a hope:
 
-        * `InstagramCommentReply` (`backend/models.py`) records every handled
+        * `InstagramCommentReply` (`domain/models.py`) records every handled
           comment; the comment handler writes its row *before* calling this,
           so a crash cannot open a second attempt.
         * This method itself refuses (`error="already_replied"`) when a

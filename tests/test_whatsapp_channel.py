@@ -374,7 +374,7 @@ def test_media_ids_are_cached_not_re_uploaded(configured, monkeypatch, seeded):
 
 def test_a_shopify_hosted_photo_is_sent_by_link_not_uploaded(configured, monkeypatch):
     """catalog.get_variants can now hand back a Shopify CDN URL instead of a
-    local file (backend/services/catalog.py::_overlay_images). Meta fetches a
+    local file (domain/services/catalog.py::_overlay_images). Meta fetches a
     `link` itself, so a URL must never touch the local-file upload path --
     there is nothing on this process's disk to open."""
     uploads: list[str] = []

@@ -86,7 +86,7 @@ def summarize(orders: list[dict], *, exclude_phones: set[str] | None = None) -> 
     of orders. Kept separate from `fetch_orders_in_range` so the math is
     testable without a fake network round trip for every case.
 
-    `exclude_phones` (from `backend/services/test_numbers.py`) drops a staff
+    `exclude_phones` (from `domain/services/test_numbers.py`) drops a staff
     number's own test purchases before anything else is computed -- not just
     from revenue, from every figure below, the same way a cancelled order
     already is excluded from all of them.

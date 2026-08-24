@@ -32,7 +32,7 @@ something looks wrong.
       webhooks" below for the one step that still has to be done by hand
 - [ ] Meta webhook registered and verified
 - [ ] A real shipping fee set for every governorate you deliver to
-      (`python -m backend.cli set-fee`) — an order for an unpriced governorate
+      (`python manage.py set-fee`) — an order for an unpriced governorate
       is refused, on purpose
 - [ ] SKUs linked (`python scripts/shopify_set_skus.py --apply`), then
       `python scripts/shopify_check_live.py` reports no disagreement
@@ -42,9 +42,9 @@ something looks wrong.
       test recipients and inside the 24-hour window; outside it,
       `WHATSAPP_TEMPLATE_BACK_IN_STOCK` / `WHATSAPP_TEMPLATE_ABANDONED_CART`
       unset means that message queues a staff alert instead of going out
-      automatically (`backend/services/notifications.py::send_proactive`)
+      automatically (`domain/services/notifications.py::send_proactive`)
 - [ ] `DASHBOARD_SESSION_SECRET` set (a long random string) **and** at least
-      one staff account exists (`python -m backend.cli create-staff`) — without
+      one staff account exists (`python manage.py create-staff`) — without
       the secret, `/dashboard` cannot log anyone in, and a conversation that
       pauses for a person has no way back to the customer
 
@@ -108,7 +108,7 @@ tokens expire 60 days after issuance. There is no refresh-token flow; the
 token refreshes itself via `graph.instagram.com/refresh_access_token` while
 still valid. When it dies the symptom is *silence*: no crash, no failed
 deploy, just the webhook never being answered and 190-series auth errors in
-the logs. `backend/services/instagram_token.py` refreshes automatically when
+the logs. `integrations/instagram/token.py` refreshes automatically when
 the stored expiry is within ten days (scheduler tick + boot, rate-limited to
 daily), stores the new token in `integration_tokens` — which then wins over
 the env var — and enqueues an `instagram_token_refresh_failed` alert when it
@@ -138,7 +138,7 @@ format JSON, four topics:
 | `orders/cancelled` | Order → `Cancelled`, stock returned locally |
 
 **The subscriptions register themselves.** `app.py`'s
-`_register_shopify_webhooks` (`backend/services/shopify_webhooks.py`) runs on
+`_register_shopify_webhooks` (`integrations/shopify/webhook_registration.py`) runs on
 every boot once `SHOPIFY_STORE_DOMAIN`/`SHOPIFY_ADMIN_TOKEN` and a public URL
 are set, checks what is already subscribed against this exact callback URL,
 and creates whatever is missing — idempotent, safe to leave running
@@ -166,7 +166,7 @@ paused a conversation and queued it; for a long stretch nothing read that
 queue back or un-paused the conversation.
 
 ```bash
-python -m backend.cli create-staff <username>   # prompts for a password twice
+python manage.py create-staff <username>   # prompts for a password twice
 ```
 
 Everyone who can log in can do everything — one role, no admin/agent split —
@@ -242,14 +242,14 @@ thing not working.
 Tables are created at startup from the models (`Base.metadata.create_all`).
 That adds missing *tables*, never missing *columns* on an existing one — see
 `scripts/migrate_add_shopify_order_columns.py` for what that costs when it
-happens. Seed a fresh database with `python -m backend.cli seed`.
+happens. Seed a fresh database with `python manage.py seed`.
 
 ### Database durability
 
 **`DATABASE_URL` must be PostgreSQL in production**
 (`postgresql+psycopg://user:password@host:5432/db`). Railway's bare
 `postgres://…` / `postgresql://…` URLs are rewritten onto the psycopg 3
-dialect automatically at engine creation (`backend/db.py`) — nothing to
+dialect automatically at engine creation (`domain/db.py`) — nothing to
 convert by hand, and the URL itself is never logged, only its scheme.
 
 A deployed container's disk is ephemeral: **SQLite there means every session,

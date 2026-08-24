@@ -2,7 +2,7 @@
 dashboard settings panel on top of it, and the fact that a marked number's
 orders actually disappear from `dashboard_stats.summarize`.
 
-See `backend/services/test_numbers.py`'s module docstring for why this
+See `domain/services/test_numbers.py`'s module docstring for why this
 exists: `dashboard_stats` reads live from Shopify, and a store owner testing
 the bot from their own WhatsApp number places real, otherwise-indistinguishable
 orders that were inflating every KPI.

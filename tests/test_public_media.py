@@ -82,7 +82,7 @@ def test_data_inbound_is_never_servable_even_with_a_correct_token(client):
 
 
 def test_traversal_is_a_404(client):
-    escaped = "../backend/config.py"
+    escaped = "../config/settings.py"
     response = client.get(f"/public/media/{token_for(CHART)}/{escaped}")
     assert response.status_code == 404
 

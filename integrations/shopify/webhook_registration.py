@@ -1,4 +1,4 @@
-"""Register the order-status webhook subscriptions `backend/webhooks/shopify.py`
+"""Register the order-status webhook subscriptions `integrations/shopify/webhooks.py`
 needs Shopify to push. See that module's docstring for what receives them.
 
 Registering a subscription and being able to *verify* what it delivers are
@@ -49,7 +49,7 @@ mutation($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) {
 }
 """
 
-#: The REST-style topic name `backend/webhooks/shopify.py` matches on, mapped
+#: The REST-style topic name `integrations/shopify/webhooks.py` matches on, mapped
 #: to Shopify's GraphQL topic enum. Kept as the single place this mapping is
 #: written, so the two files cannot silently drift apart.
 TOPICS: dict[str, str] = {

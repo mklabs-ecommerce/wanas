@@ -1,6 +1,6 @@
 """KPI and chart-data endpoint for the Statistics section.
 
-Thin on purpose -- `backend/services/dashboard_stats.py` owns the math and
+Thin on purpose -- `domain/services/dashboard_stats.py` owns the math and
 the Shopify pagination; this only adds the staff-cookie guard and turns a
 bad `days` value into a 400 instead of an obscure traceback.
 """

@@ -48,7 +48,7 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   There is deliberately no manual `inventory.decrement` in the order path —
   Shopify already does it, and doing it twice would silently oversell.
 - Price and stock are read **live from Shopify** at message time
-  (`backend/services/shopify_catalog.py`), matched to the local catalog row
+  (`integrations/shopify/catalog.py`), matched to the local catalog row
   by SKU (`variant_id`). If Shopify is unreachable, the bot falls back to
   the local database's numbers and logs a warning once — never fails the
   conversation.
@@ -67,7 +67,7 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   rather than aspirational: `ask_governorate` sends a tappable WhatsApp list,
   in **two steps** (region, then governorate) because Meta allows ten rows per
   list and there are twenty-seven. The regions live in
-  `backend/services/shipping.py`; every governorate belongs to exactly one, and
+  `domain/services/shipping.py`; every governorate belongs to exactly one, and
   a test asserts both that and the ten-row ceiling. A customer who simply names
   their governorate skips the picker entirely. **An order for a governorate
   with no fee set must be refused.** The fee is copied onto the
@@ -75,7 +75,7 @@ service file. For architecture and where things live, see `CLAUDE.md`.
 - **Order totals are four separate numbers** — `subtotal`,
   `discount_amount`, `shipping_fee`, `total`. Don't collapse them.
 - **Status is Shopify's to report, not ours to assume.** Staff fulfil in
-  Shopify Admin; `backend/webhooks/shopify.py` turns that into
+  Shopify Admin; `integrations/shopify/webhooks.py` turns that into
   `orders.advance_status`, which is what sends the packed / shipped / delivered
   messages and the feedback request. Statuses move **forward, one stage at a
   time** — and because those messages are only sent after the transaction
@@ -124,13 +124,13 @@ particular: a `variant_id` cannot be guessed, so the model must call
 re-checks stock (against Shopify) itself rather than trusting the
 conversation.
 
-**Providers sit behind a provider abstraction (`chatbot/providers/`); the
-default is OpenRouter (`chatbot/providers/openrouter.py`), called over raw
+**Providers sit behind a provider abstraction (`assistant/providers/`); the
+default is OpenRouter (`assistant/providers/openrouter.py`), called over raw
 HTTPS for chat, voice-note transcription and photos alike -- all three run on
 the same model ("google/gemini-3.1-flash-lite" unless `LLM_MODEL` says
 otherwise) through the same `chat/completions` call, keyed by
 `OPENROUTER_API_KEY` alone. Gemini
-(`chatbot/providers/gemini.py`) is kept as a fully configurable alternate
+(`assistant/providers/gemini.py`) is kept as a fully configurable alternate
 provider (`LLM_PROVIDER=gemini`) that handles chat, voice and photos itself
 on its own key.** Cost or availability is the reason the provider may change,
 so nothing above that layer may import a vendor SDK, and swapping providers
@@ -138,7 +138,7 @@ must mean writing one class and changing one config value. Treat this as a
 hard architectural boundary, not a nice-to-have.
 
 Tool argument/return shapes and refusal codes are defined by the `@tool`
-decorators in `chatbot/tools/*.py` and pinned down by
+decorators in `assistant/tools/*.py` and pinned down by
 `tests/test_tool_contracts.py` (every refusal, and that there are exactly
 eighteen tools) — that pairing is what to build against, not a separate
 spec.
@@ -157,7 +157,7 @@ messages, session expiry 6 hours, tool-loop cap 8 turns, max 10 units per
 cart line, inbound debounce 6 seconds, image-match confidence 0.6.
 
 **The catalog is in English; the customers are not.** Search goes through
-`backend/services/search_terms.py`, which folds Arabic spelling variants, maps
+`domain/services/search_terms.py`, which folds Arabic spelling variants, maps
 Arabic and franco words onto the English the catalog actually uses, and drops
 the padding a spoken request carries. This is a rule below the model, not a
 habit the model has: before it existed `get_products(query="هودي أسود")`
@@ -166,8 +166,8 @@ first. Adding a word is one line in that file.
 
 ## The Instagram surface
 
-Instagram (`"instagram_dm"`, `chatbot/channels/instagram.py` +
-`backend/integrations/instagram_client.py`) is a second first-class channel
+Instagram (`"instagram_dm"`, `assistant/channels/instagram.py` +
+`integrations/instagram/client.py`) is a second first-class channel
 on the same agent, tools, carts, orders and dashboard. Its platform limits,
 all enforced below the model:
 
@@ -185,7 +185,7 @@ all enforced below the model:
   send fails visibly (dashboard shows the warning).
 - **Images are public URLs, never uploads** — Meta fetches them itself;
   local catalog files go through the HMAC-token route in
-  `backend/public_media.py`. `data/inbound` (customers' own photos/voice
+  `api/public_media.py`. `data/inbound` (customers' own photos/voice
   notes) is never servable through that route, token or no token.
 - **Comments are a public surface, shipped OFF**
   (`INSTAGRAM_COMMENTS_ENABLED=0`). One fixed public ack + one private reply
@@ -194,7 +194,7 @@ all enforced below the model:
   comments are dropped before anything else runs. The agent never runs on
   comment text.
 - The long-lived token expires after **60 days**;
-  `backend/services/instagram_token.py` refreshes it automatically and alerts
+  `integrations/instagram/token.py` refreshes it automatically and alerts
   staff when it cannot.
 
 ## What to test

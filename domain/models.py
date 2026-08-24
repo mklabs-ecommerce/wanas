@@ -483,7 +483,7 @@ class Staff(Base):
 class RuntimeSetting(Base):
     """A staff-toggled override for a handful of named feature flags.
 
-    `backend/config.py`'s `Settings` stays env-only and frozen -- that
+    `config/settings.py`'s `Settings` stays env-only and frozen -- that
     boundary does not move. This is a separate, deliberately small overlay:
     the same "Shopify's number over wanas.db's" shape (`catalog._overlay`),
     just for `voice_notes_enabled` / `image_understanding_enabled` /
@@ -530,7 +530,7 @@ class TestPhoneNumber(Base):
 
     The bot treats these exactly like any other customer -- this table
     changes nothing about how a conversation is handled. It exists only so
-    `backend/services/dashboard_stats.py` can leave a test purchase out of
+    `domain/services/dashboard_stats.py` can leave a test purchase out of
     revenue/order-count/best-sellers, the same way a cancelled order already
     is: testing should not make the shop's own numbers look busier than they
     are.
@@ -549,8 +549,8 @@ class StockWaitlistEntry(Base):
 
     One row per (variant, identity) -- re-armed rather than duplicated if the
     same customer hits the same sold-out variant again after already being
-    notified once (`backend/services/waitlist.py`). `notified_at` null means
-    still waiting; the periodic re-engagement check (`backend/services/
+    notified once (`domain/services/waitlist.py`). `notified_at` null means
+    still waiting; the periodic re-engagement check (`domain/services/
     reengagement.py`) is what fills it in, not a webhook -- Shopify does not
     push inventory-level changes to this app.
     """
@@ -605,7 +605,7 @@ class IntegrationToken(Base):
 
     Instagram long-lived tokens die after 60 days with no symptom other than
     190-series auth errors, so the expiry has to live somewhere `/health` can
-    read it and the scheduler can act on it (`backend/services/
+    read it and the scheduler can act on it (`domain/services/
     instagram_token.py`). One row per provider; `"instagram"` is the first.
     """
 

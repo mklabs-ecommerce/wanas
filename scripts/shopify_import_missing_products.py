@@ -4,7 +4,7 @@ A product created straight in Shopify Admin -- not through the dashboard's
 own product-create panel -- never gets a row in wanas.db, and
 `catalog.get_products` (the bot's search) only ever reads wanas.db. The
 product exists, staff can see it in Shopify Admin, and the bot tells a
-customer it does not exist. See `backend/services/shopify_product_import.py`
+customer it does not exist. See `integrations/shopify/product_import.py`
 for the full explanation and the (deliberately narrow) scope.
 
 Dry run by default, like every other script here. Read the report, then:

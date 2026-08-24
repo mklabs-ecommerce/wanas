@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.2.0 — Full re-architecture: layered by responsibility, vendor-cohesive integrations
+
+Pure structural move, no behavior change. `backend/` and `chatbot/` are
+gone, replaced by eight top-level packages named for what they actually do:
+
+- `common/` — the zero-dependency shared kernel (money, events, the shared
+  Meta webhook-signature check, the file-serving path guard).
+- `config/` — `settings.py`, imported by every layer below.
+- `domain/` — persistence and business rules (`db.py`, `models.py`,
+  `legal.py`, `seed/`, `services/`); must never import `assistant/`.
+- `integrations/` — every outbound vendor client, one package per vendor
+  (`shopify/`, `whatsapp/`, `instagram/`) instead of the same six Shopify
+  files scattered across three old directories.
+- `assistant/` — the AI agent runtime (was `chatbot/`): agent loop,
+  dispatcher, session store, providers, tools, channel adapters, harness.
+- `api/` — `public_media.py`, the one FastAPI route with no home in any
+  other layer.
+- `dashboard/` — unchanged, already a clean, self-contained package.
+- `manage.py` — the ops CLI, promoted from `backend/cli.py` to a root
+  entrypoint (`python manage.py <cmd>`), matching `app.py`'s own
+  `uvicorn app:app` pattern.
+
+One real bug fixed along the way: `conversation_reset.py` imported the
+assistant layer directly, breaking the project's own "domain never imports
+assistant" rule. Replaced with a registration callback (the same shape
+`notifications.py` already used for outbound senders) instead of just
+relocating the violation under a new name.
+
+Full test suite and `ruff check .` verified clean after every step; see
+`OPENCODE_PROGRESS.md` for the complete file-by-file move log.
+
 ## 1.1.0 — Instagram, a second first-class channel
 
 Instagram DMs (`"instagram_dm"`) run on the same agent, tools, carts, orders
@@ -16,7 +47,7 @@ machinery that was already channel-neutral.
   avoid. Orders now remember `(source_channel, source_external_id)` so their
   confirmations and status pushes go down the thread they were placed in.
 - **Public media route.** Instagram cannot receive an upload; Meta fetches
-  URLs itself. `backend/public_media.py` serves catalog files (the size
+  URLs itself. `api/public_media.py` serves catalog files (the size
   charts) behind a deterministic HMAC path token — 404 on anything wrong,
   `data/inbound` unreachable even under a correct token for another path.
 - **Platform limits enforced below the model:** replies split at ~950 bytes
@@ -31,7 +62,7 @@ machinery that was already channel-neutral.
   one fixed public ack plus one private reply that seeds the DM session.
   One private reply per comment, ever — recorded before it is sent.
 - **The 60-day token.** Instagram tokens expire silently after 60 days;
-  `backend/services/instagram_token.py` refreshes them from the scheduler
+  `integrations/instagram/token.py` refreshes them from the scheduler
   within ten days of expiry, stores the result where the client reads it,
   alerts staff when it fails, and reports the expiry on `/health`.
 - Dashboard: channel badges (WA/IG), a channel filter, and a visible warning
@@ -93,7 +124,7 @@ before calling the tool — a habit, not a guarantee, and the first time it does
 not translate the shop tells a customer "we don't have that" about something on
 the shelf.
 
-`backend/services/search_terms.py` folds Arabic spelling variants (`هودى`/`هودي`,
+`domain/services/search_terms.py` folds Arabic spelling variants (`هودى`/`هودي`,
 `أسود`/`اسود`, diacritics, tatweel, Arabic-Indic digits), maps Arabic and
 franco words onto the English the catalog uses, and drops the padding a spoken
 request carries. Matching is word-start rather than bare substring — `tshirt`
@@ -148,7 +179,7 @@ gap"), not an oversight, but it was still the single biggest thing standing
 between this project and a real deployment.
 
 `chatbot/dashboard/` closes it: a staff login (`Staff` already existed —
-`backend/services/auth.py`, `python -m backend.cli create-staff` — with
+`domain/services/auth.py`, `python -m backend.cli create-staff` — with
 nowhere to log in) at `/dashboard` lists conversations, waiting-on-staff ones
 first, oldest wait first. Opening one shows the full history and, if it is
 paused, why. Replying sends the customer a real message through the same
@@ -158,7 +189,7 @@ covers a false alarm or a customer already handled by phone. It refuses
 (409) to reply into a conversation the bot still owns — the same two-writers
 race `chatbot/dispatcher.py`'s debounce lock exists to prevent.
 
-The session is a signed cookie (`backend/services/auth.py::issue_session_token`),
+The session is a signed cookie (`domain/services/auth.py::issue_session_token`),
 not a table. With no `DASHBOARD_SESSION_SECRET` set, login refuses outright
 (503) — the same call the Shopify webhook makes with no signing secret.
 `DASHBOARD_ENABLED`, `DASHBOARD_SESSION_SECRET`, `DASHBOARD_SESSION_HOURS`.

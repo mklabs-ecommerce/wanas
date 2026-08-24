@@ -286,7 +286,7 @@ def test_a_second_reply_needs_a_fresh_takeover_now_that_replying_resumes_the_bot
         assert res.status_code == 200
         assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
         # That read took a write lock (BEGIN IMMEDIATE on every SQLite
-        # transaction, see backend/db.py); release it before the next
+        # transaction, see domain/db.py); release it before the next
         # request opens its own session, or the two deadlock.
         seeded.rollback()
 

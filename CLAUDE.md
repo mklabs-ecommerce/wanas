@@ -7,18 +7,19 @@ Instructions and context for Claude Code sessions working in this repository.
 A Shopify-connected e-commerce chatbot for **Wanas Gallery**, an Egyptian
 streetwear brand, on two first-class channels: **WhatsApp** (Meta Cloud API)
 and **Instagram** (`"instagram_dm"`, DMs plus — shipped off by default —
-public comments). The product is the chatbot, its backend, and the Shopify
-integration — not a general-purpose website or admin platform.
+public comments). The product is the chatbot, its API/backend, and the
+Shopify integration — not a general-purpose website or admin platform.
 
 ## Architecture
 
 ```
 Shopify    -> product/store source of truth (orders, live inventory, live price)
               and, via webhooks, the trigger for order-status pushes
-FastAPI    -> backend/API, app.py is the composition root (uvicorn app:app)
-Chatbot    -> agent/runtime/tools/LLM (chatbot/)
-Gemini     -> current LLM provider, behind a provider abstraction; also reads
-              voice notes and photos
+FastAPI    -> the API, app.py is the composition root (uvicorn app:app)
+Assistant  -> agent/runtime/tools/LLM (assistant/)
+OpenRouter -> default LLM provider, behind a provider abstraction (Gemini and
+              a scripted fake are the alternates); Whisper/a vision model
+              handle voice notes and photos
 PostgreSQL -> chat/session history, carts, shipping rates, staff,
               human-handoff queue, plus catalog metadata Shopify can't hold
               (style, department, collection, size charts, per-colour photos)
@@ -30,7 +31,7 @@ A fuller picture, including the five decisions the design follows from, is in
 
 **Inbound messages are not answered in the request.** The webhook verifies,
 claims the message id, downloads media and returns 200; the agent turn runs on
-a worker thread after a short debounce window (`chatbot/dispatcher.py`). Never
+a worker thread after a short debounce window (`assistant/dispatcher.py`). Never
 move work back into the endpoint: it is `async`, the turn is synchronous, and
 one message would block every other conversation in the process.
 
@@ -42,34 +43,62 @@ and logs a warning once, rather than failing the conversation.
 
 ## Important Files/Directories
 
+Layered by responsibility, with the vendor-integration layer organized by
+external system:
+
 ```
-app.py                  composition root
+app.py                  composition root (uvicorn app:app)
+manage.py                ops CLI: python manage.py <seed|set-fee|create-staff|...>
 AGENTS.md                business rules and data assumptions (variant math,
                           per-colour pricing, shipping/order rules, session
-                          limits) — read this before touching chatbot/backend
+                          limits) — read this before touching domain/assistant
                           business logic
-backend/
-  config.py               env-driven settings, no hardcoded credentials
-  db.py                   SQLAlchemy engine/session
+config/
+  settings.py              env-driven settings, no hardcoded credentials --
+                            imported by every layer below
+common/                  zero-dependency shared kernel (no imports from any
+                          layer below); safe for domain, integrations,
+                          assistant, dashboard, and api/ to all import
+  money.py                 Decimal helpers
+  events.py                post-commit hooks (an outbound message must never
+                            describe a write that later rolled back)
+  security.py              shared Meta webhook-signature check (WhatsApp +
+                            Instagram; Shopify signs differently, see
+                            integrations/shopify/webhooks.py)
+  servable_paths.py        the local-file path guard api/public_media.py and
+                            assistant/media_serving.py both need
+domain/                  persistence + business rules; no vendor HTTP calls,
+                          no FastAPI routes; must never import assistant/
+  db.py                    SQLAlchemy engine/session
   models.py                ORM models (Client, Product, Variant, Order, ...,
                             Staff, StaffQueueItem, ShippingRate)
-  cli.py                   python -m backend.cli <seed|set-fee|create-staff|...>
+  legal.py                 privacy-policy text and vendor table
   seed/                    seed importers (products, governorates)
-  services/                 Order/Inventory/Notification/Catalog services,
-                            shopify_catalog.py, shopify_inventory.py,
-                            shopify_orders.py (Shopify read/write paths)
-   integrations/
-     shopify_client.py        GraphQL client for the live Shopify path
-     whatsapp_client.py        Meta Cloud API client
-     instagram_client.py       Instagram Graph client (chunked text, no
-                               templates, image-by-public-URL)
-   webhooks/shopify.py       inbound from Shopify: fulfilments and cancellations
-                               -> order status -> the customer's tracking message
-   security.py               shared Meta webhook-signature check (both adapters)
-   public_media.py           GET /public/media/{token}/... -- HMAC-gated public
-                               URL for catalog files Meta must fetch itself
-   services/search_terms.py  Arabic + franco vocabulary for the catalog search
-chatbot/
+  services/                Order/Inventory/Notification/Catalog/Auth/Queue
+                            services, search_terms.py (Arabic + franco
+                            catalog-search vocabulary), conversation_reset.py
+                            (calls back into the assistant layer via a
+                            registered callback, never a direct import --
+                            see that module's docstring)
+integrations/            everything that talks to an external vendor over
+                          HTTP, one package per vendor
+  shopify/
+    client.py               GraphQL transport for the live Shopify path
+    catalog.py, inventory.py, orders.py   live read/write
+    admin_customers.py, admin_orders.py, admin_products.py  dashboard admin
+    product_import.py       reconcile-on-boot for products created straight
+                            in Shopify Admin
+    webhook_registration.py subscribe Shopify to push order-status changes
+    webhooks.py              inbound from Shopify: fulfilments and
+                            cancellations -> order status -> the customer's
+                            tracking message
+  whatsapp/client.py        Meta Cloud API client
+  instagram/
+    client.py                Instagram Graph client (chunked text, no
+                            templates, image-by-public-URL)
+    token.py                 60-day token refresh
+assistant/               the AI agent runtime, shared byte-for-byte by every
+                          channel; never imports dashboard/
   runtime.py                entry point: handle_message(channel, external_id, text)
   dispatcher.py             debounce + worker threads; what keeps the webhook fast
   agent.py                  the tool-use loop
@@ -79,14 +108,19 @@ chatbot/
   display.py                 stored history -> bubbles a person can read;
                               shared by the harness and the dashboard
   media_serving.py           the local-file path guard both the harness and the
-                              dashboard serve through
-  providers/                  gemini.py (real), fake.py (tests/rehearsal), base.py
+                              dashboard serve through (re-exports
+                              common/servable_paths.py)
+  providers/                  openrouter.py (default), gemini.py, fake.py
+                              (tests/rehearsal), base.py
   tools/                      cart_tools, catalog_tools, order_tools, support_tools
-   channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
-   channels/instagram.py       the Instagram twin: DMs (text, attachments,
+  channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
+  channels/instagram.py       the Instagram twin: DMs (text, attachments,
                                quick replies) + comment ingest; comments ship OFF
   harness/                    local dev-only chat UI (web + terminal), unauthenticated
                               by design and OFF unless HARNESS_ENABLED=1
+api/
+  public_media.py           GET /public/media/{token}/... -- HMAC-gated public
+                            URL for catalog files Meta must fetch itself
 dashboard/                 staff dashboard, its own top-level package:
                             conversations, Shopify (products/
                             orders/customers), statistics, the review queue,
@@ -98,12 +132,13 @@ dashboard/                 staff dashboard, its own top-level package:
                             settings_api.py / customers_api.py are sibling
                             routers under the same guard, not a growing
                             single file -- see web.py's own docstring. To
-                            show conversations it reads chatbot/session.py,
-                            chatbot/display.py, chatbot/messages.py, and
-                            chatbot/media_serving.py directly -- the same
+                            show conversations it reads assistant/session.py,
+                            assistant/display.py, assistant/messages.py, and
+                            assistant/media_serving.py directly -- the same
                             read-only surface the harness reads through --
-                            plus backend/ services for everything else;
-                            chatbot/ never imports back from dashboard/.
+                            plus domain/ services and integrations/ for
+                            everything else; assistant/ never imports back
+                            from dashboard/.
 docs/                    ARCHITECTURE.md, OPERATIONS.md, MEDIA.md
 data/                    products_seed.json, size_charts.json, governorates.json,
                           merge_catalog.py, images/, size-charts/ — catalog
@@ -115,20 +150,22 @@ scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
                           migrate_add_shopify_order_columns.py (one-time schema
                           upgrade for pre-existing databases) — all dry-run by
                           default, idempotent, need --apply
-tests/                   pytest suite, see README.md
+tests/                   pytest suite (flat, one test_<module>.py per
+                          subject rather than mirroring the source tree —
+                          see README.md)
 ```
 
 ## Database
 
 - PostgreSQL is the production database (`DATABASE_URL=postgresql+psycopg://...`).
   SQLite (`sqlite:///./wanas.db`) is fine for local development only.
-- Chat/session history is persisted (`sessions` table / `chatbot/session.py`)
+- Chat/session history is persisted (`sessions` table / `assistant/session.py`)
   — this is a required production feature. **Never** remove it or replace it
   with an in-memory store.
 - No Alembic — tables are created at startup via `Base.metadata.create_all`
   (`app.py`), which adds missing tables but not missing columns on existing
   ones; see `scripts/migrate_add_shopify_order_columns.py` for that case.
-  Seed a new database with `python -m backend.cli seed`.
+  Seed a new database with `python manage.py seed`.
 - Important models: `Client`, `Product`, `Variant`, `Order`/`OrderItem`
   (carry Shopify order id/number columns), `ShippingRate`, `Staff`,
   `StaffQueueItem` (human-handoff / item-swap / alert queues),
@@ -140,7 +177,7 @@ tests/                   pytest suite, see README.md
   second product database in Postgres for these fields.
 - Postgres still legitimately holds catalog data Shopify has no field for
   (`style`, `department`, `collection`, size charts) — see
-  `backend/services/catalog.py` (the overlay: Shopify numbers over local
+  `domain/services/catalog.py` (the overlay: Shopify numbers over local
   rows). `variant_id` <-> Shopify variant is matched by SKU.
 - Product photos follow the same overlay as price/stock, not the
   style/department list above: `shopify_catalog.LiveVariant.image_url` (read
@@ -154,7 +191,7 @@ tests/                   pytest suite, see README.md
 - Manual inventory decrement is deliberately **not** in the order path —
   Shopify already decrements on `orderCreate`; doing it twice would silently
   oversell.
-- Order **status** comes back the other way: `backend/webhooks/shopify.py`
+- Order **status** comes back the other way: `integrations/shopify/webhooks.py`
   turns `orders/fulfilled` / `orders/cancelled` / `fulfillments/update` into
   `orders.advance_status`, which is what makes the tracking messages fire.
   Statuses move forward one stage at a time — never assign `order.status`
@@ -164,12 +201,15 @@ tests/                   pytest suite, see README.md
 
 ## LLM
 
-- Provider: **Gemini**, via `chatbot/providers/gemini.py`, behind
-  `chatbot/providers/base.py`. Nothing above `chatbot/providers/` may import
-  a vendor SDK — Gemini is called over raw HTTPS, so swapping providers is
-  one new class + one config value (`LLM_PROVIDER`).
-- Config: `LLM_PROVIDER`, `LLM_API_KEY` (or `GEMINI_API_KEY`), `LLM_MODEL`
-  (or `GEMINI_MODEL`, blank lets the provider pick a working model).
+- Provider: **OpenRouter** by default, via `assistant/providers/openrouter.py`,
+  behind `assistant/providers/base.py`. Gemini (`gemini.py`) remains a valid
+  alternate provider. Nothing above `assistant/providers/` may import a
+  vendor SDK — every provider is called over raw HTTPS, so swapping is one
+  new class + one config value (`LLM_PROVIDER`).
+- Config: `LLM_PROVIDER`, `LLM_API_KEY` (or `GEMINI_API_KEY`/`OPENROUTER_API_KEY`),
+  `LLM_MODEL` (or `GEMINI_MODEL`, blank lets the provider pick a working
+  model). Voice notes transcribe via OpenAI Whisper (`OPENAI_API_KEY`);
+  photos go through an OpenRouter vision model.
 - `LLM_PROVIDER=fake` runs the scripted provider used by tests and by the
   harness when no key is set.
 - The provider also owns media: `transcribe()` for voice notes and
@@ -184,7 +224,7 @@ tests/                   pytest suite, see README.md
 make dev                  # or: pip install -r requirements-dev.txt
 cp .env.example .env
 make seed
-make harness              # or: python -m chatbot.harness (terminal)
+make harness              # or: python -m assistant.harness (terminal)
 make run
 ```
 
@@ -249,7 +289,7 @@ tracking message ever fires — is in `docs/OPERATIONS.md`.
 - One private reply per Instagram comment, ever: `InstagramCommentReply` is
   written *before* the send precisely so a crash cannot permit a second one.
 - Instagram outbound images must be public HTTPS URLs (Meta fetches them);
-  local files go through the HMAC-gated `backend/public_media.py` route, and
+  local files go through the HMAC-gated `api/public_media.py` route, and
   `data/inbound` — customers' own photos and voice notes — must never be
   servable through it.
 - The outbound sender registry is per-channel. `get_sender()` with no channel
@@ -284,7 +324,7 @@ no UI to resolve it — is closed. `dashboard/` is a new, purpose-built
 staff dashboard: it lists conversations, shows one in full, and lets a
 logged-in staff member reply to a *paused* one or resolve it without a
 reply. See "The staff dashboard" in `docs/ARCHITECTURE.md`, and
-`DASHBOARD_SESSION_SECRET` / `python -m backend.cli create-staff` in
+`DASHBOARD_SESSION_SECRET` / `python manage.py create-staff` in
 `docs/OPERATIONS.md`.
 
 **This is no longer read-only for Shopify.** The dashboard grew into the
@@ -293,13 +333,13 @@ conversations it has a Shopify section (products — view, create, edit;
 orders — view, fulfil, cancel, edit across *both* the bot and the website;
 customers), store-wide statistics (KPIs, charts, built from a live Shopify
 read since only bot orders ever reach Postgres — see
-`backend/services/dashboard_stats.py`), the `item_swap`/`alert` review
+`domain/services/dashboard_stats.py`), the `item_swap`/`alert` review
 queue, and staff-toggleable feature flags
-(`backend/services/runtime_flags.py`). Shopify is still the source of truth
+(`domain/services/runtime_flags.py`). Shopify is still the source of truth
 for price/stock/orders; product create/edit pushes to Shopify first and
 mirrors the wanas.db-only fields (`category`/`department`/`style`/
 `collection`/`size_chart`) after — see the module docstring on
-`backend/services/shopify_admin_products.py` for exactly where that line
+`integrations/shopify/admin_products.py` for exactly where that line
 is drawn (no file-upload images yet, no refunds — this shop is
 cash-on-delivery with nothing to refund against, and removing a variant
 from an existing Shopify product is deliberately left to Shopify Admin).

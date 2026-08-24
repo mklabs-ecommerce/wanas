@@ -8,8 +8,9 @@ that did not come from a tool.
 ```
 Shopify           source of truth for orders, live inventory, live price
 FastAPI (app.py)  the one deployed process
-chatbot/          agent loop, tools, provider layer, channels, sessions, media
-backend/          order/inventory/notification services, integrations, models
+assistant/        agent loop, tools, provider layer, channels, sessions, media
+domain/           order/inventory/notification services and models
+integrations/     Shopify/WhatsApp/Instagram vendor clients, one package each
 PostgreSQL        chat history, carts, clients, shipping rates, staff queue
 ```
 
@@ -25,7 +26,7 @@ PostgreSQL        chat history, carts, clients, shipping rates, staff queue
   `chat/completions` endpoint. **Gemini** stays fully configurable as
   an alternate provider (`LLM_PROVIDER=gemini`) that handles chat, voice and
   photos itself. Every provider sits behind the same abstraction; nothing
-  above `chatbot/providers/` imports a vendor SDK.
+  above `assistant/providers/` imports a vendor SDK.
 
 Business rules (variant/pricing maths, shipping, sizing) are in
 [`AGENTS.md`](AGENTS.md). Repository conventions are in
@@ -54,7 +55,7 @@ calls. Set `OPENROUTER_API_KEY` (the default `LLM_PROVIDER` is `openrouter`) —
 or `LLM_PROVIDER=gemini` plus a Gemini key — to get the real agent.
 
 `make help` lists the rest. Useful CLI:
-`python -m backend.cli <seed|set-fee|create-staff|catalog-report>`.
+`python manage.py <seed|set-fee|create-staff|catalog-report>`.
 
 ## What it can do
 

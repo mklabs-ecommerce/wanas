@@ -5,7 +5,7 @@ refresh-token flow: the token refreshes *itself*, via `refresh_access_token`,
 but only while it is still valid and at least 24 hours old. Nothing else in
 the system notices the difference between a working token and one that died
 this morning -- both are just Bearer strings until graph.instagram.com starts
-answering 190. So this runs on the scheduler (`backend/services/scheduler.py`)
+answering 190. So this runs on the scheduler (`domain/services/scheduler.py`)
 and on startup: refresh when the stored expiry is inside ten days, record the
 new token here, and alert a person when the refresh itself fails.
 

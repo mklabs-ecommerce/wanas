@@ -22,21 +22,21 @@ How the pieces fit, and why they are arranged this way. Business rules live in
                        │                             ↓ returns 200     │
                        └───────────────────────────────────────────────┘
                                                      │
-                               chatbot/dispatcher.py │ debounce ~6s,
+                               assistant/dispatcher.py │ debounce ~6s,
                                (worker threads)      │ one turn per conversation
                                                      ▼
                        ┌───────────────────────────────────────────────┐
-                       │  chatbot/runtime.py  handle_message()          │
+                       │  assistant/runtime.py  handle_message()          │
                        │    pause flag · voice → transcript             │
                        │    photo → reading · one Shopify snapshot      │
                        └───────────────────────────────────────────────┘
                                                      ▼
                        ┌───────────────────────────────────────────────┐
-                       │  chatbot/agent.py   the tool-use loop          │
+                       │  assistant/agent.py   the tool-use loop          │
                         │    the LLM ⇄ 18 tools, capped at 8 rounds     │
                        └───────────────────────────────────────────────┘
                              │                              │
-               chatbot/tools/*                      backend/services/*
+               assistant/tools/*                      domain/services/*
                (the refusals)                       (the business rules)
                                                             │
                                      ┌──────────────────────┴─────────────┐
@@ -73,7 +73,7 @@ refuses is a bug in the design, not a bug in the prompt.
 
 ### 2. Shopify owns price, stock and orders
 
-Read live per message (`backend/services/shopify_catalog.py`), matched to the
+Read live per message (`integrations/shopify/catalog.py`), matched to the
 local catalog by SKU. Selling calls `orderCreate` and **Shopify** decrements
 inventory — there is deliberately no second decrement here, because doing it
 twice oversells silently.
@@ -104,7 +104,7 @@ simplest place for its own photos to live.
 
 ### 3. The provider is a boundary, not a dependency
 
-Nothing above `chatbot/providers/` imports a vendor SDK; every provider is
+Nothing above `assistant/providers/` imports a vendor SDK; every provider is
 called over raw HTTPS. **OpenRouter** (`openrouter.py`) routes the
 conversation model by default and runs the whole shop on one model through
 one `chat/completions` endpoint: replies, voice-note transcription (an
@@ -115,7 +115,7 @@ provider (`LLM_PROVIDER=gemini`): chat, voice and photos all run on Gemini's
 own key in that mode. Swapping providers is one new class and one config
 value (`LLM_PROVIDER`), because cost is the reason it may change.
 
-The neutral message format (`chatbot/messages.py`) has three shapes and carries
+The neutral message format (`assistant/messages.py`) has three shapes and carries
 an opaque `signature` blob through the database untouched — that is what makes
 a second tool call in the same conversation work on models that demand their
 own signatures back. Providers that have no such concept simply ignore it.
@@ -125,7 +125,7 @@ own signatures back. Providers that have no such concept simply ignore it.
 `POST /webhooks/whatsapp` verifies, claims the message id in its own committed
 transaction, downloads media, and returns 200 — in milliseconds. The agent turn
 runs on a worker thread after a short debounce window
-(`chatbot/dispatcher.py`).
+(`assistant/dispatcher.py`).
 
 Two reasons. An `async` endpoint running a thirty-second synchronous model call
 blocks the event loop for every other conversation in the process. And
@@ -155,32 +155,32 @@ note before this existed.
 | Path | What it is |
 | --- | --- |
 | `app.py` | Composition root. The only file that wires the pieces together. |
-| `backend/config.py` | Every setting, read from the environment. No hardcoded credentials. |
-| `backend/models.py` | The ORM. `Client`, `Product`, `Variant`, `Order`, `ShippingRate`, `StaffQueueItem`, `WebhookEvent`. |
-| `backend/services/` | Business rules. `orders.py` owns "can this order happen?". |
-| `backend/services/search_terms.py` | Arabic and franco vocabulary for catalog search. |
-| `backend/integrations/` | Outbound clients: Shopify GraphQL, Meta Cloud API (WhatsApp), Instagram Graph. |
-| `backend/security.py` | The shared Meta webhook-signature check both channel adapters use. |
-| `backend/public_media.py` | `GET /public/media/{token}/...` — the HMAC-gated public URL for catalog files Meta's fetcher has to be able to reach. |
-| `backend/webhooks/shopify.py` | Inbound from Shopify: fulfilments and cancellations. |
-| `chatbot/runtime.py` | `handle_message()` — the entry point every channel calls. |
-| `chatbot/dispatcher.py` | Debounce and worker threads. |
-| `chatbot/agent.py` | The tool-use loop, and the reply sanitisers. |
-| `chatbot/media.py` | Voice notes and photos. |
-| `chatbot/prompt.py` | Persona, flow, and the data quirks the model would otherwise get wrong. |
-| `chatbot/interactive.py` | Tappable pickers, in a channel-neutral shape. |
-| `chatbot/tools/` | The eighteen tools and their refusals. |
-| `chatbot/channels/whatsapp.py` | The only WhatsApp-specific code in the conversational path. |
-| `chatbot/channels/instagram.py` | The Instagram twin: DMs plus comment ingest, same architecture. |
-| `chatbot/harness/` | Dev-only chat UI. Unauthenticated by design; off unless `HARNESS_ENABLED=1`. |
+| `config/settings.py` | Every setting, read from the environment. No hardcoded credentials. |
+| `domain/models.py` | The ORM. `Client`, `Product`, `Variant`, `Order`, `ShippingRate`, `StaffQueueItem`, `WebhookEvent`. |
+| `domain/services/` | Business rules. `orders.py` owns "can this order happen?". |
+| `domain/services/search_terms.py` | Arabic and franco vocabulary for catalog search. |
+| `integrations/` | Outbound clients, one package per vendor: `shopify/`, `whatsapp/`, `instagram/`. |
+| `common/security.py` | The shared Meta webhook-signature check both channel adapters use. |
+| `api/public_media.py` | `GET /public/media/{token}/...` — the HMAC-gated public URL for catalog files Meta's fetcher has to be able to reach. |
+| `integrations/shopify/webhooks.py` | Inbound from Shopify: fulfilments and cancellations. |
+| `assistant/runtime.py` | `handle_message()` — the entry point every channel calls. |
+| `assistant/dispatcher.py` | Debounce and worker threads. |
+| `assistant/agent.py` | The tool-use loop, and the reply sanitisers. |
+| `assistant/media.py` | Voice notes and photos. |
+| `assistant/prompt.py` | Persona, flow, and the data quirks the model would otherwise get wrong. |
+| `assistant/interactive.py` | Tappable pickers, in a channel-neutral shape. |
+| `assistant/tools/` | The eighteen tools and their refusals. |
+| `assistant/channels/whatsapp.py` | The only WhatsApp-specific code in the conversational path. |
+| `assistant/channels/instagram.py` | The Instagram twin: DMs plus comment ingest, same architecture. |
+| `assistant/harness/` | Dev-only chat UI. Unauthenticated by design; off unless `HARNESS_ENABLED=1`. |
 | `dashboard/` | Staff dashboard: conversations, Shopify (products/orders/customers), statistics, the review queue, settings. See below. |
-| `chatbot/display.py` | Turning stored history into bubbles a person can read — shared by the harness and the dashboard. |
+| `assistant/display.py` | Turning stored history into bubbles a person can read — shared by the harness and the dashboard. |
 | `data/` | Catalog metadata Shopify has no field for. Not a product database. |
 | `scripts/` | Shopify maintenance. All dry-run by default, idempotent, need `--apply`. |
 
 ## A second channel: Instagram
 
-Instagram (`chatbot/channels/instagram.py` + `backend/integrations/instagram_client.py`)
+Instagram (`assistant/channels/instagram.py` + `integrations/instagram/client.py`)
 is a second first-class channel on the same machinery, not a fork of it. The
 channel-neutral seams — `runtime.handle_message`, `MessageDispatcher`,
 `Pending`, `session.py`, `identities.py`, `interactive.py`'s neutral shapes —
@@ -197,7 +197,7 @@ things are genuinely Instagram-specific:
    WhatsApp only for orders that predate identity-aware delivery.
 2. **Outbound images are public URLs.** There is no Instagram upload
    endpoint; Meta fetches what you send. Local catalog files (the size
-   charts) therefore go through `backend/public_media.py`: an HMAC path
+   charts) therefore go through `api/public_media.py`: an HMAC path
    token under `MEDIA_URL_SECRET`, deterministic per path so Meta's caching
    works, 404 (never 403) on anything wrong, and `data/inbound` unreachable
    through it even under a correctly computed token — customers' own photos
@@ -221,14 +221,14 @@ answering it is the bot replying to itself publicly, forever. The whole
 surface ships with `INSTAGRAM_COMMENTS_ENABLED=0`.
 
 Instagram's long-lived token expires after 60 days with no symptom but auth
-errors, so `backend/services/instagram_token.py` refreshes it from the
+errors, so `integrations/instagram/token.py` refreshes it from the
 scheduler when it is within ten days of dying, stores the result in
 `integration_tokens` (which then wins over the env var), alerts staff if the
 refresh fails, and reports the expiry on `/health`.
 
 ## The staff dashboard
 
-`request_human` (`chatbot/tools/support_tools.py`) has always paused a
+`request_human` (`assistant/tools/support_tools.py`) has always paused a
 conversation and written a `StaffQueueItem` of kind `handoff`. For a long
 stretch nothing read that queue back or un-paused the conversation except the
 dev harness's `/unpause` stand-in — a customer who triggered a handoff stayed
@@ -242,19 +242,19 @@ or resolve it without a reply (a false alarm, or a customer already handled by
 phone).
 
 It is authenticated, unlike the harness: `Staff` accounts already existed
-(`backend/services/auth.py`, `python -m backend.cli create-staff`) with
+(`domain/services/auth.py`, `python manage.py create-staff`) with
 nowhere to log in. The session is a signed cookie
 (`auth.issue_session_token`/`staff_from_session_token`, HMAC over the
 standard library) rather than a sessions table — one fewer thing that has to
 survive a restart for a shop this size. With no `DASHBOARD_SESSION_SECRET`
 configured, login refuses outright (503) rather than signing cookies with a
 secret that changes every process restart — the same call
-`backend/webhooks/shopify.py` makes with no webhook secret set.
+`integrations/shopify/webhooks.py` makes with no webhook secret set.
 
 The dashboard cannot reply into a conversation the bot still owns: `reply`
 checks `identities.is_paused` first and refuses (409) otherwise. A person and
 the model both writing into the same live turn is exactly the two-writers race
-the debounce lock (`chatbot/dispatcher.py`) exists to prevent, and the fix is
+the debounce lock (`assistant/dispatcher.py`) exists to prevent, and the fix is
 the same one — exactly one writer at a time, staff included.
 
 ### It grew into the whole business's control surface
@@ -265,14 +265,14 @@ staff login now also covers:
 - **Shopify** (`dashboard/shopify_api.py`) — products (view,
   create, edit), orders (view, fulfil, cancel, edit quantity), customers.
   Full read/write, not the read-only mirror the dashboard started as.
-- **Statistics** (`stats_api.py`, `backend/services/dashboard_stats.py`) —
+- **Statistics** (`stats_api.py`, `domain/services/dashboard_stats.py`) —
   revenue, orders, AOV, best-sellers, a status breakdown, charted inline
   (hand-rolled SVG, no chart library — the dashboard stays zero-build).
 - **The review queue** (`queue_api.py`) — `item_swap` and `alert`, the two
   `StaffQueueItem` kinds that had full backend logic (`orders.apply_swap`,
   `notifications.low_stock_breach` and friends) and no UI at all until this,
   the same gap `handoff` was in before this dashboard existed.
-- **Settings** (`settings_api.py`, `backend/services/runtime_flags.py`) —
+- **Settings** (`settings_api.py`, `domain/services/runtime_flags.py`) —
   the voice/image/interactive-list feature flags, toggleable without a
   redeploy, and a read-only system-status panel.
 - **Customers, the WhatsApp side** (`customers_api.py`) — the local
@@ -283,17 +283,17 @@ staff login now also covers:
 
 Two decisions shape all of it. First: **Shopify orders and stock still win**.
 Store-wide reads (orders, customers, stats) go straight to Shopify — see
-`shopify_admin_orders.py` / `shopify_admin_customers.py` / `dashboard_stats.py`
+`integrations/shopify/admin_orders.py` / `admin_customers.py` / `domain/services/dashboard_stats.py`
 — because the local `orders` table only ever holds what the *bot* sold; a
 number built from Postgres alone would silently miss every website sale.
 Second: **write actions prefer the existing order service when a local row
 exists**. Cancelling or editing an order the bot placed goes through
-`backend/services/orders.py`'s `cancel()` / `modify_quantity()` — already
+`domain/services/orders.py`'s `cancel()` / `modify_quantity()` — already
 transactional, already notifies the customer — rather than calling
 `shopify_orders` a second, divergent way; only a pure website order (no local
 row) talks to Shopify directly from the dashboard route.
 
-Product create/edit (`shopify_admin_products.py`) pushes to Shopify first,
+Product create/edit (`integrations/shopify/admin_products.py`) pushes to Shopify first,
 then mirrors the wanas.db-only fields onto local `Product`/`Variant` rows —
 the same overlay direction `catalog.py` already uses for price and stock,
 just for the fields that run the other way. A product created only on

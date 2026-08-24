@@ -1,10 +1,10 @@
 """Registering the order-status webhook subscriptions
-`backend/webhooks/shopify.py` needs Shopify to push -- see
-`backend/services/shopify_webhooks.py`'s module docstring for why this is
+`integrations/shopify/webhooks.py` needs Shopify to push -- see
+`integrations/shopify/webhook_registration.py`'s module docstring for why this is
 only half of "the webhook works" (the signing secret is a manual step).
 
 Not to be confused with `tests/test_shopify_webhooks.py`, which covers the
-receiving side (`backend/webhooks/shopify.py` itself: signature, idempotency,
+receiving side (`integrations/shopify/webhooks.py` itself: signature, idempotency,
 status transitions) -- this file is only about getting Shopify to subscribe
 in the first place.
 """

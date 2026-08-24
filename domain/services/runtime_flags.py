@@ -1,10 +1,10 @@
 """Staff-toggled overrides for a handful of named feature flags.
 
-`backend/config.py`'s `Settings` stays env-only and immutable -- that
+`config/settings.py`'s `Settings` stays env-only and immutable -- that
 boundary is deliberate and does not move here. This is a small, separate
 overlay on top of it: a `RuntimeSetting` row wins when present, the env
 default (`settings.X`) wins when it is absent. Exactly the shape
-`backend/services/catalog.py::_overlay` already uses for Shopify's price
+`domain/services/catalog.py::_overlay` already uses for Shopify's price
 over wanas.db's -- nothing structurally new, just a second thing worth
 overriding without a redeploy.
 

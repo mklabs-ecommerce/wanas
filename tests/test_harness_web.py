@@ -139,7 +139,7 @@ def test_the_attachment_is_actually_servable(client):
 
 @pytest.mark.parametrize(
     "path",
-    ["../../.env", "..\\..\\.env", "/etc/passwd", ".env", "backend/config.py", "data/products_seed.json"],
+    ["../../.env", "..\\..\\.env", "/etc/passwd", ".env", "config/settings.py", "data/products_seed.json"],
 )
 def test_media_will_not_serve_anything_outside_the_catalog(client, path):
     response = client.get("/harness/media", params={"path": path})

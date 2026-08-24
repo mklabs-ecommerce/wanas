@@ -1,4 +1,4 @@
-"""`backend/services/shopify_admin_products.py`: create/edit a product from
+"""`integrations/shopify/admin_products.py`: create/edit a product from
 the dashboard, and the local wanas.db mirror that makes it sellable by the
 bot afterward.
 

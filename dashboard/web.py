@@ -21,7 +21,7 @@ Authenticated, unlike the harness: `Staff` already existed
 nowhere to log in. Session is a signed cookie, not a table -- see
 `auth.issue_session_token`. With no `DASHBOARD_SESSION_SECRET` configured,
 login refuses outright (503) rather than signing cookies with a secret that
-changes every restart, the same call `backend/webhooks/shopify.py` makes with
+changes every restart, the same call `integrations/shopify/webhooks.py` makes with
 no webhook secret.
 
 The dashboard has since grown well past conversations -- Shopify products/
@@ -391,7 +391,7 @@ def reset_conversation(
 ) -> JSONResponse:
     """Wipe this conversation back to how a brand-new customer looks --
     for staff testing the bot repeatedly from the same WhatsApp number. See
-    `backend/services/conversation_reset.py` for exactly what is, and is
+    `domain/services/conversation_reset.py` for exactly what is, and is
     not, touched: a real `Client` record and its order history are never
     reachable from here."""
     with session_scope() as db:
@@ -408,7 +408,7 @@ def media(path: str = Query(...), wanas_staff: str | None = Cookie(default=None)
     is off in production (`HARNESS_ENABLED=0`) and the dashboard has to work
     without it. Only local catalog files ever come through here -- a Shopify
     photo is already an `http(s)` url the browser loads directly; see
-    `_is_url` in `backend/integrations/whatsapp_client.py`."""
+    `_is_url` in `integrations/whatsapp/client.py`."""
     with session_scope() as db:
         if _staff(db, wanas_staff) is None:
             return _unauthenticated()
