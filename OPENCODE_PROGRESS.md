@@ -1925,3 +1925,259 @@ each independently reviewable and revertable.
   pass changed or recommends changing unilaterally.
 - Working tree is otherwise clean after this pass — `git status` shows no
   uncommitted changes and no untracked files besides this document.
+
+---
+
+## 2026-08-24 — Full re-architecture (Claude, direct — no subagent, no OpenCode/Ox Alpha)
+
+User asked for a complete, large-scale restructuring — new folder names, not
+a light touch-up — after the light structural pass above. Proposed the new
+tree first (layered by responsibility, integrations grouped by vendor) and
+waited for approval before touching anything; approved with three answers
+(root `manage.py`, proceed with the Shopify vendor-cohesion move, leave
+`tests/` flat) plus a request to fix `conversation_reset.py`'s layering
+violation via callback injection rather than just relocating it. Executed in
+eight incremental, independently-reviewable commits, each with the full
+suite + ruff run before moving on.
+
+### Final architecture
+
+```
+app.py                  composition root (uvicorn app:app) — unchanged
+manage.py                ops CLI, promoted from backend/cli.py: python manage.py <cmd>
+config/settings.py       env-driven settings — imported by every layer below
+common/                 zero-dependency shared kernel
+  money.py, events.py, security.py, servable_paths.py
+domain/                 persistence + business rules; never imports assistant/
+  db.py, models.py, legal.py, seed/, services/ (19 modules: auth, carts,
+  catalog, conversation_reset, dashboard_stats, identities, ids, inventory,
+  notifications, orders, queues, reengagement, runtime_flags, scheduler,
+  search_terms, shipping, size_charts, test_numbers, waitlist)
+integrations/           one package per external vendor
+  shopify/   client.py, catalog.py, inventory.py, orders.py,
+             admin_customers.py, admin_orders.py, admin_products.py,
+             product_import.py, webhook_registration.py, webhooks.py
+  whatsapp/  client.py
+  instagram/ client.py, token.py
+assistant/              the AI agent runtime (was chatbot/), same internal
+                         layout: agent.py, runtime.py, dispatcher.py,
+                         session.py, prompt.py, display.py, messages.py,
+                         interactive.py, media.py, media_serving.py,
+                         providers/, tools/, channels/, harness/
+api/public_media.py     the one FastAPI route with no home in any other layer
+dashboard/              unchanged — already a clean, self-contained package
+docs/, data/, scripts/, tests/   unchanged locations (tests/ stays flat,
+                         per explicit instruction — imports updated only)
+```
+
+### Root cause found (bundled fix, not part of either original bug)
+
+`domain/services/conversation_reset.py` imported `chatbot.session` directly
+— a real violation of the project's own "domain never imports the assistant
+layer" rule (previously "`backend/` must never import `chatbot/`"),
+introduced when the file was first written and never caught because nothing
+in the test suite asserted on the import graph. Fixed with a registration
+callback matching the shape `domain/services/notifications.py` already used
+for outbound senders: `conversation_reset.register_history_clearer()` is
+called once by `app.py`'s startup (`assistant_session.clear`) and once by
+`tests/conftest.py` (the suite never runs `app.py`'s lifespan, so without
+this the reset endpoint would silently stop clearing chat history in every
+test — caught by re-running `tests/test_dashboard.py`'s
+`test_reset_clears_history_pause_and_cart` immediately after the change).
+`reset()` now calls the registered clearer instead of importing `assistant/`
+directly; `domain/` no longer imports the assistant layer anywhere in the
+codebase (verified: `grep -rl "^from chatbot\|^import chatbot" domain/` and
+its post-rename equivalent both return nothing throughout).
+
+### Fixes applied during the restructure
+
+1. **Layering violation** — see above.
+2. **Scattered Shopify config reads** (carried over from the previous pass,
+   re-verified still correct after the move): `integrations/shopify/client.py`
+   reads `settings.shopify_*` from `config/settings.py`, not `os.getenv`
+   directly.
+3. **Config centralization re-audited from scratch** after the full move:
+   `grep -rl "os.getenv\|os.environ\[" --include="*.py" .` outside
+   `tests/`/`scripts/` (standalone CLI tools that legitimately read env
+   before the app's settings lifecycle exists) returns exactly two files —
+   `config/settings.py` itself and `domain/db.py`'s Railway
+   deployment-marker detection (`RAILWAY_ENVIRONMENT` / `_PROJECT_ID` /
+   `_PUBLIC_DOMAIN`, and the `ALLOW_SQLITE_IN_DEPLOY` escape hatch) — both
+   pre-existing, narrow, and deliberate, not a centralization gap. Grepped
+   separately for hardcoded secret-shaped strings (`sk-`, `whsec_`, `xox*-`,
+   `AIza*`, `ghp_`, `glpat-`) across every `.py` file outside `tests/`: zero
+   hits.
+
+### Files moved / renamed / created / removed
+
+**Created (new packages):** `common/`, `config/`, `domain/`, `integrations/`
+(with `shopify/`, `whatsapp/`, `instagram/` subpackages), `api/`, `manage.py`
+at the root. `assistant/` is `chatbot/` renamed (git mv, same directory,
+same internal layout).
+
+**Moved — `backend/` → `common/`:** `money.py`, `events.py`, `security.py`,
+`servable_paths.py`.
+
+**Moved — `backend/` → `config/`:** `config.py` → `settings.py`.
+
+**Moved — `backend/` → `domain/`:** `db.py`, `models.py`, `legal.py`,
+`seed/governorates.py`, `seed/products.py`, and 19 of 25
+`services/*.py` files (everything except the Shopify-sync and
+`instagram_token.py` files below) — `auth.py`, `carts.py`, `catalog.py`,
+`conversation_reset.py`, `dashboard_stats.py`, `identities.py`, `ids.py`,
+`inventory.py`, `notifications.py`, `orders.py`, `queues.py`,
+`reengagement.py`, `runtime_flags.py`, `scheduler.py`, `search_terms.py`,
+`shipping.py`, `size_charts.py`, `test_numbers.py`, `waitlist.py`.
+
+**Moved — six files across three old directories → `integrations/shopify/`:**
+`backend/integrations/shopify_client.py` → `client.py`;
+`backend/services/shopify_catalog.py` → `catalog.py`;
+`backend/services/shopify_inventory.py` → `inventory.py`;
+`backend/services/shopify_orders.py` → `orders.py`;
+`backend/services/shopify_product_import.py` → `product_import.py`;
+`backend/services/shopify_admin_{customers,orders,products}.py` →
+`admin_{customers,orders,products}.py`;
+`backend/services/shopify_webhooks.py` → `webhook_registration.py`
+(registration, renamed apart from the receiver below to avoid a name
+collision);
+`backend/webhooks/shopify.py` → `webhooks.py` (the inbound receiver).
+
+**Moved — `backend/` → `integrations/whatsapp/` and `integrations/instagram/`:**
+`backend/integrations/whatsapp_client.py` → `whatsapp/client.py`;
+`backend/integrations/instagram_client.py` → `instagram/client.py`;
+`backend/services/instagram_token.py` → `instagram/token.py`.
+
+**Moved — `backend/` → `api/`:** `public_media.py`.
+
+**Moved — `backend/` → repo root:** `cli.py` → `manage.py` (invocation
+changed from `python -m backend.cli <cmd>` to `python manage.py <cmd>`,
+matching `app.py`'s `uvicorn app:app` pattern per explicit instruction).
+
+**Renamed (whole directory):** `chatbot/` → `assistant/` — `agent.py`,
+`runtime.py`, `dispatcher.py`, `session.py`, `prompt.py`, `display.py`,
+`messages.py`, `interactive.py`, `media.py`, `media_serving.py`,
+`providers/{base,fake,gemini,openrouter}.py`,
+`tools/{base,cart_tools,catalog_tools,order_tools,support_tools}.py`,
+`channels/{whatsapp,instagram}.py`, `harness/{__main__,web}.py`.
+
+**Removed (now empty):** `backend/` in its entirety (`webhooks/`, `seed/`,
+`integrations/`, `services/`, `__init__.py`, `config.py`, `cli.py`,
+`public_media.py` — all relocated or renamed, nothing deleted outright).
+
+**Content changes beyond pure moves:**
+- `domain/services/conversation_reset.py` — the callback-injection fix above.
+- `app.py` — registers the history-clearer callback; import paths updated.
+- `tests/conftest.py` — registers the same callback for the suite (the
+  suite never runs `app.py`'s lifespan).
+- `pyproject.toml` — `[tool.ruff.lint.isort]` `known-first-party` updated to
+  the new package names; added `combine-as-imports = true` so multi-name
+  vendor imports (`from integrations.shopify import catalog as
+  shopify_catalog, inventory as shopify_inventory`) stay one statement
+  instead of exploding into one `from ... import (...)` block per name;
+  `filterwarnings` and the `assistant/prompt.py` per-file-ignore updated to
+  the new module names.
+- `.gitignore`, `Makefile` — `python -m backend.cli` → `python manage.py`,
+  `python -m chatbot.harness.web` → `python -m assistant.harness.web`.
+- `CLAUDE.md`, `AGENTS.md`, `README.md`, `docs/ARCHITECTURE.md`,
+  `docs/OPERATIONS.md` — every structural path reference rewritten to match
+  (directory trees, file-path citations, CLI invocation examples). Every
+  module docstring across the codebase that named an old `backend/` or
+  `chatbot/` path was swept and corrected, including two that had drifted
+  to describe a layering rule ("keeps `/backend/` from importing
+  `/chatbot/`") that no longer names real directories — reworded to name
+  the actual current layers (`domain/` / `assistant/`).
+- `CHANGELOG.md` — a new `1.2.0` entry added at the top; the historical
+  1.1.0/1.0.0 entries were deliberately left describing the tree as it was
+  *at the time of that entry* rather than rewritten, since a changelog is a
+  historical record.
+- Deliberately **not** touched: every prose/business use of the word
+  "chatbot" — the product name in running text, Shopify's `"chatbot"` vs
+  `"website"` order-source tag (`ORDER_TAGS`, the dashboard's source
+  breakdown), and `dashboard.html`'s `.badge-source.chatbot` CSS class —
+  none of these are Python module references and renaming them would be a
+  business-logic change, not a structural one. Also untouched: the
+  `CHATBOT_DEBUG` environment variable name itself (config field
+  `chatbot_debug`) — real, live production configuration, unrelated to the
+  Python package rename; renaming it would be exactly the kind of
+  unauthorized environment-variable change CLAUDE.md's Security Rules
+  forbid. (Caught mid-edit: an early pass in this session briefly renamed it
+  to `ASSISTANT_DEBUG` in one doc line and was reverted before commit —
+  noted here in case the diff history looks like it happened.)
+
+### How the move was executed (for anyone auditing the diff)
+
+Renames used `git mv` throughout (history-preserving). Import rewrites used
+targeted regex substitution across every `.py` file — never a blind
+find/replace of the bare words "backend" or "chatbot", which also appear as
+ordinary English prose and as the Shopify order-source tag; only structural
+forms (`module.submodule`, `module/path`, `from module import`, `import
+module`) were rewritten, verified after each step by re-running the full
+test collection (`pytest --co`) to catch any import the regex missed, before
+running the suite. One multi-name-import fixer script mis-handled a single
+`# noqa` comment attached to a name inside a parenthesized import block
+(`scripts/shopify_check_live.py`); caught by the following `ruff check`
+pass and fixed by hand in the same commit.
+
+### Tests performed (every step, not just the final one)
+
+- **Before touching anything:** full suite baseline captured — 727 passed,
+  7 failed (the same pre-existing `tests/test_reengagement.py`
+  naive/aware-datetime failures documented throughout this file), ruff
+  clean.
+- **After each of the eight restructuring commits:** `pytest --co` (import
+  collection — catches anything the regex rewrite missed before spending
+  time on a full run), full suite (`pytest -q --tb=short -rf`), `ruff check
+  --fix .` then `ruff check .` to confirm zero remaining. Every single step
+  reproduced the identical 727 passed / 7 failed baseline — zero
+  regressions introduced at any point in the move.
+- **Targeted functional re-verification** (WhatsApp, Instagram, chat
+  persistence, text, voice/media — the explicit ask), re-run after the
+  domain/ extraction, after the Shopify consolidation, after the
+  WhatsApp/Instagram integrations move, and again after the full
+  `chatbot/`→`assistant/` rename: `tests/test_whatsapp_channel.py`,
+  `tests/test_instagram_channel.py`, `tests/test_instagram_client.py`,
+  `tests/test_instagram_comments.py`, `tests/test_instagram_orders.py`,
+  `tests/test_instagram_token.py`, `tests/test_instagram_prompt.py`,
+  `tests/test_bug1_resilience.py`, `tests/test_bug2_durability.py`,
+  `tests/test_media.py`, `tests/test_agent_and_session.py`,
+  `tests/test_dashboard.py`, `tests/test_harness_web.py`,
+  `tests/test_gemini_provider.py`, `tests/test_openrouter_provider.py` —
+  all green at every checkpoint.
+- **App-boot smoke test**, re-run after every commit: imported `app.app`
+  with a throwaway SQLite URL and the fake provider, confirmed the FastAPI
+  route table builds (17 routes) with no exception.
+- **`manage.py` verified as a standalone entrypoint**: `python manage.py
+  --help` lists all seven subcommands correctly from the repo root.
+- **Final state:** `git status` clean, 8 new commits on top of the previous
+  session's 7 (`main`, nothing pushed), full suite still 727 passed / 7
+  failed / ruff clean, `git log --oneline` shows one commit per logical
+  group as required.
+
+### Remaining risks / required manual configuration
+
+- **Same pre-existing `tests/test_reengagement.py` datetime bug, still not
+  fixed, still out of scope** — see the previous entry's Risks section for
+  the full explanation (SQLite returns naive datetimes for a
+  `DateTime(timezone=True)` column; PostgreSQL doesn't have this problem).
+  Untouched by this restructure; re-confirmed identical before and after.
+- **No live credentials in this environment, unchanged from the previous
+  entry** — `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `SHOPIFY_ADMIN_TOKEN`,
+  `WHATSAPP_*`, `INSTAGRAM_*`, `DASHBOARD_SESSION_SECRET` all unset here.
+  This restructure is a pure move-and-rewire with zero behavior change, so
+  the risk profile for live sends is unchanged from before it — the reason
+  for the deep test-suite-collection-then-run discipline at every step
+  instead of a single check at the end.
+- **`manage.py`'s new invocation is a real operational change**: anyone
+  with `python -m backend.cli ...` in a personal script, cron job, or
+  Railway one-off command needs to switch to `python manage.py ...`. Every
+  reference inside this repository (docs, Makefile, tests) was updated;
+  nothing outside the repository could be checked from here.
+- **Nothing in Railway's deploy configuration changes.** `Procfile` (`web:
+  uvicorn app:app --host 0.0.0.0 --port $PORT`) and `.github/workflows/ci.yml`
+  reference only `app.py` and generic `ruff`/`pytest` invocations — neither
+  named `backend`/`chatbot` anywhere and neither needed a change. Confirmed
+  by grep before closing this out.
+- **`data/inbound`, `wanas.db`, `test_wanas.db` and other gitignored,
+  environment-specific files** were untouched throughout (all still
+  gitignored under their original names; nothing about the restructure
+  changes what's tracked vs. local-only).
