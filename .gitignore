@@ -33,6 +33,11 @@ env/
 # IDE
 .vscode/
 .idea/
+.claude/
+
+# Test report artifacts written by ad-hoc pytest runs (not CI, which doesn't emit these)
+.pyt.xml
+.pytest-junit.xml
 
 # OS
 .DS_Store

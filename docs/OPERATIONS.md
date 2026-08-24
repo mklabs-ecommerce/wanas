@@ -74,7 +74,7 @@ false on `/health`, the webhook refuses with 503, and outbound is logged
 instead of sent. Nothing below is needed for the WhatsApp channel to keep
 working.
 
-**Meta side, once (STEP 0 of `INSTAGRAM_PLAN.md`):**
+**Meta side, once:**
 
 - [ ] The shop's Instagram account is **Professional** (Business or Creator),
       and Settings → Messages and story replies → Allow access to messages is

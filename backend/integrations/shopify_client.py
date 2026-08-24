@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import ssl
 import threading
 import time
 import urllib.error
 import urllib.request
+
+from backend.config import settings
 
 try:
     import certifi
@@ -64,14 +65,6 @@ REQUEST_TIMEOUT = 8.0
 _THROTTLE_FLOOR = 200
 
 
-def _env(*names: str, default: str = "") -> str:
-    for name in names:
-        value = (os.getenv(name) or "").strip().strip('"').strip("'")
-        if value:
-            return value
-    return default
-
-
 class ShopifyClient:
     """Minimal GraphQL client, safe to share across threads.
 
@@ -88,9 +81,9 @@ class ShopifyClient:
         *,
         timeout: float = REQUEST_TIMEOUT,
     ):
-        self.domain = domain or _env("SHOPIFY_STORE_DOMAIN")
-        self.token = token or _env("SHOPIFY_ADMIN_TOKEN")
-        self.version = version or _env("SHOPIFY_API_VERSION", default=DEFAULT_API_VERSION)
+        self.domain = domain or settings.shopify_store_domain
+        self.token = token or settings.shopify_admin_token
+        self.version = version or settings.shopify_api_version or DEFAULT_API_VERSION
         #: Per-instance, not the module constant directly -- `get_admin_client()`
         #: hands bulk list/stats pages a longer budget than a live chat turn
         #: gets, without the two sharing a mutable global.
