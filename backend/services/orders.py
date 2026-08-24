@@ -358,6 +358,10 @@ def place_order(
             order_id=next_order_id(session),
             client_id=client.client_id,
             source_channel=channel,
+            # Who placed it, so confirmations and status pushes go back down
+            # the same DM thread instead of to a phone that may never have
+            # used WhatsApp.
+            source_external_id=external_id,
             shipping_address=address.strip(),
             contact_phone=contact_phone.strip(),
             governorate=resolved,

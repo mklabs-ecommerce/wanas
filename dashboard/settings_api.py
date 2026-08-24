@@ -128,7 +128,15 @@ def system_status(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
     return JSONResponse(
         {
             "llm_provider": settings.llm_provider,
-            "llm_key_set": bool(settings.llm_api_key),
+            # The key of whichever provider is active: under the default
+            # OpenRouter that is OPENROUTER_API_KEY, not the Gemini-alias
+            # `llm_api_key` -- reporting that one would show "key not set" on
+            # a deployment where everything works.
+            "llm_key_set": bool(
+                settings.openrouter_api_key
+                if settings.llm_provider == "openrouter"
+                else settings.llm_api_key
+            ),
             "whatsapp_configured": settings.whatsapp_configured,
             "shopify_configured": settings.shopify_configured,
             "shopify_webhooks_configured": settings.shopify_webhooks_configured,

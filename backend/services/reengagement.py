@@ -18,7 +18,14 @@ from sqlalchemy import func, select
 
 from backend.config import settings
 from backend.db import session_scope
-from backend.models import AbandonedCartNudge, CartItem, StockWaitlistEntry, Variant, utcnow
+from backend.models import (
+    AbandonedCartNudge,
+    CartItem,
+    Channel,
+    StockWaitlistEntry,
+    Variant,
+    utcnow,
+)
 from backend.services import notifications, shopify_catalog, waitlist
 
 log = logging.getLogger("wanas.reengagement")
@@ -76,7 +83,8 @@ def check_back_in_stock() -> int:
 
 
 def check_abandoned_carts() -> int:
-    """Nudge every WhatsApp cart that has sat untouched past the threshold.
+    """Nudge every cart on a channel that can be messaged that has sat
+    untouched past the threshold.
 
     `MAX(added_at)` per identity stands in for "last touched": a quantity
     bump on an existing line does not move it (`carts.add` never rewrites
@@ -93,8 +101,8 @@ def check_abandoned_carts() -> int:
     # against a stored `DateTime(timezone=True)` column, and this is not the
     # place to find out whether SQLite's string-typed storage agrees with
     # PostgreSQL's on ordering across that boundary. The candidate set here
-    # is every open WhatsApp cart, never large enough for this to cost
-    # anything.
+    # is every open cart on a live channel, never large enough for this to
+    # cost anything.
     with session_scope() as session:
         rows = session.execute(
             select(
@@ -102,7 +110,7 @@ def check_abandoned_carts() -> int:
                 CartItem.external_id,
                 func.max(CartItem.added_at).label("last_activity"),
             )
-            .where(CartItem.channel == "whatsapp")
+            .where(CartItem.channel.in_(("whatsapp", Channel.INSTAGRAM_DM.value)))
             .group_by(CartItem.channel, CartItem.external_id)
         ).all()
 

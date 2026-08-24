@@ -17,7 +17,7 @@ import logging
 import threading
 
 from backend.config import settings
-from backend.services import reengagement
+from backend.services import instagram_token, reengagement
 
 log = logging.getLogger("wanas.scheduler")
 
@@ -61,6 +61,13 @@ class Scheduler:
                 log.info("abandoned-cart: nudged %d conversation(s)", nudged)
         except Exception:
             log.exception("abandoned-cart check failed")
+        try:
+            # Rate-limited internally to one attempt per day; cheap no-op on
+            # every other tick. This is what stops the Instagram channel from
+            # dying silently 60 days after launch.
+            instagram_token.scheduled_refresh()
+        except Exception:
+            log.exception("instagram token refresh failed")
 
     def stop(self) -> None:
         self._stop.set()

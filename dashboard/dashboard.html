@@ -294,6 +294,21 @@
     padding:.3rem .55rem; font-size:.78rem; color:var(--muted); direction:ltr; text-align:left;
   }
   .chip.bad { border-color:var(--bad); color:var(--bad); }
+  /* Channel badge (WA / IG) on conversation rows and the channel filter. */
+  .badge {
+    display:inline-block; font-size:.62rem; font-weight:700; letter-spacing:.03em;
+    border-radius:4px; padding:.05rem .3rem; border:1px solid var(--line); color:var(--muted);
+  }
+  .badge.wa { color:#2fd07a; border-color:#2fd07a55; }
+  .badge.ig { color:#f58529; border-color:#f5852955; }
+  #channel-filter {
+    background:transparent; color:var(--muted); border:1px solid var(--line);
+    border-radius:6px; font:inherit; font-size:.8rem; padding:.15rem .4rem; margin-inline-start:auto;
+  }
+  #igWindowNote {
+    display:none; margin:.5rem .9rem 0; font-size:.8rem; color:#ffe08a;
+    border:1px solid #ffe08a44; border-radius:6px; padding:.35rem .6rem;
+  }
 
   #replyBar { border-top:1px solid var(--line); background:var(--header);
               padding:.6rem .9rem; display:none; gap:.5rem; align-items:flex-end; }
@@ -332,6 +347,11 @@
     <div id="tabs">
       <button id="tab-open" class="active">محتاجة رد <span id="open-count"></span></button>
       <button id="tab-all">كل المحادثات</button>
+      <select id="channel-filter" title="فلتر القناة">
+        <option value="all">كل القنوات</option>
+        <option value="whatsapp">واتساب</option>
+        <option value="instagram_dm">انستجرام</option>
+      </select>
     </div>
     <div id="list"></div>
   </div>
@@ -351,6 +371,7 @@
     </div>
     <div id="handoffBanner"></div>
     <div id="log"></div>
+    <div id="igWindowNote">⚠️ المحادثة دي على الانستجرام — الرد شغال خلال ٢٤ ساعة من آخر رسالة من العميل. لو عدّت المدة الرد مش هيوصل، وهيبان في التنبيهات.</div>
     <div id="replyBar">
       <textarea id="replyText" rows="1" placeholder="اكتب ردك للعميل…"></textarea>
       <button class="send" id="btn-send">إرسال</button>
@@ -1603,10 +1624,32 @@ function fmtTime(iso) {
   return d.toLocaleString('ar-EG', {hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'});
 }
 
+function channelLabel(channel) {
+  // Human-facing label for a conversation's channel. Unknown channels show
+  // as-is rather than pretending.
+  return channel === 'instagram_dm' ? 'Instagram'
+       : channel === 'whatsapp' ? 'WhatsApp'
+       : channel;
+}
+
+function channelBadge(channel) {
+  if (channel === 'instagram_dm') return 'IG';
+  if (channel === 'whatsapp') return 'WA';
+  return '?';
+}
+
+let channelFilter = 'all';
+
+document.getElementById('channel-filter').onchange = (e) => {
+  channelFilter = e.target.value;
+  renderList();
+};
+
 function renderList() {
   const list = document.getElementById('list');
   list.innerHTML = '';
-  const shown = currentTab === 'open' ? conversations.filter(c => c.paused) : conversations;
+  let shown = currentTab === 'open' ? conversations.filter(c => c.paused) : conversations;
+  if (channelFilter !== 'all') shown = shown.filter(c => c.channel === channelFilter);
 
   if (!shown.length) {
     list.appendChild(el('div', null, ''));
@@ -1623,6 +1666,7 @@ function renderList() {
     const body = el('div', 'body');
     const idLine = el('div', 'id-line');
     idLine.appendChild(el('div', 'id', c.external_id));
+    idLine.appendChild(el('span', 'badge ' + (c.channel === 'instagram_dm' ? 'ig' : c.channel === 'whatsapp' ? 'wa' : ''), channelBadge(c.channel)));
     idLine.appendChild(el('div', 'time', fmtTime(c.updated_at)));
     body.appendChild(idLine);
     const previewLine = el('div', 'preview', c.paused ? '⏸ ' + reasonLabel(c.reason) : (c.preview || '…'));
@@ -1705,7 +1749,7 @@ async function openConversation(channel, externalId) {
   document.getElementById('convHeader').style.display = 'flex';
   document.getElementById('log').style.display = 'flex';
   document.getElementById('convWho').textContent = externalId;
-  document.getElementById('convSub').textContent = channel;
+  document.getElementById('convSub').textContent = channelLabel(channel);
   const log = document.getElementById('log');
   log.innerHTML = '';
   log.appendChild(el('div', 'meta', 'جار التحميل…'));
@@ -1783,6 +1827,11 @@ function renderConversation(data) {
     document.getElementById('replyBar').style.display = 'none';
     document.getElementById('notPaused').style.display = 'block';
   }
+  // Instagram replies are free-form only inside Meta's 24-hour window from
+  // the customer's last message -- say so where staff type, instead of
+  // letting a failed send be the first notice.
+  document.getElementById('igWindowNote').style.display =
+    current && current.channel === 'instagram_dm' ? 'block' : 'none';
 }
 
 //: The Bot ON/OFF control: always visible once a conversation is open, not

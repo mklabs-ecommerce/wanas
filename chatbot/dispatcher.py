@@ -43,10 +43,9 @@ class Pending:
     """What has arrived for one conversation and not been answered yet."""
 
     texts: list[str] = field(default_factory=list)
-    #: Parallel to `texts` -- the WhatsApp message id each fragment arrived
-    #: as, so a later reply-to reference in this same batch can be resolved
-    #: back to which text it was replying to. See `reply_to` and
-    #: `chatbot/channels/whatsapp.py`'s `_annotate_replies`.
+    #: Parallel to `texts` -- the message id each fragment arrived as, so a
+    #: later reply-to reference in this same batch can be resolved back to
+    #: which text it was replying to. See `reply_to` and `annotated_text`.
     text_ids: list[str | None] = field(default_factory=list)
     image_paths: list[str] = field(default_factory=list)
     image_ids: list[str | None] = field(default_factory=list)
@@ -80,6 +79,38 @@ class Pending:
         sentences, and running them together reads as one garbled one.
         """
         return "\n".join(part for part in self.texts if part.strip())
+
+    def annotated_text(self) -> str:
+        """The batch's text fragments, each prefixed with which earlier item in
+        this same batch it was a WhatsApp "reply to" of, when Meta says so.
+
+        Needed because the neutral message format (`chatbot/messages.py`) only
+        ever carries plain text -- there is no structured "in reply to" field to
+        thread through the provider boundary, so this is where "the customer
+        replied to the second photo" becomes words the model can actually use:
+        `[replying to photo 2] a size M please`, folded straight into the text
+        the turn runs on.
+        """
+        if not self.reply_to:
+            return self.text
+
+        labels: dict[str, str] = {}
+        for index, mid in enumerate(self.image_ids, start=1):
+            if mid:
+                labels[mid] = f"photo {index}"
+        for index, mid in enumerate(self.audio_ids, start=1):
+            if mid:
+                labels[mid] = f"voice note {index}"
+
+        out = []
+        for index, text in enumerate(self.texts):
+            mid = self.text_ids[index] if index < len(self.text_ids) else None
+            target = self.reply_to.get(mid) if mid else None
+            label = labels.get(target) if target else None
+            annotated = f"[replying to {label}] {text}" if label else text
+            if annotated.strip():
+                out.append(annotated)
+        return "\n".join(out)
 
 
 class MessageDispatcher:

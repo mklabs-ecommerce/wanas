@@ -12,6 +12,7 @@ target and SQLite is only a local convenience (AGENTS.md, Tech stack).
 from __future__ import annotations
 
 import enum
+import json
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -24,6 +25,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    TypeDecorator,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -103,8 +105,13 @@ HANDOFF_REASONS = (
     "voice_received",
     "out_of_scope",
 )
+#: `instagram_reply_delivery_failed` is the Instagram adapter's twin of
+#: `reply_delivery_failed`; `instagram_token_refresh_failed` is what stops the
+#: channel from dying silently on day 60; `comment_flood` is rate-limited to
+#: one alert per burst, not one per dropped comment.
 ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancelled", "swap_requested",
-                 "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed")
+                 "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed",
+                 "instagram_reply_delivery_failed", "instagram_token_refresh_failed", "comment_flood")
 
 
 # --------------------------------------------------------------------------
@@ -219,6 +226,12 @@ class Order(Base):
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.client_id"), nullable=False, index=True)
     source_channel: Mapped[str] = mapped_column(String(20), nullable=False)
 
+    #: The channel identity that placed this order. `source_channel` says
+    #: "Instagram"; this says *which* Instagram account, which is what an
+    #: outbound confirmation actually needs. Nullable -- orders placed before
+    #: this column existed have only the phone.
+    source_external_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
     # Copied onto the order, not read back through the client: a customer who
     # moves must not silently re-point orders already delivered to the old
     # address, and a one-time shipping address has nowhere else to live.
@@ -330,6 +343,65 @@ class ChannelIdentity(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class UnreadableHistory:
+    """What a history column holding text that is not JSON deserialises to.
+
+    A sentinel, not an exception: the decode happens while the ROW is being
+    materialised (inside `session.get` / any query selecting the column), so
+    raising there killed every turn for that customer before the model was
+    ever called. Falsy on purpose, so readers with an empty-history default
+    (`row.history or []` in the dashboard preview) take that path unchanged,
+    and without `__len__`, so the CLI's guarded `len()` still reports it.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<unreadable history>"
+
+    def __bool__(self) -> bool:
+        return False
+
+
+#: Singleton; identity-checked by readers that want to tell it apart from a
+#: legitimately empty history.
+UNREADABLE_HISTORY = UnreadableHistory()
+
+
+class LenientJSON(TypeDecorator):
+    """JSON that never raises during a row load.
+
+    The only place the column's decode runs is this result processor -- not
+    attribute access, which is why a try/except around `row.history` cannot
+    catch it. One manual edit or restore away from a poisoned value, and the
+    guard belongs at the point the poison detonates. Readers decide what an
+    unreadable value is worth (the session store starts the turn empty and
+    leaves the stored text untouched until the next save); writes are exactly
+    what they were, json.dumps on flush.
+    """
+
+    impl = JSON
+    cache_ok = True
+
+    def result_processor(self, dialect, coltype):
+        default = super().result_processor(dialect, coltype)
+
+        def process(value):
+            try:
+                return default(value) if default is not None else value
+            except Exception:
+                return UNREADABLE_HISTORY
+
+        return process
+
+    def process_literal_param(self, value, dialect):
+        return json.dumps(value)
+
+    @property
+    def python_type(self):
+        return list
+
+
 class SessionRow(Base):
     __tablename__ = "sessions"
 
@@ -337,8 +409,8 @@ class SessionRow(Base):
     external_id: Mapped[str] = mapped_column(String(120), primary_key=True)
     # The neutral message list from 02-chatbot.md. In the database rather than
     # process memory so the server can restart, and so more than one instance
-    # can run behind a load balancer.
-    history: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # can run behind a load balancer. Lenient on read: see LenientJSON.
+    history: Mapped[list] = mapped_column(LenientJSON, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -528,6 +600,42 @@ class WhatsAppMedia(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class IntegrationToken(Base):
+    """A credential that expires and refreshes itself.
+
+    Instagram long-lived tokens die after 60 days with no symptom other than
+    190-series auth errors, so the expiry has to live somewhere `/health` can
+    read it and the scheduler can act on it (`backend/services/
+    instagram_token.py`). One row per provider; `"instagram"` is the first.
+    """
+
+    __tablename__ = "integration_tokens"
+
+    provider: Mapped[str] = mapped_column(String(30), primary_key=True)  # "instagram"
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    refreshed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class InstagramCommentReply(Base):
+    """One private reply per comment, ever -- Meta's rule, enforced here.
+
+    Written *before* the send, not after: a crash between the two must leave
+    a row that stops a retry, not a gap that permits a second DM to someone
+    who already got one. The comment rate limit also reads `created_at` +
+    `commenter_igsid` off this same table -- no second table.
+    """
+
+    __tablename__ = "instagram_comment_replies"
+
+    comment_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    media_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    commenter_igsid: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    public_replied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    private_replied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 __all__ = [
     "Base",
     "Client",
@@ -538,6 +646,7 @@ __all__ = [
     "OrderFeedback",
     "ChannelIdentity",
     "SessionRow",
+    "UNREADABLE_HISTORY",
     "CartItem",
     "ShippingRate",
     "StaffQueueItem",
@@ -547,6 +656,8 @@ __all__ = [
     "WebhookEvent",
     "Counter",
     "WhatsAppMedia",
+    "IntegrationToken",
+    "InstagramCommentReply",
     "StockWaitlistEntry",
     "AbandonedCartNudge",
     "OrderStatus",

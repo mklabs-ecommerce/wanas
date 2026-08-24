@@ -135,7 +135,10 @@ def run_turn(
 ) -> AgentReply:
     provider = provider or get_provider()
     specs = tool_specs()
-    system_prompt = build_system_prompt()
+    # The surface shapes the prompt: WhatsApp's wording stays byte-identical
+    # to what it has always been; Instagram gets its own lines (see
+    # chatbot/prompt.py).
+    system_prompt = build_system_prompt(channel=channel)
 
     history = session_store.load(db, channel, external_id)
     sent_images = _sent_images(history)

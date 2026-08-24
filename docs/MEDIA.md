@@ -97,7 +97,8 @@ product, and every fallback still reaches a human.
 
 ## Cost
 
-One extra model call per voice note or photo, on `LLM_MEDIA_MODEL` (or the
-conversation model if that is blank). It runs on the worker thread, so it does
+One extra model call per voice note or photo, on the conversation model
+(`LLM_MEDIA_MODEL` overrides it only under `LLM_PROVIDER=gemini`; OpenRouter
+runs both on its one shared model). It runs on the worker thread, so it does
 not hold the webhook. `MAX_MEDIA_BYTES` (12 MB) refuses anything that is
 obviously not a phone photo or a voice note before it is uploaded.

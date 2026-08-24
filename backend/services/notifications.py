@@ -53,7 +53,11 @@ class OutboundSender(Protocol):
 
     def send_image(self, to: str, image_path: str, *, caption: str = "") -> OutboundMessage: ...
 
+    def send_interactive(self, to: str, payload: dict, *, fallback: str = "") -> OutboundMessage: ...
+
     def send_template(self, to: str, template: str, *, language: str = "ar") -> OutboundMessage: ...
+
+    def mark_as_read(self, message_id: str) -> bool: ...
 
 
 @dataclass
@@ -90,20 +94,48 @@ class LogSender:
     def mark_as_read(self, message_id: str) -> bool:
         return True
 
+    def send_private_reply(self, comment_id: str, text: str) -> OutboundMessage:
+        """Instagram's private reply to a comment -- a no-op here.
+
+        On `LogSender` only, and deliberately off the `OutboundSender`
+        protocol: it is an Instagram-only capability WhatsApp has no answer
+        to. Recorded like any other send so the tests can assert on comment
+        flows with no network.
+        """
+        message = OutboundMessage(to=f"comment:{comment_id}", text=text)
+        self.sent.append(message)
+        log.info("[outbound:comment:%s] %s", comment_id, text.replace("\n", " | "))
+        return message
+
     def clear(self) -> None:
         self.sent.clear()
 
 
-_sender: OutboundSender = LogSender()
+_senders: dict[str, OutboundSender] = {}
+_default: OutboundSender = LogSender()
 
 
-def register_sender(sender: OutboundSender) -> None:
-    global _sender
-    _sender = sender
+def register_sender(sender: OutboundSender, *, channel: str = "whatsapp") -> None:
+    """Register the client that actually delivers on one channel.
+
+    `channel` is keyword-with-a-default so every existing call site and test
+    keeps working unchanged; new channels must pass it explicitly.
+    """
+    _senders[channel] = sender
 
 
-def get_sender() -> OutboundSender:
-    return _sender
+def get_sender(channel: str | None = None) -> OutboundSender:
+    """The sender for one channel, or the LogSender when none is registered.
+
+    A channel with no registered sender falls back to the log and **never**
+    to another channel's client: sending an Instagram reply over WhatsApp is
+    a message delivered to the wrong person, which is strictly worse than a
+    message not sent. `channel=None` means "the default channel" and is kept
+    only for the pre-Instagram call sites; passing it in new code is a bug.
+    """
+    if channel is None:
+        return _senders.get("whatsapp", _default)
+    return _senders.get(channel, _default)
 
 
 # --------------------------------------------------------------------------
@@ -191,10 +223,12 @@ FEEDBACK_REQUEST_TEXT = (
 
 
 def order_confirmed(session: Session, order: Order) -> None:
-    """Staff alert + the customer's WhatsApp confirmation.
+    """Staff alert + the customer's confirmation.
 
-    Sent to the phone collected at checkout, which is always present -- so an
-    order placed on any channel still gets a WhatsApp confirmation.
+    Sent on the channel the order was placed on, to the identity that placed
+    it -- an Instagram DM, not a WhatsApp thread that may not exist. Orders
+    with no recorded identity (placed before `source_external_id` existed)
+    fall back to the phone over WhatsApp.
 
     The alert row is written inside the order's transaction; the message body
     is rendered now but only *sent* once that transaction commits. Telling a
@@ -210,16 +244,29 @@ def order_confirmed(session: Session, order: Order) -> None:
         payload={"total": money(order.total), "items": len(order.items), "channel": order.source_channel},
     )
     text = order_confirmation_text(order)
-    phone = order.contact_phone
+    channel, recipient = customer_destination(order)
     order_id = order.order_id
-    after_commit(session, lambda: _deliver_confirmation(phone, text, order_id))
+    after_commit(session, lambda: _deliver_confirmation(recipient, text, order_id, channel=channel))
 
 
-def _deliver_confirmation(phone: str, text: str, order_id: str) -> None:
-    message = _sender.send_text(phone, text, template="order_confirmation")
+def customer_destination(order: Order) -> tuple[str, str]:
+    """Where to reach this customer about this order.
+
+    The identity that placed it, when the order knows -- that is the only
+    thread guaranteed to exist on a second channel. Otherwise the phone
+    collected at checkout over WhatsApp, which is where every pre-Instagram
+    order lived anyway.
+    """
+    if order.source_channel and order.source_external_id:
+        return order.source_channel, order.source_external_id
+    return "whatsapp", order.contact_phone
+
+
+def _deliver_confirmation(to: str, text: str, order_id: str, *, channel: str = "whatsapp") -> None:
+    message = get_sender(channel).send_text(to, text, template="order_confirmation")
     if message.delivered:
         return
-    # With no email in Phase 1 a failed WhatsApp confirmation means the
+    # With no email in Phase 1 a failed confirmation means the
     # customer gets nothing at all, so someone has to call them. Its own
     # transaction, because the order it refers to has already committed.
     from backend.db import session_scope
@@ -229,26 +276,28 @@ def _deliver_confirmation(phone: str, text: str, order_id: str) -> None:
             session,
             kind=QueueKind.ALERT.value,
             reason="confirmation_delivery_failed",
-            summary=f"WhatsApp confirmation for {order_id} failed to send to {phone}",
+            summary=f"Order confirmation for {order_id} failed to send to {to} on {channel}",
             order_id=order_id,
-            payload={"error": message.error or "unknown"},
+            payload={"error": message.error or "unknown", "channel": channel},
         )
 
 
 def order_status_changed(session: Session, order: Order, status: str | None = None) -> None:
+    channel, recipient = customer_destination(order)
     status = status or order.status
     text = status_change_text(order, status)
     if text:
-        _sender.send_text(order.contact_phone, text, template=f"status_{status.lower()}")
+        get_sender(channel).send_text(recipient, text, template=f"status_{status.lower()}")
     if status == "Delivered":
         order_delivered(session, order)
 
 
 def order_delivered(session: Session, order: Order) -> None:
-    """Feedback request, always over WhatsApp regardless of where the order was
-    placed -- TikTok cannot be messaged first at all."""
-    _sender.send_text(
-        order.contact_phone,
+    """The feedback request, on the same channel the order and its updates
+    went out on."""
+    channel, recipient = customer_destination(order)
+    get_sender(channel).send_text(
+        recipient,
         FEEDBACK_REQUEST_TEXT.format(order_id=customer_reference(order)),
         template="feedback_request",
     )
@@ -281,9 +330,11 @@ def send_proactive(
     (no email, no SMS) -- so the fallback is a staff alert, the same "a
     person has to do it" shape as `_deliver_confirmation`'s failure path.
     """
-    if channel != "whatsapp":
+    if channel not in _senders:
         # Nothing else is wired to an outbound sender yet -- see
-        # `order_delivered`'s note on TikTok.
+        # `order_delivered`'s note on TikTok. A channel is opt-in: no sender
+        # registered means nothing is sent, rather than a send through some
+        # other channel's client.
         return
 
     identity = identities.get(session, channel, external_id)
@@ -294,10 +345,11 @@ def send_proactive(
     )
 
     message = None
+    sender = get_sender(channel)
     if window_open:
-        message = _sender.send_text(external_id, text, template=template)
+        message = sender.send_text(external_id, text, template=template)
     elif template:
-        message = _sender.send_template(
+        message = sender.send_template(
             external_id, template, language=settings.whatsapp_template_language
         )
 

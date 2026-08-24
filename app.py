@@ -25,8 +25,10 @@ from backend.config import settings
 from backend.db import engine, session_scope
 from backend.legal import router as legal_router
 from backend.models import Base, Product, ShippingRate, Variant
+from backend.public_media import router as public_media_router
 from backend.services.scheduler import scheduler
 from backend.webhooks.shopify import router as shopify_router
+from chatbot.channels import instagram as instagram_channel
 from chatbot.channels.whatsapp import dispatcher as whatsapp_dispatcher
 from chatbot.channels.whatsapp import register_outbound_sender
 from chatbot.channels.whatsapp import router as whatsapp_router
@@ -176,6 +178,25 @@ async def lifespan(_app: FastAPI):
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()
+    # Instagram's own client under its own channel key -- never a second
+    # registration of WhatsApp's. Inert (logged, not sent) until credentials
+    # exist, exactly like WhatsApp above.
+    instagram_channel.register_outbound_sender()
+    if not settings.instagram_configured:
+        log.warning(
+            "Instagram is not configured: /webhooks/instagram refuses with 503 "
+            "and outbound Instagram messages are logged, not sent."
+        )
+    else:
+        # The 60-day token gets its first refresh check at boot; the scheduler
+        # keeps it going afterwards. Failures are logged and alerted inside.
+        try:
+            from backend.services import instagram_token
+
+            if instagram_token.maybe_refresh(force=True):
+                log.info("instagram token refreshed at startup")
+        except Exception:
+            log.exception("startup instagram token refresh check failed")
     if settings.llm_provider in {"fake", "rehearsal"} or not settings.llm_api_key:
         log.warning("no LLM key configured: the agent will run the rehearsal stand-in")
     if settings.chatbot_debug:
@@ -226,8 +247,10 @@ async def lifespan(_app: FastAPI):
     yield
     scheduler.stop()
     # Let anything still buffered finish rather than dropping a customer's
-    # message on a deploy.
+    # message on a deploy -- on either channel. Missing one of these drops a
+    # customer's buffered message on every deploy.
     whatsapp_dispatcher.shutdown(wait=True)
+    instagram_channel.dispatcher.shutdown(wait=True)
 
 
 app = FastAPI(title="Wanas Gallery", version="0.1.0", lifespan=lifespan)
@@ -245,11 +268,21 @@ def health() -> dict:
     with session_scope() as db:
         product_count = db.query(Product).count()
         variant_count = db.query(Variant).count()
+    from backend.services import instagram_token
+
+    token_expires_at = instagram_token.expires_at()
     return {
         "status": "ok",
         "llm_provider": settings.llm_provider,
         "llm_key_set": bool(settings.llm_api_key),
         "whatsapp_configured": settings.whatsapp_configured,
+        "instagram_configured": settings.instagram_configured,
+        "instagram_comments": settings.instagram_comments_enabled,
+        # The 60-day token's remaining life, so a broken refresh job is
+        # visible weeks before the channel goes quiet.
+        "instagram_token_expires_at": (
+            token_expires_at.isoformat() if token_expires_at else None
+        ),
         "shopify_configured": settings.shopify_configured,
         "shopify_webhooks_configured": settings.shopify_webhooks_configured,
         "voice_notes": settings.voice_notes_enabled,
@@ -266,6 +299,13 @@ def index() -> RedirectResponse:
 
 
 app.include_router(whatsapp_router)
+# The second first-class channel: same machinery, its own adapter, its own
+# webhook. Inert until Meta credentials exist (see the lifespan warning).
+app.include_router(instagram_channel.router)
+# Public, unauthenticated, and safe by construction: catalog assets only,
+# behind an HMAC path token (`backend/public_media.py`). Meta's own fetcher
+# has no cookie and no session -- this is how Instagram gets a size chart.
+app.include_router(public_media_router)
 app.include_router(shopify_router)
 # Public, unauthenticated: Meta requires a privacy policy URL a logged-out
 # reviewer can read.
