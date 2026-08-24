@@ -3,14 +3,14 @@
 One implementation, two exposure levels. `SERVABLE_ROOTS` is what a logged-in
 surface (the harness, the staff dashboard) may show a person; `PUBLIC_ROOTS`
 is what may reach the public internet -- i.e. Meta's own fetcher, which has
-no cookie and no token (`backend/public_media.py`). `data/inbound` holds
+no cookie and no token (`api/public_media.py`). `data/inbound` holds
 customers' own photos and voice notes; it is servable to staff and must never
 be reachable publicly.
 
-This lives in /backend/ rather than /chatbot/ because the public media route
-is backend code, and /backend/ must never import /chatbot/. Both historical
-call sites keep importing from `chatbot.media_serving`, which re-exports
-these names unchanged.
+This lives in /common/ because `api/public_media.py` (domain-adjacent) and
+`assistant/media_serving.py` (assistant-layer) both need it, and neither
+layer may import the other. `assistant/media_serving.py` re-exports these
+names unchanged for its historical call sites.
 """
 
 from __future__ import annotations

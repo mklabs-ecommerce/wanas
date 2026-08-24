@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.models import CartItem, Variant
-from backend.money import money, to_decimal
+from common.money import money, to_decimal
 
 
 def _lines(session: Session, channel: str, external_id: str) -> list[CartItem]:

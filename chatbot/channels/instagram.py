@@ -37,13 +37,13 @@ from backend.config import PROJECT_ROOT, settings
 from backend.db import session_scope
 from backend.integrations.instagram_client import InstagramClient
 from backend.models import Channel, QueueKind, utcnow
-from backend.security import verify_signature
 from backend.services import identities, notifications, queues
 from chatbot import messages as msg
 from chatbot import session as session_store
 from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff
+from common.security import verify_signature
 
 log = logging.getLogger("wanas.channel.instagram")
 

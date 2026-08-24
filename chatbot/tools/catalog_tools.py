@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from backend.config import settings
 from backend.models import Product
-from backend.money import money
 from backend.services import catalog, runtime_flags, shipping
 from backend.services.size_charts import MEASUREMENT_NOTE, get_chart
 from chatbot import interactive
 from chatbot.tools.base import ToolContext, tool
+from common.money import money
 
 
 @tool(

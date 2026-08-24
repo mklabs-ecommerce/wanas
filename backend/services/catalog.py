@@ -18,8 +18,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.models import Product, Variant
-from backend.money import money
 from backend.services import search_terms, shopify_catalog
+from common.money import money
 
 #: Categories come first and collections last, labelled optional: 8 of the 18
 #: products have no collection, so a reply that opens with collections has

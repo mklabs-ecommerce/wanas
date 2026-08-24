@@ -43,7 +43,7 @@ from fastapi import APIRouter, Response
 from fastapi.responses import FileResponse
 
 from backend.config import settings
-from backend.servable_paths import resolve_public_path
+from common.servable_paths import resolve_public_path
 
 log = logging.getLogger("wanas.public_media")
 

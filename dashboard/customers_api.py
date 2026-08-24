@@ -17,7 +17,7 @@ from sqlalchemy import or_, select
 
 from backend.db import session_scope
 from backend.models import Client, Order
-from backend.money import money
+from common.money import money
 from dashboard.guard import staff_for, unauthenticated
 
 router = APIRouter(prefix="/dashboard/api/customers", tags=["dashboard-customers"])

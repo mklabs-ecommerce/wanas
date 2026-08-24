@@ -14,7 +14,7 @@ names every consumer has always used.
 
 from __future__ import annotations
 
-from backend.servable_paths import (  # noqa: F401 -- re-exported
+from common.servable_paths import (  # noqa: F401 -- re-exported
     PUBLIC_ROOTS,
     SERVABLE_ROOTS,
     resolve_public_path,
