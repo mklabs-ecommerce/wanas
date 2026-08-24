@@ -85,7 +85,8 @@ integrations/            everything that talks to an external vendor over
   shopify/
     client.py               GraphQL transport for the live Shopify path
     catalog.py, inventory.py, orders.py   live read/write
-    admin_customers.py, admin_orders.py, admin_products.py  dashboard admin
+    admin_customers.py, admin_orders.py, admin_products.py,
+    admin_collections.py, admin_inventory.py                dashboard admin
     product_import.py       reconcile-on-boot for products created straight
                             in Shopify Admin
     webhook_registration.py subscribe Shopify to push order-status changes
@@ -129,9 +130,14 @@ dashboard/                 staff dashboard, its own top-level package:
                             (DASHBOARD_SESSION_SECRET gates login).
                             web.py (auth + conversations) stays one file;
                             shopify_api.py / stats_api.py / queue_api.py /
-                            settings_api.py / customers_api.py are sibling
+                            settings_api.py / customers_api.py /
+                            collections_api.py / inventory_api.py /
+                            insights_api.py / inbox_api.py are sibling
                             routers under the same guard, not a growing
-                            single file -- see web.py's own docstring. To
+                            single file -- see web.py's own docstring.
+                            inbox_api.py is read-only on purpose: every
+                            outbound action still goes through web.py, so
+                            there is one place a message can leave here. To
                             show conversations it reads assistant/session.py,
                             assistant/display.py, assistant/messages.py, and
                             assistant/media_serving.py directly -- the same

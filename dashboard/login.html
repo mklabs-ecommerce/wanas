@@ -1,75 +1,180 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wanas — staff login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>ونس — دخول الفريق</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;family=Inter:wght@500;700&amp;display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg:#0b141a; --panel:#111b21; --header:#202c33; --line:#2a3942;
-    --out:#005c4b; --ink:#e9edef; --muted:#8696a0; --bad:#f2637d;
+/* Same tokens as the dashboard, trimmed to what one page needs — the login
+   is the first impression of the same product, not a different one. */
+:root {
+  color-scheme: light;
+  --ground:#F7F3EE; --surface:#FFFFFF; --surface-3:#F3EDE6;
+  --line:#E7DDD2; --line-strong:#D6C8B9;
+  --ink:#241E29; --ink-2:#4C4353; --ink-3:#6F6579;
+  --clay:#C4653C; --clay-tint:#FCEFE5; --lilac:#6B4E9B; --lilac-tint:#F2ECFB;
+  --teal:#17756B; --rose:#B33A54; --rose-tint:#FCEAEE; --rose-soft:#F6D2DA;
+  --amber-tint:#FDF4E0; --amber:#96660B; --amber-soft:#F7E3B8;
+  --shadow-3: 0 10px 40px -12px rgba(45,30,20,.26), 0 2px 8px rgba(45,30,20,.06);
+  --ring: 0 0 0 3px rgba(196,101,60,.28);
+  --r-md:13px; --r-lg:18px; --r-xl:26px;
+  --font-ar:"IBM Plex Sans Arabic","Noto Naskh Arabic","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-num:"Inter",system-ui,sans-serif;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:#14111A; --surface:#1E1A28; --surface-3:#2C2639;
+  --line:#322B41; --line-strong:#453C58;
+  --ink:#F2EDF6; --ink-2:#CFC6DB; --ink-3:#A79CB6;
+  --clay:#F0A87C; --clay-tint:#2E2119; --lilac:#BFA6EE; --lilac-tint:#261F38;
+  --teal:#6FCFBE; --rose:#F2919F; --rose-tint:#31191E; --rose-soft:#4C2129;
+  --amber-tint:#2E2617; --amber:#E9BE6A; --amber-soft:#4A3A18;
+  --shadow-3: 0 16px 48px -16px rgba(0,0,0,.75), 0 2px 10px rgba(0,0,0,.4);
+  --ring: 0 0 0 3px rgba(240,168,124,.3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:#14111A; --surface:#1E1A28; --surface-3:#2C2639;
+    --line:#322B41; --line-strong:#453C58;
+    --ink:#F2EDF6; --ink-2:#CFC6DB; --ink-3:#A79CB6;
+    --clay:#F0A87C; --clay-tint:#2E2119; --lilac:#BFA6EE; --lilac-tint:#261F38;
+    --teal:#6FCFBE; --rose:#F2919F; --rose-tint:#31191E; --rose-soft:#4C2129;
+    --amber-tint:#2E2617; --amber:#E9BE6A; --amber-soft:#4A3A18;
+    --shadow-3: 0 16px 48px -16px rgba(0,0,0,.75), 0 2px 10px rgba(0,0,0,.4);
+    --ring: 0 0 0 3px rgba(240,168,124,.3);
   }
-  * { box-sizing:border-box; }
-  body {
-    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-    background:var(--bg); color:var(--ink);
-    font:15px/1.55 "Segoe UI","Noto Naskh Arabic",Tahoma,system-ui,sans-serif;
-  }
-  form {
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:2rem; width:min(90vw, 22rem); display:flex; flex-direction:column; gap:.9rem;
-  }
-  h1 { margin:0 0 .2rem; font-size:1.2rem; }
-  .sub { color:var(--muted); font-size:.85rem; margin:0 0 .4rem; }
-  label { font-size:.85rem; color:var(--muted); display:flex; flex-direction:column; gap:.3rem; }
-  input {
-    background:var(--header); color:var(--ink); border:1px solid var(--line);
-    border-radius:6px; padding:.55rem .7rem; font:inherit;
-  }
-  button {
-    background:var(--out); color:var(--ink); border:none; border-radius:6px;
-    padding:.6rem; font:inherit; font-weight:600; cursor:pointer; margin-top:.3rem;
-  }
-  button:disabled { opacity:.6; cursor:default; }
-  #error { color:var(--bad); font-size:.85rem; min-height:1.1em; }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh; display: grid; place-items: center;
+  padding: 24px; background: var(--ground); color: var(--ink);
+  font-family: var(--font-ar); font-size: 15px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(900px 460px at 82% -6%, var(--clay-tint), transparent 60%),
+    radial-gradient(760px 420px at 6% 8%, var(--lilac-tint), transparent 58%);
+}
+main { position: relative; width: min(420px, 100%); }
+
+.mark {
+  width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
+  background: linear-gradient(145deg, var(--clay), var(--lilac));
+  color: #fff; font-weight: 700; font-size: 22px; box-shadow: var(--shadow-3);
+  margin-bottom: 18px;
+}
+h1 { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+.sub { color: var(--ink-3); font-size: 13.5px; margin: 4px 0 24px; }
+
+form {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-xl); box-shadow: var(--shadow-3);
+  padding: 28px; display: flex; flex-direction: column; gap: 16px;
+}
+label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+input {
+  width: 100%; padding: 11px 14px; font: inherit; font-size: 14px;
+  background: var(--surface-3); border: 1px solid transparent; border-radius: var(--r-md);
+  color: var(--ink); outline: none; transition: border-color .12s, box-shadow .12s, background .12s;
+}
+input:focus { background: var(--surface); border-color: var(--clay); box-shadow: var(--ring); }
+button {
+  width: 100%; min-height: 44px; border: 0; border-radius: var(--r-md);
+  background: var(--clay); color: #fff; font: inherit; font-weight: 700; font-size: 14.5px;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: filter .12s;
+}
+:root[data-theme="dark"] button { color: #17131F; }
+button:hover { filter: brightness(1.06); }
+button:disabled { opacity: .6; cursor: default; }
+button:focus-visible { outline: none; box-shadow: var(--ring); }
+
+#error {
+  display: none; align-items: flex-start; gap: 10px;
+  background: var(--rose-tint); color: var(--rose); border: 1px solid var(--rose-soft);
+  border-radius: var(--r-md); padding: 10px 13px; font-size: 12.5px;
+}
+#error[data-shown] { display: flex; }
+#error[data-tone="warn"] { background: var(--amber-tint); color: var(--amber); border-color: var(--amber-soft); }
+
+.foot { text-align: center; font-size: 11.5px; color: var(--ink-3); margin-top: 18px; }
+.spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,.45); border-top-color: #fff; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2s; } * { transition: none !important; } }
 </style>
 </head>
 <body>
-<form id="login">
-  <div>
-    <h1>Wanas Gallery — لوحة الفريق</h1>
-    <p class="sub">سجّل دخولك لمتابعة المحادثات والرد على اللي محتاج حد فعلاً.</p>
-  </div>
-  <label>اسم المستخدم <input id="username" autocomplete="username" required></label>
-  <label>كلمة السر <input id="password" type="password" autocomplete="current-password" required></label>
-  <div id="error"></div>
-  <button id="submit" type="submit">دخول</button>
-</form>
-<script>
-const form = document.getElementById('login');
-const errorEl = document.getElementById('error');
-const submitBtn = document.getElementById('submit');
+<main>
+  <div class="mark" aria-hidden="true">و</div>
+  <h1>ونس جاليري</h1>
+  <p class="sub">نظام إدارة المتجر — المحادثات والطلبات والمخزون في مكان واحد.</p>
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  errorEl.textContent = '';
-  submitBtn.disabled = true;
+  <form id="login" novalidate>
+    <div>
+      <label for="username">اسم المستخدم</label>
+      <input id="username" name="username" autocomplete="username" required autofocus>
+    </div>
+    <div>
+      <label for="password">كلمة السر</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <div id="error" role="alert" aria-live="assertive"></div>
+    <button id="submit" type="submit">دخول</button>
+  </form>
+
+  <p class="foot">الدخول للفريق فقط. كل جلسة بتنتهي تلقائيًا بعد فترة.</p>
+</main>
+
+<script>
+"use strict";
+const form = document.getElementById("login");
+const errorBox = document.getElementById("error");
+const submit = document.getElementById("submit");
+
+function showError(message, tone) {
+  errorBox.textContent = message;
+  errorBox.dataset.shown = "1";
+  if (tone) errorBox.dataset.tone = tone; else errorBox.removeAttribute("data-tone");
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  errorBox.removeAttribute("data-shown");
+
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value;
+  if (!username || !password) return showError("اكتب اسم المستخدم وكلمة السر.", "warn");
+
+  submit.disabled = true;
+  submit.innerHTML = '<span class="spin"></span> بنتأكد…';
   try {
-    const res = await fetch('/dashboard/api/login', {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({
-        username: document.getElementById('username').value,
-        password: document.getElementById('password').value,
-      }),
+    const response = await fetch("/dashboard/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username, password }),
     });
-    if (res.ok) { window.location.href = '/dashboard'; return; }
-    if (res.status === 503) errorEl.textContent = 'اللوحة مش متفعّلة على السيرفر ده لسه (DASHBOARD_SESSION_SECRET).';
-    else errorEl.textContent = 'اسم المستخدم أو كلمة السر غلط.';
-  } catch (err) {
-    errorEl.textContent = 'مفيش اتصال بالسيرفر دلوقتي.';
+    if (response.ok) { window.location.href = "/dashboard"; return; }
+    // 503 is not a wrong password: the server has no session secret, so no
+    // login could ever work here. Saying "غلط" would send someone hunting a
+    // typo instead of an env var.
+    if (response.status === 503) {
+      showError("اللوحة لسه مش متفعّلة على السيرفر ده — ناقص DASHBOARD_SESSION_SECRET.", "warn");
+    } else {
+      showError("اسم المستخدم أو كلمة السر غلط.");
+    }
+  } catch {
+    showError("مفيش اتصال بالسيرفر دلوقتي.");
   } finally {
-    submitBtn.disabled = false;
+    submit.disabled = false;
+    submit.textContent = "دخول";
   }
 });
 </script>

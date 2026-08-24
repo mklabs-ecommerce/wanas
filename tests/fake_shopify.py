@@ -21,7 +21,9 @@ from decimal import Decimal
 
 from domain.models import Product, Variant
 from integrations.shopify import (
+    admin_collections as shopify_admin_collections,
     admin_customers as shopify_admin_customers,
+    admin_inventory as shopify_admin_inventory,
     admin_orders as shopify_admin_orders,
     admin_products as shopify_admin_products,
     catalog as shopify_catalog,
@@ -58,6 +60,9 @@ class FakeShopify:
         #: Shopify's GraphQL enum name -- for testing the "Shopify refused
         #: this one" path.
         self.rejected_webhook_topics: set[str] = set()
+        # collection gid -> {"id","title","handle","description_html","smart","product_ids"}
+        self.collections: dict[str, dict] = {}
+        self._collection_seq = 0
 
     # -- seeding ---------------------------------------------------------
 
@@ -745,6 +750,125 @@ class FakeShopify:
                 }
             )
 
+    # -- admin inventory --------------------------------------------------
+
+    def inventory_rows(self, *, query=None, max_pages=100):
+        """The flat variant view `integrations/shopify/admin_inventory.py`
+        builds from a paginated products query -- same shape, one page."""
+        self._guard()
+        rows = []
+        for sku, entry in self.shelf.items():
+            product_gid = self.variant_to_product.get(sku)
+            product = self.products.get(product_gid, {})
+            options = self.variant_options.get(sku, {})
+            rows.append(
+                {
+                    "product_id": product_gid,
+                    "product_title": product.get("title", ""),
+                    "product_status": product.get("status", "ACTIVE"),
+                    "category": product.get("category"),
+                    "image_url": product.get("image_url"),
+                    "variant_id": f"gid://shopify/ProductVariant/{sku}",
+                    "sku": sku,
+                    "price": str(entry["price"]),
+                    "quantity": int(entry["qty"]),
+                    "inventory_item_id": f"gid://shopify/InventoryItem/{sku}",
+                    "size": options.get("size"),
+                    "color": options.get("color"),
+                    "length": options.get("length"),
+                }
+            )
+        return rows, False
+
+    # -- admin collections -------------------------------------------------
+
+    def _collection_payload(self, collection, *, detail=False):
+        payload = {
+            "id": collection["id"],
+            "title": collection["title"],
+            "handle": collection["handle"],
+            "updated_at": "2026-01-01T00:00:00Z",
+            "image_url": None,
+            "product_count": len(collection["product_ids"]),
+            "smart": collection["smart"],
+            "rules": [],
+            "rules_match_any": False,
+        }
+        if detail:
+            payload["description_html"] = collection["description_html"]
+            payload["products"] = [
+                {
+                    "id": gid,
+                    "title": self.products.get(gid, {}).get("title", gid),
+                    "status": self.products.get(gid, {}).get("status", "ACTIVE"),
+                    "image_url": None,
+                    "inventory": sum(
+                        self.shelf.get(sku, {}).get("qty", 0)
+                        for sku, owner in self.variant_to_product.items()
+                        if owner == gid
+                    ),
+                }
+                for gid in collection["product_ids"]
+            ]
+        return payload
+
+    def seed_collection(self, title, *, smart=False, product_ids=()):
+        self._collection_seq += 1
+        gid = f"gid://shopify/Collection/{self._collection_seq}"
+        self.collections[gid] = {
+            "id": gid,
+            "title": title,
+            "handle": re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-"),
+            "description_html": "",
+            "smart": smart,
+            "product_ids": list(product_ids),
+        }
+        return gid
+
+    def list_collections(self, *, query=None, cursor=None):
+        self._guard()
+        return {
+            "collections": [self._collection_payload(c) for c in self.collections.values()],
+            "has_next_page": False,
+            "end_cursor": None,
+        }
+
+    def get_collection(self, collection_gid):
+        self._guard()
+        collection = self.collections.get(collection_gid)
+        return None if collection is None else self._collection_payload(collection, detail=True)
+
+    def create_collection(self, *, title, description_html=""):
+        self._guard()
+        if any(c["title"] == title for c in self.collections.values()):
+            raise shopify_admin_collections.CollectionRejected("collectionCreate: title already taken")
+        gid = self.seed_collection(title)
+        self.collections[gid]["description_html"] = description_html
+        return {"id": gid, "title": title, "handle": self.collections[gid]["handle"]}
+
+    def update_collection(self, collection_gid, *, title=None, description_html=None):
+        self._guard()
+        collection = self.collections[collection_gid]
+        if title is not None:
+            collection["title"] = title
+        if description_html is not None:
+            collection["description_html"] = description_html
+        return {"id": collection_gid}
+
+    def add_collection_products(self, collection_gid, product_gids):
+        self._guard()
+        collection = self.collections[collection_gid]
+        for gid in product_gids:
+            if gid not in collection["product_ids"]:
+                collection["product_ids"].append(gid)
+        return {"ok": True, "added": len(product_gids)}
+
+    def remove_collection_products(self, collection_gid, product_gids):
+        self._guard()
+        collection = self.collections[collection_gid]
+        collection["product_ids"] = [g for g in collection["product_ids"] if g not in product_gids]
+        return {"ok": True, "removed": len(product_gids), "async": True}
+
     # -- wiring ----------------------------------------------------------
 
     def install(self, monkeypatch):
@@ -779,6 +903,13 @@ class FakeShopify:
             shopify_admin_products, "shopify_update_product_fields", self.shopify_update_product_fields
         )
         monkeypatch.setattr(shopify_admin_products, "shopify_update_variants", self.shopify_update_variants)
+        monkeypatch.setattr(shopify_admin_inventory, "inventory_rows", self.inventory_rows)
+        monkeypatch.setattr(shopify_admin_collections, "list_collections", self.list_collections)
+        monkeypatch.setattr(shopify_admin_collections, "get_collection", self.get_collection)
+        monkeypatch.setattr(shopify_admin_collections, "create_collection", self.create_collection)
+        monkeypatch.setattr(shopify_admin_collections, "update_collection", self.update_collection)
+        monkeypatch.setattr(shopify_admin_collections, "add_products", self.add_collection_products)
+        monkeypatch.setattr(shopify_admin_collections, "remove_products", self.remove_collection_products)
         monkeypatch.setattr(shopify_webhooks, "list_subscriptions", self.list_subscriptions)
         monkeypatch.setattr(shopify_webhooks, "create_subscription", self.create_subscription)
         return self

@@ -31,7 +31,11 @@ from assistant.channels.whatsapp import (
 )
 from assistant.harness.web import router as harness_router
 from config.settings import settings
+from dashboard.collections_api import router as dashboard_collections_router
 from dashboard.customers_api import router as dashboard_customers_router
+from dashboard.inbox_api import router as dashboard_inbox_router
+from dashboard.insights_api import router as dashboard_insights_router
+from dashboard.inventory_api import router as dashboard_inventory_router
 from dashboard.queue_api import router as dashboard_queue_router
 from dashboard.settings_api import router as dashboard_settings_router
 from dashboard.shopify_api import router as dashboard_shopify_router
@@ -330,6 +334,10 @@ if settings.dashboard_enabled:
     app.include_router(dashboard_customers_router)
     app.include_router(dashboard_stats_router)
     app.include_router(dashboard_queue_router)
+    app.include_router(dashboard_collections_router)
+    app.include_router(dashboard_inventory_router)
+    app.include_router(dashboard_insights_router)
+    app.include_router(dashboard_inbox_router)
 
 if settings.harness_enabled:
     app.include_router(harness_router)
