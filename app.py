@@ -198,7 +198,7 @@ async def lifespan(_app: FastAPI):
         # The 60-day token gets its first refresh check at boot; the scheduler
         # keeps it going afterwards. Failures are logged and alerted inside.
         try:
-            from backend.services import instagram_token
+            from integrations.instagram import token as instagram_token
 
             if instagram_token.maybe_refresh(force=True):
                 log.info("instagram token refreshed at startup")
@@ -275,7 +275,7 @@ def health() -> dict:
     with session_scope() as db:
         product_count = db.query(Product).count()
         variant_count = db.query(Variant).count()
-    from backend.services import instagram_token
+    from integrations.instagram import token as instagram_token
 
     token_expires_at = instagram_token.expires_at()
     return {

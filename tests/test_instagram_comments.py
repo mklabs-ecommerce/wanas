@@ -51,7 +51,7 @@ def comments_on(monkeypatch):
     )
     monkeypatch.setattr(adapter, "settings", patched)
     monkeypatch.setattr(
-        __import__("backend.integrations.instagram_client", fromlist=["settings"]),
+        __import__("integrations.instagram.client", fromlist=["settings"]),
         "settings",
         patched,
     )
@@ -233,7 +233,7 @@ def test_an_already_replied_comment_row_blocks_a_second_private_reply(
 def test_the_client_itself_refuses_a_second_completed_private_reply(
     comments_on, fake_graph, seeded
 ):
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     with session_scope() as session:
         session.add(
@@ -309,7 +309,7 @@ def test_over_the_rate_limit_drops_and_raises_exactly_one_flood_alert(
 def test_hide_comment_exists_shipped_unused(client, comments_on, fake_graph):
     """`hide_comment` ships with a test and no caller: for a future staff
     action and the abuse path, not for the agent."""
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     assert InstagramClient().hide_comment(COMMENT_ID) is True
     expected_url = f"{GRAPH}/{comments_on.instagram_api_version}/{COMMENT_ID}"

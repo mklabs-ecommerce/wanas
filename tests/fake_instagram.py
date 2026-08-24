@@ -7,7 +7,7 @@ on scripts of expected calls: it records every outbound call the client makes
 exercise the real client code -- chunking, ordering, error naming, download
 naming -- against a shelf that behaves like HTTP rather than like a plan.
 
-Installed over `backend.integrations.instagram_client`'s own `httpx` module
+Installed over `integrations.instagram.client`'s own `httpx` module
 attribute, exactly as `test_gemini_provider.py` / `test_openrouter_provider.py`
 stub theirs. No network anywhere.
 """
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 
-from backend.integrations import instagram_client
+from integrations.instagram import client as instagram_client
 
 
 class FakeResponse:

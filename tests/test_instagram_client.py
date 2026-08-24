@@ -23,7 +23,7 @@ CREDS = {"account_id": "17841400000000000", "access_token": "test-token"}
 
 
 def make_client(**overrides):
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     return InstagramClient(**{**CREDS, **overrides})
 
@@ -49,7 +49,7 @@ def test_a_short_arabic_message_is_one_post_with_the_right_shape(fake):
 
 
 def test_the_messages_url_carries_the_configured_api_version(monkeypatch):
-    from backend.integrations.instagram_client import GRAPH, InstagramClient
+    from integrations.instagram.client import GRAPH, InstagramClient
 
     client = InstagramClient(api_version="v19.0")
     assert client._messages_url() == f"{GRAPH}/v19.0/{settings.instagram_account_id}/messages"
@@ -67,7 +67,7 @@ def _long_arabic(target_bytes: int) -> str:
 
 
 def test_a_1400_byte_arabic_message_is_chunked_under_950_bytes_in_order(fake):
-    from backend.integrations.instagram_client import MAX_CHUNK_BYTES
+    from integrations.instagram.client import MAX_CHUNK_BYTES
 
     text = _long_arabic(1400)
     assert len(text.encode("utf-8")) >= 1400
@@ -88,7 +88,7 @@ def test_a_1400_byte_arabic_message_is_chunked_under_950_bytes_in_order(fake):
 
 
 def test_chunks_break_at_sentence_boundaries_when_one_exists():
-    from backend.integrations.instagram_client import MAX_CHUNK_BYTES, _chunks
+    from integrations.instagram.client import MAX_CHUNK_BYTES, _chunks
 
     sentence = "جملة قصيرة معقولة هنا. "
     text = sentence * 40  # comfortably over 950 bytes of Arabic
@@ -99,7 +99,7 @@ def test_chunks_break_at_sentence_boundaries_when_one_exists():
 
 
 def test_a_single_unbreakable_word_still_splits_within_the_cap():
-    from backend.integrations.instagram_client import MAX_CHUNK_BYTES, _chunks
+    from integrations.instagram.client import MAX_CHUNK_BYTES, _chunks
 
     text = "ك" * 800 + "ه" * 800  # no spaces, no punctuation: hard-split territory
     chunks = _chunks(text)
@@ -161,10 +161,10 @@ def test_send_template_refuses_and_posts_nothing(fake, caplog):
 def test_an_unconfigured_client_logs_and_returns_not_delivered(fake, monkeypatch):
     blank = dataclasses.replace(settings, instagram_account_id="", instagram_access_token="")
     monkeypatch.setattr(
-        "backend.integrations.instagram_client.settings",
+        "integrations.instagram.client.settings",
         blank,
     )
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     client = InstagramClient()
     assert client._configured is False

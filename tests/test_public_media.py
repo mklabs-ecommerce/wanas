@@ -120,7 +120,7 @@ def test_no_secret_configured_means_everything_404s_and_no_urls_are_built(
 
 
 def _client():
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     return InstagramClient(account_id="17841400000000000", access_token="test-token")
 

@@ -128,7 +128,7 @@ def test_more_rows_than_whatsapp_allows_are_truncated():
 
 
 def test_the_whatsapp_client_translates_a_list_into_meta_s_shape():
-    from backend.integrations.whatsapp_client import WhatsAppClient
+    from integrations.whatsapp.client import WhatsAppClient
 
     built = WhatsAppClient._interactive_payload(
         interactive.region_picker(shipping.regions())
@@ -139,7 +139,7 @@ def test_the_whatsapp_client_translates_a_list_into_meta_s_shape():
 
 
 def test_an_unknown_kind_falls_back_to_text_rather_than_sending_nothing():
-    from backend.integrations.whatsapp_client import WhatsAppClient
+    from integrations.whatsapp.client import WhatsAppClient
 
     assert WhatsAppClient._interactive_payload({"kind": "carousel"}) is None
 

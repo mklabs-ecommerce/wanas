@@ -33,7 +33,6 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request, Response
 
-from backend.integrations.instagram_client import InstagramClient
 from chatbot import messages as msg, session as session_store
 from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message, release_claims
@@ -47,6 +46,7 @@ from domain.services import (
     notifications,
     queues,
 )
+from integrations.instagram.client import InstagramClient
 
 log = logging.getLogger("wanas.channel.instagram")
 

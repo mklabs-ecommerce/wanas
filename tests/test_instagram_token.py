@@ -15,11 +15,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.services import instagram_token
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import IntegrationToken, QueueKind, utcnow
 from domain.services import queues
+from integrations.instagram import token as instagram_token
 
 
 @pytest.fixture(autouse=True)
@@ -105,7 +105,7 @@ def test_a_token_nine_days_from_expiry_refreshes_and_the_row_updates(fake_graph,
         assert (instagram_token._aware(row.expires_at) - utcnow()) > timedelta(days=59)
 
     # And the client now sends what was stored.
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     client = InstagramClient(account_id="17841400000000000")
     assert client.access_token == "refreshed-token"
@@ -189,7 +189,7 @@ def test_a_failed_refresh_enqueues_exactly_one_alert(seeded, fresh_state, fake_g
 
 def test_the_db_token_beats_the_env_token_in_the_client(fresh_state, monkeypatch):
     seed_row(token="db-token")
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     client = InstagramClient(account_id="17841400000000000")
     assert client.access_token == "db-token"
@@ -200,7 +200,7 @@ def test_the_db_token_beats_the_env_token_in_the_client(fresh_state, monkeypatch
 
 
 def test_without_any_row_the_client_falls_back_to_configuration(fresh_state):
-    from backend.integrations.instagram_client import InstagramClient
+    from integrations.instagram.client import InstagramClient
 
     client = InstagramClient()
     assert client.access_token == settings.instagram_access_token

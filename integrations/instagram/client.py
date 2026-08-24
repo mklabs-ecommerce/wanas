@@ -217,7 +217,7 @@ class InstagramClient:
             # (`backend/services/instagram_token.py`); once a row exists it is
             # authoritative -- reading only the env var here would make every
             # refresh a write to nowhere.
-            from backend.services.instagram_token import stored_token
+            from integrations.instagram.token import stored_token
 
             self.access_token = stored_token() or settings.instagram_access_token
         self.api_version = api_version or settings.instagram_api_version

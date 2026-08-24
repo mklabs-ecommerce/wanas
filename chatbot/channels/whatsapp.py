@@ -19,7 +19,6 @@ import logging
 
 from fastapi import APIRouter, Request, Response
 
-from backend.integrations.whatsapp_client import WhatsAppClient
 from chatbot.dispatcher import MessageDispatcher, Pending
 from chatbot.runtime import claim_message, handle_message, release_claims
 from chatbot.tools.support_tools import raise_handoff
@@ -32,6 +31,7 @@ from domain.services import (
     queues,
     runtime_flags,
 )
+from integrations.whatsapp.client import WhatsAppClient
 
 log = logging.getLogger("wanas.channel.whatsapp")
 
