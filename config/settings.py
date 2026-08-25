@@ -118,6 +118,9 @@ class Settings:
     media_url_secret: str                  # MEDIA_URL_SECRET
 
     history_cap: int
+    #: How many messages one conversation's stored transcript keeps. The live
+    #: context is `history_cap`; this bounds the archive behind it.
+    session_archive_cap: int
     session_expiry_hours: int
     tool_loop_cap: int
     max_quantity_per_line: int
@@ -260,6 +263,7 @@ def load_settings() -> Settings:
         instagram_comment_rate_limit=_int("INSTAGRAM_COMMENT_RATE_LIMIT", 3),
         media_url_secret=_first_env("MEDIA_URL_SECRET", "DASHBOARD_SESSION_SECRET", default=""),
         history_cap=_int("HISTORY_CAP", 40),
+        session_archive_cap=_int("SESSION_ARCHIVE_CAP", 2000),
         session_expiry_hours=_int("SESSION_EXPIRY_HOURS", 6),
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),
         max_quantity_per_line=_int("MAX_QUANTITY_PER_LINE", 10),

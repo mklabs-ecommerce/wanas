@@ -169,7 +169,12 @@ tests/                   pytest suite (flat, one test_<module>.py per
   SQLite (`sqlite:///./wanas.db`) is fine for local development only.
 - Chat/session history is persisted (`sessions` table / `assistant/session.py`)
   — this is a required production feature. **Never** remove it or replace it
-  with an in-memory store.
+  with an in-memory store. It is also append-only: a conversation *ending*
+  (six hours idle, a staff reset, `HISTORY_CAP`) moves `sessions.context_start`
+  forward and deletes nothing. Read the live slice with `session.load()` and
+  the whole transcript with `session.transcript()` — the dashboard must use
+  the latter, since a read must never be what ends a conversation. Only
+  `session.purge()` deletes, and nothing calls it.
 - No Alembic — tables are created at startup via `Base.metadata.create_all`
   (`app.py`), which adds missing tables but **not** missing columns on
   existing ones. That gap cost four days of production orders

@@ -414,6 +414,14 @@ class SessionRow(Base):
     # process memory so the server can restart, and so more than one instance
     # can run behind a load balancer. Lenient on read: see LenientJSON.
     history: Mapped[list] = mapped_column(LenientJSON, nullable=False, default=list)
+    #: Where the *live* conversation starts inside `history`. Everything before
+    #: it is the archive: messages the model no longer sees because the session
+    #: went idle, was reset by staff, or scrolled past `HISTORY_CAP`. Nothing is
+    #: deleted to move this -- expiry is a bookmark, not an erase, so a
+    #: conversation a customer had this morning is still readable tonight.
+    context_start: Mapped[int] = mapped_column(
+        Integer, nullable=True, default=0, server_default="0"
+    )
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

@@ -536,3 +536,21 @@ def test_a_staff_reply_to_an_instagram_conversation_goes_through_the_instagram_s
 
     assert [m.to for m in ig_sender.sent] == [ig_customer]
     assert wa_sender.sent == []
+
+
+def test_opening_a_stale_conversation_shows_it_in_full_and_keeps_it(logged_in, seeded):
+    """Reading is not what ends a conversation. `load` archives an idle
+    session; the dashboard reads through `transcript`, which does not."""
+    from datetime import timedelta
+
+    from domain.models import SessionRow, utcnow
+
+    session_store.append(seeded, CHANNEL, CUSTOMER, msg.user("عايز تيشيرت"))
+    row = seeded.get(SessionRow, (CHANNEL, CUSTOMER))
+    row.updated_at = utcnow() - timedelta(hours=9)
+    seeded.commit()
+
+    body = logged_in.get(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}").json()
+
+    assert [b["text"] for b in body["history"]] == ["عايز تيشيرت"]
+    assert seeded.get(SessionRow, (CHANNEL, CUSTOMER)).history, "still stored"

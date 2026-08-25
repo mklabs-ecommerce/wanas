@@ -189,6 +189,31 @@ note before this existed.
 | `data/` | Catalog metadata Shopify has no field for. Not a product database. |
 | `scripts/` | Shopify maintenance. All dry-run by default, idempotent, need `--apply`. |
 
+## A conversation ends; it is not deleted
+
+`sessions.history` is two things at once: what the model is sent next turn,
+and the only record of what the shop and a customer said to each other. Those
+have different lifetimes, and conflating them cost a morning of transcripts.
+
+Six hours of silence ends a conversation *for the model*. It used to end it
+for everyone: `session.load` overwrote the column with `[]` — and the
+dashboard called `load` to **display** a conversation, so opening an old chat
+was itself enough to destroy it.
+
+Now the column only ever grows, and `sessions.context_start` marks where the
+live conversation begins inside it. Expiry, a staff reset, and messages
+scrolling past `HISTORY_CAP` all move that bookmark forward; none of them
+remove a message.
+
+- `session.load()` — the live slice. The agent's read; moves the bookmark.
+- `session.transcript()` — everything, read-only. What `dashboard/` reads.
+- `session.clear()` — soft: ends the conversation, keeps the transcript.
+- `session.purge()` — the only function that deletes, wired to no request
+  path, for a deletion request from a real person.
+
+`SESSION_ARCHIVE_CAP` (2000) bounds one row so it cannot grow forever, and
+logs a warning on the only occasion a message is dropped.
+
 ## A second channel: Instagram
 
 Instagram (`assistant/channels/instagram.py` + `integrations/instagram/client.py`)

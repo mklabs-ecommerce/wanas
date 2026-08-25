@@ -285,7 +285,10 @@ def conversation_detail(
         if _staff(db, wanas_staff) is None:
             return _unauthenticated()
 
-        history = session_store.load(db, channel, external_id)
+        # `transcript`, not `load`: reading a conversation must not be what
+        # ends it. `load` moves the context bookmark on an idle session, which
+        # is the agent's business and never a staff member's.
+        history = session_store.transcript(db, channel, external_id)
         handoff = _open_handoffs(db).get((channel, external_id))
         paused = identities.is_paused(db, channel, external_id)
 

@@ -4,8 +4,18 @@ Not in process memory: the server has to restart without customers losing
 their conversation, and more than one instance has to be able to run behind a
 load balancer.
 
-Losing a session loses nothing real -- the cart is stored separately and
-survives.
+Losing a session loses nothing real *to the bot* -- the cart is stored
+separately and survives. It loses something real to the shop, though: this
+table is also the only record of what a customer and the bot actually said to
+each other, and it is what the dashboard reads. So nothing here deletes a
+message. Ending a conversation -- six hours of silence, a staff reset, or
+history scrolling past `HISTORY_CAP` -- moves `SessionRow.context_start`
+forward instead: the model sees a fresh conversation, the transcript keeps
+everything. `transcript()` is what reads the whole thing back.
+
+The stored transcript is bounded (`SESSION_ARCHIVE_CAP`) so one row cannot
+grow without limit; passing that bound is the one place a message is dropped,
+and it is logged.
 """
 
 from __future__ import annotations
@@ -60,46 +70,119 @@ def _expired(row: SessionRow) -> bool:
     )
 
 
-def load(session: Session, channel: str, external_id: str) -> list[dict]:
-    """History for this identity, or a fresh one after 6 hours of silence.
-
-    A row written outside the app -- a manual edit or a restore -- can hold
-    text that is not JSON at all. The decode happens while the row is loaded,
-    inside `session.get`, and is guarded there (`LenientJSON`): a poisoned
-    column arrives here as `UNREADABLE_HISTORY` instead of raising on every
-    turn. Answer with an empty history and leave the stored value untouched:
-    it stays exactly as it is until the next successful save overwrites it,
-    so nothing here silently deletes data.
-    """
-    row = session.get(SessionRow, (channel, external_id))
-    if row is None:
-        return []
-    if _expired(row):
-        row.history = []
-        row.updated_at = utcnow()
-        session.flush()
-        return []
+def _stored(row: SessionRow) -> list[dict]:
+    """The full transcript, or `[]` if the column cannot be read at all."""
     history = row.history
     if history is UNREADABLE_HISTORY or not isinstance(history, list):
         log.error(
             "session %s/%s has unreadable history (%s); this turn starts empty "
             "(stored value left in place until the next save)",
-            channel,
-            external_id,
+            row.channel,
+            row.external_id,
             type(history).__name__,
         )
         return []
-    return list(history)
+    return history
+
+
+def _start(row: SessionRow, stored: list[dict]) -> int:
+    """`context_start`, clamped -- an old row has none, a bad one may be past
+    the end, and neither is a reason to lose the transcript."""
+    start = row.context_start or 0
+    return max(0, min(start, len(stored)))
+
+
+def transcript(session: Session, channel: str, external_id: str) -> list[dict]:
+    """Everything ever said, archive included, and *read-only*.
+
+    What the dashboard shows. `load` is for the agent and moves the bookmark;
+    a staff member opening a conversation must never be what ends it.
+    """
+    row = session.get(SessionRow, (channel, external_id))
+    return list(_stored(row)) if row is not None else []
+
+
+def archive_boundary(session: Session, channel: str, external_id: str) -> int:
+    """How many messages of `transcript()` are archive rather than live."""
+    row = session.get(SessionRow, (channel, external_id))
+    return _start(row, _stored(row)) if row is not None else 0
+
+
+def load(session: Session, channel: str, external_id: str) -> list[dict]:
+    """The live history for this identity, or a fresh one after 6 hours.
+
+    Expiry archives, it does not erase: `context_start` jumps to the end of
+    the stored transcript and the same rows stay in the column. Before this,
+    the wipe here (`row.history = []`) was silently destroying every
+    conversation that went quiet for six hours -- including when the dashboard
+    called `load` to *display* one.
+
+    A row written outside the app -- a manual edit or a restore -- can hold
+    text that is not JSON at all. The decode happens while the row is loaded,
+    inside `session.get`, and is guarded there (`LenientJSON`): a poisoned
+    column arrives here as `UNREADABLE_HISTORY` instead of raising on every
+    turn. Answer with an empty history and leave the stored value untouched.
+    """
+    row = session.get(SessionRow, (channel, external_id))
+    if row is None:
+        return []
+    stored = _stored(row)
+    if _expired(row):
+        start = _start(row, stored)
+        if start < len(stored):
+            log.info(
+                "session %s/%s went idle for over %sh; archiving %d message(s) and "
+                "starting a fresh context (nothing deleted)",
+                channel,
+                external_id,
+                settings.session_expiry_hours,
+                len(stored) - start,
+            )
+        row.context_start = len(stored)
+        row.updated_at = utcnow()
+        session.flush()
+        return []
+    return list(stored[_start(row, stored) :])
 
 
 def save(session: Session, channel: str, external_id: str, history: list[dict]) -> list[dict]:
+    """Store `history` as the live conversation, keeping what came before it.
+
+    `trim` caps what the model is sent; the messages it drops move into the
+    archive rather than off the end of the world. Only `SESSION_ARCHIVE_CAP`
+    bounds the row, and it says so when it bites.
+    """
     trimmed = trim(history)
+    dropped = history[: len(history) - len(trimmed)]
+
     row = session.get(SessionRow, (channel, external_id))
     if row is None:
-        row = SessionRow(channel=channel, external_id=external_id, history=trimmed)
+        row = SessionRow(channel=channel, external_id=external_id, history=[])
         session.add(row)
+        archive: list[dict] = []
     else:
-        row.history = trimmed
+        stored = _stored(row)
+        archive = list(stored[: _start(row, stored)])
+
+    archive.extend(dropped)
+    full = archive + list(trimmed)
+
+    cap = settings.session_archive_cap
+    if cap > 0 and len(full) > cap:
+        overflow = len(full) - cap
+        log.warning(
+            "session %s/%s reached the %d-message archive cap; dropping the "
+            "oldest %d message(s)",
+            channel,
+            external_id,
+            cap,
+            overflow,
+        )
+        full = full[overflow:]
+        archive = archive[overflow:] if overflow < len(archive) else []
+
+    row.history = full
+    row.context_start = len(full) - len(trimmed)
     row.updated_at = utcnow()
     session.flush()
     return trimmed
@@ -111,8 +194,42 @@ def append(session: Session, channel: str, external_id: str, *messages: dict) ->
 
 
 def clear(session: Session, channel: str, external_id: str) -> None:
+    """End the conversation for the bot without destroying the transcript.
+
+    Staff reset (`domain/services/conversation_reset.py`) and the dev harness
+    both call this. Both mean "let me start over", never "erase what was
+    said" -- so this is a soft delete: the archive keeps every message and the
+    next turn starts from nothing. `purge` is the hard one, and no request
+    path calls it.
+    """
     row = session.get(SessionRow, (channel, external_id))
-    if row is not None:
-        row.history = []
-        row.updated_at = utcnow()
-        session.flush()
+    if row is None:
+        return
+    stored = _stored(row)
+    row.context_start = len(stored)
+    row.updated_at = utcnow()
+    session.flush()
+
+
+def purge(session: Session, channel: str, external_id: str) -> int:
+    """Actually delete a transcript. Returns how many messages went.
+
+    Deliberately not wired to anything: it exists for a deletion request from
+    a real person, run by hand, and it is the only function in this module
+    that loses data.
+    """
+    row = session.get(SessionRow, (channel, external_id))
+    if row is None:
+        return 0
+    count = len(_stored(row))
+    log.warning(
+        "PURGE: deleting %d stored message(s) for %s/%s -- this is not recoverable",
+        count,
+        channel,
+        external_id,
+    )
+    row.history = []
+    row.context_start = 0
+    row.updated_at = utcnow()
+    session.flush()
+    return count
