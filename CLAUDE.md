@@ -30,10 +30,22 @@ A fuller picture, including the five decisions the design follows from, is in
 `docs/ARCHITECTURE.md`.
 
 **Inbound messages are not answered in the request.** The webhook verifies,
-claims the message id, downloads media and returns 200; the agent turn runs on
-a worker thread after a short debounce window (`assistant/dispatcher.py`). Never
-move work back into the endpoint: it is `async`, the turn is synchronous, and
-one message would block every other conversation in the process.
+claims the message id, downloads media, **records the message**, and returns
+200; the agent turn runs on a worker thread after a short debounce window
+(`assistant/dispatcher.py`). Never move work back into the endpoint: it is
+`async`, the turn is synchronous, and one message would block every other
+conversation in the process.
+
+**A conversation is visible on arrival, not on reply.** The ingest path calls
+`assistant/runtime.py::record_inbound`, which writes the customer's message to
+`sessions` in its *own committed transaction* before the debounce window opens.
+The turn folds that provisional copy into the real message it stores
+(`session.drop_provisional`, keyed on the platform message id). Never make the
+dashboard depend on the bot having answered: a stuck, paused or crashing turn
+used to be indistinguishable from a customer who never wrote, which is how
+unanswered numbers went unnoticed. A provisional message left in the transcript
+is not litter -- it is a message nobody ever answered, and the inbox's
+`unanswered` filter is built on exactly that.
 
 When the bot sells something it creates a real Shopify order
 (`orderCreate`); Shopify decrements inventory itself. Price and stock are

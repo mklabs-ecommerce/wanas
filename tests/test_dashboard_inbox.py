@@ -190,3 +190,21 @@ def test_comment_ledger_reports_how_each_comment_was_handled(logged_in, seeded):
     untouched = next(c for c in body["comments"] if c["comment_id"] == "c2")
     assert untouched["public_replied"] is False
     assert untouched["private_replied"] is False
+
+
+def test_a_customer_with_no_reply_yet_is_listed_as_unanswered(logged_in, seeded):
+    """The filter that answers "which numbers has the bot not replied to".
+
+    It only works because ingest records the message on arrival now
+    (`assistant/runtime.py::record_inbound`) -- before that the row did not
+    exist until the bot had answered, so the one conversation this filter is
+    for was the one conversation it could never see.
+    """
+    from assistant import runtime
+
+    assert runtime.record_inbound("whatsapp", "201000000999", "حد يرد عليا؟", message_id="wamid.z")
+
+    body = logged_in.get("/dashboard/api/inbox?status=unanswered").json()
+    listed = [(c["channel"], c["external_id"]) for c in body["conversations"]]
+    assert ("whatsapp", "201000000999") in listed
+    assert body["counts"]["unanswered"] >= 1

@@ -26,8 +26,25 @@ ASSISTANT = "assistant"
 TOOL_RESULTS = "tool_results"
 
 
-def user(text: str, *, images: list[str] | None = None, audio: list[str] | None = None) -> dict:
+def user(
+    text: str,
+    *,
+    images: list[str] | None = None,
+    audio: list[str] | None = None,
+    provisional: str | None = None,
+) -> dict:
     message: dict = {"role": USER, "content": text}
+    if provisional:
+        # The platform message id this was stored under *on arrival*, before
+        # the bot had done anything with it. It exists so the conversation is
+        # visible the moment a customer writes, instead of only once a reply
+        # has been produced -- a bot that is stuck, paused or crashing used to
+        # be indistinguishable from a customer who never wrote at all.
+        #
+        # `assistant/session.py::drop_provisional` removes it again when the
+        # turn it belongs to actually runs and stores the real message. One
+        # left behind is not litter: it is a message nobody ever answered.
+        message["provisional"] = provisional
     if images:
         # The actual photo(s) the customer sent, kept in history (not sent to
         # the provider -- same reasoning and the same "unknown keys are

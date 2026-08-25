@@ -114,6 +114,60 @@ def release_claims(platform_message_ids: list[str] | str | None) -> int:
     return deleted
 
 
+def record_inbound(
+    channel: str,
+    external_id: str,
+    text: str,
+    *,
+    images: list[str] | None = None,
+    audio: list[str] | None = None,
+    message_id: str | None = None,
+) -> bool:
+    """Store a customer's message the moment it arrives, and commit it.
+
+    The dashboard reads `sessions`, and until this existed a row was only
+    written by `agent.run_turn` -- *after* the model had answered. Everything
+    between arrival and a successful reply was therefore invisible: a
+    conversation the bot was still thinking about, one paused for a staff
+    member who could not see it to release it, one whose turn crashed and
+    rolled the whole transaction back, and one the model simply never replied
+    to all looked exactly like a customer who had never written. That is how
+    three numbers went unanswered without anyone noticing.
+
+    So the record is written here instead, on the ingest path, in its **own**
+    committed transaction: it must survive whatever the turn does next,
+    including a rollback. Costs one short `UPDATE` in the webhook request,
+    which is the same price `claim_message` already pays and buys the one
+    thing the shop cannot reconstruct afterwards.
+
+    Never raises: a failure to record must not be a failure to answer.
+    """
+    if not (text or "").strip() and not images and not audio:
+        return False
+    try:
+        with session_scope() as db:
+            session_store.append(
+                db,
+                channel,
+                external_id,
+                msg.user(
+                    text or "",
+                    images=images,
+                    audio=audio,
+                    provisional=message_id or None,
+                ),
+            )
+    except Exception:
+        log.exception(
+            "could not record the inbound message from %s/%s on arrival; the turn "
+            "still runs, but the dashboard will not show it until the bot replies",
+            channel,
+            external_id,
+        )
+        return False
+    return True
+
+
 def _paused_note(db: Session, channel: str, external_id: str) -> str:
     """How long this conversation has been waiting on a person, as far as the
     data can say. There is no paused-at column; the newest handoff item for
@@ -167,10 +221,22 @@ def handle_message(
     platform_message_id: str | None = None,
     db: Session | None = None,
     provider: LLMProvider | None = None,
+    recorded_ids: set[str] | None = None,
 ) -> RuntimeReply:
+    """`recorded_ids` are the platform message ids already stored on arrival by
+    `record_inbound`. Their provisional copies are folded into the real message
+    this turn writes, so the transcript does not say everything twice."""
     if db is not None:
         return _handle(
-            db, channel, external_id, text, image_paths, audio_paths, platform_message_id, provider
+            db,
+            channel,
+            external_id,
+            text,
+            image_paths,
+            audio_paths,
+            platform_message_id,
+            provider,
+            recorded_ids,
         )
     with session_scope() as session:
         return _handle(
@@ -182,6 +248,7 @@ def handle_message(
             audio_paths,
             platform_message_id,
             provider,
+            recorded_ids,
         )
 
 
@@ -194,6 +261,7 @@ def _handle(
     audio_paths: list[str] | None,
     platform_message_id: str | None,
     provider: LLMProvider | None,
+    recorded_ids: set[str] | None = None,
 ) -> RuntimeReply:
     if _already_processed(db, platform_message_id):
         log.info("ignoring duplicate delivery %s", platform_message_id)
@@ -208,7 +276,13 @@ def _handle(
     # completely silent, which is how a latched pause looked like the bot
     # ignoring one number; make it observable without changing the semantics.
     if identity.paused_until_staff_reply:
-        session_store.append(db, channel, external_id, msg.user(_stored_text(text, image_paths, audio_paths)))
+        session_store.append(
+            db,
+            channel,
+            external_id,
+            msg.user(_stored_text(text, image_paths, audio_paths)),
+            recorded_ids=recorded_ids,
+        )
         log.warning(
             "dropping inbound message: conversation %s/%s is paused for staff reply (%s); "
             "message stored, no reply will be sent until a staff member releases it",
@@ -241,6 +315,7 @@ def _handle(
                 channel,
                 external_id,
                 msg.user(_stored_text(text, image_paths, audio_paths), audio=list(audio_paths)),
+                recorded_ids=recorded_ids,
             )
             raise_handoff(
                 db,
@@ -288,6 +363,7 @@ def _handle(
                 channel,
                 external_id,
                 msg.user(_stored_text(text, image_paths, audio_paths), images=list(image_paths)),
+                recorded_ids=recorded_ids,
             )
             raise_handoff(
                 db,
@@ -316,6 +392,15 @@ def _handle(
             text = "\n".join(parts)
 
     if not (text or "").strip():
+        # Nothing to answer: an empty body, a reaction, a message whose only
+        # content was media that could not be read. Named rather than dropped
+        # in silence -- from the customer's side this is the bot ignoring
+        # them, and it used to leave no trace anywhere that it had happened.
+        log.warning(
+            "no answerable content in the message from %s/%s; no reply will be sent",
+            channel,
+            external_id,
+        )
         return RuntimeReply()
 
     # One inbound message reads the shelf once, however many catalog tools the
@@ -324,7 +409,14 @@ def _handle(
     # asks Shopify again.
     with shopify_catalog.turn_scope():
         reply = agent.run_turn(
-            db, channel, external_id, text, provider=provider, images=image_paths, audio=audio_paths
+            db,
+            channel,
+            external_id,
+            text,
+            provider=provider,
+            images=image_paths,
+            audio=audio_paths,
+            recorded_ids=recorded_ids,
         )
     return RuntimeReply(
         text=reply.text,

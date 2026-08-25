@@ -228,6 +228,7 @@ def run_turn(
     provider: LLMProvider | None = None,
     images: list[str] | None = None,
     audio: list[str] | None = None,
+    recorded_ids: set[str] | None = None,
 ) -> AgentReply:
     provider = provider or get_provider()
     specs = tool_specs()
@@ -236,7 +237,14 @@ def run_turn(
     # assistant/prompt.py).
     system_prompt = build_system_prompt(channel=channel)
 
-    history = session_store.load(db, channel, external_id)
+    # The messages this turn is about were already written to the transcript
+    # when they arrived, so staff could see the conversation before the bot
+    # had said anything (`assistant/runtime.py::record_inbound`). Drop those
+    # provisional copies: the canonical message appended below is the one that
+    # carries the photo context and the reply-to annotations the model reads.
+    history = session_store.drop_provisional(
+        session_store.load(db, channel, external_id), recorded_ids
+    )
     sent_images = _sent_images(history)
     # `images`/`audio` are the customer's own inbound photo(s)/voice note(s)
     # for this turn -- kept on the stored message for the dashboard (see

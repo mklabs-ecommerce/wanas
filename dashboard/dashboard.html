@@ -2071,9 +2071,13 @@ VIEWS.inbox = {
     // Live-ish: the list refreshes on a timer while this view is open, so a
     // new handoff appears without anyone hitting refresh. Paused only while
     // a drawer is open, so a poll never yanks the list out from under a read.
+    //
+    // Ten seconds, not twenty: a customer's message now reaches `sessions` on
+    // arrival rather than after the bot replies, so this interval is the whole
+    // remaining delay between someone writing in and staff seeing it.
     setInterval(() => {
       if (state.route === "inbox" && !overlay.open && document.visibilityState === "visible") this.load(false);
-    }, 20000);
+    }, 10000);
   },
 
   async load(showSpinner) {

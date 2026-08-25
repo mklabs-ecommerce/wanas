@@ -188,9 +188,41 @@ def save(session: Session, channel: str, external_id: str, history: list[dict]) 
     return trimmed
 
 
-def append(session: Session, channel: str, external_id: str, *messages: dict) -> list[dict]:
-    history = load(session, channel, external_id) + list(messages)
-    return save(session, channel, external_id, history)
+def drop_provisional(history: list[dict], recorded_ids: set[str] | None) -> list[dict]:
+    """Remove the on-arrival copies of the messages a turn is about to store.
+
+    A customer's message is written to this table the instant it arrives
+    (`assistant/runtime.py::record_inbound`), so the dashboard shows the
+    conversation before the bot has replied -- or when it never replies at
+    all. When the turn for that message finally runs it stores the message
+    properly, with the photo context and reply-to annotations the model
+    actually saw, so the provisional copy has to go or the transcript reads as
+    if the customer said everything twice.
+
+    Filtered by id rather than by position: a provisional message from an
+    *earlier* batch that crashed is deliberately left where it is. That row is
+    the only evidence the customer wrote and got nothing back.
+    """
+    if not recorded_ids:
+        return list(history)
+    return [
+        message
+        for message in history
+        if not (
+            message.get("role") == USER and message.get("provisional") in recorded_ids
+        )
+    ]
+
+
+def append(
+    session: Session,
+    channel: str,
+    external_id: str,
+    *messages: dict,
+    recorded_ids: set[str] | None = None,
+) -> list[dict]:
+    history = drop_provisional(load(session, channel, external_id), recorded_ids)
+    return save(session, channel, external_id, history + list(messages))
 
 
 def clear(session: Session, channel: str, external_id: str) -> None:

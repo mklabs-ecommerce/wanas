@@ -58,6 +58,11 @@ class Pending:
     #: debounced batch -- a reply to something from an earlier, already-
     #: answered turn has nothing here to match and is left unannotated.
     reply_to: dict[str, str] = field(default_factory=dict)
+    #: Platform message ids already written to the transcript on arrival
+    #: (`assistant/runtime.py::record_inbound`). The turn folds those
+    #: provisional copies into the single message it stores, so the
+    #: conversation is visible immediately without reading twice afterwards.
+    recorded_ids: set[str] = field(default_factory=set)
     extras: dict = field(default_factory=dict)
 
     def merge(self, other: Pending) -> None:
@@ -69,6 +74,7 @@ class Pending:
         self.audio_ids.extend(other.audio_ids)
         self.last_message_id = other.last_message_id or self.last_message_id
         self.reply_to.update(other.reply_to)
+        self.recorded_ids |= other.recorded_ids
         self.extras.update(other.extras)
 
     @property

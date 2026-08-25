@@ -189,6 +189,52 @@ note before this existed.
 | `data/` | Catalog metadata Shopify has no field for. Not a product database. |
 | `scripts/` | Shopify maintenance. All dry-run by default, idempotent, need `--apply`. |
 
+## A conversation is recorded when it arrives, not when it is answered
+
+The webhook's job is to be fast, so the agent turn runs on a worker thread
+after a debounce window. That left a gap nobody designed and everybody paid
+for: `sessions` was written by `agent.run_turn`, *after* the model answered,
+so between a customer hitting send and the bot replying there was no row at
+all — and the dashboard reads `sessions`.
+
+Four different failures therefore looked identical, and all four looked like
+nothing:
+
+- the turn is still running (thirty seconds of a model call),
+- the conversation is paused for a staff member — who cannot see it in order
+  to release it, so it stays paused forever,
+- the turn crashed, and `handle_message`'s `session_scope` rolled the whole
+  transaction back, message included,
+- the message never reached a handler at all (a `reaction`, a template
+  `button` tap, a type Meta added later).
+
+From the shop's side each one reads "the bot has never replied to this
+number, not even once", with nothing anywhere to say why.
+
+So ingest records it. `assistant/runtime.py::record_inbound` writes the
+customer's message to `sessions` in its **own committed transaction**, before
+the debounce window opens and before a single model token is spent — it has to
+survive whatever the turn does next, including a rollback. It never raises: a
+failure to record must not become a failure to answer.
+
+The copy it writes carries `provisional` — the platform message id it was
+stored under. When the turn for that message finally runs it stores the real
+message (with the photo context and reply-to annotations the model actually
+saw) and `session.drop_provisional` removes the copy, keyed on that id. A
+provisional message from an *earlier* batch is deliberately left alone: that
+row is the only evidence a customer wrote and got nothing back, and the
+inbox's `unanswered` filter (`last_role == "customer"`) is built on it.
+
+Two rules follow, and both are load-bearing:
+
+- Nothing on the ingest path may sit between the claim and the record. Blue
+  ticks and the typing indicator moved *after* it — a hiccup talking to Meta
+  must not be what costs the shop its only copy of what a customer said.
+- A message type with no handler is recorded and logged at WARNING with the
+  number on it, never dropped in silence. "The bot ignored this number" and
+  "the bot never saw anything it could act on" are different problems and
+  used to be indistinguishable from both the dashboard and the logs.
+
 ## A conversation ends; it is not deleted
 
 `sessions.history` is two things at once: what the model is sent next turn,

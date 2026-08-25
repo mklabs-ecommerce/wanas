@@ -21,7 +21,7 @@ from fastapi import APIRouter, Request, Response
 
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
-from assistant.runtime import claim_message, handle_message, release_claims
+from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
 from common.security import verify_signature  # noqa: F401 -- re-exported; tests import it from here
 from config.settings import PROJECT_ROOT, settings
@@ -134,14 +134,16 @@ def _accept(message: dict, contact_name: str | None) -> None:
     # retry that lands while the first copy is still being answered has to see
     # it -- otherwise the customer gets two replies, or two orders.
     if not claim_message(message_id):
-        log.info("ignoring duplicate delivery %s", message_id)
+        log.info("ignoring duplicate delivery %s from %s", message_id, external_id)
         return
 
-    client = WhatsAppClient()
-    # Blue ticks and a typing bubble now, because the answer is seconds away
-    # and an unread message is what makes someone send it again.
-    client.mark_as_read(message_id)
+    # Every accepted message, named, with the number on it. When a customer
+    # says the bot never answered them, this line is what says whether their
+    # message ever reached the process at all -- which is the first thing
+    # nobody could establish about the three numbers that went unanswered.
+    log.info("inbound whatsapp %s from %s (%s)", message_type, external_id, message_id)
 
+    client = WhatsAppClient()
     pending = Pending(last_message_id=message_id)
     # A long-pressed "reply to this" on a specific earlier message. Meta
     # carries it as `context.id`; recorded here so `Pending.annotated_text`
@@ -185,7 +187,16 @@ def _accept(message: dict, contact_name: str | None) -> None:
         title = reply.get("title", "") or ""
         pending.texts.append(f"{title} ({picked})".strip() if picked and title else (title or picked))
         pending.text_ids.append(message_id)
+    elif message_type == "button":
+        # A tap on a template's quick-reply button. It is an ordinary reply as
+        # far as the customer is concerned, and it used to fall through to the
+        # silent `else` below -- so a conversation that opened with one got no
+        # answer, ever, and left nothing behind to show why.
+        button = message.get("button") or {}
+        pending.texts.append(button.get("text") or button.get("payload") or "")
+        pending.text_ids.append(message_id)
     elif message_type in UNSUPPORTED_TYPES:
+        record_inbound(CHANNEL, external_id, f"[{message_type}]", message_id=message_id)
         with session_scope() as session:
             raise_handoff(
                 session,
@@ -198,11 +209,41 @@ def _accept(message: dict, contact_name: str | None) -> None:
         client.send_text(external_id, UNSUPPORTED_ACK)
         return
     else:
-        log.info("ignoring unsupported whatsapp message type %r", message_type)
+        # A reaction, a system notice, a type Meta has not documented here.
+        # There is deliberately no reply -- but it is recorded and named, at
+        # WARNING, because "the bot ignored this number" and "the bot never
+        # saw a message it could act on" are different problems and used to
+        # look identical from both the dashboard and the logs.
+        record_inbound(CHANNEL, external_id, f"[{message_type}]", message_id=message_id)
+        log.warning(
+            "no handler for whatsapp message type %r from %s (%s); recorded, not answered",
+            message_type,
+            external_id,
+            message_id,
+        )
         return
 
     if contact_name:
         pending.extras["contact_name"] = contact_name
+
+    # Stored *before* the debounce window opens and before a single model
+    # token is spent, in its own committed transaction. From here on the
+    # conversation exists for the dashboard no matter what the turn does.
+    if record_inbound(
+        CHANNEL,
+        external_id,
+        pending.text,
+        images=pending.image_paths or None,
+        audio=pending.audio_paths or None,
+        message_id=message_id,
+    ):
+        pending.recorded_ids.add(message_id)
+
+    # Blue ticks and a typing bubble now, because the answer is seconds away
+    # and an unread message is what makes someone send it again. After the
+    # record, never before it: a hiccup talking to Meta must not be what
+    # costs the shop its only copy of what the customer said.
+    client.mark_as_read(message_id)
 
     dispatcher.submit(external_id, pending)
 
@@ -227,6 +268,7 @@ def _deliver(external_id: str, pending: Pending) -> None:
             pending.annotated_text(),
             image_paths=pending.image_paths or None,
             audio_paths=pending.audio_paths or None,
+            recorded_ids=pending.recorded_ids or None,
         )
     except Exception:
         # The turn died somewhere `agent.run_turn` doesn't already guard --
@@ -240,7 +282,19 @@ def _deliver(external_id: str, pending: Pending) -> None:
         _send_crash_fallback(external_id)
         return
 
-    if reply.duplicate or not (reply.text or reply.interactive):
+    if reply.duplicate:
+        return
+    if not (reply.text or reply.interactive):
+        # The turn ran and produced nothing to send. Legitimate when the
+        # conversation is paused for a staff member; a bug otherwise, and
+        # either way the customer is sitting in silence. Say so with the
+        # number attached rather than returning quietly.
+        log.warning(
+            "turn for %s produced no reply to send (paused=%s error=%s)",
+            external_id,
+            reply.paused,
+            reply.error,
+        )
         return
 
     client = WhatsAppClient()

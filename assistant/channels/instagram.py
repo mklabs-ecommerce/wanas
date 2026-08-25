@@ -38,7 +38,7 @@ from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.providers import get_provider
 from assistant.providers.base import ProviderError
-from assistant.runtime import claim_message, handle_message, release_claims
+from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
 from common.security import verify_signature
 from common.timeutil import as_aware
@@ -193,15 +193,12 @@ def _accept_message(messaging: dict) -> None:
 
     mid = message.get("mid") or ""
     if not claim_message(_claim_id(mid)):
-        log.info("ignoring duplicate delivery %s", mid)
+        log.info("ignoring duplicate delivery %s from %s", mid, sender_id)
         return
 
-    client = InstagramClient()
-    # Seen + typing now, because the answer is seconds away -- same reasoning
-    # as WhatsApp's blue ticks.
-    client.mark_seen(sender_id)
-    client.typing_on(sender_id)
+    log.info("inbound instagram message from %s (%s)", sender_id, mid)
 
+    client = InstagramClient()
     pending = Pending(last_message_id=mid)
     if not _collect_message(message, mid, pending, client, sender_id):
         # An unsupported attachment took the handoff path and acknowledged it;
@@ -209,8 +206,30 @@ def _accept_message(messaging: dict) -> None:
         return
 
     if not (pending.texts or pending.image_paths or pending.audio_paths):
-        log.info("nothing actionable in instagram message %s", mid)
+        log.warning(
+            "nothing actionable in instagram message %s from %s; no reply will be sent",
+            mid,
+            sender_id,
+        )
         return
+
+    # Same rule as WhatsApp: the transcript gets the message before the
+    # debounce window, so a turn that stalls or crashes still leaves the
+    # conversation visible to staff. See `runtime.record_inbound`.
+    if record_inbound(
+        CHANNEL,
+        sender_id,
+        pending.text,
+        images=pending.image_paths or None,
+        audio=pending.audio_paths or None,
+        message_id=_claim_id(mid),
+    ):
+        pending.recorded_ids.add(_claim_id(mid))
+
+    # Seen + typing after the record, never before -- same reasoning as
+    # WhatsApp's blue ticks.
+    client.mark_seen(sender_id)
+    client.typing_on(sender_id)
 
     dispatcher.submit(sender_id, pending)
 
@@ -310,6 +329,7 @@ def _collect_message(
             continue
 
         if att_type in UNSUPPORTED_ATTACHMENT_TYPES:
+            record_inbound(CHANNEL, sender_id, f"[{att_type}]", message_id=_claim_id(mid))
             with session_scope() as session:
                 raise_handoff(
                     session,
@@ -654,6 +674,7 @@ def _deliver(external_id: str, pending: Pending) -> None:
             text,
             image_paths=pending.image_paths or None,
             audio_paths=pending.audio_paths or None,
+            recorded_ids=pending.recorded_ids or None,
         )
     except Exception:
         # The turn died somewhere `agent.run_turn` doesn't already guard --
@@ -666,7 +687,15 @@ def _deliver(external_id: str, pending: Pending) -> None:
         _send_crash_fallback(external_id)
         return
 
-    if reply.duplicate or not (reply.text or reply.interactive):
+    if reply.duplicate:
+        return
+    if not (reply.text or reply.interactive):
+        log.warning(
+            "turn for %s produced no reply to send (paused=%s error=%s)",
+            external_id,
+            reply.paused,
+            reply.error,
+        )
         return
 
     client = InstagramClient()
