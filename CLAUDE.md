@@ -213,9 +213,15 @@ tests/                   pytest suite (flat, one test_<module>.py per
 - Product photos follow the same overlay as price/stock, not the
   style/department list above: `shopify_catalog.LiveVariant.image_url` (read
   alongside price/stock, same call) wins over the local `data/images/` file
-  for that colour when staff have set one in Shopify Admin —
-  `catalog._overlay_images` never invents a new colour split the local
-  gallery does not already have. `WhatsAppClient.send_image` sends an
+  for that colour when staff have set one in Shopify Admin. Which regime
+  `catalog._overlay_images` applies turns on *coverage*: once Shopify has a
+  photo for **every** colourway, it is the photo set — the seeded paths for
+  those colours are dropped, and a product `wanas.db` never split by colour
+  gets its split from Shopify. Short of full coverage it stays additive, a
+  Shopify photo leading a gallery that already had that key, never inventing
+  a partial split. Which colour's photo actually gets *sent* is the
+  `color` argument on the `get_variants` tool.
+  `WhatsAppClient.send_image` sends an
   `http(s)` path by `link`; the local-file upload/cache path
   (`media_id_for`) is what still serves the twelve size charts and any
   product colour Shopify has no photo for yet. See `docs/ARCHITECTURE.md`.

@@ -248,6 +248,58 @@ def test_a_shopify_photo_does_not_fragment_a_gallery_the_local_data_never_split_
     assert len(payload["images"]) > 1  # Brown's local photos are still there
 
 
+def _cover(db, product_id, urls):
+    """A snapshot where every variant carries its colourway's Shopify photo --
+    the ordinary state of a store whose products have been photographed."""
+    over = {}
+    for variant in db.query(Variant).filter(Variant.product_id == product_id):
+        over[variant.variant_id] = live(
+            variant.variant_id, variant.price, variant.stock_qty, image_url=urls[variant.color]
+        )
+    return snapshot_of(db, product_id, **over)
+
+
+def test_full_shopify_coverage_replaces_the_seeded_gallery(seeded, turn):
+    """Once Shopify has a photo for every colourway, it is the photo set. The
+    seeded `data/images/` paths are a snapshot of an older catalog -- three of
+    the RINGER TEE's four colours were seeded with a different product's
+    folder -- so a colour Shopify has answered for must not trail them."""
+    urls = {c: f"https://cdn.shopify.com/s/files/1/hoodie-{c.lower()}.jpg" for c in ("Black", "Grey", "Olive")}
+    shopify_catalog.prime(_cover(seeded, "wanas-hoodie", urls))
+
+    payload = catalog.get_variants(seeded, "wanas-hoodie")
+    assert payload["color_images"] == {c: [urls[c]] for c in ("Black", "Grey", "Olive")}
+    assert not any(p.startswith("data/images/") for p in payload["images"])
+
+
+def test_full_coverage_splits_a_product_wanas_db_never_split_by_colour(seeded, turn):
+    """cairokee-tee's local photos are one undifferentiated set. Shopify knows
+    which photo is the brown one and which is the black one, and refusing to
+    use that is how "the brown one" got answered with the black photo."""
+    urls = {"Brown": "https://cdn.shopify.com/s/files/1/ck-brown.jpg",
+            "Black": "https://cdn.shopify.com/s/files/1/ck-black.jpg"}
+    shopify_catalog.prime(_cover(seeded, "cairokee-tee", urls))
+
+    payload = catalog.get_variants(seeded, "cairokee-tee")
+    assert payload["color_images"] == {"Brown": [urls["Brown"]], "Black": [urls["Black"]]}
+
+
+def test_one_variant_photographed_wrong_on_shopify_does_not_lead_its_colour(seeded, turn):
+    """HEART TOP's large olive has the black photo attached to it in Shopify
+    Admin. Every other olive variant says otherwise, and the majority is what
+    the colour's lead photo follows."""
+    rows = list(seeded.query(Variant).filter_by(product_id="wanas-hoodie", color="Olive"))
+    assert len(rows) > 2
+    right = "https://cdn.shopify.com/s/files/1/hoodie-olive.jpg"
+    wrong = "https://cdn.shopify.com/s/files/1/hoodie-black.jpg"
+    urls = {"Black": wrong, "Grey": "https://cdn.shopify.com/s/files/1/hoodie-grey.jpg", "Olive": right}
+    snapshot = _cover(seeded, "wanas-hoodie", urls)
+    snapshot[rows[0].variant_id] = live(rows[0].variant_id, rows[0].price, 5, image_url=wrong)
+    shopify_catalog.prime(snapshot)
+
+    assert catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"][0] == right
+
+
 def test_when_shopify_cannot_be_reached_the_local_photos_are_served(seeded, turn):
     shopify_catalog.prime(None)
 

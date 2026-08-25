@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased — The photo of the colour that was asked for
+
+A customer who asked for the olive hoodie was reliably shown the black one,
+and the Inventory table put the same photo next to all four colourways of the
+RINGER TEE. Three separate causes, all in the path between Shopify's photos
+and the person looking at one.
+
+- **The bot never knew which colour to show.** `get_variants` took a
+  `product_id` and nothing else, and `_candidate_images` walked
+  `color_images` in dict order — so every request got whichever colourway
+  came first. The tool now takes an optional `color`, and the runtime sends
+  that colourway's photo. Switching colour mid-conversation is a new
+  question too: the "already shown this product" guard is now scoped to the
+  colour, where it used to swallow the reply that should have carried the
+  new photo.
+- **Shopify's answer was only ever allowed to lead a guess.** The seeded
+  `data/images/` mapping was built by matching folder names, and three of
+  the RINGER TEE's four colours point at a different product's folder
+  entirely — "another angle of the navy one" answered with a shirt this shop
+  no longer sells. Once Shopify has a photo for *every* colourway,
+  `_overlay_images` now takes it as the product's photo set rather than
+  putting it in front of the seed. Short of full coverage the old additive
+  rule is untouched, so nothing loses a photo it had. Five products that
+  `wanas.db` never split by colour get their split from Shopify for the
+  first time.
+- **A colourway's lead photo is a majority vote** across its variants. HEART
+  TOP's large olive has the black photo attached to it in Shopify Admin, and
+  taking whichever variant sorted first meant one staff mis-click decided
+  what "the olive one" looked like.
+- **The dashboard was reading the product's featured image for every
+  variant row.** Inventory rows and the product drawer's variant table now
+  show the variant's own photo, which is also what makes a mis-attached one
+  like HEART TOP's visible to staff instead of only to a customer.
+
+All 52 product/colour combinations in the live store now resolve to their own
+photo. The Shopify-unreachable fallback, the size-chart path, the one-photo
+budget and `more_images` are unchanged.
+
 ## 1.2.0 — Full re-architecture: layered by responsibility, vendor-cohesive integrations
 
 Pure structural move, no behavior change. `backend/` and `chatbot/` are

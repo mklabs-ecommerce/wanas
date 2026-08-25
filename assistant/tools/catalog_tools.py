@@ -73,14 +73,23 @@ def get_products(
     "variants are returned too so you can say which combinations exist; `in_stock` is the only "
     "list you may offer from. If you already called this for the same product earlier in this "
     "conversation, its answer is still valid -- re-read it from what was already said instead of "
-    "calling again, unless the customer is asking about a different product. Calling this attaches "
+    "calling again, unless the customer is asking about a different product, or a different colour "
+    "of it. Calling this attaches "
     "one product photo to your reply automatically (never more, and never one already sent), so "
-    "describe the product in words and never mention a file path or a link. Only pass "
+    "describe the product in words and never mention a file path or a link. Always pass `color` "
+    "when the customer has named or picked one -- it decides which colourway's photo gets sent, "
+    "and without it they get whichever colour happens to come first. Only pass "
     "more_images=true when the customer explicitly asks to see more photos of this exact product; "
     "it then sends up to two more, still never repeating a photo already sent unless there is "
     "nothing else left to show.",
     properties={
         "product_id": {"type": "string", "description": "From get_products."},
+        "color": {
+            "type": "string",
+            "description": "The colourway the customer is asking about, exactly as it appears in "
+            "this product's `colors`. Pass it whenever one has been named or picked, including "
+            "when they switch to a different colour of a product already shown.",
+        },
         "more_images": {
             "type": "boolean",
             "description": "true only for an explicit 'show me more photos / other colours / other "
@@ -89,12 +98,19 @@ def get_products(
     },
     required=("product_id",),
 )
-def get_variants(ctx: ToolContext, product_id: str, more_images: bool = False) -> dict:
+def get_variants(
+    ctx: ToolContext, product_id: str, color: str | None = None, more_images: bool = False
+) -> dict:
     payload = catalog.get_variants(ctx.session, product_id)
     if payload is None:
         return {"error": "product_not_found", "product_id": product_id}
     if more_images:
         payload["_more_images"] = True
+    if color:
+        # An internal marker, popped before the model ever sees the result:
+        # it steers which photo the runtime attaches, it is not a fact about
+        # the product for the model to read back or explain.
+        payload["_image_color"] = color
     return payload
 
 

@@ -103,9 +103,16 @@ idea, not a deployment for one specific shop, so it shipped with a scraped
 photo set rather than a live store's own CDN. Once staff attach a photo to a
 variant or product in Shopify Admin, `shopify_catalog.fetch_all` reads it back
 alongside price and stock (`LiveVariant.image_url`), and
-`catalog.get_variants` puts it ahead of the local file for that colour —
-never inventing a colour split the local gallery does not already have; see
-the docstring on `catalog._overlay_images`. `WhatsAppClient.send_image` sends
+`catalog.get_variants` prefers it over the local file for that colour. Once
+Shopify has a photo for every colourway of a product it becomes that
+product's photo set outright, seeded paths and all — the seed's colour
+mapping was built by matching folder names and got three of the RINGER TEE's
+four colours wrong, so a photo Shopify has answered for is not something to
+trail a guess behind. Short of full coverage the older additive rule holds
+and no partial split is invented; see the docstring on
+`catalog._overlay_images`. The colour whose photo is actually sent comes
+from the `color` argument on the `get_variants` tool — without it the bot
+sent whichever colourway sorted first. `WhatsAppClient.send_image` sends
 an `http(s)` path by `link` directly rather than uploading it through Meta's
 media endpoint, since Meta fetches the link itself — the upload-and-cache path
 (`media_id_for` / `WhatsAppMedia`) still exists for whatever is a genuine local

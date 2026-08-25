@@ -242,7 +242,8 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     # internal marker rather than as part of the answer -- popped here so it
     # never reaches the model as data to explain.
     more_images = bool(result.pop("_more_images", False))
-    _collect_images(ctx, result, more_images=more_images)
+    color = result.pop("_image_color", None)
+    _collect_images(ctx, result, more_images=more_images, color=color)
     return result
 
 
@@ -257,22 +258,30 @@ MAX_PRODUCT_IMAGES = 1
 MAX_EXTRA_IMAGES = 2
 
 
-def _candidate_images(result: dict) -> list[str]:
-    """Every photo a tool result could offer, one per colour first.
+def _candidate_images(result: dict, color: str | None = None) -> list[str]:
+    """Every photo a tool result could offer, the asked-for colour first.
 
     For a product that comes in three colours, one photo of each is a more
     useful default than three angles of the same one -- so colour variety is
     what `more_images` reaches for, not just "the next file in the list".
+
+    `color` is the colourway the customer is actually talking about, when the
+    tool was able to name one. Without it the list simply starts at whichever
+    colour happens to be first, which is how "عايز الهودي الزيتي" got answered
+    with a photo of the black one.
     """
     color_images = result.get("color_images")
     picked: list[str] = []
     if isinstance(color_images, dict):
-        for paths in color_images.values():
+        wanted = _matching_color(color_images, color)
+        keys = [wanted] + [c for c in color_images if c != wanted] if wanted else list(color_images)
+        for key in keys:
+            paths = color_images.get(key)
             if isinstance(paths, list) and paths:
                 picked.append(paths[0])
 
     if not picked:
-        # The five products the store never split by colour fall back to the
+        # A product Shopify has not split by colour falls back to the
         # unlabelled set -- an unlabelled photo is fine, a wrong colourway
         # labelled confidently is not.
         images = result.get("images")
@@ -281,7 +290,25 @@ def _candidate_images(result: dict) -> list[str]:
     return picked
 
 
-def _collect_images(ctx: ToolContext, result: dict, *, more_images: bool = False) -> None:
+def _matching_color(color_images: dict, color: str | None) -> str | None:
+    """The `color_images` key the customer's word refers to, or None.
+
+    Case- and spacing-insensitive because the colour reaches here as the model
+    typed it, not as an option value: "olive" must find "Olive", and
+    "camel brown" must find "Camel Brown".
+    """
+    if not isinstance(color, str) or not color.strip():
+        return None
+    needle = " ".join(color.split()).casefold()
+    for key in color_images:
+        if isinstance(key, str) and " ".join(key.split()).casefold() == needle:
+            return key
+    return None
+
+
+def _collect_images(
+    ctx: ToolContext, result: dict, *, more_images: bool = False, color: str | None = None
+) -> None:
     """Turn image paths in a tool result into real attachments.
 
     Tools report images in two different shapes and both are part of the tool
@@ -295,7 +322,7 @@ def _collect_images(ctx: ToolContext, result: dict, *, more_images: bool = False
     if isinstance(image, str) and image:
         ctx.attach(image, force=True)
 
-    candidates = _candidate_images(result)
+    candidates = _candidate_images(result, color)
     if not candidates:
         return
 
@@ -315,8 +342,14 @@ def _collect_images(ctx: ToolContext, result: dict, *, more_images: bool = False
                 added += 1
         return
 
-    if any(path in ctx.sent_images for path in candidates):
-        # This product has already been shown a photo in this conversation.
+    # What counts as "already answered" is the colourway being talked about,
+    # not the product. Showing the black hoodie and then being asked for the
+    # olive one is a new question, and the whole product used to count as
+    # answered here -- so the reply that should have carried the olive photo
+    # carried none at all.
+    named = color and _matching_color(result.get("color_images") or {}, color)
+    answered = candidates[:1] if named else candidates
+    if any(path in ctx.sent_images for path in answered):
         # The default request is "show me the product", already answered --
         # substituting a different colour nobody asked for is still fetching
         # another image, which is exactly what a plain request must not do.

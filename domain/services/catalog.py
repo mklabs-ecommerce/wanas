@@ -266,32 +266,68 @@ def variant_payload(variant: Variant, live_map=None) -> dict:
 def _overlay_images(
     product: Product, variants: list[Variant], live_map
 ) -> tuple[list[str], dict[str, list[str]]]:
-    """Shopify's own photo for a colour, when staff have set one, ahead of the
-    file `wanas.db` was seeded with -- see the module note in
-    `shopify_catalog`. Only the lead photo is ever replaced; whatever gallery
-    wanas.db already has for that colour still follows behind it, so "show me
-    another angle" still has something to reach for.
+    """Which photo belongs to which colourway, Shopify's answer preferred.
 
-    A colour only ever gets a Shopify photo swapped in if `color_images`
-    already had an entry for it -- never a new key. `merge_catalog.py` keeps
-    that dict all-or-nothing per product (every colour or none), and a partial
-    one would make `_candidate_images` (assistant/tools/base.py) show a photo for
-    some colours and silently drop the rest of the product's gallery for
-    everyone else. Products with no colour split at all (`color_images` is
-    empty) overlay onto the shared `images` list instead, on the same logic:
-    the local set is already undifferentiated, so a colour is not a key worth
-    inventing here either.
+    Two regimes, and which one applies is decided by *coverage* -- whether
+    Shopify has a photo for every colourway the product comes in:
+
+    **Full coverage.** Shopify knows the whole colour split, so it is the
+    photo set: `color_images` is rebuilt from it and the seeded
+    `data/images/` paths for those colours are dropped rather than trailing
+    behind. They are a snapshot of an older catalog and the shop has been
+    re-photographed since -- three of the RINGER TEE's four colourways were
+    seeded with another product's folder entirely, so "show me another angle
+    of the navy one" answered with a photo of a shirt this shop no longer
+    sells. A wrong photo is not a spare angle. What `more_images` reaches for
+    instead is the other colourways, which is what its own docstring in
+    `assistant/tools/base.py` says it is for, and those are now all correct.
+
+    **Partial or no coverage.** Exactly the older, additive behaviour: a
+    Shopify photo leads the local gallery for a colour `color_images`
+    already had, and never opens a new key. A partial split would make
+    `_candidate_images` show a photo for some colours and silently drop the
+    rest of the product's gallery for everyone else. A product with no local
+    split at all overlays onto the shared `images` list on the same logic.
+
+    Shopify unreachable is the same as no coverage: wanas.db's own photos,
+    unchanged.
     """
     color_images = {color: list(paths) for color, paths in (product.color_images or {}).items()}
     images = list(product.images or [])
 
+    # Ordered-unique per colour, commonest first. Every size of one colourway
+    # normally carries the same photo, so a majority vote is what makes the
+    # lead robust: HEART TOP's large olive has the black photo attached to it
+    # in Shopify Admin, and taking whichever variant sorted first would have
+    # answered "the olive one" with a picture of the black one.
+    counts: dict[str, dict[str, int]] = {}
     for variant in variants:
         url = _overlay(variant, live_map).image_url
-        if not url:
+        if not (url and variant.color):
             continue
-        if variant.color and variant.color in color_images:
-            gallery = [p for p in color_images[variant.color] if p != url]
-            color_images[variant.color] = [url, *gallery]
+        tally = counts.setdefault(variant.color, {})
+        tally[url] = tally.get(url, 0) + 1
+
+    live_by_color = {
+        color: sorted(tally, key=lambda url: -tally[url]) for color, tally in counts.items()
+    }
+
+    colors = {v.color for v in variants if v.color}
+    if colors and colors <= set(live_by_color):
+        # Ordered like `product.colors` so the gallery reads in the order the
+        # rest of the payload lists the colourways in.
+        ordered = [c for c in (product.colors or []) if c in live_by_color]
+        ordered += [c for c in live_by_color if c not in ordered]
+        color_images = {c: list(live_by_color[c]) for c in ordered}
+        images = []
+        for gallery in color_images.values():
+            images.extend(p for p in gallery if p not in images)
+        return images, color_images
+
+    for color, gallery in live_by_color.items():
+        url = gallery[0]
+        if color in color_images:
+            color_images[color] = [url, *(p for p in color_images[color] if p != url)]
         elif not color_images:
             images = [url, *(p for p in images if p != url)]
 

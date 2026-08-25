@@ -59,6 +59,7 @@ query($cursor: String, $query: String) {
           price
           compareAtPrice
           inventoryQuantity
+          image { url }
           selectedOptions { name value }
         }
       }
@@ -231,6 +232,9 @@ def get_product(shopify_gid: str) -> dict | None:
             "price": v.get("price"),
             "compare_at_price": v.get("compareAtPrice"),
             "inventory_quantity": v.get("inventoryQuantity"),
+            # The colourway's own photo, so the row that says "Navy" can be
+            # checked against the picture Shopify will actually send for it.
+            "image_url": (v.get("image") or {}).get("url"),
             "size": _opt(v, "Size"),
             "color": _opt(v, "Color"),
             "length": _opt(v, "Length"),

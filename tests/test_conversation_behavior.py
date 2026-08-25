@@ -96,6 +96,47 @@ def test_a_product_the_store_never_split_by_colour_still_gets_photos(ctx):
     assert ctx.attachments == payload["images"][:MAX_PRODUCT_IMAGES]
 
 
+def test_the_photo_sent_is_the_colour_that_was_asked_for(ctx):
+    """The bug: `color_images` was walked in dict order, so every request got
+    the first colourway's photo. Asking for the olive hoodie and being shown
+    the black one is the shop answering a question nobody asked."""
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    assert ctx.attachments == [payload["color_images"]["Olive"][0]]
+
+
+def test_the_colour_is_matched_however_the_model_typed_it(ctx):
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="olive")
+    assert ctx.attachments == [payload["color_images"]["Olive"][0]]
+
+
+def test_switching_colour_sends_the_new_colours_photo(ctx):
+    """Showing black and then being asked for olive is a new question. The
+    "already shown this product" guard used to swallow it, so the reply that
+    should have carried the olive photo carried none at all."""
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Black")
+    assert ctx.attachments == [payload["color_images"]["Black"][0]]
+
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    assert ctx.attachments == [payload["color_images"]["Olive"][0]]
+
+
+def test_the_same_colour_asked_for_twice_is_not_sent_twice(ctx):
+    """The colour scopes the guard; it does not remove it."""
+    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    assert ctx.attachments == []
+
+
+def test_a_colour_the_product_does_not_come_in_falls_back_to_the_default(ctx):
+    """A colour that matches nothing must not cost the customer their photo."""
+    call(ctx, "get_variants", product_id="wanas-hoodie", color="Turquoise")
+    assert len(ctx.attachments) == 1
+
+
 def test_size_charts_are_still_attached_alongside_product_photos(ctx):
     """The chart is the answer to a sizing question, so it is never dropped in
     favour of a product photo."""

@@ -46,6 +46,7 @@ query($cursor: String, $query: String) {
           price
           inventoryQuantity
           inventoryItem { id }
+          image { url }
           selectedOptions { name value }
         }
       }
@@ -71,7 +72,13 @@ def _rows_for_product(node: dict) -> list[dict]:
                 "product_title": node.get("title") or "",
                 "product_status": node.get("status"),
                 "category": node.get("productType"),
-                "image_url": (node.get("featuredImage") or {}).get("url"),
+                # The variant's own photo first. This table has one row per
+                # colourway, and the product's featured image put the same
+                # black tee next to every one of them -- a row labelled Navy
+                # showing the black photo is the table getting it wrong, not
+                # a missing nicety.
+                "image_url": (variant.get("image") or {}).get("url")
+                or (node.get("featuredImage") or {}).get("url"),
                 "variant_id": variant["id"],
                 "sku": variant.get("sku") or "",
                 "price": variant.get("price") or "0.00",
