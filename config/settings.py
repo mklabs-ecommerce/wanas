@@ -282,7 +282,7 @@ def load_settings() -> Settings:
         ),
         public_base_url=_public_base_url(),
         reengagement_interval_seconds=_float("REENGAGEMENT_INTERVAL_SECONDS", 1800.0),
-        abandoned_cart_hours=_float("ABANDONED_CART_HOURS", 6.0),
+        abandoned_cart_hours=_float("ABANDONED_CART_HOURS", 2.0),
         abandoned_cart_max_age_hours=_float("ABANDONED_CART_MAX_AGE_HOURS", 48.0),
         whatsapp_template_back_in_stock=os.getenv("WHATSAPP_TEMPLATE_BACK_IN_STOCK", "").strip(),
         whatsapp_template_abandoned_cart=os.getenv("WHATSAPP_TEMPLATE_ABANDONED_CART", "").strip(),

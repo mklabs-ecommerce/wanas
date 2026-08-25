@@ -19,6 +19,7 @@ import logging
 
 from fastapi import APIRouter, Request, Response
 
+from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.runtime import claim_message, handle_message, release_claims
 from assistant.tools.support_tools import raise_handoff
@@ -228,13 +229,16 @@ def _deliver(external_id: str, pending: Pending) -> None:
             audio_paths=pending.audio_paths or None,
         )
     except Exception:
-        # The turn died before the message was handled, and every id in the
-        # batch was claimed at ingest. Release them so Meta's retry is
-        # processed instead of suppressed forever. A turn that *succeeded*
-        # never gets here, so a handled message still cannot be processed
-        # twice.
+        # The turn died somewhere `agent.run_turn` doesn't already guard --
+        # session/identity plumbing, media handling, the Shopify read -- and
+        # every id in the batch was claimed at ingest. Release them so Meta's
+        # retry is processed instead of suppressed forever. A turn that
+        # *succeeded* never gets here, so a handled message still cannot be
+        # processed twice.
         release_claims(pending.text_ids + pending.image_ids + pending.audio_ids)
-        raise
+        log.exception("turn crashed before producing a reply for %s; sending fallback", external_id)
+        _send_crash_fallback(external_id)
+        return
 
     if reply.duplicate or not (reply.text or reply.interactive):
         return
@@ -265,6 +269,30 @@ def _deliver(external_id: str, pending: Pending) -> None:
         outcomes.append(client.send_image(external_id, path))
 
     _flag_delivery_failures(external_id, outcomes)
+
+
+def _send_crash_fallback(external_id: str) -> None:
+    """Last line of defence: the turn never produced a reply at all.
+
+    Without this the customer is left with dead air until they message again
+    -- the webhook already returned 200 at ingest, so Meta will not retry.
+    Sending is itself wrapped: a customer must not be left silent just
+    because *this* also failed, and the alert queue is what tells staff a
+    real bug happened, not a delivery hiccup.
+    """
+    try:
+        WhatsAppClient().send_text(external_id, GENERIC_FAILURE)
+    except Exception:
+        log.exception("failed to send the crash fallback message to %s", external_id)
+    with session_scope() as db:
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason="turn_crashed",
+            summary=f"Conversation with {external_id} hit an unhandled error; sent a generic apology",
+            channel=CHANNEL,
+            external_id=external_id,
+        )
 
 
 def _flag_delivery_failures(external_id: str, outcomes: list) -> None:

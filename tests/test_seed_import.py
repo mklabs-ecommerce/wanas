@@ -92,7 +92,7 @@ def test_cairokee_hoodie_is_the_only_fully_sold_out_product(seeded):
 
 def test_size_charts_cover_every_product(seeded):
     charts = all_charts()
-    assert len(charts) == 12
+    assert len(charts) == 13
     for product in seeded.scalars(select(Product)).all():
         assert product.size_chart is not None, f"{product.product_id} has no chart mapping"
         assert get_chart(product.size_chart) is not None

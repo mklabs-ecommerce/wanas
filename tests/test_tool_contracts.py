@@ -294,6 +294,46 @@ def test_tops_chart_has_no_xl(ctx):
     assert "XL" not in chart["sizes"]
 
 
+def test_different_products_never_return_each_others_chart(ctx):
+    """A customer asking about one product must never receive another
+    product's chart_id, image, or measurements -- the exact failure
+    AGENTS.md calls out as causing returns."""
+    sweatpant = call(ctx, "get_size_chart", product_id="wanas-sweatpant")
+    hoodie = call(ctx, "get_size_chart", product_id="wanas-hoodie")
+    assert sweatpant["chart_id"] != hoodie["chart_id"]
+    assert sweatpant["image"] != hoodie["image"]
+    assert sweatpant["sizes"] != hoodie["sizes"]
+
+    crewneck = call(ctx, "get_size_chart", product_id="wanas-crewneck")
+    assert crewneck["chart_id"] not in {sweatpant["chart_id"], hoodie["chart_id"]}
+    assert crewneck["image"] not in {sweatpant["image"], hoodie["image"]}
+
+
+def test_boxy_wns_tee_and_ringer_tee_have_distinct_charts(ctx):
+    """Regression: these two products used to share one chart_id
+    ("ringer-boxy-tee") even though their real measurements differ, so a
+    Boxy Fit customer could be sent the Ringer Tee's numbers/image."""
+    boxy = call(ctx, "get_size_chart", product_id="boxy-wns-tee")
+    ringer = call(ctx, "get_size_chart", product_id="ringer-tee")
+
+    assert boxy["chart_id"] == "wns-boxy-tee"
+    assert ringer["chart_id"] == "ringer-boxy-tee"
+    assert boxy["chart_id"] != ringer["chart_id"]
+    assert boxy["image"] != ringer["image"]
+    assert boxy["sizes"] == {
+        "S": {"width": 56, "length": 66},
+        "M": {"width": 58, "length": 68},
+        "L": {"width": 61, "length": 71},
+        "XL": {"width": 63, "length": 73},
+    }
+    assert ringer["sizes"] == {
+        "S": {"width": 54, "length": 65},
+        "M": {"width": 56, "length": 67},
+        "L": {"width": 58, "length": 69},
+        "XL": {"width": 60, "length": 71},
+    }
+
+
 # --- shipping -------------------------------------------------------------
 
 

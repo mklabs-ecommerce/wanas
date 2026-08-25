@@ -80,7 +80,7 @@ GROUPS = [
         "department": "unisex",
         "style": ["boxy-fit"],
         "collection": None,
-        "size_chart": "ringer-boxy-tee",
+        "size_chart": "wns-boxy-tee",
         "members": {
             "wanas-grey-t-shirt": "Black",
             "path-to-heaven-t-shirt-copy": "Grey",

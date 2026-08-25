@@ -34,6 +34,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Request, Response
 
 from assistant import messages as msg, session as session_store
+from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.providers import get_provider
 from assistant.providers.base import ProviderError
@@ -655,12 +656,15 @@ def _deliver(external_id: str, pending: Pending) -> None:
             audio_paths=pending.audio_paths or None,
         )
     except Exception:
-        # The turn died before the message was handled, and every id in the
-        # batch was claimed at ingest. Release them so Meta's retry is
-        # processed instead of suppressed forever.
+        # The turn died somewhere `agent.run_turn` doesn't already guard --
+        # session/identity plumbing, media handling, the Shopify read -- and
+        # every id in the batch was claimed at ingest. Release them so Meta's
+        # retry is processed instead of suppressed forever.
         claimed = [i for i in pending.text_ids + pending.image_ids + pending.audio_ids if i]
         release_claims([_claim_id(i) for i in claimed])
-        raise
+        log.exception("turn crashed before producing a reply for %s; sending fallback", external_id)
+        _send_crash_fallback(external_id)
+        return
 
     if reply.duplicate or not (reply.text or reply.interactive):
         return
@@ -694,6 +698,29 @@ def runtime_flags_enabled(db) -> bool:
     from domain.services import runtime_flags
 
     return runtime_flags.get(db, "interactive_messages_enabled", settings.interactive_messages_enabled)
+
+
+def _send_crash_fallback(external_id: str) -> None:
+    """Last line of defence: the turn never produced a reply at all.
+
+    Same justification as the WhatsApp adapter's: the webhook already
+    returned 200 at ingest, so nothing else will retry this. Sending is
+    itself wrapped so a customer is never left silent because *this* also
+    failed, and the alert queue tells staff a real bug happened.
+    """
+    try:
+        InstagramClient().send_text(external_id, GENERIC_FAILURE)
+    except Exception:
+        log.exception("failed to send the crash fallback message to %s", external_id)
+    with session_scope() as db:
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason="turn_crashed",
+            summary=f"Conversation with {external_id} hit an unhandled error; sent a generic apology",
+            channel=CHANNEL,
+            external_id=external_id,
+        )
 
 
 def _flag_delivery_failures(external_id: str, outcomes: list) -> None:

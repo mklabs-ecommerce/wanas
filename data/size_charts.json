@@ -19,7 +19,7 @@
 
   "ringer-boxy-tee": {
     "chart_id": "ringer-boxy-tee",
-    "title": "Ringer / boxy-fit t-shirt",
+    "title": "Ringer t-shirt",
     "image": "data/size-charts/ringer-boxy-tee.png",
     "unit": "cm",
     "measurements": [
@@ -31,6 +31,23 @@
       "M":  { "width": 56, "length": 67 },
       "L":  { "width": 58, "length": 69 },
       "XL": { "width": 60, "length": 71 }
+    }
+  },
+
+  "wns-boxy-tee": {
+    "chart_id": "wns-boxy-tee",
+    "title": "WNS boxy-fit t-shirt",
+    "image": "data/size-charts/wns-boxy-tee.png",
+    "unit": "cm",
+    "measurements": [
+      { "key": "width", "label_en": "Width", "label_ar": "العرض" },
+      { "key": "length", "label_en": "Length", "label_ar": "الطول" }
+    ],
+    "sizes": {
+      "S":  { "width": 56, "length": 66 },
+      "M":  { "width": 58, "length": 68 },
+      "L":  { "width": 61, "length": 71 },
+      "XL": { "width": 63, "length": 73 }
     }
   },
 

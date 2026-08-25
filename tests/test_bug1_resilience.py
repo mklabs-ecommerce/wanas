@@ -136,14 +136,22 @@ def _crash(*_args, **_kwargs):
 def test_a_crashed_turn_releases_the_claim_so_it_can_be_claimed_again(seeded, monkeypatch):
     assert claim_message("wamid.crash") is True
     monkeypatch.setattr(adapter, "handle_message", _crash)
+    sent = []
+    monkeypatch.setattr(
+        adapter.WhatsAppClient, "send_text", lambda self, to, text, **k: sent.append((to, text))
+    )
 
-    with pytest.raises(RuntimeError):
-        adapter._deliver(WHO, Pending(texts=["hi"], text_ids=["wamid.crash"]))
+    # No longer raises: the crash is swallowed here so a customer left with
+    # dead air still gets a fallback message instead of pure silence.
+    adapter._deliver(WHO, Pending(texts=["hi"], text_ids=["wamid.crash"]))
 
     with fresh_db() as check:
         assert check.get(WebhookEvent, "wamid.crash") is None
     # The id is free again: a Meta retry gets processed instead of suppressed.
     assert claim_message("wamid.crash") is True
+    # The customer is never left with silence for a crash the code didn't
+    # already produce a customer-facing reply for.
+    assert sent == [(WHO, adapter.GENERIC_FAILURE)]
 
 
 def test_a_crashed_ingest_releases_the_claim_so_the_retry_is_processed(wa_client, seeded, monkeypatch):
