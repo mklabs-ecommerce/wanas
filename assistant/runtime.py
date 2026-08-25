@@ -264,10 +264,17 @@ def handle_message(
     db: Session | None = None,
     provider: LLMProvider | None = None,
     recorded_ids: set[str] | None = None,
+    reply_to: list[str] | None = None,
+    mids: list[str] | None = None,
 ) -> RuntimeReply:
     """`recorded_ids` are the platform message ids already stored on arrival by
     `record_inbound`. Their provisional copies are folded into the real message
-    this turn writes, so the transcript does not say everything twice."""
+    this turn writes, so the transcript does not say everything twice.
+
+    `mids` are those same ids kept *on* the stored message, so a later
+    "reply to this" can find it; `reply_to` is the other direction -- the ids
+    of the earlier messages this one is quoting, resolved against the
+    transcript in `assistant/quoting.py`."""
     if db is not None:
         return _handle(
             db,
@@ -279,6 +286,8 @@ def handle_message(
             platform_message_id,
             provider,
             recorded_ids,
+            reply_to,
+            mids,
         )
     with session_scope() as session:
         return _handle(
@@ -291,6 +300,8 @@ def handle_message(
             platform_message_id,
             provider,
             recorded_ids,
+            reply_to,
+            mids,
         )
 
 
@@ -304,6 +315,8 @@ def _handle(
     platform_message_id: str | None,
     provider: LLMProvider | None,
     recorded_ids: set[str] | None = None,
+    reply_to: list[str] | None = None,
+    mids: list[str] | None = None,
 ) -> RuntimeReply:
     if _already_processed(db, platform_message_id):
         log.info("ignoring duplicate delivery %s", platform_message_id)
@@ -322,7 +335,7 @@ def _handle(
             db,
             channel,
             external_id,
-            msg.user(_stored_text(text, image_paths, audio_paths)),
+            msg.user(_stored_text(text, image_paths, audio_paths), mids=mids),
             recorded_ids=recorded_ids,
         )
         log.warning(
@@ -356,7 +369,11 @@ def _handle(
                 db,
                 channel,
                 external_id,
-                msg.user(_stored_text(text, image_paths, audio_paths), audio=list(audio_paths)),
+                msg.user(
+                    _stored_text(text, image_paths, audio_paths),
+                    audio=list(audio_paths),
+                    mids=mids,
+                ),
                 recorded_ids=recorded_ids,
             )
             raise_handoff(
@@ -404,7 +421,11 @@ def _handle(
                 db,
                 channel,
                 external_id,
-                msg.user(_stored_text(text, image_paths, audio_paths), images=list(image_paths)),
+                msg.user(
+                    _stored_text(text, image_paths, audio_paths),
+                    images=list(image_paths),
+                    mids=mids,
+                ),
                 recorded_ids=recorded_ids,
             )
             raise_handoff(
@@ -459,6 +480,8 @@ def _handle(
             images=image_paths,
             audio=audio_paths,
             recorded_ids=recorded_ids,
+            reply_to=reply_to,
+            mids=mids,
         )
     return RuntimeReply(
         text=reply.text,

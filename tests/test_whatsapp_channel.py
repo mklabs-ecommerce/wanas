@@ -18,7 +18,8 @@ from fastapi.testclient import TestClient
 
 from assistant.channels import whatsapp as adapter
 from assistant.providers import set_provider
-from assistant.providers.fake import RehearsalProvider
+from assistant.providers.base import ModelReply
+from assistant.providers.fake import RehearsalProvider, ScriptedProvider
 from config.settings import settings
 from domain.models import Order, QueueKind, ShippingRate
 from domain.services import queues
@@ -53,7 +54,7 @@ def sent(monkeypatch):
         # not messages; the assertions below are about what the customer sees.
         if payload.get("status") != "read":
             outbox.append(payload)
-        return True, None
+        return True, None, "sent.1"
 
     def fake_upload(self, path):
         return f"media-for-{path}"
@@ -254,7 +255,7 @@ def test_accept_captures_the_reply_to_id_from_meta_context(configured, seeded, m
     or a reply to one of several photos has nothing to resolve against."""
     captured = []
     monkeypatch.setattr(adapter.dispatcher, "submit", lambda key, item: captured.append(item))
-    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None, "sent.1"))
 
     message = {
         "from": PHONE,
@@ -275,7 +276,7 @@ def test_accept_captures_the_reply_to_id_from_meta_context(configured, seeded, m
 def test_accept_gives_each_image_its_own_id(configured, seeded, monkeypatch):
     captured = []
     monkeypatch.setattr(adapter.dispatcher, "submit", lambda key, item: captured.append(item))
-    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None, "sent.1"))
     monkeypatch.setattr(adapter.WhatsAppClient, "download_media", lambda self, *a, **k: "data/inbound/x.jpg")
 
     message = {
@@ -386,7 +387,7 @@ def test_a_shopify_hosted_photo_is_sent_by_link_not_uploaded(configured, monkeyp
 
     def fake_post(self, payload):
         posts.append(payload)
-        return True, None
+        return True, None, "sent.1"
 
     monkeypatch.setattr(adapter.WhatsAppClient, "_upload", fake_upload)
     monkeypatch.setattr(adapter.WhatsAppClient, "_post", fake_post)
@@ -410,7 +411,7 @@ def test_a_local_photo_still_goes_through_the_cached_upload(configured, monkeypa
         return "media-1"
 
     monkeypatch.setattr(adapter.WhatsAppClient, "_upload", fake_upload)
-    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None, "sent.1"))
     client = adapter.WhatsAppClient(phone_number_id="1", access_token="t")
 
     client.send_image("201000000123", "data/images/wanas-hoodie/01.jpg")
@@ -424,3 +425,33 @@ def test_the_notification_sender_is_only_registered_when_configured(monkeypatch)
     monkeypatch.setattr(adapter, "settings", dataclasses.replace(settings, whatsapp_access_token=""))
     assert adapter.register_outbound_sender() is False
     assert isinstance(notifications.get_sender(), notifications.LogSender)
+
+
+def test_a_reply_to_something_the_bot_said_reaches_the_model_as_a_quote(
+    client, configured, sent, seeded
+):
+    """End to end, the case the customer reported: the bot answers, they
+    long-press that answer and reply to it, and the turn that follows knows
+    which message they meant instead of guessing from recency.
+
+    Nothing on our side used to know the bot's own message by the name
+    WhatsApp quotes it under -- the send's response body was read for a status
+    code and thrown away -- so `context.id` matched nothing at all.
+    """
+    provider = ScriptedProvider([ModelReply(text="عندنا أسود وأوليڤ وبيچ")])
+    set_provider(provider)
+
+    assert post(client, webhook_body("الهودي بيجي بألوان إيه؟")).status_code == 200
+
+    provider.push(ModelReply(text="تمام، الأسود"))
+    assert (
+        post(
+            client,
+            webhook_body("الأول ده", message_id="wamid.2", reply_to="sent.1"),
+        ).status_code
+        == 200
+    )
+
+    _system, history, _tools = provider.calls[-1]
+    assert "عندنا أسود وأوليڤ وبيچ" in history[-1]["content"]
+    assert "الأول ده" in history[-1]["content"]

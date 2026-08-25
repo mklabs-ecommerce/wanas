@@ -66,7 +66,7 @@ def sent(monkeypatch):
 
     def fake_post(self, payload):
         outbox.append(payload)
-        return True, None
+        return True, None, "sent.1"
 
     monkeypatch.setattr(adapter.WhatsAppClient, "_post", fake_post)
     monkeypatch.setattr(adapter.WhatsAppClient, "_upload", lambda self, path: "media")
@@ -265,7 +265,7 @@ def test_a_message_with_neither_identity_is_still_named(client, configured, sent
 def test_every_outbound_kind_addresses_a_bsuid_the_same_way(monkeypatch, method, args):
     captured: list[dict] = []
     monkeypatch.setattr(
-        WhatsAppClient, "_post", lambda self, payload: (captured.append(payload), (True, None))[1]
+        WhatsAppClient, "_post", lambda self, payload: (captured.append(payload), (True, None, "sent.1"))[1]
     )
     whatsapp = WhatsAppClient(phone_number_id="1", access_token="t")
 
@@ -281,7 +281,7 @@ def test_every_outbound_kind_addresses_a_bsuid_the_same_way(monkeypatch, method,
 def test_an_interactive_picker_addresses_a_bsuid_too(monkeypatch):
     captured: list[dict] = []
     monkeypatch.setattr(
-        WhatsAppClient, "_post", lambda self, payload: (captured.append(payload), (True, None))[1]
+        WhatsAppClient, "_post", lambda self, payload: (captured.append(payload), (True, None, "sent.1"))[1]
     )
     whatsapp = WhatsAppClient(phone_number_id="1", access_token="t")
 

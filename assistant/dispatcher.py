@@ -54,9 +54,10 @@ class Pending:
     #: The last inbound message id, so the adapter can mark the right one read.
     last_message_id: str | None = None
     #: message id -> the id of the WhatsApp message it was a reply to (Meta's
-    #: `context.id`). Only ever resolved against another id in this same
-    #: debounced batch -- a reply to something from an earlier, already-
-    #: answered turn has nothing here to match and is left unannotated.
+    #: `context.id`). Resolved here when the quoted message is in this same
+    #: debounced batch; anything else is handed to `assistant/quoting.py`,
+    #: which looks it up in the stored transcript -- see
+    #: `unresolved_reply_to`.
     reply_to: dict[str, str] = field(default_factory=dict)
     #: Platform message ids already written to the transcript on arrival
     #: (`assistant/runtime.py::record_inbound`). The turn folds those
@@ -86,6 +87,42 @@ class Pending:
         """
         return "\n".join(part for part in self.texts if part.strip())
 
+    def _batch_labels(self) -> dict[str, str]:
+        """What each message *in this batch* can be called, by its id.
+
+        Text fragments are named too, not only media: a customer who sends
+        three lines and then replies to the first of them was previously left
+        with no annotation at all, since only photos and voice notes had a
+        label to point at.
+        """
+        labels: dict[str, str] = {}
+        for index, mid in enumerate(self.image_ids, start=1):
+            if mid:
+                labels[mid] = f"photo {index}"
+        for index, mid in enumerate(self.audio_ids, start=1):
+            if mid:
+                labels[mid] = f"voice note {index}"
+        for index, mid in enumerate(self.text_ids, start=1):
+            if mid and mid not in labels:
+                text = self.texts[index - 1] if index - 1 < len(self.texts) else ""
+                snippet = " ".join((text or "").split())
+                if len(snippet) > 80:
+                    snippet = snippet[:80].rstrip() + "…"
+                labels[mid] = f'their message "{snippet}"' if snippet else f"message {index}"
+        return labels
+
+    def unresolved_reply_to(self) -> list[str]:
+        """Quoted ids this batch cannot explain on its own.
+
+        A reply to something the bot said, or to a message from a turn that
+        has already been answered, points outside the debounce window -- which
+        is most of them. They go to the runtime, which resolves them against
+        the stored transcript (`assistant/quoting.py`). Anything the batch
+        *can* label is left out, so the same quote is never described twice.
+        """
+        labels = self._batch_labels()
+        return [target for target in self.reply_to.values() if target and target not in labels]
+
     def annotated_text(self) -> str:
         """The batch's text fragments, each prefixed with which earlier item in
         this same batch it was a WhatsApp "reply to" of, when Meta says so.
@@ -100,13 +137,7 @@ class Pending:
         if not self.reply_to:
             return self.text
 
-        labels: dict[str, str] = {}
-        for index, mid in enumerate(self.image_ids, start=1):
-            if mid:
-                labels[mid] = f"photo {index}"
-        for index, mid in enumerate(self.audio_ids, start=1):
-            if mid:
-                labels[mid] = f"voice note {index}"
+        labels = self._batch_labels()
 
         out = []
         for index, text in enumerate(self.texts):

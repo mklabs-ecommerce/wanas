@@ -1,6 +1,41 @@
 # Changelog
 
-## Unreleased — Every message the shop sends, in the transcript
+## Unreleased — The bot remembers, and knows what it is being asked about
+
+Two complaints that read as one ("the bot gets confused") and share nothing
+underneath.
+
+- **It forgot the product.** `HISTORY_CAP` answered both "what is stored" and
+  "what does the model see", and it counts messages, not exchanges. One
+  customer question costs four to six — the question, an assistant message
+  carrying tool calls, the `tool_results`, then the reply — so forty messages
+  was about seven exchanges, and a product discussed at the start of a
+  conversation was gone by the time the customer asked a follow-up about it.
+  `assistant/context.py` splits the two: the last `MODEL_CONTEXT_MESSAGES`
+  (24) go through verbatim, and up to `MODEL_CONTEXT_RECALL` (60) older ones
+  are compacted to the sentences that were actually said, with the catalog
+  dumps underneath them dropped. `HISTORY_CAP` itself goes to 150. Nothing is
+  summarised: compaction only removes whole messages, so every sentence the
+  model reads is the exact sentence that was said, and the stored transcript
+  keeps every tool exchange for the dashboard.
+- **It answered the wrong message.** A WhatsApp "reply to this" arrives as
+  `context.id`, and the only thing it could ever be matched against was the
+  other messages in the same debounce batch — so a reply to something the bot
+  said was unresolvable outright (nothing recorded the id WhatsApp gave a
+  message the shop sent; the send's response body was read for a status code
+  and thrown away), and a reply to an earlier message of the customer's own
+  fell outside the batch. Either way the quote was dropped and the model
+  guessed from recency. Now every stored message carries the platform ids it
+  was sent or received as (`mids`), outbound ones stamped on after delivery
+  by `session.attach_outbound_ids`, and `assistant/quoting.py` resolves a
+  quoted id against the whole transcript — archive included — folding the
+  original sentence into the turn. An id it cannot find is left unannotated
+  rather than guessed at. Both channels: WhatsApp and Instagram DMs.
+- `Pending` also labels text fragments now, not only photos and voice notes,
+  and hands on only the quotes it cannot explain itself
+  (`unresolved_reply_to`), so no quote is ever described twice.
+
+## Earlier unreleased — Every message the shop sends, in the transcript
 
 Two bugs found by comparing a customer's WhatsApp thread against the same
 conversation in the dashboard. The dashboard was showing strictly less than

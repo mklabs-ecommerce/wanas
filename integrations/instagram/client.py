@@ -236,9 +236,17 @@ class InstagramClient:
     def _configured(self) -> bool:
         return bool(self.account_id and self.access_token)
 
-    def _post(self, payload: dict) -> tuple[bool, str | None]:
-        ok, error, _body = self._post_json(self._messages_url(), payload)
-        return ok, error
+    def _post(self, payload: dict) -> tuple[bool, str | None, str | None]:
+        """(delivered, error, message_id).
+
+        The id is the one Instagram gave the message it accepted. It is what a
+        customer's later "reply to this" quotes, and without it a turn has to
+        guess which of the bot's own messages was meant -- see
+        `assistant/quoting.py`. Same shape as the WhatsApp client's.
+        """
+        ok, error, body = self._post_json(self._messages_url(), payload)
+        message_id = body.get("message_id") if isinstance(body, dict) else None
+        return ok, error, message_id or None
 
     def _post_json(self, url: str, payload: dict) -> tuple[bool, str | None, dict]:
         """POST and hand back the parsed response body (empty on failure)."""
@@ -279,20 +287,32 @@ class InstagramClient:
             )
 
         outcomes: list[tuple[bool, str | None]] = []
+        sent_ids: list[str] = []
         for index, chunk in enumerate(_chunks(text)):
-            ok, error = self._post(
+            ok, error, sent_id = self._post(
                 {
                     "recipient": {"id": to},
                     "message": {"text": chunk},
                 }
             )
             outcomes.append((ok, error))
+            if sent_id:
+                sent_ids.append(sent_id)
             if not ok:
                 log.error("chunk %d of a reply to %s failed: %s", index + 1, to, error)
 
         delivered = all(ok for ok, _ in outcomes) if outcomes else True
         error = next((e for _, e in outcomes if e), None)
-        return OutboundMessage(to=to, text=text, template=template, delivered=delivered, error=error)
+        return OutboundMessage(
+            to=to,
+            text=text,
+            template=template,
+            delivered=delivered,
+            error=error,
+            # One reply can be several Instagram messages (the chunking
+            # above), and a customer may quote any of them.
+            message_ids=sent_ids,
+        )
 
     def send_image(self, to: str, image_path: str, *, caption: str = "") -> OutboundMessage:
         """An outbound picture -- a public URL, never an upload.
@@ -329,7 +349,7 @@ class InstagramClient:
         if caption.strip():
             self.send_text(to, caption)
 
-        ok, error = self._post(
+        ok, error, sent_id = self._post(
             {
                 "recipient": {"id": to},
                 "message": {
@@ -338,7 +358,13 @@ class InstagramClient:
             }
         )
         return OutboundMessage(
-            to=to, text=caption, kind="image", image_path=image_path, delivered=ok, error=error
+            to=to,
+            text=caption,
+            kind="image",
+            image_path=image_path,
+            delivered=ok,
+            error=error,
+            message_ids=[sent_id] if sent_id else [],
         )
 
     def send_template(self, to: str, template: str, *, language: str = "ar") -> OutboundMessage:
@@ -390,7 +416,7 @@ class InstagramClient:
 
         quick_replies, degraded_text = _translate_quick_replies(payload)
         if quick_replies:
-            ok, error = self._post(
+            ok, error, sent_id = self._post(
                 {
                     "recipient": {"id": to},
                     "message": {
@@ -402,7 +428,13 @@ class InstagramClient:
             if not ok:
                 log.warning("quick replies rejected (%s); falling back to text", error)
                 return self.send_text(to, fallback or body)
-            return OutboundMessage(to=to, text=body, kind="interactive", delivered=True)
+            return OutboundMessage(
+                to=to,
+                text=body,
+                kind="interactive",
+                delivered=True,
+                message_ids=[sent_id] if sent_id else [],
+            )
 
         if degraded_text is not None:
             # Too many rows for this channel; the numbered text carries the
@@ -417,13 +449,13 @@ class InstagramClient:
     def mark_seen(self, igsid: str) -> bool:
         """Best effort, like every sender action: never blocks the reply,
         never raises."""
-        ok, error = self._post({"recipient": {"id": igsid}, "sender_action": "mark_seen"})
+        ok, error, _ = self._post({"recipient": {"id": igsid}, "sender_action": "mark_seen"})
         if not ok:
             log.info("could not mark the conversation as seen: %s", error)
         return ok
 
     def typing_on(self, igsid: str) -> bool:
-        ok, error = self._post({"recipient": {"id": igsid}, "sender_action": "typing_on"})
+        ok, error, _ = self._post({"recipient": {"id": igsid}, "sender_action": "typing_on"})
         if not ok:
             log.info("could not show the typing indicator: %s", error)
         return ok

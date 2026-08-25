@@ -32,8 +32,16 @@ def user(
     images: list[str] | None = None,
     audio: list[str] | None = None,
     provisional: str | None = None,
+    mids: list[str] | None = None,
 ) -> dict:
     message: dict = {"role": USER, "content": text}
+    if mids:
+        # Every platform message id this one message was assembled from -- a
+        # debounced batch is several WhatsApp messages joined into one. Stored
+        # (never sent to the provider) so that when the customer long-presses
+        # "reply" on one of them later, `assistant/quoting.py` can find which
+        # message they meant instead of guessing from recency.
+        message["mids"] = [m for m in mids if m]
     if provisional:
         # The platform message id this was stored under *on arrival*, before
         # the bot had done anything with it. It exists so the conversation is
@@ -63,8 +71,17 @@ def assistant(
     signature: str | None = None,
     attachments: list[str] | None = None,
     by: str | None = None,
+    mids: list[str] | None = None,
 ) -> dict:
     message: dict = {"role": ASSISTANT, "content": text or ""}
+    if mids:
+        # The ids the *platform* gave the messages this reply went out as
+        # (WhatsApp assigns one per send, and one reply can be text plus a
+        # picker plus a photo). Stamped on after delivery by
+        # `assistant/session.py::attach_outbound_ids`; it is what makes a
+        # customer's "reply to this" on something the bot said resolvable at
+        # all. Never sent to the provider, same as `attachments`.
+        message["mids"] = [m for m in mids if m]
     if tool_calls:
         message["tool_calls"] = tool_calls
     if signature:

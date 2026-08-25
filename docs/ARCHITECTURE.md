@@ -333,6 +333,55 @@ remove a message.
 `SESSION_ARCHIVE_CAP` (2000) bounds one row so it cannot grow forever, and
 logs a warning on the only occasion a message is dropped.
 
+### What is stored and what is sent are not the same list
+
+`HISTORY_CAP` used to answer both questions, and that is where the bot's
+memory went. It counts **messages**, and one customer question costs four to
+six of them — the question, an assistant message carrying tool calls, the
+`tool_results`, sometimes a second round, then the reply. Forty messages was
+seven or eight exchanges, so the product a conversation opened with was gone
+by the time the customer asked a follow-up about it.
+
+`assistant/context.py` splits it. The last `MODEL_CONTEXT_MESSAGES` (24) go to
+the provider **verbatim** — that is the turn the model is working in, and
+nothing in it may be reshaped. Everything before it is **compacted**: the
+sentences the customer and the bot said are kept, the tool calls and their
+results are dropped, bounded at `MODEL_CONTEXT_RECALL` (60). A `get_products`
+result is the whole matching catalog; it is a working note for one reply, and
+once the reply exists the reply is what matters.
+
+Nothing summarises. There is no second model call and no paraphrase — a
+compressed sentence that quietly loses "black" is worse than a shorter
+history. Compaction only ever removes whole messages. The stored transcript
+keeps every tool exchange, so the dashboard and the archive are untouched.
+
+### A reply to a specific message
+
+WhatsApp's long-press "reply to this" arrives as `context.id`, and the adapter
+always read it — but the only thing it could be matched against was the other
+messages in the same debounce batch. So the two cases that actually happen
+were both invisible: a reply to something **the bot** said (nothing recorded
+the id WhatsApp gave a message the shop sent), and a reply to an **earlier**
+message of the customer's own (outside the batch). The quote was dropped, the
+turn received a bare "the black one please", and the model guessed from
+recency — which is the wrong-message answer, seen from the customer's side.
+
+Both halves are closed now:
+
+- every stored message carries the platform ids it was sent or received as
+  (`mids`, `assistant/messages.py`). Outbound ids come from the send's
+  response body, which used to be read for a status code and thrown away, and
+  are stamped on by `session.attach_outbound_ids` after delivery;
+- `assistant/quoting.py` resolves a quoted id against the **whole**
+  transcript, archive included, and folds the original sentence into the
+  turn's text. An id it cannot find is left unannotated: a reply to something
+  older than the transcript is still an ordinary message, and silence about
+  which one it was beats inventing it.
+
+`Pending` still resolves quotes *within* its own debounce batch
+(`annotated_text`); only what it cannot explain is handed on
+(`unresolved_reply_to`), so no quote is ever described twice.
+
 ## A second channel: Instagram
 
 Instagram (`assistant/channels/instagram.py` + `integrations/instagram/client.py`)

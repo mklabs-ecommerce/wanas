@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from assistant import messages as msg, session as session_store
+from assistant import context, messages as msg, quoting, session as session_store
 from assistant.prompt import build_system_prompt
 from assistant.providers import LLMProvider, ProviderError, get_provider
 from assistant.tools.base import REGISTRY, ToolContext, call_tool, load_all, tool_specs
@@ -229,6 +229,8 @@ def run_turn(
     images: list[str] | None = None,
     audio: list[str] | None = None,
     recorded_ids: set[str] | None = None,
+    reply_to: list[str] | None = None,
+    mids: list[str] | None = None,
 ) -> AgentReply:
     provider = provider or get_provider()
     specs = tool_specs()
@@ -246,11 +248,22 @@ def run_turn(
         session_store.load(db, channel, external_id), recorded_ids
     )
     sent_images = _sent_images(history)
+
+    if reply_to:
+        # A long-pressed "reply to this" pointing at something outside this
+        # debounce batch -- almost always a message the bot itself sent. The
+        # quoted message is looked up in the *whole* stored transcript, not
+        # the live slice, because a customer may well reply to something said
+        # before the current context window opened. Resolved here rather than
+        # in the adapter so every channel that can quote gets it for free.
+        text = quoting.annotate(
+            text, session_store.transcript(db, channel, external_id), reply_to
+        )
     # `images`/`audio` are the customer's own inbound photo(s)/voice note(s)
     # for this turn -- kept on the stored message for the dashboard (see
     # `assistant/messages.py::user`), never sent to the provider itself, so
     # this is not a second copy of what the model already read via `text`.
-    history.append(msg.user(text, images=images, audio=audio))
+    history.append(msg.user(text, images=images, audio=audio, mids=mids))
 
     # `history` is the same list object the loop below appends to, so the
     # tool layer's duplicate-call cache and image de-dup both see this turn's
@@ -267,7 +280,11 @@ def run_turn(
 
     for _turn in range(settings.tool_loop_cap):
         try:
-            reply = provider.generate(system_prompt, history, specs)
+            # What the model sees is a view of `history`, not `history`
+            # itself: recent messages verbatim, older ones compacted down
+            # to what was actually said. See `assistant/context.py` --
+            # the stored conversation keeps everything either way.
+            reply = provider.generate(system_prompt, context.for_model(history), specs)
         except ProviderError as exc:
             # A rate limit is transient and worth telling the customer about.
             # An auth or configuration failure is a deployment problem that no

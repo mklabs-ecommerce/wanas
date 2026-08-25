@@ -25,7 +25,7 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
-from assistant.messages import USER
+from assistant.messages import ASSISTANT, USER
 from common.timeutil import as_aware
 from config.settings import settings
 from domain.models import UNREADABLE_HISTORY, SessionRow, utcnow
@@ -223,6 +223,49 @@ def append(
 ) -> list[dict]:
     history = drop_provisional(load(session, channel, external_id), recorded_ids)
     return save(session, channel, external_id, history + list(messages))
+
+
+def attach_outbound_ids(
+    session: Session, channel: str, external_id: str, message_ids: list[str]
+) -> bool:
+    """Record the platform ids a reply actually went out as.
+
+    WhatsApp assigns an id to every message *it* accepts, and one agent reply
+    can leave as several -- the words, then a picker, then a photo. Those ids
+    are the only handle a customer's later "reply to this" has on something
+    the bot said, and until this existed nothing kept them: the response body
+    was read for a status code and thrown away, so a quoted bot message could
+    never be resolved and the model was left guessing which of its own
+    sentences the customer meant.
+
+    Stamped onto the newest assistant message rather than passed into the turn
+    because the ids do not exist until after the send, which is after the turn
+    has already stored its reply. Returns False when there was nothing to
+    stamp -- a paused conversation, or a send that failed outright.
+    """
+    ids = [m for m in (message_ids or []) if m]
+    if not ids:
+        return False
+    row = session.get(SessionRow, (channel, external_id))
+    if row is None:
+        return False
+    stored = _stored(row)
+    for index in range(len(stored) - 1, -1, -1):
+        message = stored[index]
+        if message.get("role") != ASSISTANT:
+            continue
+        merged = list(dict.fromkeys([*(message.get("mids") or []), *ids]))
+        # Replaced rather than mutated in place: the column is JSON and
+        # SQLAlchemy only notices a reassignment.
+        updated = dict(message)
+        updated["mids"] = merged
+        stored = list(stored)
+        stored[index] = updated
+        row.history = stored
+        row.updated_at = utcnow()
+        session.flush()
+        return True
+    return False
 
 
 def clear(session: Session, channel: str, external_id: str) -> None:

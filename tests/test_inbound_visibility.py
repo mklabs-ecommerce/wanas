@@ -60,7 +60,7 @@ def sent(monkeypatch):
         # Read receipts go through the same POST but are not messages.
         if payload.get("status") != "read":
             outbox.append(payload)
-        return True, None
+        return True, None, "sent.1"
 
     monkeypatch.setattr(adapter.WhatsAppClient, "_post", fake_post)
     monkeypatch.setattr(adapter.WhatsAppClient, "_upload", lambda self, path: "media")

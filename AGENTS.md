@@ -152,9 +152,20 @@ shop does not have is discarded before the caller ever sees it, and every
 failure in either path falls back to the human handoff, which is what happened
 to all of them before. See `docs/MEDIA.md`.
 
-**Numbers that are decided, so nobody has to guess:** history cap 40
-messages, session expiry 6 hours, tool-loop cap 8 turns, max 10 units per
-cart line, inbound debounce 6 seconds, image-match confidence 0.6.
+**Numbers that are decided, so nobody has to guess:** history cap 150
+messages, model context 24 verbatim + 60 recalled, session expiry 6 hours,
+tool-loop cap 8 turns, max 10 units per cart line, inbound debounce 6
+seconds, image-match confidence 0.6.
+
+The history cap and the model's context are **two different numbers**, and
+treating them as one is what made the bot forget a product discussed ten
+minutes earlier. Both count messages, and one customer question costs four to
+six of them: the question, an assistant message carrying tool calls, the
+`tool_results`, then the reply. The cap that used to be 40 was therefore about
+seven exchanges of memory. `assistant/context.py` sends the last 24 messages
+verbatim and up to 60 older ones compacted to what was actually said, with the
+catalog dumps underneath them dropped. It never summarises: every sentence the
+model sees is the exact sentence that was said.
 
 **The catalog is in English; the customers are not.** Search goes through
 `domain/services/search_terms.py`, which folds Arabic spelling variants, maps
@@ -208,7 +219,12 @@ Not full coverage — the parts where a silent bug is expensive:
   proving it refuses, because the whole design rests on tools refusing
   rather than the model behaving.
 - **Session trimming.** History over the cap trims to a user message and
-  never splits a tool-call/tool-result pair.
+  never splits a tool-call/tool-result pair. The same invariant holds for the
+  compacted context view (`assistant/context.py`): the verbatim window must
+  never open on a `tool_results` whose call has been compacted away.
+- **A quoted reply resolves to the right message.** A WhatsApp "reply to
+  this" on something the bot said must reach the model as that message's
+  actual words, not be dropped and guessed at from recency.
 - **The media fallbacks.** Every way a voice note or a photo can fail still
   reaches a person. That path used to be the *only* path, so it is the one that
   must not quietly stop working.

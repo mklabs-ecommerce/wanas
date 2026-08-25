@@ -128,6 +128,12 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
   runtime.py                entry point: handle_message(channel, external_id, text)
   dispatcher.py             debounce + worker threads; what keeps the webhook fast
   agent.py                  the tool-use loop
+  context.py                what the model is *sent*: recent messages
+                             verbatim, older ones compacted to what was
+                             said. Not what is stored -- see session.py
+  quoting.py                resolves a "reply to this message" against the
+                             whole transcript, so the turn knows which
+                             message it is about
   media.py                  voice notes and photos (see docs/MEDIA.md)
   interactive.py            tappable pickers, in a channel-neutral shape
   session.py                 DB-backed session storage
@@ -200,6 +206,25 @@ tests/                   pytest suite (flat, one test_<module>.py per
   the whole transcript with `session.transcript()` — the dashboard must use
   the latter, since a read must never be what ends a conversation. Only
   `session.purge()` deletes, and nothing calls it.
+- **What is stored and what the model is sent are different lists.**
+  `HISTORY_CAP` (150) bounds the live slice; `assistant/context.py` decides
+  the provider's view — the last `MODEL_CONTEXT_MESSAGES` (24) verbatim plus
+  up to `MODEL_CONTEXT_RECALL` (60) older messages compacted to what was
+  actually said, tool calls and catalog dumps dropped. Conflating the two is
+  what made the bot forget a product discussed ten minutes earlier: the cap
+  counts messages, and one question costs four to six of them. Never
+  summarise here — compaction removes whole messages only, so every sentence
+  the model reads is the exact sentence that was said, and the verbatim
+  window must never open on a `tool_results` whose call was compacted away.
+- **A quoted reply is resolved, never guessed.** Every stored message carries
+  the platform ids it was sent or received as (`mids`); outbound ids come
+  from the send's response body and are stamped on by
+  `session.attach_outbound_ids` after delivery. `assistant/quoting.py` looks
+  a WhatsApp/Instagram `context.id` up across the *whole* transcript, archive
+  included, and folds the original sentence into the turn. An unresolvable id
+  is left unannotated on purpose: a reply to something older than the
+  transcript is still an ordinary message, and inventing which one it was is
+  exactly the wrong-message answer this closed.
 - No Alembic — tables are created at startup via `Base.metadata.create_all`
   (`app.py`), which adds missing tables but **not** missing columns on
   existing ones. That gap cost four days of production orders

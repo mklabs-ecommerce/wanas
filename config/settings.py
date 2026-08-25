@@ -117,7 +117,19 @@ class Settings:
     #: Falls back to DASHBOARD_SESSION_SECRET so one less secret has to be set.
     media_url_secret: str                  # MEDIA_URL_SECRET
 
+    #: How many messages stay in the *live* slice of a conversation -- the
+    #: part `session.load()` returns and a new turn continues from. It is not
+    #: how much the model is sent: see `model_context_messages` below and
+    #: `assistant/context.py`. Counted in messages, and one exchange costs
+    #: four to six of them once tool calls and their results are included.
     history_cap: int
+    #: The verbatim window handed to the provider: the last N messages exactly
+    #: as stored, tool calls and results included.
+    model_context_messages: int
+    #: How much of the conversation *before* that window is still recalled,
+    #: compacted to what was actually said (`assistant/context.py`). 0 turns
+    #: recall off and makes the model's memory `model_context_messages` again.
+    model_context_recall: int
     #: How many messages one conversation's stored transcript keeps. The live
     #: context is `history_cap`; this bounds the archive behind it.
     session_archive_cap: int
@@ -262,7 +274,9 @@ def load_settings() -> Settings:
         instagram_comment_max_age_hours=_float("INSTAGRAM_COMMENT_MAX_AGE_HOURS", 48.0),
         instagram_comment_rate_limit=_int("INSTAGRAM_COMMENT_RATE_LIMIT", 3),
         media_url_secret=_first_env("MEDIA_URL_SECRET", "DASHBOARD_SESSION_SECRET", default=""),
-        history_cap=_int("HISTORY_CAP", 40),
+        history_cap=_int("HISTORY_CAP", 150),
+        model_context_messages=_int("MODEL_CONTEXT_MESSAGES", 24),
+        model_context_recall=_int("MODEL_CONTEXT_RECALL", 60),
         session_archive_cap=_int("SESSION_ARCHIVE_CAP", 2000),
         session_expiry_hours=_int("SESSION_EXPIRY_HOURS", 6),
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),

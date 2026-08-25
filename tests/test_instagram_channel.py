@@ -58,7 +58,7 @@ def sent(monkeypatch):
         # these assertions are about what the customer sees.
         if "sender_action" not in payload:
             outbox.append(payload)
-        return True, None
+        return True, None, "sent.1"
 
     monkeypatch.setattr(adapter.InstagramClient, "_post", fake_post)
     return outbox
@@ -73,7 +73,7 @@ def whatsapp_outbox(monkeypatch):
     def fake_post(self, payload):
         if payload.get("status") != "read":
             outbox.append(payload)
-        return True, None
+        return True, None, "sent.1"
 
     monkeypatch.setattr(whatsapp_adapter.WhatsAppClient, "_post", fake_post)
     return outbox
@@ -214,9 +214,9 @@ def test_sender_actions_fire_but_are_not_messages(client, configured, sent, monk
     def fake_post(self, payload):
         if "sender_action" in payload:
             actions.append(payload["sender_action"])
-            return True, None
+            return True, None, "sent.1"
         sent.append(payload)
-        return True, None
+        return True, None, "sent.1"
 
     monkeypatch.setattr(adapter.InstagramClient, "_post", fake_post)
     post(client, webhook_body("categories"))

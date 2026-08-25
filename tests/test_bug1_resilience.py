@@ -55,7 +55,7 @@ def wa_client(seeded, monkeypatch):
             whatsapp_access_token="test-token",
         ),
     )
-    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None))
+    monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None, "sent.1"))
     set_provider = RehearsalProvider()
     from assistant.providers import set_provider as _set
 

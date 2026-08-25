@@ -51,6 +51,18 @@ class OutboundMessage:
     template: str | None = None
     delivered: bool = True
     error: str | None = None
+    #: The ids the platform gave the messages it accepted, when it gives any.
+    #: Plural because one logical reply can leave as several sends -- Instagram
+    #: chunks long text, and a customer may quote any chunk. The channel
+    #: adapter stamps them onto the transcript so a later "reply to this" on a
+    #: message the shop sent can be resolved -- see `assistant/quoting.py`.
+    #: Empty for a sender that has no such notion (the log sender, the
+    #: harness) and for anything that was not delivered.
+    message_ids: list[str] = field(default_factory=list)
+
+    @property
+    def message_id(self) -> str | None:
+        return self.message_ids[0] if self.message_ids else None
 
 
 class OutboundSender(Protocol):

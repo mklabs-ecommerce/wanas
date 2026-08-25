@@ -92,18 +92,35 @@ class WhatsAppClient:
             return {"recipient": to}
         return {"to": self.normalise_recipient(to)}
 
-    def _post(self, payload: dict) -> tuple[bool, str | None]:
+    def _post(self, payload: dict) -> tuple[bool, str | None, str | None]:
+        """(delivered, error, message_id).
+
+        The third element is the id **Meta** gave the message it accepted. It
+        used to be thrown away with the rest of the response body, which is
+        why a customer long-pressing "reply" on something the bot said could
+        never be matched to what they were replying to -- nothing on our side
+        knew the message by the name WhatsApp quotes it under. See
+        `assistant/session.py::attach_outbound_ids`.
+        """
         try:
             response = httpx.post(
                 self._messages_url(), json=payload, headers=self._headers, timeout=self.timeout
             )
         except httpx.HTTPError as exc:
             log.error("whatsapp send failed: %s", exc)
-            return False, str(exc)
+            return False, str(exc), None
         if response.status_code >= 400:
             log.error("whatsapp send rejected %s: %s", response.status_code, response.text[:400])
-            return False, f"{response.status_code}: {response.text[:200]}"
-        return True, None
+            return False, f"{response.status_code}: {response.text[:200]}", None
+        message_id = None
+        try:
+            sent = (response.json().get("messages") or [{}])[0]
+            message_id = sent.get("id") or None
+        except Exception:
+            # A 200 with a body we cannot read is still a delivered message.
+            # Losing the id costs a quoted reply its context, never the send.
+            log.debug("whatsapp accepted the send but returned no readable message id")
+        return True, None, message_id
 
     # -- the OutboundSender port -----------------------------------------
 
@@ -117,7 +134,7 @@ class WhatsAppClient:
         if template:
             log.info("proactive message (%s) sent free-form; approved template required at launch", template)
 
-        ok, error = self._post(
+        ok, error, sent_id = self._post(
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
@@ -126,7 +143,14 @@ class WhatsAppClient:
                 "text": {"preview_url": False, "body": text},
             }
         )
-        return OutboundMessage(to=to, text=text, template=template, delivered=ok, error=error)
+        return OutboundMessage(
+            to=to,
+            text=text,
+            template=template,
+            delivered=ok,
+            error=error,
+            message_ids=[sent_id] if sent_id else [],
+        )
 
     def send_image(self, to: str, image_path: str, *, caption: str = "") -> OutboundMessage:
         if _is_url(image_path):
@@ -138,7 +162,7 @@ class WhatsAppClient:
             image_field = {"link": image_path}
             if caption:
                 image_field["caption"] = caption[:1024]
-            ok, error = self._post(
+            ok, error, sent_id = self._post(
                 {
                     "messaging_product": "whatsapp",
                     "recipient_type": "individual",
@@ -148,7 +172,13 @@ class WhatsAppClient:
                 }
             )
             return OutboundMessage(
-                to=to, text=caption, kind="image", image_path=image_path, delivered=ok, error=error
+                to=to,
+                text=caption,
+                kind="image",
+                image_path=image_path,
+                delivered=ok,
+                error=error,
+                message_ids=[sent_id] if sent_id else [],
             )
 
         media_id = self.media_id_for(image_path)
@@ -161,7 +191,7 @@ class WhatsAppClient:
                 delivered=False,
                 error="upload_failed",
             )
-        ok, error = self._post(
+        ok, error, sent_id = self._post(
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
@@ -173,7 +203,13 @@ class WhatsAppClient:
             }
         )
         return OutboundMessage(
-            to=to, text=caption, kind="image", image_path=image_path, delivered=ok, error=error
+            to=to,
+            text=caption,
+            kind="image",
+            image_path=image_path,
+            delivered=ok,
+            error=error,
+            message_ids=[sent_id] if sent_id else [],
         )
 
     def send_template(self, to: str, template: str, *, language: str = "ar") -> OutboundMessage:
@@ -185,7 +221,7 @@ class WhatsAppClient:
         for in the approved copy, not filled in at send time. A template that
         needs body parameters would extend this, not replace it.
         """
-        ok, error = self._post(
+        ok, error, sent_id = self._post(
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
@@ -195,7 +231,12 @@ class WhatsAppClient:
             }
         )
         return OutboundMessage(
-            to=to, text=f"[template:{template}]", template=template, delivered=ok, error=error
+            to=to,
+            text=f"[template:{template}]",
+            template=template,
+            delivered=ok,
+            error=error,
+            message_ids=[sent_id] if sent_id else [],
         )
 
     def send_interactive(self, to: str, payload: dict, *, fallback: str = "") -> OutboundMessage:
@@ -212,7 +253,7 @@ class WhatsAppClient:
             log.warning("unknown interactive kind %r; sending text instead", payload.get("kind"))
             return self.send_text(to, fallback or body)
 
-        ok, error = self._post(
+        ok, error, sent_id = self._post(
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
@@ -224,7 +265,13 @@ class WhatsAppClient:
         if not ok:
             log.warning("interactive message rejected (%s); falling back to text", error)
             return self.send_text(to, fallback or body)
-        return OutboundMessage(to=to, text=body, kind="interactive", delivered=True)
+        return OutboundMessage(
+            to=to,
+            text=body,
+            kind="interactive",
+            delivered=True,
+            message_ids=[sent_id] if sent_id else [],
+        )
 
     @staticmethod
     def _interactive_payload(payload: dict) -> dict | None:
@@ -330,7 +377,7 @@ class WhatsAppClient:
         """
         if not message_id:
             return False
-        ok, error = self._post(
+        ok, error, sent_id = self._post(
             {
                 "messaging_product": "whatsapp",
                 "status": "read",

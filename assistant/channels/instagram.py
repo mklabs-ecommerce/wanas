@@ -675,6 +675,16 @@ def _deliver(external_id: str, pending: Pending) -> None:
             image_paths=pending.image_paths or None,
             audio_paths=pending.audio_paths or None,
             recorded_ids=pending.recorded_ids or None,
+            # A quote pointing outside this debounce batch -- at something the
+            # bot said, most often. Resolved against the stored transcript by
+            # the runtime, exactly as on WhatsApp.
+            reply_to=pending.unresolved_reply_to() or None,
+            mids=[
+                mid
+                for mid in (*pending.text_ids, *pending.image_ids, *pending.audio_ids)
+                if mid
+            ]
+            or None,
         )
     except Exception:
         # The turn died somewhere `agent.run_turn` doesn't already guard --
@@ -721,6 +731,20 @@ def _deliver(external_id: str, pending: Pending) -> None:
         outcomes.append(client.send_image(external_id, path))
 
     _flag_delivery_failures(external_id, outcomes)
+    _remember_sent_ids(external_id, outcomes)
+
+
+def _remember_sent_ids(external_id: str, outcomes: list) -> None:
+    """Stamp the ids Instagram gave this reply onto the message it stored, so
+    a later "reply to this" on it resolves. See the WhatsApp adapter's twin."""
+    sent = [mid for out in outcomes if out.delivered for mid in out.message_ids]
+    if not sent:
+        return
+    try:
+        with session_scope() as db:
+            session_store.attach_outbound_ids(db, CHANNEL, external_id, sent)
+    except Exception:
+        log.exception("could not record the outbound message ids for %s", external_id)
 
 
 def runtime_flags_enabled(db) -> bool:

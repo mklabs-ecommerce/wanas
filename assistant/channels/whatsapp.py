@@ -19,6 +19,7 @@ import logging
 
 from fastapi import APIRouter, Request, Response
 
+from assistant import session as session_store
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
@@ -399,6 +400,11 @@ def _deliver(external_id: str, pending: Pending) -> None:
             image_paths=pending.image_paths or None,
             audio_paths=pending.audio_paths or None,
             recorded_ids=pending.recorded_ids or None,
+            # A quote pointing outside this batch -- at something the bot
+            # said, or at a message from a turn already answered. The runtime
+            # resolves it against the stored transcript.
+            reply_to=pending.unresolved_reply_to() or None,
+            mids=_batch_ids(pending) or None,
         )
     except Exception:
         # The turn died somewhere `agent.run_turn` doesn't already guard --
@@ -453,6 +459,37 @@ def _deliver(external_id: str, pending: Pending) -> None:
         outcomes.append(client.send_image(external_id, path))
 
     _flag_delivery_failures(external_id, outcomes)
+    _remember_sent_ids(external_id, outcomes)
+
+
+def _batch_ids(pending: Pending) -> list[str]:
+    """Every platform id the messages in this batch arrived as."""
+    return [
+        mid
+        for mid in (*pending.text_ids, *pending.image_ids, *pending.audio_ids)
+        if mid
+    ]
+
+
+def _remember_sent_ids(external_id: str, outcomes: list) -> None:
+    """Stamp the ids WhatsApp gave this reply onto the message it stored.
+
+    Done here and not in the turn because the ids do not exist until Meta has
+    accepted the send, which is after the reply was written down. Without them
+    a customer long-pressing "reply" on something the bot said quotes an id
+    nothing recognises, and the turn that follows has to guess which of its
+    own sentences was meant -- which is exactly the wrong-message answer this
+    closes. Best effort: a failure here costs a future quote its context, and
+    nothing else.
+    """
+    sent = [mid for out in outcomes if out.delivered for mid in out.message_ids]
+    if not sent:
+        return
+    try:
+        with session_scope() as db:
+            session_store.attach_outbound_ids(db, CHANNEL, external_id, sent)
+    except Exception:
+        log.exception("could not record the outbound message ids for %s", external_id)
 
 
 def _send_crash_fallback(external_id: str) -> None:
