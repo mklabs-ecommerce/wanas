@@ -212,8 +212,7 @@ def test_a_failed_local_write_returns_the_reserved_stock(priced, shopify, monkey
 
     monkeypatch.setattr(orders, "next_order_id", boom)
 
-    with pytest.raises(RuntimeError):
-        place(priced)
+    assert place(priced)["error"] == "order_failed"
 
     assert shopify.qty(VARIANT) == 5
 

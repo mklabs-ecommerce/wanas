@@ -86,6 +86,17 @@ When Shopify is unreachable the browse path falls back to the local numbers and
 logs once; the **order** path refuses (`store_unavailable`) rather than
 promising stock it could not check.
 
+**An order is placed or it never happened — there is no third state.** There is
+no transaction across the two systems, so `place_order` makes one: Shopify
+creates the sale, the local order is written, and the session is **committed
+right there**, at the point Shopify accepted it. Before that commit the order
+is cancelled on Shopify if anything at all goes wrong, and the tool answers
+`order_failed` naming the stage that failed. After it, nothing can take the
+order back: a later failure in the turn cannot roll it away, and the staff
+alert and the customer's confirmation are bookkeeping that is allowed to fail
+loudly without ever being reported as a failed order. Confirming a second time
+finds that order (`already_confirmed`) instead of an empty cart.
+
 **Product photos follow the same rule as price.** `wanas.db`/`data/images/`
 was this project's starting point — this repo is a sample built to show the
 idea, not a deployment for one specific shop, so it shipped with a scraped

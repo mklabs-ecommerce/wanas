@@ -32,7 +32,7 @@ def _next(session: Session, name: str) -> int:
         Counter, name
     )
     if row is None:
-        row = Counter(name=name, value=_STARTS.get(name, 0))
+        row = Counter(name=name, value=_seed_value(session, name))
         session.add(row)
         session.flush()
     # An UPDATE ... SET value = value + 1 keeps the increment in the database
@@ -44,6 +44,34 @@ def _next(session: Session, name: str) -> int:
 
 def _supports_for_update(session: Session) -> bool:
     return session.get_bind().dialect.name != "sqlite"
+
+
+def _seed_value(session: Session, name: str) -> int:
+    """Where a missing counter row restarts from.
+
+    The default (`_STARTS`) is right for a fresh database and wrong for every
+    other way one comes into existence: a dump restored without `counters`, a
+    SQLite -> PostgreSQL move that copied the order tables, a counters table
+    recreated by `create_all` next to orders that were already there. In all
+    of those the counter restarts at 1000 while `WNS-1001` already exists, and
+    the *next* `INSERT` fails on the primary key -- inside the order
+    transaction, after Shopify has already created the sale and taken the
+    stock. The savepoint rolls the increment back with everything else, so the
+    counter never gets past the collision: every order from that point on is
+    created on Shopify and then cancelled again. Reading the highest id that
+    actually exists costs one query, once, and only when the row is missing.
+    """
+    if name != ORDER_COUNTER:
+        return _STARTS.get(name, 0)
+
+    from domain.models import Order
+
+    highest = _STARTS[ORDER_COUNTER]
+    for (order_id,) in session.execute(select(Order.order_id)).all():
+        _, _, suffix = (order_id or "").partition("-")
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+    return highest
 
 
 def next_order_id(session: Session) -> str:

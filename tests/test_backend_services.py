@@ -311,29 +311,53 @@ def test_low_stock_breach_alerts(cairo_rate):
         assert any(a.reason == "low_stock" for a in alerts)
 
 
-def test_confirmation_is_not_sent_when_the_transaction_rolls_back(cairo_rate, monkeypatch):
+def test_confirmation_is_not_sent_when_the_order_never_lands(cairo_rate, monkeypatch):
     """A customer must never be told about an order the database does not
-    have."""
+    have. The order commits at the moment Shopify accepts it, so the case that
+    can still produce that mismatch is the local write failing -- and then
+    nothing is written, nothing is sent, and the Shopify order is cancelled."""
     sender = notifications.LogSender()
     notifications.register_sender(sender)
 
-    def boom():
-        raise RuntimeError("commit failed")
+    def boom(_session):
+        raise RuntimeError("database went away")
+
+    monkeypatch.setattr(orders, "next_order_id", boom)
+
+    try:
+        with session_scope() as session:
+            result = _place(session)
+    finally:
+        notifications.register_sender(notifications.LogSender())
+
+    assert result["error"] == "order_failed"
+    assert sender.sent == []
+    with SessionLocal() as session:
+        assert session.scalar(select(Order)) is None
+
+
+def test_a_crash_after_the_order_cannot_unplace_it(cairo_rate):
+    """The other side of the same rule. Once Shopify has the sale, the local
+    order is committed with it: a turn that dies afterwards must not leave a
+    Shopify order nothing on our side knows about."""
+    sender = notifications.LogSender()
+    notifications.register_sender(sender)
 
     try:
         try:
             with session_scope() as session:
-                _place(session)
-                session.flush()
-                raise RuntimeError("crash after place_order, before commit")
+                result = _place(session)
+                raise RuntimeError("crash after place_order")
         except RuntimeError:
             pass
     finally:
         notifications.register_sender(notifications.LogSender())
 
-    assert sender.sent == []
     with SessionLocal() as session:
-        assert session.scalar(select(Order)) is None
+        order = session.get(Order, result["order_id"])
+        assert order is not None
+        assert order.shopify_order_id
+    assert len(sender.sent) == 1, "the customer is told, because the order is real"
 
 
 # --- After the order ------------------------------------------------------

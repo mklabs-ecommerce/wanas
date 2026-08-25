@@ -132,9 +132,9 @@ def test_crash_mid_transaction_rolls_back_stock_and_order(cairo_rate, monkeypatc
 
     monkeypatch.setattr(orders, "next_order_id", boom)
 
-    with pytest.raises(RuntimeError), session_scope() as session:
+    with session_scope() as session:
         carts.add(session, "whatsapp", "201888", VARIANT, 1)
-        orders.place_order(
+        result = orders.place_order(
             session,
             channel="whatsapp",
             external_id="201888",
@@ -143,6 +143,10 @@ def test_crash_mid_transaction_rolls_back_stock_and_order(cairo_rate, monkeypatc
             address="3 Test Street",
             contact_phone="01088888888",
         )
+
+    # Refused, not raised -- and the refusal names the step that failed.
+    assert result["error"] == "order_failed"
+    assert result["stage"] == "local_write"
 
     assert _stock() == before
     with SessionLocal() as session:

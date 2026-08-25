@@ -8,12 +8,14 @@ is permanently wrong with nothing to show for it.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from common.events import after_commit
 from common.money import money, to_decimal
+from common.timeutil import as_aware
 from domain.models import (
     MODIFIABLE_STATUSES,
     STATUS_SEQUENCE,
@@ -184,6 +186,31 @@ def _all_lines_unavailable(session: Session, lines) -> list[dict]:
     return out
 
 
+#: How long after an order this identity's next `confirm_order` with an empty
+#: cart is read as "the same order again" rather than a new, empty one. Long
+#: enough to cover a customer asking "did it go through?" a few messages
+#: later; short enough that tomorrow's genuinely empty cart says so.
+RECENT_ORDER_WINDOW = timedelta(minutes=30)
+
+
+def _recently_placed(session: Session, channel: str, external_id: str) -> Order | None:
+    """The order this identity placed a moment ago, if any."""
+    order = session.scalar(
+        select(Order)
+        .where(
+            Order.source_channel == channel,
+            Order.source_external_id == external_id,
+            Order.status != OrderStatus.CANCELLED.value,
+        )
+        .order_by(Order.placed_at.desc())
+    )
+    if order is None or order.placed_at is None:
+        return None
+    if utcnow() - as_aware(order.placed_at) > RECENT_ORDER_WINDOW:
+        return None
+    return order
+
+
 def place_order(
     session: Session,
     *,
@@ -211,6 +238,23 @@ def place_order(
 
     lines = carts._lines(session, channel, external_id)
     if not lines:
+        # An empty cart right after this identity placed an order is not an
+        # empty cart -- it is the same order being confirmed twice, because
+        # `confirm_order` clears the cart on success. Answering `cart_empty`
+        # there reads to the model as "something went wrong" one message after
+        # the order actually went through, and the customer gets an apology
+        # for an order that exists. Hand back the order instead.
+        recent = _recently_placed(session, channel, external_id)
+        if recent is not None:
+            log.info(
+                "confirm_order for %s/%s with an empty cart: %s was placed %s ago; "
+                "answering already_confirmed rather than cart_empty",
+                channel,
+                external_id,
+                recent.order_id,
+                utcnow() - as_aware(recent.placed_at),
+            )
+            return {"error": "already_confirmed", "order": order_payload(recent)}
         return {"error": "cart_empty"}
 
     resolved = resolve_governorate(session, governorate)
@@ -332,7 +376,17 @@ def place_order(
         log.warning("Refusing order %s: Shopify unreachable (%s)", reference, exc)
         return {"error": "store_unavailable"}
 
-    committed = False
+    remote_name = remote.get("name") or remote["id"]
+    log.info(
+        "order %s: Shopify created %s; writing the local order now", reference, remote_name
+    )
+
+    # From here the sale exists on Shopify and its stock is gone. Every path
+    # below has to end in exactly one of two states -- the order recorded
+    # locally and committed, or the Shopify order cancelled -- and has to say
+    # in the log which one it chose. `stage` is what names the step that
+    # failed when the next one goes wrong at 2am.
+    stage = "local_write"
     nested = session.begin_nested()
     try:
         decremented: list[tuple[str, int]] = [
@@ -421,29 +475,88 @@ def place_order(
         carts.clear(session, channel, external_id)
         session.flush()
         nested.commit()
-        committed = True
-    except Refusal as refusal:
-        nested.rollback()
-        return refusal.payload
+
+        # Inside the transaction on purpose: the alert row is part of the
+        # order, and the customer's confirmation is only *registered* here --
+        # `after_commit` sends it once the commit below has actually landed.
+        # Guarded, so that a failure to tell anyone about the order can never
+        # be reported to the customer as a failure to place it.
+        stage = "notifications"
+        _post_order_notifications(session, order, decremented)
+
+        # The durable point. Until this returns, the order lives in an open
+        # transaction that anything later in the turn -- another tool, the
+        # provider, the session write -- can still roll back, leaving the
+        # Shopify order with nothing on our side that knows about it.
+        stage = "commit"
+        payload = order_payload(order)
+        session.commit()
+    except Exception as exc:
+        # Back to the savepoint while there still is one -- on PostgreSQL a
+        # failed statement aborts the transaction and `ROLLBACK TO SAVEPOINT`
+        # is what recovers it, so the rest of the turn survives. A failure at
+        # the commit itself has no savepoint left to return to.
+        if nested.is_active:
+            nested.rollback()
+        else:
+            session.rollback()
+        log.exception(
+            "order %s: the local write failed at stage=%s after Shopify created %s (%s: %s)",
+            reference,
+            stage,
+            remote_name,
+            type(exc).__name__,
+            exc,
+        )
+        # The order exists on Shopify and its stock is gone, but nothing
+        # landed on our side. Cancelling puts both back. Nothing here raises
+        # -- the failure that got us here is the one worth seeing.
+        cancelled = shopify_orders.try_cancel(remote["id"], reason="OTHER")
+        log.error(
+            "order %s: refusing the order; Shopify order %s was %s",
+            reference,
+            remote_name,
+            "cancelled and its stock returned" if cancelled else "LEFT OPEN -- cancel it by hand",
+        )
+        return {
+            "error": "order_failed",
+            "stage": stage,
+            "shopify_order": remote_name,
+            "shopify_cancelled": cancelled,
+        }
+
+    log.info(
+        "order %s: committed as %s (Shopify %s), cart cleared", reference, order.order_id, remote_name
+    )
+    return payload
+
+
+def _post_order_notifications(session: Session, order: Order, decremented: list[tuple[str, int]]) -> None:
+    """Staff alerts and the customer's confirmation, in their own savepoint.
+
+    Every line of this is bookkeeping *about* an order that has already been
+    created on Shopify and written locally. Letting it raise used to turn a
+    completed order into `tool_failed`: the customer was told the shop had a
+    technical problem while their order sat in the Shopify admin, the cart was
+    already cleared, and confirming again answered `cart_empty`. So a failure
+    here is rolled back to the savepoint (the order itself is behind an
+    already-released one) and logged loudly -- never returned.
+    """
+    nested = session.begin_nested()
+    try:
+        for variant_id, _qty in decremented:
+            variant = session.get(Variant, variant_id)
+            if variant is not None and inventory.breached_threshold(session, variant_id):
+                notifications.low_stock_breach(session, variant)
+        notifications.order_confirmed(session, order)
+        nested.commit()
     except Exception:
         nested.rollback()
-        raise
-    finally:
-        if not committed:
-            # The order exists on Shopify and its stock is gone, but the local
-            # write did not land. Cancelling puts both back. Nothing here can
-            # raise -- the failure that got us here is the one worth seeing.
-            shopify_orders.try_cancel(remote["id"], reason="OTHER")
-
-    # Threshold checks and notifications happen after the order is safely
-    # written, never before.
-    for variant_id, _qty in decremented:
-        variant = session.get(Variant, variant_id)
-        if variant is not None and inventory.breached_threshold(session, variant_id):
-            notifications.low_stock_breach(session, variant)
-
-    notifications.order_confirmed(session, order)
-    return order_payload(order)
+        log.exception(
+            "order %s was placed, but its staff alert and customer confirmation could not be "
+            "written. The order stands; nobody has been told about it.",
+            order.order_id,
+        )
 
 
 # --------------------------------------------------------------------------

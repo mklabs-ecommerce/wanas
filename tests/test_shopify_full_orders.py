@@ -212,9 +212,14 @@ def test_a_failed_local_write_cancels_the_shopify_order(priced, shopify, monkeyp
 
     monkeypatch.setattr(orders, "next_order_id", boom)
 
-    with pytest.raises(RuntimeError):
-        place(priced)
+    # It refuses rather than raising: a crash out of `confirm_order` ends the
+    # customer's conversation with a generic apology, and the code that names
+    # the failed stage is what a recurrence gets diagnosed from.
+    result = place(priced)
 
+    assert result["error"] == "order_failed"
+    assert result["stage"] == "local_write"
+    assert result["shopify_cancelled"] is True
     assert priced.query(Order).count() == 0
     remote = next(iter(shopify.orders.values()))
     assert remote["cancelled"] is True
