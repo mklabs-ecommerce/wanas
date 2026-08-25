@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from assistant import runtime as assistant_runtime, session as session_store
 from domain.db import SessionLocal, session_scope
 from domain.models import (
     AbandonedCartNudge,
@@ -20,6 +21,7 @@ from domain.models import (
     utcnow,
 )
 from domain.services import (
+    carts,
     identities,
     notifications,
     queues,
@@ -43,19 +45,19 @@ def _seen(session, *, hours_ago: float) -> None:
 
 
 def test_join_is_idempotent(seeded):
-    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER)
-    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
     seeded.commit()
     assert len(waitlist.open_entries(seeded)) == 1
 
 
 def test_join_rearms_after_notification(seeded):
-    entry = waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER)
+    entry = waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
     entry.notified_at = utcnow()
     seeded.flush()
     assert waitlist.open_entries(seeded) == []
 
-    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
     seeded.commit()
     entries = waitlist.open_entries(seeded)
     assert len(entries) == 1
@@ -178,7 +180,7 @@ def test_send_proactive_ignores_non_whatsapp_channels(seeded):
 
 def test_back_in_stock_notifies_and_closes_the_entry(seeded, shopify):
     _seen(seeded, hours_ago=1)
-    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
     seeded.commit()
 
     shopify.set(SOLD_OUT, qty=5)
@@ -200,7 +202,7 @@ def test_back_in_stock_notifies_and_closes_the_entry(seeded, shopify):
 
 def test_still_out_of_stock_leaves_the_entry_open(seeded, shopify):
     _seen(seeded, hours_ago=1)
-    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
     seeded.commit()
 
     shopify.set(SOLD_OUT, qty=0)
@@ -287,3 +289,132 @@ def test_ancient_cart_is_not_nudged(seeded):
 
     assert nudged == 0
     assert sender.sent == []
+
+
+# --- "back in stock" must describe an actual change -------------------------
+
+
+def test_no_restock_is_announced_for_an_item_that_never_left_the_shelf(seeded, shopify):
+    """The bug this guard exists for, end to end at the service level.
+
+    An entry whose baseline says the item was on the shelf when the customer
+    was turned away is not evidence of a restock, however healthy the count
+    looks now -- so nothing is sent and the entry stays open.
+    """
+    _seen(seeded, hours_ago=1)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=2)
+    seeded.commit()
+
+    shopify.set(SOLD_OUT, qty=5)
+
+    sender = notifications.LogSender()
+    notifications.register_sender(sender)
+    try:
+        notified = reengagement.check_back_in_stock()
+    finally:
+        notifications.register_sender(notifications.LogSender())
+
+    assert notified == 0
+    assert sender.sent == []
+    with SessionLocal() as session:
+        assert session.query(StockWaitlistEntry).one().notified_at is None
+
+
+def test_an_entry_with_no_baseline_is_baselined_rather_than_announced(seeded, shopify):
+    """Rows written before `observed_stock` existed cannot prove a transition,
+    so the first pass records one instead of guessing at one."""
+    _seen(seeded, hours_ago=1)
+    entry = waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
+    entry.observed_stock = None
+    seeded.commit()
+
+    shopify.set(SOLD_OUT, qty=5)
+
+    sender = notifications.LogSender()
+    notifications.register_sender(sender)
+    try:
+        notified = reengagement.check_back_in_stock()
+    finally:
+        notifications.register_sender(notifications.LogSender())
+
+    assert notified == 0
+    assert sender.sent == []
+    with SessionLocal() as session:
+        fresh = session.query(StockWaitlistEntry).one()
+        assert fresh.observed_stock == 5
+        assert fresh.notified_at is None
+
+
+# --- every message the shop starts reaches the transcript -------------------
+
+
+def test_a_proactive_message_is_written_into_the_transcript(seeded, shopify):
+    """The dashboard reads `sessions`. A back-in-stock notice that reaches the
+    customer's phone and not that table is a transcript staff cannot trust."""
+    _seen(seeded, hours_ago=1)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
+    seeded.commit()
+    shopify.set(SOLD_OUT, qty=5)
+
+    notifications.register_sender(notifications.LogSender())
+    notifications.register_transcript_recorder(assistant_runtime.record_outbound)
+    try:
+        assert reengagement.check_back_in_stock() == 1
+    finally:
+        notifications.register_transcript_recorder(None)
+        notifications.register_sender(notifications.LogSender())
+
+    with SessionLocal() as session:
+        history = session_store.transcript(session, CHANNEL, CUSTOMER)
+    assert len(history) == 1
+    assert history[0]["role"] == "assistant"
+    # Neither the model's words nor a staff member's.
+    assert history[0]["by"] == "system"
+    assert "WANAS Hoodie" in history[0]["content"]
+
+
+def test_an_abandoned_cart_nudge_reaches_the_transcript_too(seeded, shopify):
+    _seen(seeded, hours_ago=1)
+    carts.add(seeded, CHANNEL, CUSTOMER, VARIANT, 1)
+    line = seeded.query(CartItem).one()
+    line.added_at = utcnow() - timedelta(hours=4)
+    seeded.commit()
+
+    notifications.register_sender(notifications.LogSender())
+    notifications.register_transcript_recorder(assistant_runtime.record_outbound)
+    try:
+        assert reengagement.check_abandoned_carts() == 1
+    finally:
+        notifications.register_transcript_recorder(None)
+        notifications.register_sender(notifications.LogSender())
+
+    with SessionLocal() as session:
+        history = session_store.transcript(session, CHANNEL, CUSTOMER)
+    assert [m["content"] for m in history] == [notifications.ABANDONED_CART_TEXT]
+
+
+def test_a_message_that_did_not_land_is_not_written_down(seeded, shopify):
+    """An undelivered message is not something the customer was told, and a
+    transcript claiming otherwise is how staff answer a question nobody asked."""
+    _seen(seeded, hours_ago=1)
+    waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
+    seeded.commit()
+    shopify.set(SOLD_OUT, qty=5)
+
+    class _Refusing(notifications.LogSender):
+        def send_text(self, to, text, *, template=None):
+            message = super().send_text(to, text, template=template)
+            message.delivered = False
+            message.error = "outside the 24h window"
+            return message
+
+    notifications.register_sender(_Refusing())
+    notifications.register_transcript_recorder(assistant_runtime.record_outbound)
+    try:
+        reengagement.check_back_in_stock()
+    finally:
+        notifications.register_transcript_recorder(None)
+        notifications.register_sender(notifications.LogSender())
+
+    with SessionLocal() as session:
+        assert session_store.transcript(session, CHANNEL, CUSTOMER) == []

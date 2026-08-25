@@ -168,6 +168,48 @@ def record_inbound(
     return True
 
 
+def record_outbound(
+    channel: str, external_id: str, text: str, *, db: Session | None = None
+) -> None:
+    """Store a message the shop started, so the dashboard shows it too.
+
+    Registered onto `domain/services/notifications.py` at startup (see
+    `register_transcript_recorder` there) and called by every send that does
+    not come out of an agent turn: the order confirmation, the Shopify
+    status pushes, the delivery feedback request, the back-in-stock notice
+    and the abandoned-cart nudge. All of them reach the customer's phone; none
+    of them used to reach `sessions`, so the dashboard showed a strictly
+    shorter conversation than the one that actually happened, and a staff
+    member reading it could not see what the shop had already told the
+    customer.
+
+    Writes through `db` when the caller has a transaction open, and opens its
+    own when it does not. Both matter. Joining the caller's transaction is
+    what makes the transcript line and the row that marks the message handled
+    (`StockWaitlistEntry.notified_at`, `AbandonedCartNudge.sent_at`) commit or
+    roll back together, instead of a second connection queueing behind the
+    first for a write lock the first will not release until it is done. And
+    the order confirmation has no transaction to join -- it is sent *after*
+    its order commits, on purpose -- so it gets one of its own.
+
+    Recorded as an assistant message with `by="system"`, which
+    `assistant/display.py` and the dashboard carry through: an automated push
+    is neither the model's own words nor a staff member's, and a transcript
+    that cannot tell those apart is how someone ends up answering for a
+    sentence nobody chose.
+
+    Never raises -- see the caller's `_record`.
+    """
+    if not (text or "").strip():
+        return
+    message = msg.assistant(text, by="system")
+    if db is not None:
+        session_store.append(db, channel, external_id, message)
+        return
+    with session_scope() as own:
+        session_store.append(own, channel, external_id, message)
+
+
 def _paused_note(db: Session, channel: str, external_id: str) -> str:
     """How long this conversation has been waiting on a person, as far as the
     data can say. There is no paused-at column; the newest handoff item for

@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from assistant import messages as msg, session as session_store
 from config.settings import settings
 from dashboard import inbox_api, web as dashboard
+from domain.db import SessionLocal
 from domain.models import InstagramCommentReply
 from domain.services import auth, identities
 
@@ -208,3 +209,27 @@ def test_a_customer_with_no_reply_yet_is_listed_as_unanswered(logged_in, seeded)
     listed = [(c["channel"], c["external_id"]) for c in body["conversations"]]
     assert ("whatsapp", "201000000999") in listed
     assert body["counts"]["unanswered"] >= 1
+
+
+def test_an_automated_push_does_not_count_as_answering_the_customer(logged_in, seeded):
+    """A cart nudge or a shipping update is the shop talking on a clock, not
+    a reply to the question that is still sitting there unanswered.
+
+    Recording those pushes is what makes the dashboard match the customer's
+    own phone -- but if one were allowed to stand as the conversation's last
+    word, this filter would quietly empty itself of exactly the conversations
+    it exists to surface.
+    """
+    from assistant import runtime
+
+    assert runtime.record_inbound("whatsapp", "201000000998", "المقاس ده متوفر؟", message_id="wamid.y")
+    runtime.record_outbound("whatsapp", "201000000998", "لسه طلبك في السلة 🛒")
+
+    body = logged_in.get("/dashboard/api/inbox?status=unanswered").json()
+    listed = [(c["channel"], c["external_id"]) for c in body["conversations"]]
+    assert ("whatsapp", "201000000998") in listed
+
+    # It is still in the transcript, though -- that is the whole point.
+    with SessionLocal() as db:
+        history = session_store.transcript(db, "whatsapp", "201000000998")
+    assert [m.get("by") for m in history if m["role"] == "assistant"] == ["system"]

@@ -42,6 +42,15 @@ def check_back_in_stock() -> int:
     Reads Shopify once for the whole open waitlist rather than once per
     entry -- several customers can be waiting on the same variant, and this
     is a background pass with no customer waiting on the reply.
+
+    "Available now" is not on its own a reason to say anything. The message
+    this sends claims an *event* -- that the item came back -- so it goes out
+    only where both ends of that event are on record: `observed_stock` at or
+    below zero when the customer was turned away, and above zero now. An
+    entry created against a level nobody verified is baselined and left
+    alone. Before that, a wanas.db row whose `stock_qty` had gone stale at
+    zero was enough to produce a restock announcement for an item that had
+    been in stock the whole time.
     """
     with session_scope() as session:
         entries = waitlist.open_entries(session)
@@ -67,6 +76,30 @@ def check_back_in_stock() -> int:
             # may have closed it out first.
             fresh = session.get(StockWaitlistEntry, entry.id)
             if fresh is None or fresh.notified_at is not None:
+                continue
+
+            if fresh.observed_stock is None:
+                # Written before `observed_stock` existed, so there is no
+                # baseline to compare against and no way to tell a real
+                # restock from an entry that was created against a stale zero
+                # in the first place. Baseline it from this reading and say
+                # nothing: if it genuinely goes to zero and back later, that
+                # transition is one this can prove.
+                fresh.observed_stock = live_variant.stock_qty
+                continue
+
+            if fresh.observed_stock > 0:
+                # It was on the shelf when this customer was turned away, so
+                # it being on the shelf now is not news -- there was no
+                # restock to announce. Nothing here can put it right for that
+                # customer, but claiming an event that never happened is
+                # worse than staying quiet.
+                log.info(
+                    "waitlist entry %s was created against a non-zero level (%s); "
+                    "no restock to announce",
+                    fresh.id,
+                    fresh.observed_stock,
+                )
                 continue
 
             variant = session.get(Variant, fresh.variant_id)

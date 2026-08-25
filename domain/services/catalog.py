@@ -130,6 +130,26 @@ def _overlay(variant: Variant, live_map) -> _Priced:
     )
 
 
+def live_stock(variant: Variant) -> tuple[int, bool]:
+    """How many of this variant are really sellable, and whether Shopify said so.
+
+    The same overlay `get_variants` quotes from, exposed for the one caller
+    that has a `Variant` in hand and a decision to make about it rather than a
+    payload to build. `variant.stock_qty` on its own is a wanas.db column that
+    nothing keeps current -- reading it directly is how `add_to_cart` came to
+    refuse an item the storefront was happily selling, and (because a refusal
+    is what joins the stock waitlist) how a customer was then told it had come
+    "back in stock" without a single unit having moved.
+
+    The second element is `False` when Shopify could not be reached and the
+    number is wanas.db's own guess. Refusing on it is safe -- an over-cautious
+    "sold out" never oversells -- but *acting* on it as though it were
+    observed fact is not.
+    """
+    priced = _overlay(variant, shopify_catalog.live_map())
+    return priced.stock_qty, priced.live
+
+
 def _product_summary(product: Product, live_map=None) -> dict:
     variants = [_overlay(v, live_map) for v in product.variants]
     prices = [v.price for v in variants]

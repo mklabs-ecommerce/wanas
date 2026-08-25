@@ -431,6 +431,38 @@ def test_status_pushes_and_feedback_request(cairo_rate):
     assert templates == ["status_packed", "status_shipped", "status_delivered", "feedback_request"]
 
 
+def test_the_order_confirmation_and_status_pushes_reach_the_transcript(cairo_rate):
+    """Every message the shop starts, in the dashboard's copy of the thread.
+
+    The confirmation is the hard one: it is deliberately sent *after* its
+    order commits (`common/events.py`), so there is no open transaction to
+    write the transcript line through and it has to open its own. The status
+    pushes have one and share it.
+    """
+    from assistant import runtime as assistant_runtime, session as session_store
+
+    notifications.register_sender(notifications.LogSender())
+    notifications.register_transcript_recorder(assistant_runtime.record_outbound)
+    try:
+        with session_scope() as session:
+            order_id = _place(session)["order_id"]
+        for status in ("Packed", "Shipped", "Delivered"):
+            with session_scope() as session:
+                orders.advance_status(session, session.get(Order, order_id), status)
+    finally:
+        notifications.register_transcript_recorder(None)
+        notifications.register_sender(notifications.LogSender())
+
+    with SessionLocal() as session:
+        history = session_store.transcript(session, "whatsapp", "201666")
+
+    assert [m["by"] for m in history] == ["system"] * 5
+    texts = [m["content"] for m in history]
+    assert "تم تأكيد طلبك" in texts[0]
+    assert "اتجهز" in texts[1] and "الطريق" in texts[2] and "اتسلم" in texts[3]
+    assert "تقيّم تجربتك" in texts[4]
+
+
 def test_status_transitions_are_forward_only(cairo_rate):
     with session_scope() as session:
         order_id = _place(session)["order_id"]

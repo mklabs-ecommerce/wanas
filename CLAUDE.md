@@ -47,6 +47,19 @@ unanswered numbers went unnoticed. A provisional message left in the transcript
 is not litter -- it is a message nobody ever answered, and the inbox's
 `unanswered` filter is built on exactly that.
 
+**And every message the shop sends is visible too.** A confirmation, a status
+push, a feedback request, a back-in-stock notice, a cart nudge -- none of
+these come out of an agent turn, so `domain/services/notifications.py` writes
+them to `sessions` through a registered port
+(`register_transcript_recorder` -> `assistant/runtime.py::record_outbound`,
+wired in `app.py`; domain/ never imports assistant/). The line goes in
+**inside the transaction that decides the message**, never from the
+after-commit hook that sends it -- the committing connection holds SQLite's
+write lock until that hook returns, which is why
+`notifications.record_status_push` is separate from
+`notifications.order_status_changed`. They are stored `by="system"`: a third
+voice beside the model and staff, and one the `unanswered` filter skips.
+
 When the bot sells something it creates a real Shopify order
 (`orderCreate`); Shopify decrements inventory itself. Price and stock are
 read live from Shopify per message, matched to the local catalog by SKU; if
@@ -225,6 +238,15 @@ tests/                   pytest suite (flat, one test_<module>.py per
   `http(s)` path by `link`; the local-file upload/cache path
   (`media_id_for`) is what still serves the twelve size charts and any
   product colour Shopify has no photo for yet. See `docs/ARCHITECTURE.md`.
+- Anything deciding whether a sale may happen reads the **overlay**, never
+  `variants.stock_qty` directly — that column is a seeded value nothing keeps
+  current. `catalog.live_stock(variant)` is the one-variant form
+  `add_to_cart` uses; reading the column there refused sizes Shopify was
+  selling, and (because that refusal joins the stock waitlist) told those
+  customers half an hour later that the item was "back in stock" when it had
+  never left. A "back in stock" message must describe a *verified transition*
+  — `StockWaitlistEntry.observed_stock` at or below zero then, above it now
+  — never just a positive number today.
 - Manual inventory decrement is deliberately **not** in the order path —
   Shopify already decrements on `orderCreate`; doing it twice would silently
   oversell.

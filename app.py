@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from api.public_media import router as public_media_router
-from assistant import session as assistant_session
+from assistant import runtime as assistant_runtime, session as assistant_session
 from assistant.channels import instagram as instagram_channel
 from assistant.channels.whatsapp import (
     dispatcher as whatsapp_dispatcher,
@@ -44,7 +44,7 @@ from dashboard.web import router as dashboard_router
 from domain.db import engine, session_scope
 from domain.legal import router as legal_router
 from domain.models import Base, Product, ShippingRate, Variant
-from domain.services import conversation_reset
+from domain.services import conversation_reset, notifications
 from domain.services.scheduler import scheduler
 from integrations.shopify.webhooks import router as shopify_router
 
@@ -222,6 +222,11 @@ async def lifespan(_app: FastAPI):
     # The one place domain/services/conversation_reset.py learns how to clear
     # chat history, without domain/ ever importing the assistant layer.
     conversation_reset.register_history_clearer(assistant_session.clear)
+    # ...and the one place the Notification service learns how to write into a
+    # transcript. Without it every message the shop starts -- confirmations,
+    # status pushes, back-in-stock, cart nudges -- reaches the customer and
+    # never the dashboard.
+    notifications.register_transcript_recorder(assistant_runtime.record_outbound)
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()

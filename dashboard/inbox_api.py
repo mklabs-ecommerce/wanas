@@ -64,7 +64,13 @@ def _last_role(history: list) -> str | None:
     """Who spoke last. A conversation whose last word is the customer's is
     the one nobody has answered -- the `unanswered` filter is built on this
     and not on a read/unread flag, because nothing in this system has ever
-    recorded a staff member reading anything."""
+    recorded a staff member reading anything.
+
+    An automated push (`by="system"`: an order confirmation, a shipping
+    update, a cart nudge) is skipped rather than counted as an answer. It goes
+    out on a clock or on a Shopify webhook, knowing nothing about the question
+    the customer asked -- letting one stand as the last word would quietly
+    empty this filter of exactly the conversations it exists to surface."""
     if not isinstance(history, list):
         return None
     for message in reversed(history):
@@ -74,7 +80,10 @@ def _last_role(history: list) -> str | None:
         if role == "user":
             return "customer"
         if role == "assistant" and message.get("content"):
-            return "staff" if message.get("by") == "staff" else "bot"
+            by = message.get("by")
+            if by == "system":
+                continue
+            return "staff" if by == "staff" else "bot"
     return None
 
 

@@ -17,6 +17,7 @@ interface, and never imports assistant/.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Protocol
@@ -143,9 +144,58 @@ def get_sender(channel: str | None = None) -> OutboundSender:
 
 
 # --------------------------------------------------------------------------
-# Customer-facing message bodies. Egyptian Arabic, WhatsApp length. Product
-# names and sizes stay in Latin script -- a customer who asks again will use
-# the English name.
+# The transcript
+# --------------------------------------------------------------------------
+#
+# Everything below sends a message the shop started rather than a reply the
+# agent produced -- an order confirmation, a status push, a feedback request,
+# a back-in-stock notice, an abandoned-cart nudge. All of them went straight
+# to the sender and nowhere else, so none of them appeared in `sessions`, and
+# the dashboard showed a conversation the customer's own phone did not agree
+# with: a bot that had said things nobody on staff could see it say.
+#
+# A port, for the same reason `OutboundSender` is one: the transcript lives in
+# `assistant/session.py`, one layer up, and domain/ must never import the
+# assistant layer. The assistant registers its own writer at startup, exactly
+# like `domain/services/conversation_reset.py`'s history clearer.
+#
+# Every call here passes the transaction that decided the message, so the line
+# and the row that records the decision commit together. That is also the only
+# thing that works: several of these messages are sent from an after-commit
+# hook, and SQLite holds the write lock on the committing connection until the
+# hook returns -- a second connection opened in there waits for a lock nothing
+# is going to release.
+
+#: (channel, external_id, text, db=Session|None) -> None. Given a session it
+#: writes through it; given none it opens its own. See
+#: `assistant/runtime.py::record_outbound`.
+TranscriptRecorder = Callable[..., None]
+
+_transcript_recorder: TranscriptRecorder | None = None
+
+
+def register_transcript_recorder(recorder: TranscriptRecorder) -> None:
+    """Called once at startup by the assistant layer. Until it is, proactive
+    messages are still sent -- they simply are not written to the transcript,
+    which is what tests with no assistant wiring expect."""
+    global _transcript_recorder
+    _transcript_recorder = recorder
+
+
+def _record(
+    channel: str, external_id: str, text: str, *, db: Session | None = None
+) -> None:
+    if _transcript_recorder is None or not (text or "").strip():
+        return
+    try:
+        _transcript_recorder(channel, external_id, text, db=db)
+    except Exception:
+        # The customer already has the message. Failing to write it down is
+        # bad, but turning that into an exception in a Shopify webhook or the
+        # scheduler loop would be worse.
+        log.exception("could not record an outbound message to %s/%s", channel, external_id)
+
+
 # --------------------------------------------------------------------------
 
 
@@ -250,6 +300,10 @@ def order_confirmed(session: Session, order: Order) -> None:
     text = order_confirmation_text(order)
     channel, recipient = customer_destination(order)
     order_id = order.order_id
+    # The transcript line goes in here, beside the alert row and for the same
+    # reason: an order that rolls back must not leave the dashboard showing a
+    # confirmation for it. Only the *send* waits for the commit.
+    _record(channel, recipient, text, db=session)
     after_commit(session, lambda: _deliver_confirmation(recipient, text, order_id, channel=channel))
 
 
@@ -286,7 +340,32 @@ def _deliver_confirmation(to: str, text: str, order_id: str, *, channel: str = "
         )
 
 
+def record_status_push(session: Session, order: Order, status: str | None = None) -> None:
+    """The transcript half of `order_status_changed`, written in the transaction.
+
+    Split from the send, and not for tidiness. `order_status_changed` runs
+    from an after-commit hook, where `session` has already committed and can
+    emit no more SQL -- and where a *second* connection cannot help either,
+    because the committing one holds SQLite's write lock until the hook
+    returns. So the line the dashboard reads is written here, while the status
+    change itself is still being written, and rolls back with it if it does.
+    """
+    channel, recipient = customer_destination(order)
+    status = status or order.status
+    text = status_change_text(order, status)
+    if text:
+        _record(channel, recipient, text, db=session)
+    if status == "Delivered":
+        _record(
+            channel,
+            recipient,
+            FEEDBACK_REQUEST_TEXT.format(order_id=customer_reference(order)),
+            db=session,
+        )
+
+
 def order_status_changed(session: Session, order: Order, status: str | None = None) -> None:
+    """The outbound half. Sends only -- see `record_status_push`."""
     channel, recipient = customer_destination(order)
     status = status or order.status
     text = status_change_text(order, status)
@@ -355,6 +434,10 @@ def send_proactive(
         )
 
     if message is not None and message.delivered:
+        # `text` even on the template branch: the template renders to this
+        # same sentence on Meta's side, and the transcript has to say what the
+        # customer read, not "[template:back_in_stock]".
+        _record(channel, external_id, text, db=session)
         return
 
     queues.enqueue(

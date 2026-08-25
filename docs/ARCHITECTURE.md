@@ -278,6 +278,36 @@ Two rules follow, and both are load-bearing:
   "the bot never saw anything it could act on" are different problems and
   used to be indistinguishable from both the dashboard and the logs.
 
+### And the same rule going out
+
+The mirror image of the same bug: a message the *shop* starts is not produced
+by an agent turn, so nothing wrote it to `sessions` either. The order
+confirmation, the Shopify status pushes, the delivery feedback request, the
+back-in-stock notice and the abandoned-cart nudge all reached the customer's
+phone and none of them reached the dashboard — a transcript that was a strict
+subset of the real conversation, with no way for a staff member to tell.
+
+`domain/services/notifications.py` now writes each one through a registered
+port (`register_transcript_recorder`, wired in `app.py` to
+`assistant/runtime.py::record_outbound`) — the same shape as `OutboundSender`
+and `conversation_reset`'s history clearer, and for the same reason: the
+transcript lives in the assistant layer and domain/ must never import it.
+
+The line is written **inside the transaction that decides the message**, next
+to the alert row and for the same reason — an order that rolls back must not
+leave a confirmation in the transcript. It is also the only thing that works:
+several of these are sent from an after-commit hook, where the session can
+emit no more SQL and a second connection would wait on a SQLite write lock the
+hook itself is holding. That is why `notifications.record_status_push` exists
+separately from `notifications.order_status_changed`.
+
+They are stored as `by="system"` — a third voice, neither the model's words
+nor a staff member's (`assistant/display.py`). Two things turn on that: the
+dashboard renders them distinctly, and the inbox's `unanswered` filter skips
+them. A cart nudge is the shop talking on a clock; letting one stand as a
+conversation's last word would quietly empty that filter of exactly the
+conversations it exists to surface.
+
 ## A conversation ends; it is not deleted
 
 `sessions.history` is two things at once: what the model is sent next turn,

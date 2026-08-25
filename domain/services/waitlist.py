@@ -14,13 +14,26 @@ from sqlalchemy.orm import Session
 from domain.models import StockWaitlistEntry, utcnow
 
 
-def join(session: Session, variant_id: str, channel: str, external_id: str) -> StockWaitlistEntry:
+def join(
+    session: Session,
+    variant_id: str,
+    channel: str,
+    external_id: str,
+    *,
+    observed_stock: int,
+) -> StockWaitlistEntry:
     """Add this identity to the variant's waitlist, or re-arm it.
 
     A customer who hit the same sold-out variant a second time after already
     being notified once (and, presumably, not finding it in time) is asking
     again -- `notified_at` resets rather than being left to block a second
     notification forever behind the unique constraint.
+
+    `observed_stock` is what Shopify said the level *was* at this moment, and
+    it is required rather than optional on purpose: it is the baseline the
+    later "back in stock" message is a comparison against. Joining without
+    knowing the real level is what let a stale wanas.db zero turn into an
+    announcement that an item nobody had restocked was back.
     """
     existing = session.scalar(
         select(StockWaitlistEntry).where(
@@ -31,12 +44,20 @@ def join(session: Session, variant_id: str, channel: str, external_id: str) -> S
     )
     if existing is None:
         existing = StockWaitlistEntry(
-            variant_id=variant_id, channel=channel, external_id=external_id
+            variant_id=variant_id,
+            channel=channel,
+            external_id=external_id,
+            observed_stock=observed_stock,
         )
         session.add(existing)
     elif existing.notified_at is not None:
         existing.notified_at = None
         existing.requested_at = utcnow()
+        existing.observed_stock = observed_stock
+    else:
+        # Still waiting from an earlier attempt. Re-baseline anyway: this is a
+        # fresher reading of the same shelf than the one already stored.
+        existing.observed_stock = observed_stock
     session.flush()
     return existing
 

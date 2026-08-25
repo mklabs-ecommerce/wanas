@@ -42,11 +42,13 @@ def turn_detail(history: list[dict]) -> list[dict]:
 def display_history(history: list[dict]) -> list[dict]:
     """The stored conversation as bubbles, so a reload is not a fresh start.
 
-    `by` on an assistant message distinguishes a staff reply
-    (`assistant/messages.py::assistant(..., by="staff")`, written from the
-    dashboard) from the model's own words -- the two must never look
-    identical, or a staff member reading the transcript back cannot tell who
-    actually promised the customer something.
+    `by` on an assistant message says which of three voices it is: the
+    model's own words (absent), a staff reply written from the dashboard
+    (`"staff"`), or an automated push the shop sent on its own -- an order
+    confirmation, a shipping update, a back-in-stock notice, a cart nudge
+    (`"system"`, `assistant/runtime.py::record_outbound`). They must never
+    look identical, or a staff member reading the transcript back cannot tell
+    who actually promised the customer something.
     """
     items: list[dict] = []
     for message in history:

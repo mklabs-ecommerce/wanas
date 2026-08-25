@@ -816,6 +816,9 @@ def cancel(
 
     notifications.order_cancelled(session, order, by=by)
     if notify_customer:
+        # The dashboard's copy of the message now, the message itself once
+        # this commits -- see `notifications.record_status_push`.
+        notifications.record_status_push(session, order)
         after_commit(session, lambda: notifications.order_status_changed(session, order))
     return {"order_id": order.order_id, "status": order.status}
 
@@ -962,6 +965,7 @@ def advance_status(session: Session, order: Order, new_status: str) -> dict:
     # inside one transaction, and a callback that reads `order.status` at
     # commit time would send "shipped" twice and never send "packed".
     stage = new_status
+    notifications.record_status_push(session, order, stage)
     after_commit(session, lambda: notifications.order_status_changed(session, order, stage))
     return {"order_id": order.order_id, "status": order.status}
 

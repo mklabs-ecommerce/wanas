@@ -16,6 +16,7 @@ from domain.services import (
     identities,
     orders,
     queues,
+    waitlist,
 )
 
 load_all()
@@ -192,13 +193,31 @@ def test_add_to_cart_out_of_stock_joins_the_waitlist(ctx):
     assert len(waitlist.open_entries(ctx.session)) == 1
 
 
-def test_add_to_cart_insufficient_stock(ctx):
-    ctx.session.get(Variant, VARIANT).stock_qty = 3
-    ctx.session.flush()
+def test_add_to_cart_insufficient_stock(ctx, shopify):
+    # Set on the shelf, not on the wanas.db row: what a cart may hold follows
+    # Shopify's count, the same as every price and status the bot quotes.
+    shopify.set(VARIANT, qty=3)
     assert call(ctx, "add_to_cart", variant_id=VARIANT, quantity=5) == {
         "error": "insufficient_stock",
         "available": 3,
     }
+
+
+def test_add_to_cart_follows_shopify_not_the_stale_local_row(ctx, shopify):
+    """A wanas.db row stuck at zero must not refuse a size Shopify is selling.
+
+    This is the whole of the phantom-restock bug in one assertion: the refusal
+    below used to happen, it joined the stock waitlist, and half an hour later
+    the customer was told an item that had never left the shelf was "back in
+    stock".
+    """
+    ctx.session.get(Variant, VARIANT).stock_qty = 0
+    ctx.session.flush()
+    shopify.set(VARIANT, qty=4)
+
+    result = call(ctx, "add_to_cart", variant_id=VARIANT)
+    assert "error" not in result
+    assert waitlist.open_entries(ctx.session) == []
 
 
 def test_add_to_cart_quantity_bounds(ctx):

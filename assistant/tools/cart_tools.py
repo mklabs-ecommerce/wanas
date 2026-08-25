@@ -45,12 +45,29 @@ def add_to_cart(ctx: ToolContext, variant_id: str, quantity: int | None = None) 
         # ships the wrong size.
         return {"error": "variant_not_found", "variant_id": variant_id}
 
-    if variant.stock_qty <= 0:
-        # The only signal this app gets that someone wanted a sold-out
-        # variant -- there is no separate "notify me" button. Joining here
-        # (rather than a tool the model has to remember to call) means every
-        # customer who hits this gets waitlisted, not just the ones who ask.
-        waitlist.join(ctx.session, variant.variant_id, ctx.channel, ctx.external_id)
+    # Shopify's number, not the `variants.stock_qty` column, which is a seeded
+    # value nothing keeps current. Reading the column here refused sizes the
+    # storefront was still selling -- and, because the refusal below is what
+    # joins the stock waitlist, told those customers half an hour later that
+    # the item was "back in stock" when it had never been away.
+    stock_qty, stock_is_live = catalog.live_stock(variant)
+
+    if stock_qty <= 0:
+        if stock_is_live:
+            # The only signal this app gets that someone wanted a sold-out
+            # variant -- there is no separate "notify me" button. Joining here
+            # (rather than a tool the model has to remember to call) means
+            # every customer who hits this gets waitlisted, not just the ones
+            # who ask. Only on a level Shopify actually confirmed, though: a
+            # waitlist entry is a promise to say "it is back", and that
+            # sentence is only true if it was really gone.
+            waitlist.join(
+                ctx.session,
+                variant.variant_id,
+                ctx.channel,
+                ctx.external_id,
+                observed_stock=stock_qty,
+            )
         return {
             "error": "out_of_stock",
             "variant": {
@@ -69,8 +86,8 @@ def add_to_cart(ctx: ToolContext, variant_id: str, quantity: int | None = None) 
             "error": "bad_arguments",
             "detail": f"that line would exceed the cap of {MAX_PER_LINE} units",
         }
-    if variant.stock_qty < already + quantity:
-        return {"error": "insufficient_stock", "available": variant.stock_qty}
+    if stock_qty < already + quantity:
+        return {"error": "insufficient_stock", "available": stock_qty}
 
     carts.add(ctx.session, ctx.channel, ctx.external_id, variant_id, quantity)
     return carts.cart_payload(ctx.session, ctx.channel, ctx.external_id)

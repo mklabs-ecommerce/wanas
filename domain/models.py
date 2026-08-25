@@ -574,6 +574,13 @@ class StockWaitlistEntry(Base):
     external_id: Mapped[str] = mapped_column(String(120), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: What Shopify said the stock actually was when this customer was turned
+    #: away. Without it, "back in stock" meant nothing more than "stock is
+    #: above zero now", and any entry created against a *stale* zero produced
+    #: a restock announcement for an item that had never left the shelf.
+    #: Null on rows written before this column existed; the re-engagement
+    #: check baselines those instead of notifying on them.
+    observed_stock: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("variant_id", "channel", "external_id", name="uq_waitlist_variant_identity"),

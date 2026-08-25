@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased — Every message the shop sends, in the transcript
+
+Two bugs found by comparing a customer's WhatsApp thread against the same
+conversation in the dashboard. The dashboard was showing strictly less than
+had actually been said, and one of the missing messages should never have
+been sent at all.
+
+- **Nothing recorded a message the shop started.** An agent turn writes its
+  reply to `sessions`; an order confirmation, a Shopify status push, the
+  delivery feedback request, a back-in-stock notice and an abandoned-cart
+  nudge do not go through a turn, so they went to the sender and nowhere
+  else. `domain/services/notifications.py` now writes each of them through a
+  registered port (`register_transcript_recorder` →
+  `assistant/runtime.py::record_outbound`), inside the transaction that
+  decides the message so it commits or rolls back with it. Stored as
+  `by="system"`: a third voice next to the model and a staff member, rendered
+  distinctly in the conversation view, and skipped by the inbox's
+  `unanswered` filter — a nudge sent on a clock is not somebody answering
+  the customer.
+- **"Back in stock" for an item that had never been away.** `add_to_cart`
+  was the one place in the bot still reading `variants.stock_qty`, the
+  seeded wanas.db column, instead of the live Shopify overlay every price
+  and status it quotes already comes from. `cairokee-hoodie-s-black` reads 0
+  there and 1 on Shopify, so the bot refused a size the storefront was
+  selling — and because a refusal is what joins the stock waitlist, the
+  scheduler read Shopify half an hour later, saw a positive number, and
+  announced a restock that had never happened. It reads the overlay now.
+- **And the notice itself now has to prove the change.** `StockWaitlistEntry`
+  gained `observed_stock`: what Shopify said the level *was* when the
+  customer was turned away. `check_back_in_stock` sends only when that
+  baseline is at or below zero and the level is above it now — an actual,
+  verified transition rather than "the number looks healthy today". An entry
+  is only created against a level Shopify confirmed, so a Shopify outage no
+  longer manufactures one; rows written before the column existed are
+  baselined on the first pass instead of fired on. Added additively by the
+  startup schema reconciliation, no migration to run by hand.
+
 ## Unreleased — The photo of the colour that was asked for
 
 A customer who asked for the olive hoodie was reliably shown the black one,

@@ -524,6 +524,8 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 .bubble.user { align-self: flex-start; background: var(--surface); border-start-start-radius: var(--r-xs); }
 .bubble.bot  { align-self: flex-end; background: var(--teal-tint); border-color: var(--teal-soft); border-start-end-radius: var(--r-xs); }
 .bubble.staff { align-self: flex-end; background: var(--clay-tint); border-color: var(--clay-soft); border-start-end-radius: var(--r-xs); }
+.bubble.system { align-self: flex-end; background: var(--surface); border-style: dashed; border-start-end-radius: var(--r-xs); }
+.bubble.system .by { color: var(--ink-3); }
 .bubble .by { font-size: 10.5px; font-weight: 700; color: var(--ink-3); margin-bottom: 3px; display: block; }
 .bubble.staff .by { color: var(--clay); }
 .bubble.bot .by { color: var(--teal); }
@@ -2210,9 +2212,15 @@ function renderThread(data) {
         `<audio controls preload="none" src="${mediaURL(src)}"></audio>`));
       log.append(bubble);
     } else if (item.kind === "bot") {
-      const staff = item.by === "staff";
-      const bubble = el("div", { class: `bubble ${staff ? "staff" : "bot"}` });
-      bubble.innerHTML = `<span class="by">${icon(staff ? "user" : "bot", 11)} ${staff ? "الفريق" : "البوت"}</span>${esc(item.text || "")}`;
+      // Three voices, not two: the model, a staff member, and the automated
+      // pushes (order confirmation, shipping updates, back-in-stock, cart
+      // nudges) that the shop sends on its own. They all reach the same
+      // WhatsApp thread, so the transcript has to say which is which.
+      const who = item.by === "staff" ? "staff" : item.by === "system" ? "system" : "bot";
+      const LABEL = { staff: "الفريق", system: "رسالة تلقائية", bot: "البوت" };
+      const GLYPH = { staff: "user", system: "spark", bot: "bot" };
+      const bubble = el("div", { class: `bubble ${who}` });
+      bubble.innerHTML = `<span class="by">${icon(GLYPH[who], 11)} ${LABEL[who]}</span>${esc(item.text || "")}`;
       (item.attachments || []).forEach((src) => bubble.insertAdjacentHTML("beforeend",
         `<img class="att" loading="lazy" alt="صورة اتبعتت للعميل" src="${mediaURL(src)}">`));
       log.append(bubble);
