@@ -84,7 +84,9 @@ async def inbound(request: Request) -> Response:
     except Exception:
         return Response("ok", status_code=200)
 
+    seen = 0
     for message, contact_name in _iter_messages(payload):
+        seen += 1
         try:
             _accept(message, contact_name)
         except Exception:  # never let one bad message stop the batch
@@ -94,9 +96,44 @@ async def inbound(request: Request) -> Response:
             release_claims([message.get("id")])
             log.exception("failed to accept inbound message %s", message.get("id"))
 
+    if not seen:
+        # A delivery this adapter took nothing out of. Usually a `statuses`
+        # callback (sent/delivered/read receipts for our own outbound), which
+        # is normal and uninteresting -- but it is *also* what a payload we
+        # fail to parse looks like, and the two were indistinguishable: an
+        # accepted 200 with no other trace anywhere. That is the shape a
+        # customer who "never gets a reply" leaves behind, so it gets named.
+        log.warning("no inbound message extracted from a whatsapp delivery: %s", _shape(payload))
+
     # Always 200: Meta retries anything else, and the idempotency claim taken
     # in `_accept` is what makes a retry safe rather than a duplicate order.
     return Response("ok", status_code=200)
+
+
+def _shape(payload: dict) -> str:
+    """What a webhook delivery *is*, without what it says.
+
+    Structure only -- field names, which keys `value` carries, message types,
+    whether the sender id is there at all. Enough to tell a status receipt
+    from a payload shape this adapter does not understand, and deliberately
+    not the message text: a customer's words belong in the transcript, not in
+    a hosting provider's log stream.
+    """
+    parts: list[str] = []
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            value = change.get("value") or {}
+            detail = [f"field={change.get('field')!r}", f"keys={sorted(value)}"]
+            for message in value.get("messages") or []:
+                detail.append(
+                    f"message(type={message.get('type')!r} "
+                    f"from={'yes' if message.get('from') else 'MISSING'} "
+                    f"id={'yes' if message.get('id') else 'MISSING'})"
+                )
+            for status in value.get("statuses") or []:
+                detail.append(f"status({status.get('status')!r})")
+            parts.append(" ".join(detail))
+    return "; ".join(parts) or f"top-level keys={sorted(payload)}"
 
 
 def _iter_messages(payload: dict):
@@ -128,6 +165,14 @@ def _accept(message: dict, contact_name: str | None) -> None:
     message_id = message.get("id")
     message_type = message.get("type")
     if not external_id:
+        # No sender means nothing can be answered, recorded or claimed. It
+        # used to return in silence, which is indistinguishable from the
+        # message never arriving -- say it instead.
+        log.warning(
+            "whatsapp message %s (type=%r) has no sender id; nothing to answer",
+            message_id,
+            message_type,
+        )
         return
 
     # The claim is committed on its own, before any work is queued. A Meta

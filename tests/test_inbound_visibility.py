@@ -252,3 +252,59 @@ def test_nothing_is_recorded_for_an_empty_message(seeded):
     assert runtime.record_inbound(CHANNEL, PHONE, "   ", message_id="wamid.e") is False
     with SessionLocal() as db:
         assert db.get(SessionRow, (CHANNEL, PHONE)) is None
+
+
+# --- the last silent path ------------------------------------------------
+
+
+def test_a_delivery_with_no_message_says_so_with_its_shape(client, configured, caplog):
+    """The one trace three unanswered numbers left behind was `POST
+    /webhooks/whatsapp 200 OK` and nothing else: `_iter_messages` took nothing
+    out of the payload and the handler returned 200 in silence. A status
+    receipt looks the same, so both are named now -- structurally, never with
+    the customer's words in it."""
+    body = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "statuses": [{"status": "delivered", "recipient_id": PHONE}],
+                        },
+                    }
+                ]
+            }
+        ],
+    }
+    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+        assert post(client, body).status_code == 200
+
+    assert "no inbound message extracted" in caplog.text
+    assert "field='messages'" in caplog.text
+    assert "status('delivered')" in caplog.text
+
+
+def test_the_shape_log_never_carries_what_the_customer_wrote(client, configured, caplog):
+    """A hosting provider's log stream is not where a customer's words go."""
+    body = webhook_body("رقم حسابي السري")
+    body["entry"][0]["changes"][0]["value"]["messages"][0].pop("from")
+
+    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+        assert post(client, body).status_code == 200
+    adapter.dispatcher.wait_idle()
+
+    assert "has no sender id" in caplog.text
+    assert "رقم حسابي السري" not in caplog.text
+
+
+def test_a_message_with_no_sender_is_named_rather_than_dropped(client, configured, caplog):
+    body = webhook_body("hi", message_id="wamid.nosender")
+    body["entry"][0]["changes"][0]["value"]["messages"][0].pop("from")
+
+    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+        assert post(client, body).status_code == 200
+
+    assert "wamid.nosender" in caplog.text
