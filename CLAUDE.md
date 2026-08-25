@@ -323,6 +323,15 @@ tracking message ever fires — is in `docs/OPERATIONS.md`.
   local files go through the HMAC-gated `api/public_media.py` route, and
   `data/inbound` — customers' own photos and voice notes — must never be
   servable through it.
+- A WhatsApp customer is **not always a phone number**. Since April 2026 Meta
+  also sends a business-scoped user id (`messages[].from_user_id` /
+  `contacts[].user_id`, e.g. `EG.1754797805572316`), and for a customer using a
+  WhatsApp username it sends *only* that -- `from` and `wa_id` are omitted.
+  `common/identifiers.py` is the one place that tells the two apart. Outbound,
+  a BSUID goes in `recipient`, never `to`: `normalise_recipient` strips every
+  non-digit, so sending one through `to` addresses a different person. Never
+  run phone logic (`phone_variants`, auto-linking a returning customer) over an
+  external_id without checking `is_phone_number` first.
 - The outbound sender registry is per-channel. `get_sender()` with no channel
   is a bug in any new code: it silently means "the default channel", which is
   WhatsApp.

@@ -308,36 +308,3 @@ def test_a_message_with_no_sender_is_named_rather_than_dropped(client, configure
         assert post(client, body).status_code == 200
 
     assert "wamid.nosender" in caplog.text
-
-
-def test_a_message_with_no_from_reports_where_the_identity_might_be(client, configured, caplog):
-    """The live failure: Meta delivers a `text` message whose `from` is absent
-    and whose wamid embeds a country-scoped opaque id rather than a phone
-    number. Key names and value classes are reported so the identity can be
-    located; nothing that identifies the customer is."""
-    body = webhook_body("hello")
-    value = body["entry"][0]["changes"][0]["value"]
-    value["messages"][0].pop("from")
-    value["contacts"][0]["user_id"] = "EG.2774371549622959"
-
-    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
-        assert post(client, body).status_code == 200
-
-    assert "identity candidates" in caplog.text
-    assert "from=absent" in caplog.text
-    assert "user_id=opaque(19,starts='EG.')" in caplog.text
-    assert f"wa_id=digits({len(PHONE)})" in caplog.text
-    assert PHONE not in caplog.text, "a wa_id is a phone number and never gets logged"
-    assert "2774371549622959" not in caplog.text
-
-
-def test_the_identity_report_never_carries_the_message_body(client, configured, caplog):
-    body = webhook_body("عايز اطلب حاجة")
-    body["entry"][0]["changes"][0]["value"]["messages"][0].pop("from")
-
-    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
-        assert post(client, body).status_code == 200
-
-    identity_line = next(r for r in caplog.messages if "identity candidates" in r)
-    assert "عايز اطلب حاجة" not in identity_line
-    assert "text" not in identity_line, "content keys are not even named"

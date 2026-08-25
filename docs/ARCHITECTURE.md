@@ -189,6 +189,42 @@ note before this existed.
 | `data/` | Catalog metadata Shopify has no field for. Not a product database. |
 | `scripts/` | Shopify maintenance. All dry-run by default, idempotent, need `--apply`. |
 
+## Who a WhatsApp customer is
+
+`external_id` was a phone number for as long as this app existed. From April
+2026 it is not always one.
+
+Meta now puts a **business-scoped user id** in every message webhook --
+`messages[].from_user_id` and `contacts[].user_id`, a country code, a period
+and up to 128 alphanumerics: `EG.1754797805572316`. It identifies one customer
+within one business portfolio and means nothing outside it. For a customer who
+has enabled a WhatsApp username, Meta sends *only* the BSUID: `from` and
+`wa_id` are omitted entirely, not left empty.
+
+This adapter read `messages[].from`, so those customers were dropped by
+`_accept` at its first check — before the claim, the record, the model and the
+send. They had never received a single reply, from their first message onward.
+
+Three rules, in `common/identifiers.py` because three layers that cannot
+import each other all need the same answer:
+
+- **Inbound**, `_sender_id` prefers `from` and falls back to `from_user_id`.
+  The phone number stays the key wherever there is one, so every existing
+  conversation keeps its session row and its history unchanged.
+- **Outbound**, a BSUID goes in `recipient` and a phone number in `to`
+  (`WhatsAppClient._addressed`). This is not cosmetic: `normalise_recipient`
+  strips every non-digit, so `EG.1754797805572316` sent through `to` becomes
+  `201754797805572316` — a real number, belonging to somebody else.
+- **Never run phone logic over an identifier without checking it first.**
+  `detect_pending_link_from_external_id` would have matched a BSUID's digits
+  against a customer's saved phone number and offered a stranger their address
+  and order history. Those customers link at checkout, where they type their
+  own number, like every other unmatched conversation.
+
+A BSUID conversation is otherwise ordinary: same session row, same cart, same
+order path. The customer supplies a real phone number at checkout, which is
+what the courier needs anyway.
+
 ## A conversation is recorded when it arrives, not when it is answered
 
 The webhook's job is to be fast, so the agent turn runs on a worker thread

@@ -197,25 +197,39 @@ def _identity_shape(value: dict, message: dict) -> str:
     return "; ".join(parts)
 
 
+def _sender_id(message: dict) -> str | None:
+    """Who sent this, however Meta chose to say it.
+
+    `from` is the customer's phone number and was the only identity this
+    adapter had ever seen. Since April 2026 Meta also sends `from_user_id`, a
+    business-scoped user id (`EG.1754797805572316`), and for a customer using
+    a WhatsApp username it sends **only** that -- `from` is omitted entirely.
+    Those customers had never received a single reply: the message arrived
+    intact, `from` was empty, and `_accept` dropped it at its first check
+    before the claim, the record, the model and the send.
+
+    The phone number stays first so nothing about an existing conversation
+    changes: same key, same session row, same history. The BSUID is the
+    fallback, and only for the customers who have no phone number on offer.
+    """
+    return message.get("from") or message.get("from_user_id") or None
+
+
 def _iter_messages(payload: dict):
     for entry in payload.get("entry") or []:
         for change in entry.get("changes") or []:
             value = change.get("value") or {}
-            names = {
-                contact.get("wa_id"): (contact.get("profile") or {}).get("name")
-                for contact in value.get("contacts") or []
-            }
+            # Keyed on both identifiers, because a contact carries whichever
+            # of them the payload has -- `wa_id` for a customer whose phone
+            # number Meta still shares, `user_id` for one it does not.
+            names: dict[str, str | None] = {}
+            for contact in value.get("contacts") or []:
+                name = (contact.get("profile") or {}).get("name")
+                for key in ("wa_id", "user_id"):
+                    if contact.get(key):
+                        names[contact[key]] = name
             for message in value.get("messages") or []:
-                if not message.get("from"):
-                    # The whole pipeline keys on this being a phone number.
-                    # When it is missing the message is dropped at the first
-                    # check in `_accept`, so say what the payload offers in
-                    # its place -- structurally -- before that happens.
-                    log.warning(
-                        "whatsapp message has no `from`; identity candidates: %s",
-                        _identity_shape(value, message),
-                    )
-                yield message, names.get(message.get("from"))
+                yield message, names.get(_sender_id(message))
 
 
 # --------------------------------------------------------------------------
@@ -231,17 +245,18 @@ def _accept(message: dict, contact_name: str | None) -> None:
     six seconds later is a fetch that can fail for a reason the customer will
     never understand.
     """
-    external_id = message.get("from")
+    external_id = _sender_id(message)
     message_id = message.get("id")
     message_type = message.get("type")
     if not external_id:
-        # No sender means nothing can be answered, recorded or claimed. It
-        # used to return in silence, which is indistinguishable from the
-        # message never arriving -- say it instead.
+        # Neither a phone number nor a business-scoped user id. Nothing can be
+        # answered, recorded or claimed. It used to return in silence, which
+        # is indistinguishable from the message never arriving.
         log.warning(
-            "whatsapp message %s (type=%r) has no sender id; nothing to answer",
+            "whatsapp message %s (type=%r) has no sender id at all; nothing to answer: %s",
             message_id,
             message_type,
+            _identity_shape({}, message),
         )
         return
 

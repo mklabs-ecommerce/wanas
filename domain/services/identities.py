@@ -14,6 +14,7 @@ from __future__ import annotations
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from common.identifiers import is_phone_number
 from domain.models import ChannelIdentity, Client, utcnow
 
 
@@ -110,11 +111,23 @@ def decline_link(session: Session, identity: ChannelIdentity) -> None:
 
 
 def detect_pending_link_from_external_id(session: Session, identity: ChannelIdentity) -> None:
-    """WhatsApp's external_id *is* a phone number, so a returning customer can
-    be spotted on first contact rather than only at checkout."""
+    """WhatsApp's external_id is *usually* a phone number, so a returning
+    customer can be spotted on first contact rather than only at checkout.
+
+    Usually, not always: a customer who uses a WhatsApp username is identified
+    by a business-scoped user id (`EG.1754797805572316`) and has no phone
+    number in the payload at all. Running that through `phone_variants` strips
+    the `EG.` and leaves sixteen digits that could match a real customer's
+    number -- an automatic link to a stranger, which is the one thing the rule
+    at the top of this module exists to prevent. So it is checked, not
+    assumed. Those customers link at checkout, where they type their own
+    number, like every other unmatched conversation.
+    """
     if identity.client_id is not None or identity.pending_link:
         return
     if identity.channel != "whatsapp":
+        return
+    if not is_phone_number(identity.external_id):
         return
     match = find_matching_client(session, phone=identity.external_id)
     if match is not None:

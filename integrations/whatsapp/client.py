@@ -21,6 +21,7 @@ from pathlib import Path
 
 import httpx
 
+from common.identifiers import is_bsuid
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
 from domain.models import WhatsAppMedia
@@ -77,6 +78,20 @@ class WhatsAppClient:
             digits = "20" + digits[1:]
         return digits
 
+    def _addressed(self, to: str) -> dict:
+        """How Meta is told who a message is for.
+
+        A phone number goes in `to`, normalised as it always has been. A
+        business-scoped user id goes in `recipient` instead -- Meta added that
+        field precisely because a customer using a WhatsApp username has no
+        phone number to send to. Sending a BSUID through `normalise_recipient`
+        would strip `EG.` and leave digits that address somebody else
+        entirely, so the two must never share a path.
+        """
+        if is_bsuid(to):
+            return {"recipient": to}
+        return {"to": self.normalise_recipient(to)}
+
     def _post(self, payload: dict) -> tuple[bool, str | None]:
         try:
             response = httpx.post(
@@ -106,7 +121,7 @@ class WhatsAppClient:
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
-                "to": self.normalise_recipient(to),
+                **self._addressed(to),
                 "type": "text",
                 "text": {"preview_url": False, "body": text},
             }
@@ -127,7 +142,7 @@ class WhatsAppClient:
                 {
                     "messaging_product": "whatsapp",
                     "recipient_type": "individual",
-                    "to": self.normalise_recipient(to),
+                    **self._addressed(to),
                     "type": "image",
                     "image": image_field,
                 }
@@ -150,7 +165,7 @@ class WhatsAppClient:
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
-                "to": self.normalise_recipient(to),
+                **self._addressed(to),
                 "type": "image",
                 "image": (
                     {"id": media_id, "caption": caption[:1024]} if caption else {"id": media_id}
@@ -174,7 +189,7 @@ class WhatsAppClient:
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
-                "to": self.normalise_recipient(to),
+                **self._addressed(to),
                 "type": "template",
                 "template": {"name": template, "language": {"code": language}},
             }
@@ -201,7 +216,7 @@ class WhatsAppClient:
             {
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
-                "to": self.normalise_recipient(to),
+                **self._addressed(to),
                 "type": "interactive",
                 "interactive": built,
             }
