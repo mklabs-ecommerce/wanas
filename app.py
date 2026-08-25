@@ -52,6 +52,41 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 log = logging.getLogger("wanas")
 
 
+def _ensure_schema_columns() -> None:
+    """Add columns the models declare and an existing table does not have.
+
+    `create_all` above builds missing *tables* and silently ignores missing
+    *columns*, so a database that predates a model change boots looking
+    perfectly healthy and then fails at the first write that mentions the new
+    column. That is not a degraded feature -- it is every write to that table
+    failing, and it is what `orders.source_external_id` did to production: each
+    order was created on Shopify, failed its `INSERT`, and was cancelled again
+    by the compensating path, for four days, with nothing in the logs at boot.
+
+    Additive and idempotent, the same contract as `_ensure_catalog_seeded` and
+    `_ensure_shipping_fees_set` below: only `ALTER TABLE ... ADD COLUMN`, only
+    for columns that can be added to a table that already has rows, never a
+    drop, a retype or a backfill. A column that cannot be added safely is
+    logged for a person to handle rather than guessed at.
+
+    Set `AUTO_MIGRATE_SCHEMA=0` to report the drift without touching the
+    database -- `python scripts/migrate_schema.py --apply` then does it by hand.
+    """
+    from domain import schema_drift
+
+    try:
+        if settings.auto_migrate_schema:
+            schema_drift.apply_additive(engine)
+        drift = schema_drift.log_drift(engine)
+    except Exception:
+        # A schema check must never be what stops the app from booting.
+        log.exception("could not reconcile the database schema against the models")
+        return
+
+    if drift.clean:
+        log.info("schema matches the models")
+
+
 def _ensure_catalog_seeded() -> None:
     """Import `data/products_seed.json` / `data/governorates.json` if the
     catalog tables are still empty.
@@ -181,6 +216,7 @@ def _register_shopify_webhooks() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
+    _ensure_schema_columns()
     _ensure_catalog_seeded()
     _ensure_shipping_fees_set()
     # The one place domain/services/conversation_reset.py learns how to clear

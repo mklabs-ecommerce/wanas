@@ -143,6 +143,12 @@ class Settings:
     chatbot_debug: bool
     harness_enabled: bool
 
+    #: Add columns the models declare and an existing table lacks, at startup.
+    #: On by default: `create_all` never adds a column to a table it did not
+    #: create, so the alternative default is a database that silently keeps an
+    #: old shape until the first write that needs the new column fails.
+    auto_migrate_schema: bool
+
     #: The staff dashboard: view conversations, reply to a paused one, resolve
     #: the handoff. On by default -- unlike the harness it requires a staff
     #: login -- but with no secret set it refuses every login rather than
@@ -264,6 +270,10 @@ def load_settings() -> Settings:
         image_understanding_enabled=_bool("IMAGE_UNDERSTANDING_ENABLED", True),
         interactive_messages_enabled=_bool("INTERACTIVE_MESSAGES_ENABLED", True),
         chatbot_debug=_bool("CHATBOT_DEBUG", False),
+        # On by default, and additive-only: see `_ensure_schema_columns` in
+        # app.py. Set it to 0 to have startup report the drift and change
+        # nothing, leaving `scripts/migrate_schema.py` to do it by hand.
+        auto_migrate_schema=_bool("AUTO_MIGRATE_SCHEMA", True),
         # Off unless asked for. It is an unauthenticated surface that can
         # converse as any customer identity, so the default that costs
         # something when you forget it has to be the closed one.

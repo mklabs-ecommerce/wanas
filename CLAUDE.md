@@ -153,8 +153,10 @@ data/                    products_seed.json, size_charts.json, governorates.json
 scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
                           shopify_set_skus.py (link local variant_id -> Shopify
                           SKU), shopify_check_live.py (read-only smoke check),
-                          migrate_add_shopify_order_columns.py (one-time schema
-                          upgrade for pre-existing databases) — all dry-run by
+                          migrate_schema.py (add every column the models
+                          declare and the database lacks — the general form),
+                          migrate_add_shopify_order_columns.py (the earlier
+                          one-time, SQLite-only version) — all dry-run by
                           default, idempotent, need --apply
 tests/                   pytest suite (flat, one test_<module>.py per
                           subject rather than mirroring the source tree —
@@ -169,9 +171,15 @@ tests/                   pytest suite (flat, one test_<module>.py per
   — this is a required production feature. **Never** remove it or replace it
   with an in-memory store.
 - No Alembic — tables are created at startup via `Base.metadata.create_all`
-  (`app.py`), which adds missing tables but not missing columns on existing
-  ones; see `scripts/migrate_add_shopify_order_columns.py` for that case.
-  Seed a new database with `python manage.py seed`.
+  (`app.py`), which adds missing tables but **not** missing columns on
+  existing ones. That gap cost four days of production orders
+  (`orders.source_external_id`), so startup now also reconciles columns:
+  `domain/schema_drift.py` compares the models against the live schema and
+  `_ensure_schema_columns` in `app.py` adds what is missing, additively and
+  idempotently (`AUTO_MIGRATE_SCHEMA=0` to only report it, and
+  `python scripts/migrate_schema.py --apply` to do it by hand). A `NOT NULL`
+  column with no server default is reported, never guessed at. Seed a new
+  database with `python manage.py seed`.
 - Important models: `Client`, `Product`, `Variant`, `Order`/`OrderItem`
   (carry Shopify order id/number columns), `ShippingRate`, `Staff`,
   `StaffQueueItem` (human-handoff / item-swap / alert queues),

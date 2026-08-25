@@ -388,6 +388,7 @@ def place_order(
     # failed when the next one goes wrong at 2am.
     stage = "local_write"
     nested = session.begin_nested()
+    savepoint_open = True
     try:
         decremented: list[tuple[str, int]] = [
             (line.variant_id, line.quantity) for line in lines
@@ -475,6 +476,7 @@ def place_order(
         carts.clear(session, channel, external_id)
         session.flush()
         nested.commit()
+        savepoint_open = False
 
         # Inside the transaction on purpose: the alert row is part of the
         # order, and the customer's confirmation is only *registered* here --
@@ -492,13 +494,22 @@ def place_order(
         payload = order_payload(order)
         session.commit()
     except Exception as exc:
-        # Back to the savepoint while there still is one -- on PostgreSQL a
-        # failed statement aborts the transaction and `ROLLBACK TO SAVEPOINT`
-        # is what recovers it, so the rest of the turn survives. A failure at
-        # the commit itself has no savepoint left to return to.
-        if nested.is_active:
-            nested.rollback()
-        else:
+        # Back to the savepoint, which is what keeps the customer's cart: it
+        # was filled before the savepoint opened, so `ROLLBACK TO SAVEPOINT`
+        # leaves it exactly as they built it and they can simply try again. A
+        # full `session.rollback()` here would throw the cart away too, and
+        # their next "yes, confirm" would answer `cart_empty` -- which is what
+        # production did. Note `nested.is_active` is False after a database
+        # error (SQLAlchemy deactivates the transaction), and rolling it back
+        # anyway is exactly how that state is meant to be recovered, so the
+        # flag rather than the property is what decides.
+        try:
+            if savepoint_open:
+                nested.rollback()
+            else:
+                session.rollback()
+        except Exception:
+            log.exception("could not roll back to the savepoint; rolling the transaction back")
             session.rollback()
         log.exception(
             "order %s: the local write failed at stage=%s after Shopify created %s (%s: %s)",

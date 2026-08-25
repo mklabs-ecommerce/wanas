@@ -240,9 +240,24 @@ thing not working.
 ## Database
 
 Tables are created at startup from the models (`Base.metadata.create_all`).
-That adds missing *tables*, never missing *columns* on an existing one — see
-`scripts/migrate_add_shopify_order_columns.py` for what that costs when it
-happens. Seed a fresh database with `python manage.py seed`.
+That adds missing *tables*, never missing *columns* on an existing one — which
+is why startup then reconciles the columns too (`_ensure_schema_columns` in
+`app.py`, over `domain/schema_drift.py`): additive, idempotent, and logged as
+
+    WARNING wanas.schema: SCHEMA: added missing column orders.source_external_id
+
+Anything it cannot add safely — a `NOT NULL` column with no server default, on
+a table that already has rows — is logged as `SCHEMA DRIFT: …` for a person to
+resolve, never guessed at. `AUTO_MIGRATE_SCHEMA=0` turns the repair off and
+leaves only the report; `python scripts/migrate_schema.py` then shows the
+`ALTER TABLE` statements it would run (`--apply` runs them).
+
+**This is what "the bot creates an order and Shopify cancels it" means.** A
+column the code writes and the table lacks fails every `INSERT` into that
+table; the order path had already created the sale on Shopify by then, so the
+compensating cancel fires and the customer is told the shop had a technical
+problem. Check the boot log for `SCHEMA DRIFT` first. Seed a fresh database
+with `python manage.py seed`.
 
 ### Database durability
 
