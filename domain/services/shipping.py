@@ -1,8 +1,15 @@
 """Shipping rates.
 
-A flat fee per governorate from a table staff edit. The governorate is a
-picked value, never free text, because it sets the price -- and because every
-spelling variant would otherwise become a different row.
+A flat fee per governorate from a table staff edit. The governorate is always
+one of the twenty-seven stored keys, never a string a customer invented,
+because it sets the price -- and because every spelling variant would
+otherwise become a different row.
+
+How the customer *arrives* at one of those keys is a separate question.
+Tapping a picker is the reliable way. Naming it themselves in an address line
+("شبين الكوم المنوفية شارع 9") is the common way, and `detect` reads that --
+by whole word, against the same fixed list, so free text still adds nothing
+and only ever selects.
 """
 
 from __future__ import annotations
@@ -142,16 +149,110 @@ def resolve(session: Session, value: str) -> str | None:
         if target == normalise(alias):
             return key
 
-    # Last resort: a containment match, so "شحن للقاهرة" still lands.
-    for rate in rates:
-        if normalise(rate.label_ar) and normalise(rate.label_ar) in target:
-            return rate.governorate
-        if normalise(rate.governorate) in target:
-            return rate.governorate
+    # Last resort: the name is somewhere inside a longer sentence -- "شحن
+    # للقاهرة", or a whole address line. `detect` is word-aware, which the
+    # plain substring test this replaced was not: "قنا" sits inside "القناة",
+    # so a street in Ismailia used to be priced as Qena.
+    found = detect(session, value)
+    return found[0] if found else None
+
+
+# --- reading a governorate out of a free-text address ----------------------
+#
+# The picker exists because the governorate sets a price and a typed value
+# would be a different row for every spelling. But a customer who has already
+# written "شبين الكوم المنوفية شارع 9" has *named* one of the twenty-seven, and
+# sending them a list to tap after that is the bot failing to read. So free
+# text is still not a source of new values -- it is only ever matched against
+# the same fixed list -- and what changes is that the match is looked for.
+#
+# The matching is by whole word, not by substring, and that is the whole
+# defence against a false positive. A street or district whose name merely
+# *contains* a governorate's ("شارع القناة" over "قنا") does not match,
+# because the tokens differ.
+
+#: Arabic punctuation `normalise` leaves in place -- it falls inside the
+#: Arabic block whose characters it deliberately keeps. Harmless when the
+#: whole string is being compared, fatal to a word boundary.
+_PUNCTUATION = re.compile(r"[،؛؟٬٫ـ]+")
+
+
+def _bare(token: str) -> str:
+    """A token without its definite article.
+
+    Applied to both sides of every comparison, so it does not matter that it
+    is a blunt rule: "المنوفية" and "منوفية" become the same token, and a
+    short word that merely begins with the two letters is left alone.
+    """
+    return token[2:] if len(token) > 4 and token.startswith("ال") else token
+
+
+def _tokens(value: str) -> list[str]:
+    return [_bare(token) for token in _PUNCTUATION.sub(" ", normalise(value)).split() if token]
+
+
+def _named_places(session: Session) -> list[tuple[tuple[str, ...], str]]:
+    """Every string that names a governorate, as tokens, longest first.
+
+    Longest first so that "شبين الكوم" is tried before any single-word name
+    that happens to fall inside it.
+    """
+    places: list[tuple[tuple[str, ...], str]] = []
+    for rate in session.scalars(select(ShippingRate)).all():
+        for name in (rate.governorate, rate.label_ar):
+            tokens = tuple(_tokens(name or ""))
+            if tokens:
+                places.append((tokens, rate.governorate))
     for alias, key in ALIASES.items():
-        if normalise(alias) and normalise(alias) in target:
-            return key
-    return None
+        tokens = tuple(_tokens(alias))
+        if tokens:
+            places.append((tokens, key))
+    places.sort(key=lambda item: len(item[0]), reverse=True)
+    return places
+
+
+def detect(session: Session, text: str) -> list[str]:
+    """The governorates named in a free-text message, in the order written.
+
+    Returns stored keys, de-duplicated. An empty list means nothing in the
+    fixed list was named -- which is the only case where the customer should
+    be handed a picker. More than one means the message named two different
+    governorates and nobody may pick between them but the customer.
+    """
+    tokens = _tokens(text)
+    if not tokens:
+        return []
+
+    taken: set[int] = set()
+    hits: list[tuple[int, str]] = []
+    for names, key in _named_places(session):
+        width = len(names)
+        for start in range(len(tokens) - width + 1):
+            span = range(start, start + width)
+            if tuple(tokens[start : start + width]) != names or taken.intersection(span):
+                continue
+            taken.update(span)
+            hits.append((start, key))
+
+    ordered = [key for _position, key in sorted(hits)]
+    return list(dict.fromkeys(ordered))
+
+
+def describe(session: Session, keys: list[str]) -> list[dict]:
+    """Named governorates in the shape a picker takes, skipping any the shop
+    has since removed from the rate table."""
+    rows = []
+    for key in keys:
+        rate = session.get(ShippingRate, key)
+        if rate is not None:
+            rows.append(
+                {
+                    "governorate": rate.governorate,
+                    "label_ar": rate.label_ar,
+                    "has_fee": rate.fee is not None,
+                }
+            )
+    return rows
 
 
 #: The 27 governorates grouped the way an Egyptian would group them.

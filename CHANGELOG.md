@@ -1,6 +1,35 @@
 # Changelog
 
-## Unreleased — The bot remembers, and knows what it is being asked about
+## Unreleased — The governorate in the address the customer already typed
+
+A customer wrote "شبين الكوم المنوفية شارع 9" and the bot answered with the
+region picker, as though they had not said where they live. Everything needed
+to read it was already there — `shipping.resolve` knows the twenty-seven names,
+their Arabic labels, and the districts people use instead of them. What was
+missing was anyone looking: `ask_governorate` offered a list without reading
+the message it was answering.
+
+- **`shipping.detect` reads the governorate out of free text**, and
+  `ask_governorate` calls it before sending anything. One match and the tool
+  returns `step: "done"` with the key, so the turn goes straight to
+  `get_shipping_fee`. No match and the region picker is sent exactly as
+  before — free text is still never a source of new values, only a way of
+  selecting one of the fixed twenty-seven.
+- **Matching is by whole word, which is the whole defence against a false
+  positive.** The substring test underneath the old last-resort match found
+  "قنا" inside "القناة", so an address on شارع القناة in Ismailia resolved to
+  Qena — 700km and a different fee, on a path `confirm_order` also runs
+  through. Tokens are compared instead, with the definite article stripped
+  from both sides, and the longest name at a position wins ("مرسى مطروح" over
+  "مطروح").
+- **Two governorates in one message is not a decision the bot makes.** It
+  returns `step: "confirm"` with those two, and the picker it sends offers
+  those two rather than all twenty-seven.
+- Only the customer's own last two messages are scanned. A governorate the
+  *bot* named is not the customer stating where they live, and one mentioned
+  six messages ago is not this order's address.
+
+## Earlier unreleased — The bot remembers, and knows what it is being asked about
 
 Two complaints that read as one ("the bot gets confused") and share nothing
 underneath.

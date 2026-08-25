@@ -68,9 +68,17 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   in **two steps** (region, then governorate) because Meta allows ten rows per
   list and there are twenty-seven. The regions live in
   `domain/services/shipping.py`; every governorate belongs to exactly one, and
-  a test asserts both that and the ten-row ceiling. A customer who simply names
-  their governorate skips the picker entirely. **An order for a governorate
-  with no fee set must be refused.** The fee is copied onto the
+  a test asserts both that and the ten-row ceiling. **A customer who has
+  already named their governorate never sees the picker** — not only when they
+  say it on its own ("أنا من طنطا") but when it is sitting inside an address
+  they typed out ("شبين الكوم المنوفية شارع 9"). `shipping.detect` reads it
+  out of their message, matched **by whole word** against the same twenty-seven
+  keys and the district/spelling aliases, so free text still never invents a
+  value — it only selects one. Whole-word is the guard against the obvious
+  false positive: "قنا" sits inside "القناة", and a street in Ismailia must not
+  be priced as a parcel to Qena. Two different governorates in one message is
+  not a decision the bot may make: it offers those two and asks. **An order for
+  a governorate with no fee set must be refused.** The fee is copied onto the
   order at confirm time, so a later rate change never alters a past order.
 - **Order totals are four separate numbers** — `subtotal`,
   `discount_amount`, `shipping_fee`, `total`. Don't collapse them.
@@ -225,6 +233,10 @@ Not full coverage — the parts where a silent bug is expensive:
 - **A quoted reply resolves to the right message.** A WhatsApp "reply to
   this" on something the bot said must reach the model as that message's
   actual words, not be dropped and guessed at from recency.
+- **The governorate inside an address.** A free-text address that names one
+  of the twenty-seven skips the picker and resolves to that key, wherever in
+  the sentence it sits — and a street name that merely contains one ("شارع
+  القناة") does not.
 - **The media fallbacks.** Every way a voice note or a photo can fail still
   reaches a person. That path used to be the *only* path, so it is the one that
   must not quietly stop working.

@@ -178,15 +178,73 @@ def _interactive_enabled(ctx: ToolContext) -> bool:
     )
 
 
+#: How many of the customer's own recent messages the address scan reads. Two,
+#: because "شبين الكوم المنوفية شارع 9" and the message that follows it ("تمام
+#: كده؟") are one address between them -- and because reaching further back
+#: risks picking up a governorate from a conversation that has moved on.
+ADDRESS_SCAN_MESSAGES = 2
+
+
+def _recent_customer_text(ctx: ToolContext) -> list[str]:
+    """What the customer themselves last said, newest first.
+
+    Only their messages: a governorate the *bot* named is not the customer
+    stating where they live.
+    """
+    texts: list[str] = []
+    for message in reversed(ctx.history):
+        if message.get("role") != "user":
+            continue
+        content = (message.get("content") or "").strip()
+        if content:
+            texts.append(content)
+        if len(texts) >= ADDRESS_SCAN_MESSAGES:
+            break
+    return texts
+
+
+def _governorate_already_given(ctx: ToolContext) -> dict | None:
+    """The picker this call does not need to send, or None.
+
+    A customer who wrote their governorate into their address has answered the
+    question already; asking them to tap it out of a list reads as the bot not
+    having read their message, which is exactly the complaint this closes.
+
+    Two names in one message is not a decision this may make -- an address
+    that says both is genuinely ambiguous, and the customer is handed those
+    two to choose between rather than a list of twenty-seven.
+    """
+    for text in _recent_customer_text(ctx):
+        found = shipping.detect(ctx.session, text)
+        if not found:
+            continue
+        if len(found) == 1:
+            return {"step": "done", "governorate": found[0], "read_from": "their message"}
+        rows = shipping.describe(ctx.session, found)
+        if len(rows) < 2:
+            # The rest are no longer in the rate table; not a real choice.
+            return {"step": "done", "governorate": rows[0]["governorate"]} if rows else None
+        payload = {
+            "step": "confirm",
+            "governorates": [
+                {"governorate": row["governorate"], "label_ar": row["label_ar"]} for row in rows
+            ],
+        }
+        if _interactive_enabled(ctx):
+            payload["picker_sent"] = ctx.offer(interactive.governorate_picker(rows))
+        return payload
+    return None
+
+
 @tool(
     "ask_governorate",
     "Ask which governorate to ship to, as a list the customer taps rather than a question they "
     "answer in prose. Call it with no arguments to offer the six regions; when they pick one, call "
     "it again with that region to offer its governorates. The governorate sets the shipping fee, so "
-    "it has to be one of the twenty-seven real values -- this is what makes that true instead of "
-    "hoping the address text can be parsed. Ask for the street address separately, in words. If the "
-    "customer simply names their governorate themselves, you do not need this at all: go straight "
-    "to get_shipping_fee.",
+    "it has to be one of the twenty-seven real values. If the customer has already named their "
+    "governorate -- on its own or inside an address they typed out -- this returns it as "
+    "step=done instead of sending a list, and you should go straight to get_shipping_fee. Ask for "
+    "the street address separately, in words.",
     properties={
         "region": {
             "type": "string",
@@ -196,6 +254,9 @@ def _interactive_enabled(ctx: ToolContext) -> bool:
 )
 def ask_governorate(ctx: ToolContext, region: str | None = None) -> dict:
     if not region:
+        already = _governorate_already_given(ctx)
+        if already is not None:
+            return already
         regions = shipping.regions()
         payload = {
             "step": "region",
