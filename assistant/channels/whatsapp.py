@@ -136,6 +136,67 @@ def _shape(payload: dict) -> str:
     return "; ".join(parts) or f"top-level keys={sorted(payload)}"
 
 
+#: Keys that have ever carried, or might carry, a customer identity. Checked
+#: by name only -- what is in them is never logged.
+_IDENTITY_KEYS = ("from", "sender", "wa_id", "user_id", "identity", "identity_key_hash")
+
+#: Message keys that hold what the customer actually said. Never classified,
+#: never printed, not even by length.
+_CONTENT_KEYS = ("text", "image", "audio", "video", "document", "sticker",
+                 "location", "contacts", "interactive", "button", "reaction", "context")
+
+
+def _classify(raw) -> str:
+    """What a value *is*, so an identifier can be recognised without being read.
+
+    A `wa_id` is the customer's phone number, so it never reaches the log --
+    only whether it is all digits (a phone number), or opaque (the country
+    scoped identifier Meta hands over instead), and how long it is. Three
+    leading characters of an opaque id is what distinguishes `EG.` from the
+    next scheme; a phone number's digits are not shown at all.
+    """
+    if raw is None:
+        return "absent"
+    if not isinstance(raw, str):
+        return type(raw).__name__
+    if not raw:
+        return "empty"
+    if raw.isdigit():
+        return f"digits({len(raw)})"
+    return f"opaque({len(raw)},starts={raw[:3]!r})"
+
+
+def _identity_shape(value: dict, message: dict) -> str:
+    """Where this customer's identity is, when `messages[].from` is not there.
+
+    Key names and value classes only. The whole pipeline is keyed on
+    `external_id` being a phone number; this says what is actually on offer
+    instead, without putting any of it in a hosting provider's log stream.
+    """
+    parts = [
+        "message keys=" + repr(sorted(k for k in message if k not in _CONTENT_KEYS)),
+        "message ids={"
+        + ", ".join(f"{k}={_classify(message.get(k))}" for k in _IDENTITY_KEYS)
+        + "}",
+    ]
+    for index, contact in enumerate(value.get("contacts") or []):
+        if not isinstance(contact, dict):
+            parts.append(f"contacts[{index}]={type(contact).__name__}")
+            continue
+        ids = ", ".join(
+            f"{k}={_classify(contact.get(k))}" for k in _IDENTITY_KEYS if k in contact
+        )
+        parts.append(
+            f"contacts[{index}] keys={sorted(contact)!r}"
+            + (f" ids={{{ids}}}" if ids else "")
+            + f" profile_name={'yes' if (contact.get('profile') or {}).get('name') else 'no'}"
+        )
+    if not value.get("contacts"):
+        parts.append("contacts=absent")
+    parts.append("value keys=" + repr(sorted(value)))
+    return "; ".join(parts)
+
+
 def _iter_messages(payload: dict):
     for entry in payload.get("entry") or []:
         for change in entry.get("changes") or []:
@@ -145,6 +206,15 @@ def _iter_messages(payload: dict):
                 for contact in value.get("contacts") or []
             }
             for message in value.get("messages") or []:
+                if not message.get("from"):
+                    # The whole pipeline keys on this being a phone number.
+                    # When it is missing the message is dropped at the first
+                    # check in `_accept`, so say what the payload offers in
+                    # its place -- structurally -- before that happens.
+                    log.warning(
+                        "whatsapp message has no `from`; identity candidates: %s",
+                        _identity_shape(value, message),
+                    )
                 yield message, names.get(message.get("from"))
 
 
