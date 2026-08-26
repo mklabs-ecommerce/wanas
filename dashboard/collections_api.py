@@ -16,7 +16,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 
-from dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import require_permission
 from domain.db import session_scope
 from integrations.shopify import admin_collections
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
@@ -32,17 +32,26 @@ def _rejected(exc: Exception) -> JSONResponse:
     return JSONResponse({"error": "collection_rejected", "detail": str(exc)}, status_code=409)
 
 
-def _authed(wanas_staff: str | None) -> bool:
+#: This whole router is the Collections section, so one permission covers it.
+PERMISSION = "collections"
+
+
+def _refused(wanas_staff: str | None) -> JSONResponse | None:
+    """None when this account may work collections, otherwise the 401/403 to
+    return. Opens its own short session because every route below does its
+    Shopify call outside one -- see `dashboard/guard.py`."""
     with session_scope() as db:
-        return staff_for(db, wanas_staff) is not None
+        _, refused = require_permission(db, wanas_staff, PERMISSION)
+        return refused
 
 
 @router.get("")
 def list_collections(
     q: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    if not _authed(wanas_staff):
-        return unauthenticated()
+    refused = _refused(wanas_staff)
+    if refused is not None:
+        return refused
     try:
         result = admin_collections.list_collections(query=q)
     except (ShopifyUnavailable, ShopifyConfigError) as exc:
@@ -54,8 +63,9 @@ def list_collections(
 def create_collection(
     payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    if not _authed(wanas_staff):
-        return unauthenticated()
+    refused = _refused(wanas_staff)
+    if refused is not None:
+        return refused
 
     title = (payload.get("title") or "").strip()
     if not title:
@@ -75,8 +85,9 @@ def create_collection(
 def collection_detail(
     collection_gid: str, wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    if not _authed(wanas_staff):
-        return unauthenticated()
+    refused = _refused(wanas_staff)
+    if refused is not None:
+        return refused
     try:
         collection = admin_collections.get_collection(collection_gid)
     except (ShopifyUnavailable, ShopifyConfigError) as exc:
@@ -90,8 +101,9 @@ def collection_detail(
 def update_collection(
     collection_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    if not _authed(wanas_staff):
-        return unauthenticated()
+    refused = _refused(wanas_staff)
+    if refused is not None:
+        return refused
     try:
         result = admin_collections.update_collection(
             collection_gid,
@@ -135,8 +147,9 @@ def _membership(collection_gid: str, payload: dict, *, add: bool) -> JSONRespons
 def add_products(
     collection_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    if not _authed(wanas_staff):
-        return unauthenticated()
+    refused = _refused(wanas_staff)
+    if refused is not None:
+        return refused
     return _membership(collection_gid, payload, add=True)
 
 
@@ -144,6 +157,7 @@ def add_products(
 def remove_products(
     collection_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    if not _authed(wanas_staff):
-        return unauthenticated()
+    refused = _refused(wanas_staff)
+    if refused is not None:
+        return refused
     return _membership(collection_gid, payload, add=False)

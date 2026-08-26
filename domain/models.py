@@ -490,6 +490,22 @@ class Staff(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+    #: `owner` can do everything, including managing other staff. Anything
+    #: else is scoped by `permissions` below.
+    #:
+    #: Both columns are **nullable on purpose**, and both grandfather to full
+    #: access when NULL -- see `domain/services/staff_admin.py`. Two reasons,
+    #: and neither is style: `domain/schema_drift.py` reports a NOT NULL
+    #: column with no server default instead of adding it, so a NOT NULL role
+    #: would mean a production boot that never gets the column; and every
+    #: account that existed before this shipped has no row value, so
+    #: defaulting those to "staff with no permissions" would lock the only
+    #: people who can log in out of the section that grants permissions.
+    role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    #: A list of permission keys (`staff_admin.PERMISSIONS`). NULL means
+    #: "not scoped" -- see `role`.
+    permissions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
 
 class RuntimeSetting(Base):
     """A staff-toggled override for a handful of named feature flags.

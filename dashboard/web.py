@@ -47,6 +47,7 @@ from assistant import messages as msg, session as session_store
 from assistant.display import display_history
 from assistant.media_serving import resolve_servable_path
 from config.settings import settings
+from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import ChannelIdentity, QueueKind, SessionRow
 from domain.services import (
@@ -55,6 +56,7 @@ from domain.services import (
     identities,
     notifications,
     queues,
+    staff_admin,
 )
 
 log = logging.getLogger("wanas.dashboard")
@@ -64,6 +66,11 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 _DIR = Path(__file__).parent
 LOGIN_PAGE = _DIR / "login.html"
 APP_PAGE = _DIR / "dashboard.html"
+#: The brand mark, served rather than inlined as a data URI so the shop can
+#: replace the file without anyone editing HTML. It sits next to the two pages
+#: that use it, and like them it is public -- the login page shows it before
+#: anybody has a session, and a logo is not customer data.
+LOGO_FILE = _DIR / "wanas.webp"
 
 COOKIE_NAME = "wanas_staff"
 
@@ -82,6 +89,21 @@ PREVIEW_LENGTH = 80
 
 def _staff(db, token: str | None):
     return auth.staff_from_session_token(db, token)
+
+
+#: Everything from "conversations" down is one section of the dashboard and
+#: one permission: it all reads or writes a customer's own messages. Login
+#: (`/api/login`, `/api/me`, `/api/logout`) is deliberately *not* behind it --
+#: an account with no permissions at all still has to be able to log in and be
+#: told what it can reach.
+INBOX_PERMISSION = "inbox"
+
+
+def _inbox_guard(db, token: str | None):
+    """`(staff, None)` when this account may work the inbox, `(None, response)`
+    when it may not -- 401 with no session, 403 with one that lacks the
+    permission. See `dashboard/guard.py`."""
+    return require_permission(db, token, INBOX_PERMISSION)
 
 
 def _unauthenticated() -> JSONResponse:
@@ -165,6 +187,20 @@ def login_page() -> HTMLResponse:
     return HTMLResponse(LOGIN_PAGE.read_text(encoding="utf-8"))
 
 
+@router.get("/logo.webp")
+def logo():
+    """Public, like the login page that shows it. Cached hard: the file only
+    changes when the shop rebrands, and a logo re-fetched on every navigation
+    is the kind of thing nobody notices until the dashboard feels slow."""
+    if not LOGO_FILE.exists():
+        return JSONResponse({"error": "not_found"}, status_code=404)
+    return FileResponse(
+        LOGO_FILE,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 def app_page() -> HTMLResponse:
     # No server-side auth check here on purpose: the page itself carries no
@@ -223,7 +259,16 @@ def me(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
         staff = _staff(db, wanas_staff)
         if staff is None:
             return _unauthenticated()
-        return JSONResponse({"username": staff.username})
+        # `permissions` is what the sidebar hides nav items by. It is not what
+        # protects anything -- every route it points at checks for itself
+        # (`dashboard/guard.py::require_permission`).
+        return JSONResponse(
+            {
+                "username": staff.username,
+                "role": staff.role or staff_admin.OWNER_ROLE,
+                "permissions": list(staff_admin.permission_keys(staff)),
+            }
+        )
 
 
 # --------------------------------------------------------------------------
@@ -234,8 +279,9 @@ def me(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
 @router.get("/api/conversations")
 def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if _staff(db, wanas_staff) is None:
-            return _unauthenticated()
+        _, refused = _inbox_guard(db, wanas_staff)
+        if refused is not None:
+            return refused
 
         handoffs = _open_handoffs(db)
         paused_keys = _paused_identity_keys(db)
@@ -282,8 +328,9 @@ def conversation_detail(
     channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        if _staff(db, wanas_staff) is None:
-            return _unauthenticated()
+        _, refused = _inbox_guard(db, wanas_staff)
+        if refused is not None:
+            return refused
 
         # `transcript`, not `load`: reading a conversation must not be what
         # ends it. `load` moves the context bookmark on an idle session, which
@@ -313,8 +360,9 @@ def takeover(channel: str, external_id: str, wanas_staff: str | None = Cookie(de
     Idempotent: taking over an already-paused conversation is a no-op that
     still answers `ok`, so the frontend never has to check first."""
     with session_scope() as db:
-        if _staff(db, wanas_staff) is None:
-            return _unauthenticated()
+        _, refused = _inbox_guard(db, wanas_staff)
+        if refused is not None:
+            return refused
         identities.pause(db, channel, external_id)
     return JSONResponse({"ok": True})
 
@@ -331,9 +379,9 @@ def reply(
         return JSONResponse({"error": "empty_text"}, status_code=400)
 
     with session_scope() as db:
-        staff = _staff(db, wanas_staff)
-        if staff is None:
-            return _unauthenticated()
+        staff, refused = _inbox_guard(db, wanas_staff)
+        if refused is not None:
+            return refused
 
         handoff = _open_handoffs(db).get((channel, external_id))
         if not identities.is_paused(db, channel, external_id):
@@ -373,9 +421,9 @@ def release(channel: str, external_id: str, wanas_staff: str | None = Cookie(def
     needed" case) or a manual takeover (nothing else to clear). No message
     goes out; the next thing the customer sends is what the bot answers."""
     with session_scope() as db:
-        staff = _staff(db, wanas_staff)
-        if staff is None:
-            return _unauthenticated()
+        staff, refused = _inbox_guard(db, wanas_staff)
+        if refused is not None:
+            return refused
 
         if not identities.is_paused(db, channel, external_id):
             return JSONResponse({"error": "not_paused"}, status_code=409)
@@ -398,9 +446,9 @@ def reset_conversation(
     not, touched: a real `Client` record and its order history are never
     reachable from here."""
     with session_scope() as db:
-        staff = _staff(db, wanas_staff)
-        if staff is None:
-            return _unauthenticated()
+        staff, refused = _inbox_guard(db, wanas_staff)
+        if refused is not None:
+            return refused
         conversation_reset.reset(db, channel, external_id, staff_id=staff.staff_id)
     return JSONResponse({"ok": True})
 
@@ -413,8 +461,9 @@ def media(path: str = Query(...), wanas_staff: str | None = Cookie(default=None)
     photo is already an `http(s)` url the browser loads directly; see
     `_is_url` in `integrations/whatsapp/client.py`."""
     with session_scope() as db:
-        if _staff(db, wanas_staff) is None:
-            return _unauthenticated()
+        _, refused = _inbox_guard(db, wanas_staff)
+        if refused is not None:
+            return refused
 
     target = resolve_servable_path(path)
     if target is None:

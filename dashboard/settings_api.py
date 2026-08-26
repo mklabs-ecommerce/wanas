@@ -12,7 +12,7 @@ from fastapi import APIRouter, Body, Cookie
 from fastapi.responses import JSONResponse
 
 from config.settings import settings
-from dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import Staff
 from domain.services import (
@@ -32,6 +32,10 @@ def _flag_payload(session, flag, row) -> dict:
         "key": flag.key,
         "label_ar": flag.label_ar,
         "description_ar": flag.description_ar,
+        # Both languages travel together: the dashboard's own dictionary
+        # cannot translate a string that only exists on the server.
+        "label_en": flag.label_en,
+        "description_en": flag.description_en,
         "value": row.value if row is not None else getattr(settings, flag.key),
         "overridden": row is not None,
         "updated_at": row.updated_at.isoformat() if row is not None else None,
@@ -42,8 +46,9 @@ def _flag_payload(session, flag, row) -> dict:
 @router.get("/flags")
 def list_flags(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "settings")
+        if refused is not None:
+            return refused
         rows = runtime_flags.get_all(db)
         flags = [_flag_payload(db, flag, rows.get(flag.key)) for flag in runtime_flags.KNOWN_FLAGS]
     return JSONResponse({"flags": flags})
@@ -54,9 +59,9 @@ def set_flag(
     key: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        staff = staff_for(db, wanas_staff)
-        if staff is None:
-            return unauthenticated()
+        staff, refused = require_permission(db, wanas_staff, "settings")
+        if refused is not None:
+            return refused
 
         if "value" not in payload or not isinstance(payload["value"], bool):
             detail = "value must be a boolean"
@@ -85,8 +90,9 @@ def list_test_numbers(wanas_staff: str | None = Cookie(default=None)) -> JSONRes
     """Numbers marked as staff testing the bot -- excluded from the
     Statistics page's totals. See `domain/services/test_numbers.py`."""
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "settings")
+        if refused is not None:
+            return refused
         rows = test_numbers.list_numbers(db)
         numbers = [_number_payload(db, row) for row in rows]
     return JSONResponse({"numbers": numbers})
@@ -97,9 +103,9 @@ def add_test_number(
     payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        staff = staff_for(db, wanas_staff)
-        if staff is None:
-            return unauthenticated()
+        staff, refused = require_permission(db, wanas_staff, "settings")
+        if refused is not None:
+            return refused
         phone = (payload.get("phone") or "").strip()
         if not any(ch.isdigit() for ch in phone):
             return JSONResponse({"error": "bad_arguments", "detail": "phone is required"}, status_code=400)
@@ -112,8 +118,9 @@ def add_test_number(
 @router.delete("/test-numbers/{phone}")
 def remove_test_number(phone: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "settings")
+        if refused is not None:
+            return refused
         removed = test_numbers.remove(db, phone)
     if not removed:
         return JSONResponse({"error": "not_found"}, status_code=404)
@@ -125,8 +132,9 @@ def system_status(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
     """The same booleans `/health` reports, behind the staff login rather than
     the open endpoint -- useful from inside the dashboard without a second tab."""
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "settings")
+        if refused is not None:
+            return refused
 
     return JSONResponse(
         {

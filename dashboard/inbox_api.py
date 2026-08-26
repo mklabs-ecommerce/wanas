@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from common.timeutil import as_aware
-from dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import require_permission
 from dashboard.web import _conversation_summary, _open_handoffs, _paused_identity_keys
 from domain.db import session_scope
 from domain.models import ChannelIdentity, Client, InstagramCommentReply, SessionRow
@@ -110,8 +110,9 @@ def inbox(
         return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
 
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "inbox")
+        if refused is not None:
+            return refused
 
         handoffs = _open_handoffs(db)
         paused_keys = _paused_identity_keys(db)
@@ -202,8 +203,9 @@ def comments(
     """
     since = datetime.now(UTC) - timedelta(days=days)
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "inbox")
+        if refused is not None:
+            return refused
 
         rows = db.scalars(
             select(InstagramCommentReply)

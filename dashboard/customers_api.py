@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 
 from common.money import money
-from dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import Client, Order
 
@@ -43,8 +43,9 @@ def list_local_customers(
     q: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "customers")
+        if refused is not None:
+            return refused
 
         stmt = select(Client).order_by(Client.created_at.desc()).limit(MAX_CUSTOMERS)
         if q:
@@ -58,8 +59,9 @@ def list_local_customers(
 @router.get("/{client_id}")
 def local_customer_detail(client_id: int, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "customers")
+        if refused is not None:
+            return refused
 
         client = db.get(Client, client_id)
         if client is None:

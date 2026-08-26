@@ -18,7 +18,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 
-from dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import require_permission
 from domain.db import session_scope
 from integrations.shopify import admin_inventory, admin_products
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
@@ -57,8 +57,9 @@ def list_inventory(
         return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
 
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "inventory")
+        if refused is not None:
+            return refused
 
     try:
         rows, truncated = admin_inventory.inventory_rows()
@@ -105,8 +106,9 @@ def set_quantities(
     and a delta would compound every double-tap into another phantom unit.
     """
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "inventory")
+        if refused is not None:
+            return refused
 
     updates = payload.get("updates") or []
     quantities = []

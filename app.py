@@ -39,6 +39,7 @@ from dashboard.inventory_api import router as dashboard_inventory_router
 from dashboard.queue_api import router as dashboard_queue_router
 from dashboard.settings_api import router as dashboard_settings_router
 from dashboard.shopify_api import router as dashboard_shopify_router
+from dashboard.staff_api import router as dashboard_staff_router
 from dashboard.stats_api import router as dashboard_stats_router
 from dashboard.web import router as dashboard_router
 from domain.db import engine, session_scope
@@ -379,6 +380,7 @@ if settings.dashboard_enabled:
     app.include_router(dashboard_inventory_router)
     app.include_router(dashboard_insights_router)
     app.include_router(dashboard_inbox_router)
+    app.include_router(dashboard_staff_router)
 
 if settings.harness_enabled:
     app.include_router(harness_router)

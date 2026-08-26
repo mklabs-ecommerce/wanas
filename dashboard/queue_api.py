@@ -14,7 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 
-from dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import Order, QueueKind, QueueStatus, StaffQueueItem
 from domain.services import orders as orders_service, queues
@@ -41,8 +41,9 @@ def list_queue(
     kind: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "queue")
+        if refused is not None:
+            return refused
 
         kinds = [kind] if kind in _KINDS else list(_KINDS)
         items = []
@@ -57,9 +58,9 @@ def list_queue(
 def resolve_queue_item(queue_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """The generic close: an alert acknowledged, or a swap request declined."""
     with session_scope() as db:
-        staff = staff_for(db, wanas_staff)
-        if staff is None:
-            return unauthenticated()
+        staff, refused = require_permission(db, wanas_staff, "queue")
+        if refused is not None:
+            return refused
         item = queues.resolve(db, queue_id, staff.staff_id, status=QueueStatus.REJECTED.value)
         if item is None:
             return JSONResponse({"error": "not_open"}, status_code=409)
@@ -74,9 +75,9 @@ def approve_swap(
     stock/availability check already guards) and resolve the queue item only
     if it lands -- a rejected swap must not disappear from the queue."""
     with session_scope() as db:
-        staff = staff_for(db, wanas_staff)
-        if staff is None:
-            return unauthenticated()
+        staff, refused = require_permission(db, wanas_staff, "queue")
+        if refused is not None:
+            return refused
 
         item = db.get(StaffQueueItem, queue_id)
         if (

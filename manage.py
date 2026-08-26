@@ -3,7 +3,7 @@ never imported by the rest of the app.
 
     python manage.py init-db
     python manage.py seed
-    python manage.py create-staff <username>
+    python manage.py create-staff <username> [--role owner|staff] [--can inbox,orders,...]
     python manage.py set-fee <governorate> <fee>
     python manage.py catalog-report
     python manage.py inspect-conversation <external_id> [--channel whatsapp]
@@ -35,8 +35,8 @@ from domain.seed.products import import_products
 from domain.services import (
     identities,
     queues,
+    staff_admin,
 )
-from domain.services.auth import create_staff
 from domain.services.size_charts import all_charts
 
 
@@ -84,10 +84,17 @@ def cmd_create_staff(args) -> int:
     if password != confirm:
         print("passwords do not match", file=sys.stderr)
         return 1
+    permissions = None
+    if args.can:
+        permissions = [key.strip() for key in args.can.split(",") if key.strip()]
     try:
         with session_scope() as session:
-            staff = create_staff(session, args.username, password)
-            print(f"created staff #{staff.staff_id} {staff.username}")
+            staff = staff_admin.create(
+                session, args.username, password, role=args.role, permissions=permissions
+            )
+            granted = ", ".join(staff.permissions or []) or "nothing yet"
+            scope = "everything" if staff_admin.is_owner(staff) else granted
+            print(f"created staff #{staff.staff_id} {staff.username} ({staff.role}) -> {scope}")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -212,6 +219,17 @@ def main(argv: list[str] | None = None) -> int:
         "create-staff", help="create a staff account (used to attribute resolved queue items)"
     )
     p_staff.add_argument("username")
+    # Defaults to owner because the first account created on a fresh database
+    # has to be able to reach the Team section and scope everyone else. A
+    # deliberately limited account is `--role staff --can ...`.
+    p_staff.add_argument(
+        "--role", choices=list(staff_admin.ROLES), default=staff_admin.OWNER_ROLE,
+        help="owner sees everything; staff sees only what --can grants",
+    )
+    p_staff.add_argument(
+        "--can", default="",
+        help=f"comma-separated permissions for --role staff: {', '.join(staff_admin.PERMISSION_KEYS)}",
+    )
     p_staff.set_defaults(func=cmd_create_staff)
 
     p_fee = sub.add_parser("set-fee", help="set a governorate shipping fee")
