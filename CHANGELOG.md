@@ -1,5 +1,105 @@
 # Changelog
 
+## Unreleased — Who sees the dashboard, and what the numbers are actually of
+
+The dashboard has had one role since it existed: everyone who could log in
+could do everything, and attribution was the only control. That was true while
+the only two logins belonged to the people who built the shop. It is not a
+staffing model. Alongside it, four screens answered questions slightly to the
+side of the ones being asked — "how many orders" with no way to separate the
+cash-on-delivery ones, "the customers" with no way to ask which of them come
+back, a channel breakdown that called every Instagram sale a WhatsApp one.
+
+- **Staff accounts now carry a role and a permission list**, and the owner
+  manages both from a new **الفريق** section under القرار. One permission per
+  dashboard section. `manage.py create-staff` grew `--role` / `--can`, and
+  still defaults to `owner` so the first account on a fresh database can reach
+  the screen that scopes everyone else.
+- **Enforcement is on the endpoints, not in the sidebar**
+  (`dashboard/guard.py::require_permission`). Hiding a nav item is a courtesy
+  to whoever is reading it; the route behind a hidden button is one `fetch`
+  away, so each one refuses on its own with a 403. The first test written for
+  this asserts exactly that.
+- **A `Staff` row with no role stored reads as an owner.** Both new columns
+  are nullable, which is also what lets `domain/schema_drift.py` add them at
+  boot — it reports a `NOT NULL` column with no server default rather than
+  guessing at one. Reading an absent role as "staff with no permissions"
+  would have shipped a deploy in which every existing login was scoped to
+  nothing and nobody could open the screen that fixes it.
+- **Orders and Analytics split cash-on-delivery from online**, classified once
+  in `admin_orders._payment_method` from the order's `paymentGatewayNames` so
+  the list and the statistics page can never disagree about what COD counted.
+  An order with no gateway is `unknown`, never `online` — a draft is not
+  evidence that somebody paid a card, and folding it in would inflate the
+  exact number the toggle exists to separate.
+- **The channel a sale came in on is read from `Order.source_channel`**, not
+  from the Shopify tags. `ORDER_TAGS` hardcodes `whatsapp` on every order the
+  bot places, Instagram included, and no tag can be added retroactively to the
+  orders already in the shop. Analytics gets a Web / WhatsApp / Instagram /
+  All toggle on the same footing as the payment one — both narrow every number
+  on the page, not one chart. The money is still summed from Shopify; only the
+  label comes from Postgres.
+- **Orders can be filtered to returning or new customers**, from Shopify's own
+  lifetime `numberOfOrders`. An order with no customer record is a third
+  bucket, never counted as new.
+- **Customers filters by order count (1, 2, 3, or any number typed in) and by
+  governorate, and sorts by order count.** None of those three is expressible
+  in Shopify's customer search or its `CustomerSortKeys`, so the moment one is
+  set the route pages through the whole matching list rather than filtering
+  the first fifty rows — "the customer with the most orders", computed over
+  page one, is the most of that page, and nothing on screen would have said
+  so. The page cap is surfaced as `truncated`. The governorate dropdown comes
+  from the shop's own `ShippingRate` list, so it offers a governorate the shop
+  ships to but has not sold to yet.
+- **Two new things to look at**: orders per governorate, and a
+  conversation-to-order rate. The second is deliberately not called "معدل
+  التحويل" — the Admin API this app reads exposes no site traffic at all, so a
+  real conversion rate is not derivable. It is bot orders over bot
+  conversations, computed in the browser from the two payloads the page
+  already loads, with a caption on screen saying so. The denominator moves
+  with the channel toggle (`insights.by_channel`); under the payment toggle,
+  and on the website, there is no denominator that matches, so the card is
+  hidden rather than dividing by something that does not.
+- **Both the Orders and the Customers list page through the whole match once
+  a filter is on.** Filtering the first fifty rows would answer a different
+  question with a straight face — "the COD orders" would mean "the COD ones
+  among the last fifty orders", and the totals above the table would sum that
+  subset while reading like store figures. The page cap surfaces as
+  `truncated` and the UI says the numbers are a floor.
+
+- **Analytics takes a specific window, not just 7/30/90.** `dashboard/ranges.py`
+  parses one date window for both tabs, because two tabs of one page answering
+  about different fortnights is the failure that module exists to prevent. A
+  single day is `start == end`. `insights_api` needed the real work: its
+  zero-filled series anchored on *today* and every filter was `>= since` with
+  no upper bound, so a historical range would have drawn a flat line of zeros
+  across dates that had real activity, and swept everything after the window
+  into the totals. Both are fixed and both are tested. Bad input is refused
+  (400), never repaired: `start` after `end` is not silently swapped.
+- **A language toggle, Arabic ⇄ English.** Arabic stays the source language and
+  the dictionary is keyed on it, so a missing translation falls back to Arabic
+  rather than to a blank. Because that makes an omission invisible,
+  `tests/test_dashboard_i18n.py` extracts every phrase the page asks for and
+  fails on any that is unaccounted for — all 527 are.
+  - Templates are translated through a **tagged** template, `TR`, which is what
+    makes this safe: a tagged template receives its literal chunks separately
+    from its `${...}` values. The chunks are developer copy; the values are
+    where a customer's name arrives. No customer data can reach the dictionary.
+  - `QUICK_REPLIES` is excluded by name. It is typed into the composer and sent
+    to a customer over WhatsApp — the UI language is the staff member's
+    preference, and an Egyptian customer should not get an English message
+    because somebody's dashboard was in English.
+  - `dir` flips in a head script, before first paint. That one attribute is the
+    whole RTL/LTR switch, because the stylesheet was already written in logical
+    properties throughout — a test now keeps it that way.
+  - Strings that live on the server (the feature flags, the permission
+    catalog) carry both languages in the payload, since the page's dictionary
+    has never seen them.
+- **The brand mark is the real logo, and the name is always "Wanas Gallery".**
+  It is a name, not a label, so it is excluded from the dictionary and reads
+  the same in both languages. The file is served from `/dashboard/logo.webp`
+  rather than inlined, so the shop can swap it without editing HTML.
+
 ## Unreleased — The governorate in the address the customer already typed
 
 A customer wrote "شبين الكوم المنوفية شارع 9" and the bot answered with the

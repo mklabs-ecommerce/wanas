@@ -470,8 +470,33 @@ staff login now also covers:
   create, edit), orders (view, fulfil, cancel, edit quantity), customers.
   Full read/write, not the read-only mirror the dashboard started as.
 - **Statistics** (`stats_api.py`, `domain/services/dashboard_stats.py`) —
-  revenue, orders, AOV, best-sellers, a status breakdown, charted inline
-  (hand-rolled SVG, no chart library — the dashboard stays zero-build).
+  revenue, orders, AOV, best-sellers, a status breakdown, orders per
+  governorate, and the payment/channel splits, charted inline (hand-rolled
+  SVG, no chart library — the dashboard stays zero-build). Two toggles narrow
+  *every* number on the page rather than one card: **payment**
+  (cash-on-delivery / online / unknown, classified once from the order's
+  `paymentGatewayNames` in `admin_orders._payment_method`) and **channel**
+  (website / WhatsApp / Instagram). Channel attribution is read from the local
+  `Order.source_channel`, never from the Shopify tags — every bot order is
+  tagged `whatsapp` regardless of where it was placed, and no tag can be added
+  retroactively to orders already in the shop. The money is still summed from
+  Shopify; only the *label* comes from Postgres.
+- **The window both analytics tabs share** (`dashboard/ranges.py`) — the
+  three presets *and* an explicit `start`/`end`, parsed in one place because
+  `stats_api` reads Shopify and `insights_api` reads Postgres, and two tabs of
+  one page answering about different fortnights is the bug that module exists
+  to prevent. A single day is `start == end`. The Postgres side needed real
+  work to support it: its zero-filled day series anchored on *today*, and
+  every filter was a lower bound with no upper one, so a historical window
+  would have charted zeros across days that had activity and folded everything
+  after the window into the totals.
+- **The Team** (`staff_api.py`, `domain/services/staff_admin.py`) — who can
+  log in, and which of the sections on this list each of them sees. See
+  "Roles and permissions" in `docs/OPERATIONS.md`; the rule worth repeating
+  here is that a `Staff` row with no role stored reads as an owner, because
+  the alternative is a deploy that scopes every existing login to nothing and
+  locks everyone out of the screen that would fix it. Enforcement is on the
+  endpoints (`dashboard/guard.py::require_permission`), not in the sidebar.
 - **The review queue** (`queue_api.py`) — `item_swap` and `alert`, the two
   `StaffQueueItem` kinds that had full backend logic (`orders.apply_swap`,
   `notifications.low_stock_breach` and friends) and no UI at all until this,
@@ -483,7 +508,14 @@ staff login now also covers:
   `Client` table, kept as a *separate* view from Shopify's customers rather
   than merged, for the same reason stats reads Shopify directly: a customer
   who only ever ordered on the website has no `Client` row, and pretending
-  otherwise would double- or under-count.
+  otherwise would double- or under-count. Shopify's own side of that view
+  filters by lifetime order count and governorate and sorts by order count —
+  none of which Shopify's customer search or `CustomerSortKeys` can express,
+  so the moment any of them is set the route pages through the whole matching
+  list (`admin_customers.list_all_customers`) rather than filtering page one.
+  Filtering a single page would answer "the customer with the most orders"
+  with the most of *that page*, and nothing on screen would have said so; the
+  page cap is reported as `truncated` instead.
 
 Two decisions shape all of it. First: **Shopify orders and stock still win**.
 Store-wide reads (orders, customers, stats) go straight to Shopify — see
@@ -504,6 +536,39 @@ just for the fields that run the other way. A product created only on
 Shopify through this dashboard is invisible to the bot's own search until
 that mirror runs, so the create/edit forms ask for both halves together
 rather than leaving that a manual follow-up step.
+
+### It reads in two languages
+
+Arabic is the source language: every string in `dashboard.html` is written in
+it, and the `EN` dictionary is keyed on the Arabic itself rather than on
+invented message ids. A key with no translation falls back to the Arabic,
+which is the right runtime behaviour and also why the gap has to be caught
+mechanically — `tests/test_dashboard_i18n.py` extracts every phrase the page
+will look up and fails on any that is unaccounted for.
+
+The safety property is in the wrapper, not the dictionary. Templates go
+through `TR`, a **tagged** template, which receives its literal chunks
+separately from its `${...}` values: the chunks are developer-authored markup,
+the values are where a customer's name, a product title or a typed message
+arrive. Translating only the chunks means no customer's data can ever be run
+through the dictionary — the thing a blanket innerHTML sweep could not
+promise, and the reason that approach was rejected.
+
+Two categories are deliberately not translated. `QUICK_REPLIES` is typed into
+the composer and sent to a customer over WhatsApp; the UI language is the
+staff member's preference, and the customer reads Arabic either way. And the
+shop's name is a name, not a label: "Wanas Gallery" in both.
+
+Strings that live on the server — the feature flags, the permission catalog —
+carry both languages in their payloads (`label_ar`/`label_en`), because the
+page's dictionary has never seen them and a table kept in the page would drift
+the first time a flag was added.
+
+The right-to-left/left-to-right switch is a single `dir` attribute set in a
+head script before first paint. That works only because the stylesheet is
+written in logical properties throughout (`inset-inline-start`,
+`text-align: start`, `margin-inline`); a test now asserts no physical
+`left`/`right` creeps back in.
 
 Deliberately out of scope, and disclosed rather than silently missing:
 **refunds** (this shop is cash-on-delivery with no captured payment

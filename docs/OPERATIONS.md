@@ -166,14 +166,63 @@ paused a conversation and queued it; for a long stretch nothing read that
 queue back or un-paused the conversation.
 
 ```bash
-python manage.py create-staff <username>   # prompts for a password twice
+python manage.py create-staff <username>                          # an owner
+python manage.py create-staff <username> --role staff --can inbox,orders
 ```
 
-Everyone who can log in can do everything — one role, no admin/agent split —
-so an account is who to hold responsible, not what to restrict. Deactivate
-rather than delete someone who leaves (flip `Staff.is_active`, direct in the
-database — there is no CLI for it yet) so their name stays attached to what
-they already resolved.
+Both prompt for a password twice. The default is `--role owner` on purpose:
+the first account on a fresh database has to be able to open **الفريق** and
+scope everyone else.
+
+### Roles and permissions
+
+Two roles. An **owner** sees everything, including the Team section that hands
+permissions out. A **staff** member sees only the sections ticked for them —
+one permission per section (`inbox`, `orders`, `products`, `inventory`,
+`collections`, `customers`, `queue`, `analytics`, `settings`, `manage_staff`;
+the list lives in `domain/services/staff_admin.py`).
+
+After the first owner exists, everything else is done from the dashboard:
+**الفريق** adds an account, changes its role or its ticks, resets its
+password, and deactivates it. Deactivate rather than delete someone who
+leaves, so their name stays attached to what they already resolved.
+
+Two things the UI will refuse, both of them "you cannot lock the shop out of
+itself": the last active owner cannot be demoted or deactivated, and nobody
+can edit their own role or permissions.
+
+An account created **before** permissions shipped has no role stored and is
+read as an owner. That is deliberate — the alternative is a deploy in which
+every existing login is scoped to nothing and nobody can reach the screen that
+would fix it. Give those accounts an explicit role from the dashboard when you
+next touch them.
+
+Permissions are enforced on the endpoints (`dashboard/guard.py`), not by
+hiding nav items. The sidebar hiding a section is a courtesy; the route behind
+it refuses on its own with a 403.
+
+### Language
+
+The dashboard reads Arabic or English, switched by the **AR / EN** button at
+the bottom of the sidebar. It is a per-browser preference (`localStorage`,
+key `wanas.lang`), not an account setting, and the login page reads the same
+key so the language does not flip on the way in. Switching reloads the page:
+several label tables are built once at load, and re-rendering would leave
+those in the old language.
+
+Arabic is the source language. An untranslated phrase falls back to Arabic
+rather than to a blank, and `pytest tests/test_dashboard_i18n.py` fails if any
+phrase on the page has no English entry — so adding a screen means adding its
+translations in the same commit.
+
+Two things never translate, on purpose: the shop's name ("Wanas Gallery" in
+both languages) and the canned quick replies in the conversation composer,
+which are sent to customers.
+
+### The logo
+
+`dashboard/wanas.webp`, served at `/dashboard/logo.webp`. Replace the file and
+redeploy; nothing in the HTML names it twice.
 
 `DASHBOARD_ENABLED=0` removes the router entirely; leaving it on with no
 `DASHBOARD_SESSION_SECRET` set is also safe (login refuses, 503) but means

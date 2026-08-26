@@ -163,9 +163,25 @@ dashboard/                 staff dashboard, its own top-level package:
                             shopify_api.py / stats_api.py / queue_api.py /
                             settings_api.py / customers_api.py /
                             collections_api.py / inventory_api.py /
-                            insights_api.py / inbox_api.py are sibling
-                            routers under the same guard, not a growing
+                            insights_api.py / inbox_api.py / staff_api.py are
+                            sibling routers under the same guard, not a growing
                             single file -- see web.py's own docstring.
+                            Every one of them goes through
+                            guard.py::require_permission, one permission per
+                            section (domain/services/staff_admin.py). The
+                            sidebar hides what an account cannot open; that is
+                            a courtesy, the route refusal is the control.
+                            ranges.py parses the one date window both analytics
+                            tabs use (presets, or an explicit start/end).
+                            dashboard.html is bilingual: Arabic is the source
+                            language, `EN` is keyed on the Arabic, and the
+                            tagged template `TR` translates only a template's
+                            literal chunks -- never its `${...}` values, which
+                            is where customer data arrives. Adding a screen
+                            means adding its translations;
+                            tests/test_dashboard_i18n.py fails otherwise.
+                            QUICK_REPLIES is excluded on purpose: it is sent
+                            to customers, not shown to staff.
                             inbox_api.py is read-only on purpose: every
                             outbound action still goes through web.py, so
                             there is one place a message can leave here. To
@@ -428,7 +444,11 @@ customers), store-wide statistics (KPIs, charts, built from a live Shopify
 read since only bot orders ever reach Postgres — see
 `domain/services/dashboard_stats.py`), the `item_swap`/`alert` review
 queue, and staff-toggleable feature flags
-(`domain/services/runtime_flags.py`). Shopify is still the source of truth
+(`domain/services/runtime_flags.py`), and a Team section where the owner adds
+staff and ticks which sections each of them sees. A `Staff` row whose `role`
+is NULL -- every account that existed before permissions shipped -- reads as
+an **owner**, never as "scoped to nothing": the opposite locks everyone out of
+the one screen that hands permissions out. Shopify is still the source of truth
 for price/stock/orders; product create/edit pushes to Shopify first and
 mirrors the wanas.db-only fields (`category`/`department`/`style`/
 `collection`/`size_chart`) after — see the module docstring on
