@@ -222,3 +222,195 @@ def test_editing_quantity_rejects_a_missing_variant_id(logged_in, bot_order):
         json={"quantity": 2},
     )
     assert res.status_code == 400
+
+
+# --------------------------------------------------------------------------
+# the Orders view's three toggles: payment, customer, channel
+#
+# All three narrow the same list, and all three are classified once on the
+# server -- see `integrations/shopify/admin_orders._payment_method` and
+# `dashboard/shopify_api._order_channel`. The point of testing them here
+# rather than only in the classifier is that a filter that silently means
+# "all" when it does not understand its argument is exactly as wrong as one
+# that filters on the wrong field, and only an endpoint test catches it.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def cod_website_order(shopify) -> str:
+    """A storefront order paid cash on delivery -- so "COD" and "from the
+    bot" are provably different questions, not the same one twice."""
+    return shopify.seed_order(
+        items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 400}],
+        shipping_fee=60,
+        customer_name="COD Website Customer",
+        phone="01088877766",
+        address="3 Storefront St",
+        governorate="Giza",
+        payment_gateways=["Cash on Delivery (COD)"],
+    )
+
+
+@pytest.fixture()
+def gatewayless_order(shopify) -> str:
+    """No gateway at all: the third bucket. Never "online"."""
+    return shopify.seed_order(
+        items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 300}],
+        shipping_fee=60,
+        customer_name="Draft Customer",
+        phone="01077766655",
+        address="4 Storefront St",
+        governorate="Giza",
+        payment_gateways=[],
+    )
+
+
+def test_a_bot_order_is_classified_cash_on_delivery(logged_in, bot_order):
+    entry = next(
+        o for o in logged_in.get("/dashboard/api/shopify/orders").json()["orders"]
+        if o["id"] == bot_order.shopify_order_id
+    )
+    assert entry["payment_method"] == "cod"
+
+
+def test_an_order_with_no_gateway_is_unknown_not_online(logged_in, gatewayless_order):
+    entry = next(
+        o for o in logged_in.get("/dashboard/api/shopify/orders").json()["orders"]
+        if o["id"] == gatewayless_order
+    )
+    assert entry["payment_method"] == "unknown"
+
+
+def test_payment_filter_separates_cod_from_online(
+    logged_in, bot_order, website_order, cod_website_order, gatewayless_order
+):
+    cod = {o["id"] for o in logged_in.get("/dashboard/api/shopify/orders?payment=cod").json()["orders"]}
+    assert cod == {bot_order.shopify_order_id, cod_website_order}
+
+    online = {o["id"] for o in logged_in.get("/dashboard/api/shopify/orders?payment=online").json()["orders"]}
+    assert online == {website_order}
+
+    unknown = {
+        o["id"] for o in logged_in.get("/dashboard/api/shopify/orders?payment=unknown").json()["orders"]
+    }
+    assert unknown == {gatewayless_order}
+
+    everything = logged_in.get("/dashboard/api/shopify/orders?payment=all").json()["orders"]
+    assert len(everything) == 4
+
+
+def test_an_unknown_payment_filter_is_refused_not_ignored(logged_in):
+    res = logged_in.get("/dashboard/api/shopify/orders?payment=bitcoin")
+    assert res.status_code == 400
+
+
+def test_channel_comes_from_the_local_row_not_the_shopify_tags(logged_in, bot_order, website_order):
+    by_id = {o["id"]: o for o in logged_in.get("/dashboard/api/shopify/orders").json()["orders"]}
+    assert by_id[bot_order.shopify_order_id]["channel"] == "whatsapp"
+    assert by_id[website_order]["channel"] == "web"
+
+
+def test_channel_filter_narrows_the_list(logged_in, bot_order, website_order):
+    web = logged_in.get("/dashboard/api/shopify/orders?channel=web").json()["orders"]
+    assert {o["id"] for o in web} == {website_order}
+
+    whatsapp = logged_in.get("/dashboard/api/shopify/orders?channel=whatsapp").json()["orders"]
+    assert {o["id"] for o in whatsapp} == {bot_order.shopify_order_id}
+
+    instagram = logged_in.get("/dashboard/api/shopify/orders?channel=instagram_dm").json()["orders"]
+    assert instagram == []
+
+
+def test_a_first_time_buyer_is_new_and_a_second_order_makes_them_returning(
+    logged_in, shopify, cairo_rate, seeded
+):
+    first = shopify.seed_order(
+        items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 500}],
+        shipping_fee=60, customer_name="Repeat", phone="01011122233", governorate="Cairo",
+    )
+    listed = {o["id"]: o for o in logged_in.get("/dashboard/api/shopify/orders").json()["orders"]}
+    assert listed[first]["customer_kind"] == "new"
+    assert listed[first]["customer_order_count"] == 1
+
+    shopify.seed_order(
+        items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 500}],
+        shipping_fee=60, customer_name="Repeat", phone="01011122233", governorate="Cairo",
+    )
+    listed = {o["id"]: o for o in logged_in.get("/dashboard/api/shopify/orders").json()["orders"]}
+    assert listed[first]["customer_kind"] == "returning"
+
+    returning = logged_in.get("/dashboard/api/shopify/orders?customer=returning").json()["orders"]
+    assert len(returning) == 2
+    assert logged_in.get("/dashboard/api/shopify/orders?customer=new").json()["orders"] == []
+
+
+def test_an_unknown_customer_filter_is_refused(logged_in):
+    assert logged_in.get("/dashboard/api/shopify/orders?customer=loyal").status_code == 400
+
+
+def test_filters_combine_rather_than_replace_each_other(
+    logged_in, bot_order, website_order, cod_website_order
+):
+    """COD *and* from the website -- neither toggle may quietly win."""
+    res = logged_in.get("/dashboard/api/shopify/orders?payment=cod&channel=web")
+    assert {o["id"] for o in res.json()["orders"]} == {cod_website_order}
+
+
+def _fake_order(gid, *, payment, kind="new", governorate="Cairo"):
+    return {
+        "id": gid, "name": gid, "created_at": "2026-01-05T00:00:00Z",
+        "financial_status": "PENDING", "fulfillment_status": "UNFULFILLED",
+        "cancelled": False, "tags": [], "customer_name": "Someone",
+        "customer_phone": gid, "customer_order_count": 2 if kind == "returning" else 1,
+        "customer_kind": kind, "payment_gateways": [], "payment_method": payment,
+        "governorate": governorate, "total": "100", "line_items": [], "source": "website",
+    }
+
+
+def test_filtering_walks_every_page_not_only_the_first(logged_in, monkeypatch):
+    """The bug this guards is the one already fixed for customers: filtering
+    page one makes "عند الاستلام" mean "the COD orders among the last fifty
+    orders", and the KPI strip above the table totals that subset while
+    reading like a store figure."""
+    pages = [
+        {"orders": [_fake_order("p1-online", payment="online")],
+         "has_next_page": True, "end_cursor": "cursor-1"},
+        {"orders": [_fake_order("p2-cod", payment="cod")],
+         "has_next_page": False, "end_cursor": None},
+    ]
+
+    def fake_list(*, query=None, cursor=None):
+        return pages[0] if cursor is None else pages[1]
+
+    monkeypatch.setattr(shopify_api.shopify_admin_orders, "list_orders", fake_list)
+
+    body = logged_in.get("/dashboard/api/shopify/orders?payment=cod").json()
+    assert [o["id"] for o in body["orders"]] == ["p2-cod"]
+    assert body["truncated"] is False
+
+
+def test_an_unfiltered_list_still_reads_a_single_page(logged_in, monkeypatch):
+    """Nothing pages through the whole shop just to render the default view --
+    the cost is paid only when a toggle actually needs it."""
+    calls = []
+
+    def fake_list(*, query=None, cursor=None):
+        calls.append(cursor)
+        return {"orders": [_fake_order("only", payment="cod")],
+                "has_next_page": True, "end_cursor": "more"}
+
+    monkeypatch.setattr(shopify_api.shopify_admin_orders, "list_orders", fake_list)
+    body = logged_in.get("/dashboard/api/shopify/orders").json()
+    assert calls == [None]
+    assert body["has_next_page"] is True
+
+
+def test_hitting_the_page_cap_while_filtering_is_reported(logged_in, monkeypatch):
+    def endless(*, query=None, cursor=None):
+        return {"orders": [_fake_order("x", payment="cod")],
+                "has_next_page": True, "end_cursor": "more"}
+
+    monkeypatch.setattr(shopify_api.shopify_admin_orders, "list_orders", endless)
+    body = logged_in.get("/dashboard/api/shopify/orders?payment=cod").json()
+    assert body["truncated"] is True
+    assert body["has_next_page"] is False

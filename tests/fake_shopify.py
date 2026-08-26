@@ -270,6 +270,10 @@ class FakeShopify:
                 "governorate": governorate,
                 "shipping_fee": Decimal(str(shipping_fee)),
                 "tags": ["chatbot", "whatsapp", "cash-on-delivery"],
+                # Every order the bot places is cash on delivery -- see
+                # `integrations/shopify/orders.py`, which leaves it PENDING
+                # for exactly that reason.
+                "payment_gateways": ["Cash on Delivery (COD)"],
                 "lines": {},
                 #: sku -> {title, unit_price}, so a swap/quantity edit can still
                 #: describe the line without a second lookup.
@@ -347,7 +351,18 @@ class FakeShopify:
                 self.shelf[from_sku]["qty"] += back
             order["lines"][to_sku] = order["lines"].get(to_sku, 0) + int(quantity)
 
-    def seed_order(self, *, customer_name="", phone="", email=None, address="", governorate="", items, shipping_fee=0):
+    def seed_order(
+        self,
+        *,
+        customer_name="",
+        phone="",
+        email=None,
+        address="",
+        governorate="",
+        items,
+        shipping_fee=0,
+        payment_gateways=("shopify_payments",),
+    ):
         """A order as if placed on the storefront directly -- never through
         `create_order`, so it carries none of the bot's own tags. This is the
         only honest way to get a "website" order into the fake: `create_order`
@@ -370,6 +385,10 @@ class FakeShopify:
                 "governorate": governorate,
                 "shipping_fee": Decimal(str(shipping_fee)),
                 "tags": [],
+                # A storefront order is card-paid by default; a test wanting
+                # a COD website order (or none at all, for the `unknown`
+                # bucket) passes its own list.
+                "payment_gateways": list(payment_gateways),
                 "lines": {},
                 "line_meta": {},
             }
@@ -541,6 +560,13 @@ class FakeShopify:
     def _customer_key(self, order):
         return order.get("phone") or order.get("email") or order["id"]
 
+    def _orders_for_customer(self, order):
+        """This customer's lifetime order count, the way Shopify's
+        `numberOfOrders` reports it -- across the whole fake shop, not the
+        page being listed."""
+        key = self._customer_key(order)
+        return sum(1 for o in self.orders.values() if self._customer_key(o) == key)
+
     def _customers_grouped(self):
         grouped: dict[str, list] = {}
         for order in self.orders.values():
@@ -638,6 +664,17 @@ class FakeShopify:
             "tags": list(order["tags"]),
             "customer_name": order["customer_name"],
             "customer_phone": order["phone"],
+            # Classified by the real function, not a second copy of the rule
+            # living here -- a fake that decides COD its own way would let the
+            # dashboard and production disagree with the test all green.
+            "payment_gateways": list(order.get("payment_gateways") or []),
+            "payment_method": shopify_admin_orders._payment_method(
+                {"paymentGatewayNames": order.get("payment_gateways") or []}
+            ),
+            "customer_order_count": self._orders_for_customer(order),
+            "customer_kind": (
+                "returning" if self._orders_for_customer(order) > 1 else "new"
+            ),
             "governorate": order["governorate"],
             "total": str(
                 sum(

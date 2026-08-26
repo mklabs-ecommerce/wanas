@@ -78,6 +78,35 @@ def list_customers(*, query: str | None = None, cursor: str | None = None) -> di
     }
 
 
+#: Hard ceiling on pages walked for one filtered customer list, mirroring
+#: `domain/services/dashboard_stats.MAX_PAGES`. At 50 rows a page this is
+#: 1,000 customers -- past that the list still returns, flagged truncated,
+#: rather than the request growing unboundedly slow.
+MAX_PAGES = 20
+
+
+def list_all_customers(*, query: str | None = None, max_pages: int = MAX_PAGES) -> tuple[list[dict], bool]:
+    """Every customer matching `query`, paginated. Returns `(customers,
+    truncated)`.
+
+    The dashboard needs this because the filters it offers -- governorate,
+    an exact order count, and sorting by order count -- are things Shopify's
+    customer search and its `CustomerSortKeys` cannot express. Applying them
+    to the first 50 rows instead would answer a different question with a
+    straight face: "the customer with the most orders" computed over one page
+    is the most of *that page*, and nothing on screen would say so.
+    """
+    customers: list[dict] = []
+    cursor = None
+    for _ in range(max_pages):
+        page = list_customers(query=query, cursor=cursor)
+        customers.extend(page["customers"])
+        if not page["has_next_page"]:
+            return customers, False
+        cursor = page["end_cursor"]
+    return customers, True
+
+
 def get_customer(shopify_gid: str) -> dict | None:
     client = get_admin_client()
     data = client(CUSTOMER_DETAIL_QUERY, {"id": shopify_gid})
@@ -101,4 +130,11 @@ def get_customer(shopify_gid: str) -> dict | None:
     return out
 
 
-__all__ = ["ShopifyConfigError", "ShopifyUnavailable", "list_customers", "get_customer"]
+__all__ = [
+    "ShopifyConfigError",
+    "ShopifyUnavailable",
+    "MAX_PAGES",
+    "list_customers",
+    "list_all_customers",
+    "get_customer",
+]

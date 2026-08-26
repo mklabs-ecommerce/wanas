@@ -53,7 +53,8 @@ query($cursor: String, $query: String) {
       displayFulfillmentStatus
       cancelledAt
       tags
-      customer { id displayName email phone }
+      paymentGatewayNames
+      customer { id displayName email phone numberOfOrders }
       shippingAddress { city province }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 50) {
@@ -75,7 +76,8 @@ query($id: ID!) {
     cancelledAt
     note
     tags
-    customer { id displayName email phone }
+    paymentGatewayNames
+    customer { id displayName email phone numberOfOrders }
     shippingAddress { address1 city province phone }
     totalPriceSet { shopMoney { amount currencyCode } }
     subtotalPriceSet { shopMoney { amount currencyCode } }
@@ -110,6 +112,63 @@ def _money(block: dict | None) -> str:
     return ((block or {}).get("shopMoney") or {}).get("amount") or "0.00"
 
 
+#: Gateway names that mean the money has not moved yet. Shopify lets a shop
+#: name its manual gateways whatever it likes, so this matches on substrings
+#: of the lowercased name rather than on an exact string the merchant could
+#: rename in the admin tomorrow.
+COD_GATEWAY_HINTS = ("cash on delivery", "cash_on_delivery", "cod", "الدفع عند الاستلام")
+
+PAYMENT_COD = "cod"
+PAYMENT_ONLINE = "online"
+PAYMENT_UNKNOWN = "unknown"
+PAYMENT_METHODS = (PAYMENT_COD, PAYMENT_ONLINE, PAYMENT_UNKNOWN)
+
+
+def _payment_method(node: dict) -> str:
+    """Which of the three buckets the payment toggle offers this order belongs
+    in. Classified once, here, so the orders list and the statistics page can
+    never disagree about what "COD" counted.
+
+    An order with no gateway at all is `unknown`, never `online`: a draft, a
+    manually created order, or one whose gateway Shopify did not return is not
+    evidence that somebody paid a card, and folding it into `online` would
+    quietly inflate exactly the number the toggle exists to separate.
+    """
+    gateways = [str(g).lower() for g in (node.get("paymentGatewayNames") or []) if g]
+    if not gateways:
+        return PAYMENT_UNKNOWN
+    if any(hint in gateway for gateway in gateways for hint in COD_GATEWAY_HINTS):
+        return PAYMENT_COD
+    return PAYMENT_ONLINE
+
+
+def _customer_orders(customer: dict) -> int | None:
+    """The customer's *lifetime* order count, not their count inside whatever
+    range is on screen -- Shopify's `numberOfOrders` is a shop-wide total, and
+    an order from someone with a long history is a returning customer whether
+    or not their earlier orders fall in this window.
+
+    Returned over the wire as a string on some API versions and an int on
+    others, so it is coerced rather than trusted. None when the order has no
+    customer record at all, which is a third case the caller must not read as
+    "new".
+    """
+    raw = customer.get("numberOfOrders")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _customer_kind(customer: dict) -> str:
+    count = _customer_orders(customer)
+    if count is None:
+        return "unknown"
+    return "returning" if count > 1 else "new"
+
+
 def _order_summary(node: dict) -> dict:
     customer = node.get("customer") or {}
     address = node.get("shippingAddress") or {}
@@ -123,6 +182,10 @@ def _order_summary(node: dict) -> dict:
         "tags": node.get("tags") or [],
         "customer_name": customer.get("displayName"),
         "customer_phone": customer.get("phone"),
+        "customer_order_count": _customer_orders(customer),
+        "customer_kind": _customer_kind(customer),
+        "payment_gateways": node.get("paymentGatewayNames") or [],
+        "payment_method": _payment_method(node),
         "governorate": address.get("province") or address.get("city"),
         "total": _money(node.get("totalPriceSet")),
         "line_items": [
@@ -155,6 +218,34 @@ def list_orders(*, query: str | None = None, cursor: str | None = None) -> dict:
         "has_next_page": bool(page.get("hasNextPage")),
         "end_cursor": page.get("endCursor"),
     }
+
+
+#: Hard ceiling on pages walked for one filtered order list, mirroring
+#: `domain/services/dashboard_stats.MAX_PAGES` and
+#: `admin_customers.MAX_PAGES`. At 50 orders a page this is 1,000 orders.
+MAX_PAGES = 20
+
+
+def list_all_orders(*, query: str | None = None, max_pages: int = MAX_PAGES) -> tuple[list[dict], bool]:
+    """Every order matching `query`, paginated. Returns `(orders, truncated)`.
+
+    The dashboard needs this for the three toggles Shopify's order search
+    cannot express -- payment method, returning-vs-new, and the channel, which
+    comes out of Postgres entirely. Applied to one page instead, "عند
+    الاستلام" would silently mean "the COD orders among the last fifty
+    orders" rather than "the last fifty COD orders", and the KPI strip above
+    the table would total that subset while reading like a store figure. Same
+    argument as `admin_customers.list_all_customers`, same shape.
+    """
+    orders: list[dict] = []
+    cursor = None
+    for _ in range(max_pages):
+        page = list_orders(query=query, cursor=cursor)
+        orders.extend(page["orders"])
+        if not page["has_next_page"]:
+            return orders, False
+        cursor = page["end_cursor"]
+    return orders, True
 
 
 def get_order(shopify_order_id: str) -> dict | None:
@@ -197,6 +288,10 @@ def get_order(shopify_order_id: str) -> dict | None:
         "customer_name": customer.get("displayName"),
         "customer_email": customer.get("email"),
         "customer_phone": customer.get("phone") or address.get("phone"),
+        "customer_order_count": _customer_orders(customer),
+        "customer_kind": _customer_kind(customer),
+        "payment_gateways": node.get("paymentGatewayNames") or [],
+        "payment_method": _payment_method(node),
         "address": address.get("address1"),
         "governorate": address.get("province") or address.get("city"),
         "subtotal": _money(node.get("subtotalPriceSet")),
@@ -268,7 +363,13 @@ __all__ = [
     "OrderRejected",
     "ShopifyConfigError",
     "ShopifyUnavailable",
+    "PAYMENT_COD",
+    "PAYMENT_ONLINE",
+    "PAYMENT_UNKNOWN",
+    "PAYMENT_METHODS",
+    "MAX_PAGES",
     "list_orders",
+    "list_all_orders",
     "get_order",
     "fulfill",
 ]

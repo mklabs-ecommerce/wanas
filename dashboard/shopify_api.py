@@ -18,9 +18,9 @@ from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
-from dashboard.guard import staff_for, unauthenticated
+from dashboard.guard import require_permission
 from domain.db import session_scope
-from domain.models import Order, Product, Variant
+from domain.models import Order, Product, ShippingRate, Variant
 from domain.services import orders as orders_service
 from integrations.shopify import (
     admin_customers as shopify_admin_customers,
@@ -59,37 +59,113 @@ def _local_ref(order: Order | None) -> dict | None:
 # --------------------------------------------------------------------------
 
 
+#: What the Orders view's toggles may ask for. Anything else is a 400 rather
+#: than a silent "all", for the same reason `stats_api.ALLOWED_RANGES` refuses
+#: an unknown range: a screen that says "COD only" has to be COD only.
+PAYMENT_FILTERS = ("all", *shopify_admin_orders.PAYMENT_METHODS)
+CUSTOMER_FILTERS = ("all", "new", "returning")
+CHANNEL_FILTERS = ("all", "web", "whatsapp", "instagram_dm")
+
+
+def _bad(detail: str) -> JSONResponse:
+    return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
+
+
+def _order_channel(local: Order | None) -> str:
+    """Which channel an order came in on.
+
+    Read off the local `Order` row, never off the Shopify tags. The bot tags
+    every order it creates `whatsapp` regardless of the channel it was
+    actually placed on, and no tag at all can be added retroactively to the
+    orders already in the shop -- whereas `Order.source_channel` has recorded
+    the real channel since the column existed. No local row means nobody
+    talked to the bot about it, which is the website.
+    """
+    return local.source_channel if local is not None else "web"
+
+
 @router.get("/orders")
 def list_orders(
     q: str | None = Query(default=None, description="Shopify search syntax, e.g. financial_status:paid"),
+    payment: str = Query(default="all", description="all | cod | online | unknown"),
+    customer: str = Query(default="all", description="all | new | returning"),
+    channel: str = Query(default="all", description="all | web | whatsapp | instagram_dm"),
     wanas_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
+    if payment not in PAYMENT_FILTERS:
+        return _bad(f"payment must be one of {PAYMENT_FILTERS}")
+    if customer not in CUSTOMER_FILTERS:
+        return _bad(f"customer must be one of {CUSTOMER_FILTERS}")
+    if channel not in CHANNEL_FILTERS:
+        return _bad(f"channel must be one of {CHANNEL_FILTERS}")
+
+    # None of the three is expressible in Shopify's order search: two are
+    # classified from fields the query syntax has no operator for, and
+    # `channel` lives in Postgres entirely. So the moment one is set, the
+    # whole matching list is walked rather than one page -- filtering page one
+    # would make "عند الاستلام" mean "the COD orders among the last fifty
+    # orders", and the KPI strip above the table would total that subset while
+    # reading like a store figure. See `admin_orders.list_all_orders`.
+    filtering = payment != "all" or customer != "all" or channel != "all"
+
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "orders")
+        if refused is not None:
+            return refused
         try:
-            result = shopify_admin_orders.list_orders(query=q)
+            if filtering:
+                orders, truncated = shopify_admin_orders.list_all_orders(query=q)
+                end_cursor = None
+            else:
+                page = shopify_admin_orders.list_orders(query=q)
+                orders, truncated = page["orders"], page["has_next_page"]
+                end_cursor = page["end_cursor"]
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             return _outage(exc)
 
-        local_by_id = _local_orders_for(db, [item["id"] for item in result["orders"]])
-        for item in result["orders"]:
-            item["local"] = _local_ref(local_by_id.get(item["id"]))
-    return JSONResponse(result)
+        local_by_id = _local_orders_for(db, [item["id"] for item in orders])
+        for item in orders:
+            local = local_by_id.get(item["id"])
+            item["local"] = _local_ref(local)
+            item["channel"] = _order_channel(local)
+
+    if payment != "all":
+        orders = [o for o in orders if o["payment_method"] == payment]
+    if customer != "all":
+        orders = [o for o in orders if o["customer_kind"] == customer]
+    if channel != "all":
+        orders = [o for o in orders if o["channel"] == channel]
+
+    return JSONResponse(
+        {
+            "orders": orders,
+            # `has_next_page` is meaningless once a filter ran -- the list is
+            # the whole match, not a page of it. `truncated` is the honest
+            # replacement: True means the page cap was hit and these numbers
+            # are a floor.
+            "has_next_page": (not filtering) and truncated,
+            "end_cursor": end_cursor,
+            "truncated": truncated,
+            "filters": {"payment": payment, "customer": customer, "channel": channel},
+        }
+    )
 
 
 @router.get("/orders/{order_gid:path}")
 def order_detail(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "orders")
+        if refused is not None:
+            return refused
         try:
             order = shopify_admin_orders.get_order(order_gid)
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             return _outage(exc)
         if order is None:
             return JSONResponse({"error": "order_not_found"}, status_code=404)
-        order["local"] = _local_ref(_local_order_for(db, order_gid))
+        local = _local_order_for(db, order_gid)
+        order["local"] = _local_ref(local)
+        order["channel"] = _order_channel(local)
     return JSONResponse(order)
 
 
@@ -103,8 +179,9 @@ def fulfill_order(
     order_gid: str, payload: dict = Body(default={}), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "orders")
+        if refused is not None:
+            return refused
         try:
             result = shopify_admin_orders.fulfill(
                 order_gid,
@@ -124,9 +201,9 @@ def fulfill_order(
 @router.post("/orders/{order_gid:path}/cancel")
 def cancel_order(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        staff = staff_for(db, wanas_staff)
-        if staff is None:
-            return unauthenticated()
+        staff, refused = require_permission(db, wanas_staff, "orders")
+        if refused is not None:
+            return refused
 
         local = _local_order_for(db, order_gid)
         if local is not None:
@@ -164,8 +241,9 @@ def list_products(
     q: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
         try:
             result = shopify_admin_products.list_products(query=q)
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
@@ -176,8 +254,9 @@ def list_products(
 @router.get("/products/{product_gid:path}")
 def product_detail(product_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
         try:
             product = shopify_admin_products.get_product(product_gid)
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
@@ -217,8 +296,9 @@ _REQUIRED_PRODUCT_FIELDS = ("title", "category", "department", "variants")
 @router.post("/products")
 def create_product(payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
 
         missing = [f for f in _REQUIRED_PRODUCT_FIELDS if not payload.get(f)]
         if missing:
@@ -250,8 +330,9 @@ def update_product(
     local_product_id: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
         try:
             result = shopify_admin_products.update_product(
                 db,
@@ -280,8 +361,9 @@ def edit_quantity(
     order_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "orders")
+        if refused is not None:
+            return refused
 
         variant_id = (payload.get("variant_id") or "").strip()
         quantity = payload.get("quantity")
@@ -310,25 +392,105 @@ def edit_quantity(
 # --------------------------------------------------------------------------
 
 
+#: How the Customers view may order the list.
+CUSTOMER_SORTS = ("recent", "orders_desc", "orders_asc")
+
+#: What a customer with no address on file is bucketed as, so the governorate
+#: dropdown can offer it instead of quietly dropping those rows.
+UNKNOWN_GOVERNORATE = "__unknown__"
+
+
+def _governorate_options(db) -> list[dict]:
+    """The shop's own governorate list, not whatever happened to load.
+
+    Sourced from `ShippingRate` (seeded from `data/governorates.json`) so the
+    dropdown is the same twenty-seven every other part of this app knows
+    about. Building it from the customer rows on screen would make the filter
+    change shape every time the list did, and would never offer a governorate
+    the shop ships to but has not sold to yet.
+    """
+    rows = db.scalars(select(ShippingRate).order_by(ShippingRate.governorate)).all()
+    return [{"key": row.governorate, "label_ar": row.label_ar} for row in rows]
+
+
+def _matches_governorate(customer: dict, wanted: str) -> bool:
+    value = (customer.get("governorate") or "").strip()
+    if wanted == UNKNOWN_GOVERNORATE:
+        return not value
+    return value.casefold() == wanted.casefold()
+
+
 @router.get("/customers")
 def list_customers(
-    q: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
+    q: str | None = Query(default=None),
+    orders_count: int | None = Query(default=None, ge=0, description="filter by lifetime order count"),
+    orders_op: str = Query(default="eq", description="eq | gte -- how to read orders_count"),
+    governorate: str | None = Query(default=None),
+    sort: str = Query(default="recent", description="recent | orders_desc | orders_asc"),
+    wanas_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
+    if orders_op not in ("eq", "gte"):
+        return _bad("orders_op must be 'eq' or 'gte'")
+    if sort not in CUSTOMER_SORTS:
+        return _bad(f"sort must be one of {CUSTOMER_SORTS}")
+
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "customers")
+        if refused is not None:
+            return refused
+        options = _governorate_options(db)
         try:
-            result = shopify_admin_customers.list_customers(query=q)
+            # One page is enough only when nothing is being filtered or
+            # re-sorted across the whole list; the moment it is, page one is
+            # the wrong denominator -- see `list_all_customers`.
+            filtering = orders_count is not None or governorate or sort != "recent"
+            if filtering:
+                customers, truncated = shopify_admin_customers.list_all_customers(query=q)
+            else:
+                page = shopify_admin_customers.list_customers(query=q)
+                customers, truncated = page["customers"], page["has_next_page"]
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             return _outage(exc)
-    return JSONResponse(result)
+
+    if orders_count is not None:
+        if orders_op == "gte":
+            customers = [c for c in customers if (c.get("order_count") or 0) >= orders_count]
+        else:
+            customers = [c for c in customers if (c.get("order_count") or 0) == orders_count]
+    if governorate:
+        customers = [c for c in customers if _matches_governorate(c, governorate)]
+    if sort != "recent":
+        customers = sorted(
+            customers,
+            key=lambda c: c.get("order_count") or 0,
+            reverse=(sort == "orders_desc"),
+        )
+
+    return JSONResponse(
+        {
+            "customers": customers,
+            # `has_next_page` is gone once anything was filtered -- the list
+            # below is the whole match, not a page of it. `truncated` is the
+            # honest replacement: True means the cap was hit and these numbers
+            # are a floor.
+            "truncated": truncated,
+            "governorates": options,
+            "filters": {
+                "orders_count": orders_count,
+                "orders_op": orders_op,
+                "governorate": governorate,
+                "sort": sort,
+            },
+        }
+    )
 
 
 @router.get("/customers/{customer_gid:path}")
 def customer_detail(customer_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "customers")
+        if refused is not None:
+            return refused
         try:
             customer = shopify_admin_customers.get_customer(customer_gid)
         except (ShopifyUnavailable, ShopifyConfigError) as exc:

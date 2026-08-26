@@ -157,3 +157,130 @@ def test_a_website_only_order_never_creates_a_local_client(logged_in, shopify):
     res = logged_in.get("/dashboard/api/customers")
     names = {c["full_name"] for c in res.json()["customers"]}
     assert "Website Only Person" not in names
+
+
+# --------------------------------------------------------------------------
+# the Customers view's filters: order count, governorate, and the sort
+#
+# Every one of these is applied to *every* matching customer, not to the first
+# page of them -- see `integrations/shopify/admin_customers.list_all_customers`.
+# The pagination test below is the one that matters: "the customer with the
+# most orders", computed over page one, is the most of that page, and nothing
+# on screen would have said so.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def three_buyers(shopify):
+    """One customer with three orders, one with two, one with a single one --
+    each in a different governorate."""
+    def buy(phone, name, governorate, times):
+        for _ in range(times):
+            shopify.seed_order(
+                items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 500}],
+                shipping_fee=60, customer_name=name, phone=phone, governorate=governorate,
+            )
+
+    buy("01000000003", "Three Timer", "Cairo", 3)
+    buy("01000000002", "Two Timer", "Giza", 2)
+    buy("01000000001", "One Timer", "Cairo", 1)
+
+
+def _named(body):
+    return {c["name"]: c["order_count"] for c in body["customers"]}
+
+
+def test_filtering_by_an_exact_order_count(logged_in, three_buyers):
+    body = logged_in.get("/dashboard/api/shopify/customers?orders_count=2").json()
+    assert _named(body) == {"Two Timer": 2}
+
+
+def test_filtering_by_at_least_an_order_count(logged_in, three_buyers):
+    body = logged_in.get("/dashboard/api/shopify/customers?orders_count=2&orders_op=gte").json()
+    assert _named(body) == {"Three Timer": 3, "Two Timer": 2}
+
+
+def test_filtering_by_governorate(logged_in, three_buyers):
+    body = logged_in.get("/dashboard/api/shopify/customers?governorate=Cairo").json()
+    assert set(_named(body)) == {"Three Timer", "One Timer"}
+
+
+def test_a_customer_with_no_governorate_is_findable_rather_than_lost(logged_in, shopify):
+    shopify.seed_order(
+        items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 500}],
+        shipping_fee=60, customer_name="Addressless", phone="01000000009", governorate="",
+    )
+    body = logged_in.get("/dashboard/api/shopify/customers?governorate=__unknown__").json()
+    assert set(_named(body)) == {"Addressless"}
+
+
+def test_sorting_by_order_count_both_ways(logged_in, three_buyers):
+    desc = logged_in.get("/dashboard/api/shopify/customers?sort=orders_desc").json()
+    assert [c["order_count"] for c in desc["customers"]] == [3, 2, 1]
+
+    asc = logged_in.get("/dashboard/api/shopify/customers?sort=orders_asc").json()
+    assert [c["order_count"] for c in asc["customers"]] == [1, 2, 3]
+
+
+def test_the_governorate_dropdown_comes_from_the_shops_own_list(logged_in, three_buyers):
+    """Not from whatever rows happened to load -- otherwise the filter changes
+    shape every time the list does, and never offers a governorate the shop
+    ships to but has not sold to yet."""
+    body = logged_in.get("/dashboard/api/shopify/customers").json()
+    keys = {g["key"] for g in body["governorates"]}
+    assert "Cairo" in keys and "Giza" in keys
+    assert len(keys) > 3
+    assert all(g["label_ar"] for g in body["governorates"])
+
+
+def test_a_bad_sort_or_operator_is_refused(logged_in):
+    assert logged_in.get("/dashboard/api/shopify/customers?sort=alphabetical").status_code == 400
+    assert logged_in.get("/dashboard/api/shopify/customers?orders_op=lte").status_code == 400
+
+
+def test_filtering_walks_every_page_not_only_the_first(logged_in, monkeypatch):
+    """The bug this guards: the top customer by orders may not be on page one
+    at all, and a page-one-only filter looks like it works."""
+    pages = [
+        {
+            "customers": [
+                {"id": "1", "name": "Page One", "order_count": 1, "governorate": "Cairo",
+                 "amount_spent": "100", "email": None, "phone": "1"}
+            ],
+            "has_next_page": True,
+            "end_cursor": "cursor-1",
+        },
+        {
+            "customers": [
+                {"id": "2", "name": "Page Two", "order_count": 9, "governorate": "Cairo",
+                 "amount_spent": "900", "email": None, "phone": "2"}
+            ],
+            "has_next_page": False,
+            "end_cursor": None,
+        },
+    ]
+
+    def fake_list(*, query=None, cursor=None):
+        return pages[0] if cursor is None else pages[1]
+
+    monkeypatch.setattr(shopify_api.shopify_admin_customers, "list_customers", fake_list)
+
+    body = logged_in.get("/dashboard/api/shopify/customers?sort=orders_desc").json()
+    assert [c["name"] for c in body["customers"]] == ["Page Two", "Page One"]
+    assert body["truncated"] is False
+
+
+def test_hitting_the_page_cap_is_reported_rather_than_hidden(logged_in, monkeypatch):
+    def endless(*, query=None, cursor=None):
+        return {
+            "customers": [
+                {"id": "x", "name": "Someone", "order_count": 1, "governorate": "Cairo",
+                 "amount_spent": "1", "email": None, "phone": "x"}
+            ],
+            "has_next_page": True,
+            "end_cursor": "more",
+        }
+
+    monkeypatch.setattr(shopify_api.shopify_admin_customers, "list_customers", endless)
+    body = logged_in.get("/dashboard/api/shopify/customers?sort=orders_desc").json()
+    assert body["truncated"] is True
