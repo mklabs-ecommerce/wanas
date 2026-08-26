@@ -4,7 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>ونس — نظام إدارة المتجر</title>
+<script>
+/* Before first paint, like the theme: switching `dir` after the page has
+   drawn flips the entire layout in front of the reader. The dashboard's CSS
+   is written in logical properties throughout (inset-inline-start,
+   text-align: start, margin-inline), so this one attribute is the whole
+   right-to-left / left-to-right switch. */
+(function () {
+  var lang = "ar";
+  try { lang = localStorage.getItem("wanas.lang") === "en" ? "en" : "ar"; } catch (e) { /* private window */ }
+  var root = document.documentElement;
+  root.lang = lang;
+  root.dir = lang === "en" ? "ltr" : "rtl";
+})();
+</script>
+<title>Wanas Gallery — نظام إدارة المتجر</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
@@ -197,11 +211,13 @@ a:hover { text-decoration: underline; }
 .brand { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3) 0; }
 .brand .mark {
   width: 38px; height: 38px; border-radius: 12px; flex: 0 0 auto;
-  display: grid; place-items: center;
-  background: linear-gradient(145deg, var(--clay), var(--lilac));
-  color: #fff; font-weight: 700; font-size: 16px; letter-spacing: -.02em;
+  object-fit: contain; background: var(--surface-3);
   box-shadow: var(--shadow-2);
 }
+/* The brand name is a name, not a label: it reads "Wanas Gallery" in both
+   languages, so it is never routed through `t()`. Latin either way, so it
+   gets the Latin face rather than the Arabic one. */
+.brand .name { font-family: var(--font-num); }
 .brand .name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
 .brand .role { font-size: 11.5px; color: var(--ink-3); margin-top: -3px; }
 
@@ -792,7 +808,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 
 <div id="boot" class="empty" style="height:100dvh;justify-content:center">
   <div class="spin"></div>
-  <div class="d">بنفتح لوحة التحكم…</div>
+  <div class="d" data-i18n="بنفتح لوحة التحكم…">بنفتح لوحة التحكم…</div>
 </div>
 
 <div id="app" hidden>
@@ -800,31 +816,35 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
   <!-- ===================== rail ===================== -->
   <aside id="rail">
     <div class="brand">
-      <div class="mark" aria-hidden="true">و</div>
+      <img class="mark" src="/dashboard/logo.webp" alt="Wanas Gallery" width="38" height="38">
       <div>
-        <div class="name">ونس جاليري</div>
-        <div class="role">نظام إدارة المتجر</div>
+        <div class="name" dir="ltr">Wanas Gallery</div>
+        <div class="role" data-i18n="نظام إدارة المتجر">نظام إدارة المتجر</div>
       </div>
     </div>
 
     <button class="rail-search" id="paletteBtn" type="button">
       <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <span>ابحث أو نفّذ أمر…</span>
+      <span data-i18n="ابحث أو نفّذ أمر…">ابحث أو نفّذ أمر…</span>
       <kbd>Ctrl K</kbd>
     </button>
 
-    <nav id="nav" aria-label="أقسام اللوحة"></nav>
+    <nav id="nav" data-i18n-title="أقسام اللوحة" aria-label="أقسام اللوحة"></nav>
 
     <div class="rail-foot">
       <div class="avatar" id="meAvatar" aria-hidden="true">؟</div>
       <div class="who">
         <div class="u" id="meName">…</div>
-        <div class="s"><span class="dot" id="sysDot"></span><span id="sysText">جاري الفحص</span></div>
+        <div class="s"><span class="dot" id="sysDot"></span><span id="sysText" data-i18n="جاري الفحص">جاري الفحص</span></div>
       </div>
-      <button class="btn sm icon ghost" id="themeBtn" type="button" title="تبديل الوضع الليلي" aria-label="تبديل الوضع الليلي">
+      <!-- Label left bilingual on purpose: it names both languages, so it is
+           correct in either and is not a translatable string. -->
+      <button class="btn sm icon ghost" id="langBtn" type="button" title="العربية / English"
+        aria-label="العربية / English" style="font-family:var(--font-num);font-weight:700;font-size:11px">AR</button>
+      <button class="btn sm icon ghost" id="themeBtn" type="button" data-i18n-title="تبديل الوضع الليلي" title="تبديل الوضع الليلي" aria-label="تبديل الوضع الليلي">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
       </button>
-      <button class="btn sm icon ghost" id="logoutBtn" type="button" title="تسجيل الخروج" aria-label="تسجيل الخروج">
+      <button class="btn sm icon ghost" id="logoutBtn" type="button" data-i18n-title="تسجيل الخروج" title="تسجيل الخروج" aria-label="تسجيل الخروج">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
       </button>
     </div>
@@ -941,6 +961,11 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
         <div class="scroll"><div class="wrap stack" id="queueBody"></div></div>
       </section>
 
+      <!-- ---------- staff ---------- -->
+      <section class="view" id="view-staff" role="tabpanel" aria-label="الفريق">
+        <div class="scroll"><div class="wrap stack" id="staffBody" style="max-width:900px"></div></div>
+      </section>
+
       <!-- ---------- settings ---------- -->
       <section class="view" id="view-settings" role="tabpanel" aria-label="الإعدادات">
         <div class="scroll"><div class="wrap stack" id="settingsBody" style="max-width:820px"></div></div>
@@ -956,7 +981,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 <aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
   <div class="drawer-head">
     <h2 id="drawerTitle"></h2>
-    <button class="btn sm icon ghost" data-close-overlay type="button" aria-label="إغلاق">
+    <button class="btn sm icon ghost" data-close-overlay type="button" data-i18n-title="إغلاق" aria-label="إغلاق">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
   </div>
@@ -967,7 +992,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="modal-head">
     <h2 id="modalTitle"></h2>
-    <button class="btn sm icon ghost" data-close-overlay type="button" aria-label="إغلاق">
+    <button class="btn sm icon ghost" data-close-overlay type="button" data-i18n-title="إغلاق" aria-label="إغلاق">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
   </div>
@@ -999,6 +1024,610 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
    a 401 and a 503 mean here, and one view module per section.
    ========================================================================== */
 "use strict";
+
+/* --------------------------------------------------------------------------
+   language
+   --------------------------------------------------------------------------
+   Arabic is the source language: every string in this file is written in it,
+   and `EN` below is keyed on the Arabic itself rather than on invented ids.
+   A key with no translation falls back to the Arabic, so a missed string is a
+   cosmetic gap and never a blank screen -- and because that makes an omission
+   invisible, tests/test_dashboard_i18n.py extracts the same key set this file
+   asks for and fails when one is unaccounted for.
+
+   Two wrappers, one rule:
+
+     tr("الطلبات")        one string
+     TR`<h2>الطلبات</h2>` a template
+
+   `TR` is a *tagged* template, which is what makes this safe. A tagged
+   template receives its literal chunks separately from its `${...}` values.
+   The chunks are developer-authored markup; the values are where a customer's
+   name, a product title, or a typed message arrive. Translating only the
+   chunks means no customer's data can ever be run through the dictionary --
+   the thing a blanket innerHTML sweep could not promise.
+
+   Not everything here is UI: QUICK_REPLIES is typed into the composer and
+   sent to a customer over WhatsApp. Those stay Arabic whatever language the
+   staff member picked, and are excluded by name, not by being overlooked. */
+
+const LANG_KEY = "wanas.lang";
+const LANG = document.documentElement.lang === "en" ? "en" : "ar";
+
+/* The one segmentation rule, shared byte for byte with the extractor in
+   tests/test_dashboard_i18n.py: a translatable segment is a maximal run
+   containing at least one Arabic letter and stopping at anything that is HTML
+   or JS syntax. That keeps a run from crossing a tag boundary or swallowing
+   an attribute's quotes, so `placeholder="اسم أو تليفون"`, `<h2>الطلبات</h2>`
+   and a bare string all segment the same way. */
+const I18N_SEGMENT = /[^<>="'`{}()]*[؀-ۿ][^<>="'`{}()]*/g;
+
+/* ---- 8< ---- EN DICTIONARY (generated; keep the markers) ---- 8< ---- */
+const EN = {
+  ". رقم التتبع اختياري، لكنه اللي بيوصل للعميل في رسالة الشحن.": ". The tracking number is optional, but it is what reaches the customer in the shipping message.",
+  ". صفر معناه شيل الصنف من الطلب.": ". Zero removes the item from the order.",
+  "Ctrl K أو /": "Ctrl K or /",
+  "SKU البديل": "Replacement SKU",
+  "· مستني من": "· waiting since",
+  "،": ", ",
+  "، والمحادثات من قاعدة البيانات المحلية": ", conversations from the local database",
+  "؟": "?",
+  "آخر الطلبات": "Latest orders",
+  "آخر كلمة للعميل": "Customer spoke last",
+  "آخر نشاط": "Last activity",
+  "آخر ٧ أيام": "Last 7 days",
+  "أخطاء أدوات": "Tool errors",
+  "أرقام الاختبار": "Test numbers",
+  "أرقام المبيعات": "the sales figures",
+  "أرقام المحادثات": "the conversation figures",
+  "أسباب التحويل والتنبيه": "Handoff and alert reasons",
+  "أضف مقاس": "Add a size",
+  "أعضاؤها بيتحددوا بقواعد شوبيفاي، فمش بنضيف أو نشيل منها من هنا —\n      أي تعديل يدوي شوبيفاي هيلغيه أول ما يعيد تطبيق القواعد.": "Its members are decided by Shopify's own rules, so nothing is added or removed from here —\n      Shopify undoes any manual change the next time it reapplies them.",
+  "أقسام اللوحة": "Dashboard sections",
+  "أكتر محادثات نشاطًا": "Busiest conversations",
+  "أكتر ١٢ أداة": "Top 12 tools",
+  "أكيد، ألغِ الطلب": "Yes, cancel the order",
+  "أكّد الشحن": "Confirm shipment",
+  "أنشئ": "Create",
+  "أنشئ المنتج": "Create the product",
+  "أنفق": "Spent",
+  "أو أكتر": "or more",
+  "أوامر": "Commands",
+  "أول حاجة تتعمل النهاردة": "First thing to do today",
+  "أول طلب من البوت هيعمل عميل هنا": "The bot's first order will create a customer here",
+  "أول طلب هيظهر هنا": "The first order will show up here",
+  "أول ظهور": "First seen",
+  "أول ظهور على أي قناة": "First seen on any channel",
+  "أول ما تبعت، المحادثة بترجع للبوت تلقائيًا.": "As soon as you send, the conversation goes back to the bot automatically.",
+  "أونلاين": "Online",
+  "إجمالي الإنفاق": "Total spent",
+  "إجمالي الفترة": "Whole period",
+  "إجمالي القطع": "Total units",
+  "إجمالي المعروض": "Total shown",
+  "إرسال الرد": "Send the reply",
+  "إعادة تعيين المحادثة": "Reset the conversation",
+  "إعادة تعيين المحادثة؟": "Reset the conversation?",
+  "إعداد ناقص": "setting missing",
+  "إغلاق": "Close",
+  "إغلاق أي نافذة": "Close any dialog",
+  "إلغاء": "Cancel",
+  "إلغاء الطلب": "Cancel the order",
+  "إلغاء الطلب؟": "Cancel the order?",
+  "إلى": "To",
+  "إلى مقاس": "To size",
+  "إنشاء الحساب": "Create the account",
+  "إنشاء وتعديل، والتغيير بيروح لشوبيفاي": "Create and edit — changes go to Shopify",
+  "إيقاف الحساب": "Deactivate account",
+  "ا": "I",
+  "ابحث أو نفّذ أمر…": "Search or run a command…",
+  "ابدأ بإضافة منتج جديد": "Start by adding a product",
+  "ابعت إشعار للعميل من شوبيفاي": "Let Shopify notify the customer",
+  "اتحفظ": "Saved",
+  "اتعمل من شوبيفاي مباشرة. أسعار ومخزون تقدر تعدلهم من شوبيفاي،\n      لكن القسم والستايل والمجموعة محتاجين مزامنة الأول": "Created straight in Shopify. Prices and stock are editable there,\n      but department, style and collection need a sync first",
+  "اتغيرت بواسطة": "changed by",
+  "اتنسخ": "Copied",
+  "احفظ": "Save",
+  "احفظ التغييرات": "Save changes",
+  "اختار منتج على الأقل": "Pick at least one product",
+  "اختصار: زرار القمر في الشريط الجانبي.": "Shortcut: the moon button in the sidebar.",
+  "اختصارات لوحة المفاتيح": "Keyboard shortcuts",
+  "اختياري": "optional",
+  "ارفض واقفل": "Reject and close",
+  "استلم المحادثة": "Take over",
+  "اسم أو تليفون": "Name or phone",
+  "اسم الدخول *": "Username *",
+  "اسم المنتج *": "Product name *",
+  "اسم المنتج أو صيغة شوبيفاي": "Product name, or Shopify syntax",
+  "اسم، SKU، لون…": "Name, SKU, colour…",
+  "اضغط للنسخ": "Click to copy",
+  "اكتب الرقم": "Type the number",
+  "اكتب رقم": "Type a number",
+  "الآن": "just now",
+  "الأحدث": "Newest",
+  "الأدوات اللي البوت بيستخدمها": "Tools the bot reaches for",
+  "الأرقام": "the numbers",
+  "الأرقام دي مستبعدة من كل أرقام صفحة التحليلات": "These numbers are excluded from every figure on the Analytics page",
+  "الأصناف": "Items",
+  "الأقسام": "Sections",
+  "الأقل طلبات": "Fewest orders",
+  "الأكتر طلبات": "Most orders",
+  "الأكثر مبيعًا": "Best sellers",
+  "الأمر مانفذش": "That did not go through",
+  "الإجمالي": "Total",
+  "الإضافة مانفذتش": "Could not add it",
+  "الإعدادات": "Settings",
+  "الإلغاء مانفذش": "Could not cancel",
+  "الإنشاء مانفذش": "Could not create it",
+  "الإنشاء والتعديل بيروح لشوبيفاي الأول، وبعدين بيتسجل محليًا": "Create and edit go to Shopify first, then mirror locally",
+  "الإيراد": "Revenue",
+  "الإيرادات": "Revenue",
+  "الإيرادات يوم بيوم": "Revenue day by day",
+  "الإيرادات يوميًا": "Daily revenue",
+  "الإيميل": "Email",
+  "الاتصال بالسيرفر اتقطع": "The connection to the server dropped",
+  "الاسم": "Name",
+  "الاسم *": "Name *",
+  "الاسم مطلوب": "A name is required",
+  "الاسم والتصنيف والقسم ومقاس واحد على الأقل مطلوبين": "Name, category, department and at least one size are required",
+  "البند اتقفل": "Item closed",
+  "البوت": "Bot",
+  "البوت خلّص لوحده": "Bot handled it alone",
+  "البوت شغال": "Bot is running",
+  "البوت ماسك المحادثة دلوقتي — استلمها الأول عشان ترد بنفسك.": "The bot owns this conversation — take it over first to reply yourself.",
+  "البوت مش فاهم": "Bot did not understand",
+  "التاريخ": "Date",
+  "التبديل اتعمل": "Swap applied",
+  "التبديل مانفذش": "The swap did not go through",
+  "التحليلات": "Analytics",
+  "التشغيل اليومي": "Day to day",
+  "التصنيف": "Category",
+  "التصنيف *": "Category *",
+  "التعديل مانفذش": "The edit did not go through",
+  "التعليق": "Comment",
+  "التعليقات": "Comments",
+  "التغيير بيسري فورًا على كل المحادثات": "Takes effect immediately on every conversation",
+  "التغيير راح لشوبيفاي": "The change went to Shopify",
+  "التفاصيل": "Details",
+  "التليفون": "Phone",
+  "الحالة": "Status",
+  "الحذف مانفذش": "Could not delete it",
+  "الحساب": "Account",
+  "الحساب اتعمل": "Account created",
+  "الحفظ مانفذش": "Could not save",
+  "الدفع": "Payment",
+  "الدور": "Role",
+  "الرد العام": "Public reply",
+  "الرد رجع للبوت": "Handed back to the bot",
+  "الرسالة اتبعتت": "Message sent",
+  "الرسالة الخاصة": "Private message",
+  "الرسالة مابعتتش": "The message was not sent",
+  "الرسايل": "Messages",
+  "الرسايل المحفوظة مالهاش توقيت لكل رسالة، فالرسوم اليومية بتعدّ": "Stored messages carry no per-message timestamp, so the daily charts count",
+  "الرقم اتشال": "Number removed",
+  "الرقم اتضاف": "Number added",
+  "الستايل": "Style",
+  "السعر": "Price",
+  "الشحن": "Fulfilment",
+  "الشحن مانفذش": "The shipment did not go through",
+  "الصنف": "Item",
+  "الطلب": "Order",
+  "الطلب اتشحن": "Order shipped",
+  "الطلب اتلغى": "Order cancelled",
+  "الطلبات": "Orders",
+  "الطلبات المطابقة أكتر من اللي بنقراه في نداء واحد — الأرقام دي حد أدنى، مش كل الفترة.": "More orders match than one call can read — these figures are a floor, not the whole period.",
+  "الطلبات حسب الحالة": "Orders by status",
+  "الطلبات حسب المحافظة": "Orders by governorate",
+  "العملاء": "Customers",
+  "العملاء أكتر من اللي بنقراه في نداء واحد — القايمة دي حد أدنى، مش كل اللي مطابق.": "More customers than one call can read — this list is a floor, not every match.",
+  "العميل": "Customer",
+  "العميل ده": "This customer",
+  "العميل هيوصله التتبع": "The customer gets the tracking",
+  "العنوان": "Address",
+  "الفترة دي فيها طلبات أكتر من اللي بنقراه في نداء واحد — الأرقام حد أدنى.": "This period has more orders than one call can read — the figures are a floor.",
+  "الفريق": "Team",
+  "الفريق استلم المحادثة": "Staff took the conversation",
+  "الفريق والصلاحيات": "Team and permissions",
+  "القايمة فاضية": "The list is empty",
+  "القرار": "Decisions",
+  "القسم": "Department",
+  "القسم *": "Department *",
+  "القناة": "Channel",
+  "القنوات": "Channels",
+  "الكل": "All",
+  "الكمية": "Quantity",
+  "الكمية اتعدلت": "Quantity updated",
+  "الكمية الجديدة": "New quantity",
+  "اللون": "Colour",
+  "المالك": "Owner",
+  "المالك بيشوف كل حاجة، وعضو الفريق بيشوف اللي اتظبط له بس. الحساب اللي اتعمل قبل ما الصلاحيات\n        تنزل بيفضل مالك — عشان محدش يتقفل بره الشاشة اللي بتوزّع الصلاحيات.": "An owner sees everything; a staff member sees only what was ticked for them. An account created\n        before permissions shipped stays an owner — so nobody is locked out of the screen that hands them out.",
+  "المبيعات": "Sales",
+  "المبيعات من شوبيفاي": "Sales from Shopify",
+  "المبيعات والمحادثات في صفحة واحدة": "Sales and conversations on one page",
+  "المبيعات — آخر ٧ أيام": "Sales — last 7 days",
+  "المتجر": "Store",
+  "المتجر أكبر من إننا نقراه كله في نداء واحد — الأرقام دي حد أدنى.": "The store is larger than one call can read — these figures are a floor.",
+  "المتجر كله": "Whole store",
+  "المتصفح رافض الوصول للحافظة": "The browser refused clipboard access",
+  "المجموعات": "Collections",
+  "المجموعات بتخلي عرض المنتجات أسهل على العميل": "Collections make products easier to browse",
+  "المجموعة": "Collection",
+  "المجموعة اتحدّثت": "Collection updated",
+  "المجموعة اتعملت": "Collection created",
+  "المجموعة بتتعمل يدوية — تقدر تضيف منتجاتها بعد الإنشاء.": "The collection is created manual — you can add its products afterwards.",
+  "المجموعة فاضية": "The collection is empty",
+  "المحادثات": "Conversations",
+  "المحادثات المستنية رد": "Conversations awaiting a reply",
+  "المحادثة": "Conversation",
+  "المحادثة بقت معاك": "The conversation is yours now",
+  "المحادثة رجعت للبوت — استلمها تاني وابعت": "The conversation went back to the bot — take it over again and send",
+  "المحادثة رجعت من الأول": "The conversation was reset",
+  "المحادثة فاضية": "The conversation is empty",
+  "المحافظة": "Governorate",
+  "المخزون": "Inventory",
+  "المخزون اتحدّث": "Inventory updated",
+  "المخزون اللي خلص": "Out-of-stock inventory",
+  "المخزون كويس": "Stock is healthy",
+  "المخزون والطلب اتحدثوا": "Inventory and order updated",
+  "المراجعة": "Review",
+  "المزايا": "the features",
+  "المزايا وأرقام الاختبار وحالة النظام": "Features, test numbers and system status",
+  "المسؤول": "Handled by",
+  "المصدر": "Source",
+  "المظهر": "Appearance",
+  "المعرّف": "ID",
+  "المقاس": "Size",
+  "المقاسات": "Sizes",
+  "المقاسات والأسعار": "Sizes and prices",
+  "الملف اتحمّل": "File downloaded",
+  "المنتج": "Product",
+  "المنتج اتحدّث": "Product updated",
+  "المنتج اتشال": "Product removed",
+  "المنتج اتعمل": "Product created",
+  "المنتج ده مالوش نسخة محلية": "This product has no local copy",
+  "المنتج مالوش نسخة محلية": "The product has no local copy",
+  "المنتجات": "Products",
+  "المنتجات اتضافت": "Products added",
+  "الموقع": "Website",
+  "الموقع مقابل البوت": "Website vs. bot",
+  "الميزة اتفتحت": "Feature turned on",
+  "الميزة اتقفلت": "Feature turned off",
+  "النص": "Text",
+  "الوارد": "Inbox",
+  "الوارد الموحّد": "Unified inbox",
+  "الوصف": "Description",
+  "الوقت": "Time",
+  "اليوم": "Today",
+  "اليوم بس": "Today only",
+  "امسح وابدأ من الأول": "Wipe and start over",
+  "انت": "you",
+  "انستجرام": "Instagram",
+  "بالظبط": "Exactly",
+  "بالقطعة": "by unit",
+  "بدون خاصة": "No private reply",
+  "بدون رد عام": "No public reply",
+  "بس": "only",
+  "بند مراجعة": "Review item",
+  "بند مفتوح دلوقتي": "open item right now",
+  "بنفتح لوحة التحكم…": "Opening the dashboard…",
+  "بيانات التواصل": "Contact details",
+  "بيانات العميل": "Customer details",
+  "بيانات المجموعة": "Collection details",
+  "بيانات المنتج": "Product details",
+  "بيتحفظ في المتصفح ده بس": "Saved in this browser only",
+  "بيشوف إيه": "Sees what",
+  "تاريخ البداية بعد النهاية": "The start date is after the end date",
+  "تبديل المنتجات والتنبيهات": "Item swaps and alerts",
+  "تبديل الوضع الليلي": "Toggle dark mode",
+  "تبديل الوضع الليلي / النهاري": "Toggle dark / light mode",
+  "تجميعات شوبيفاي وأعضاؤها": "Shopify collections and their members",
+  "تحديث": "Refresh",
+  "تحديث الصفحة": "Refresh the page",
+  "تحديث الصفحة الحالية": "Refresh the current page",
+  "تحويلات": "Handoffs",
+  "تحويلات للفريق": "Handoffs to staff",
+  "تسجيل الخروج": "Log out",
+  "تصدير": "Export",
+  "تعديل": "Edit",
+  "تعديل الكمية": "Edit quantity",
+  "تعديل كمية": "Edit quantity",
+  "تعذر تحميل": "Could not load",
+  "تعليق انستجرام": "Instagram comment",
+  "تعليق سلبي": "Negative comment",
+  "تعليقات آخر ٣٠ يوم": "Comments in the last 30 days",
+  "تعليقات انستجرام": "Instagram comments",
+  "تعليقات كتير": "Comment flood",
+  "تفعيل الحساب": "Activate account",
+  "تمام، اتفهم": "Got it",
+  "تنبيه": "Alert",
+  "ج.م": "EGP",
+  "جاري التحميل…": "Loading…",
+  "جاري الفحص": "Checking…",
+  "جدول المقاسات": "Size chart",
+  "جرّب فلتر تاني أو امسح البحث": "Try another filter or clear the search",
+  "جزئي": "Partial",
+  "حالة الطلبات": "Order status",
+  "حالة النظام": "System status",
+  "حجم الرسايل": "Message volume",
+  "حذف": "Delete",
+  "حذف السطر": "Delete row",
+  "حسب عدد طلبات العميل الكلي في المتجر": "By the customer's lifetime order count",
+  "حفظ": "Save",
+  "خلص": "Out of stock",
+  "د": "m",
+  "دخول اللوحة": "Dashboard login",
+  "ده بيمسح تاريخ المحادثة والسلة عشان العميل يبدأ من الأول. بيانات العميل وطلباته مش بتتمس.": "This wipes the conversation history and cart so the customer starts fresh. Their record and orders are untouched.",
+  "ده حسابك انت. الدور والصلاحيات بتاعتك مش بتتغير من هنا — عشان محدش يقفل على نفسه بالغلط.": "This is your own account. Your role and permissions cannot be changed here — so nobody locks themselves out by accident.",
+  "ذكية": "Smart",
+  "رابط صورة": "Image URL",
+  "رجالي": "Men's",
+  "رجّع البوت": "Hand back to the bot",
+  "رد عام": "Public reply",
+  "ردود عامة": "Public replies",
+  "رسالة تلقائية": "Automatic message",
+  "رسالة خاصة": "Private message",
+  "رسالة من الفريق": "message from staff",
+  "رسايل خاصة": "Private messages",
+  "رسم بياني أعمدة": "Bar chart",
+  "رسم بياني زمني": "Time chart",
+  "رقم التتبع": "Tracking number",
+  "رقم التليفون": "Phone number",
+  "رقم الطلب": "Order number",
+  "رقم تاني…": "Another number…",
+  "رقم طلب، اسم، أو صيغة شوبيفاي": "Order number, name, or Shopify syntax",
+  "رقم غير صحيح": "Not a valid number",
+  "س": "h",
+  "سبب التحويل": "Handoff reason",
+  "سجل التعليقات": "Comment log",
+  "سجل التعليقات وردودها": "Comments and their replies",
+  "سعر *": "Price *",
+  "سيبها فاضية لو مش هتتغير": "leave blank to keep it",
+  "شتوي ٢٠٢٦": "Winter 2026",
+  "شحن": "Ship",
+  "شحن الطلب": "Ship the order",
+  "شركة الشحن": "Carrier",
+  "شغال": "In progress",
+  "شكوى": "Complaint",
+  "شوبيفاي": "Shopify",
+  "شوبيفاي بيطبّق التغيير خلال ثواني": "Shopify applies the change within seconds",
+  "شوبيفاي مش راجع دلوقتي": "Shopify is not responding right now",
+  "شيل": "Remove",
+  "صنف": "item",
+  "صور وصوتيات": "Photos and voice notes",
+  "صورة اتبعتت للعميل": "Image sent to the customer",
+  "صورة من العميل": "Image from the customer",
+  "ضيف": "Add",
+  "ضيف المختار": "Add selected",
+  "ضيف منتجات": "Add products",
+  "ضيف منتجات للمجموعة": "Add products to the collection",
+  "طريقة الدفع": "Payment method",
+  "طلب": "order",
+  "طلب اتعدّل": "Order modified",
+  "طلب اختبار من أرقام الفريق مستبعد من كل رقم في الصفحة دي.": "test order(s) from staff numbers are excluded from every figure on this page.",
+  "طلب البوت": "Bot order",
+  "طلب الموقع": "Website order",
+  "طلب تبديل": "Swap request",
+  "طلب من": "Order from",
+  "طلب موظف": "Asked for a person",
+  "طلبات": "orders",
+  "طلبات فعّالة": "Active orders",
+  "طول": "Length",
+  "عدد الرسايل": "Message count",
+  "عدد الطلبات": "Order count",
+  "عدد الطلبات يوميًا": "Orders per day",
+  "عدد طلباته": "Their order count",
+  "عضو جديد": "New member",
+  "عضو فريق": "Staff member",
+  "عضو فريق جديد": "New staff member",
+  "عضو فريق — بيشوف اللي تحت بس": "Staff member — sees only what is ticked below",
+  "على شوبيفاي": "on Shopify",
+  "على وشك الخلاص": "Running low",
+  "عملاء البوت": "Bot customers",
+  "عملاء المتجر وعملاء البوت": "Store customers and bot customers",
+  "عملاء جدد": "New customers",
+  "عملاء شوبيفاي": "Shopify customers",
+  "عملاء شوبيفاي هم كل المتجر؛ عملاء البوت هم اللي اشتروا من المحادثة — الاتنين مش نفس القايمة عن قصد": "Shopify customers are the whole store; bot customers are the ones who bought in a conversation — two different lists, on purpose",
+  "عملاء قدامى": "Returning customers",
+  "عملاء مختلفين": "Distinct customers",
+  "عميل": "customer",
+  "عميل جديد": "New customer",
+  "عميل قديم": "Returning",
+  "عميل قديم/جديد": "Returning/new",
+  "عميل مختلف": "distinct customer",
+  "عند الاستلام": "Cash on delivery",
+  "غير محدد": "Unspecified",
+  "غيّر الفلتر أو امسح البحث": "Change the filter or clear the search",
+  "فاضل": "left",
+  "فترة محددة": "Custom range",
+  "فلترة سريعة": "Quick filter",
+  "قائمة الطلبات": "Order list",
+  "قائمة المراجعة": "Review queue",
+  "قدامى وجدد": "Returning and new",
+  "قراءة فقط": "read only",
+  "قطعة": "unit",
+  "قيمة المخزون بالبيع": "Stock value at retail",
+  "كل الأقسام": "Every section",
+  "كل الأنظمة شغالة": "All systems running",
+  "كل الدفع": "All payments",
+  "كل العملاء": "All customers",
+  "كل القنوات": "All channels",
+  "كل المتجر": "Whole store",
+  "كل المحافظات": "All governorates",
+  "كل المخزون": "All inventory",
+  "كل المنتجات": "All products",
+  "كل تحويل هو سؤال البوت مقدرش عليه": "Each handoff is a question the bot could not answer",
+  "كل تعليق بياخد رسالة خاصة واحدة بس، مرة واحدة للأبد — القيد ده متسجّل في قاعدة البيانات قبل ما الرسالة تتبعت،\n        عشان أي كراش ما يسمحش برسالة تانية. التعليق اللي مالوش أي رد اتشاف واتقرر إن الرد عليه مش مناسب.": "Each comment gets exactly one private message, once and for all — that limit is written to the database before the message is sent,\n        so no crash can permit a second one. A comment with no reply at all was seen and judged not worth answering.",
+  "كل حاجة تمام": "Everything is fine",
+  "كل سطر بيبقى SKU لوحده في شوبيفاي. المقاس مطلوب؛ اللون والطول اختياريين.": "Each row becomes its own SKU in Shopify. Size is required; colour and length are optional.",
+  "كل مقاس ولون، الأقل أولاً": "Every size and colour, lowest first",
+  "كلمة السر *": "Password *",
+  "كلمة سر جديدة": "New password",
+  "لسه": "Not yet",
+  "لسه محدش اشترى": "Nobody has bought yet",
+  "لسه محصلش كلام هنا": "Nothing has been said here yet",
+  "لسه مفيش مبيعات": "No sales yet",
+  "لو ميزة التعليقات مقفولة، ده الوضع الطبيعي": "If the comments feature is off, this is expected",
+  "لوحة الأوامر والبحث": "Command palette and search",
+  "لون": "Colour",
+  "ليلي": "Dark",
+  "مالك": "Owner",
+  "مالك — بيشوف كل حاجة": "Owner — sees everything",
+  "مانفعش نعمل الحساب": "Could not create the account",
+  "مانفعش نغيّر الميزة": "Could not change the feature",
+  "مانفعش نقفله": "Could not close it",
+  "مبيعات آخر ٧ أيام": "Sales, last 7 days",
+  "متاح": "Available",
+  "متسجّل": "Set",
+  "متشحن": "Shipped",
+  "متشحنة": "Shipped",
+  "متوسط الطلب": "Average order",
+  "متوفر": "In stock",
+  "مثلاً 1234567890": "e.g. 1234567890",
+  "مثلاً بوسطة": "e.g. Bosta",
+  "مثلاً: صيف ٢٠٢٦": "e.g. Summer 2026",
+  "مثلاً: هودي ونس الشتوي": "e.g. Wanas winter hoodie",
+  "مجموعة جديدة": "New collection",
+  "مجموعة ذكية": "Smart collection",
+  "محادثات نشطة": "Active conversations",
+  "محادثة": "conversation",
+  "محادثة اتحولت لحد": "conversation handed to a person",
+  "محادثة نشطة": "active conversation",
+  "محادثة ← طلب": "Conversation → order",
+  "محتاج تدخّل": "Needs you",
+  "محتاج متابعة": "Needs following up",
+  "مخزون": "Stock",
+  "مخزون خلص": "Out of stock",
+  "مخزون منخفض": "Low stock",
+  "مدفوع": "Paid",
+  "مزايا البوت": "Bot features",
+  "مزود الموديل": "Model provider",
+  "مسترجع": "Refunded",
+  "مستني رد": "Awaiting reply",
+  "مستنية رد": "Awaiting reply",
+  "مستنية شحن": "Awaiting shipment",
+  "مش عدد الرسايل.\n        إجمالي الرسايل تحت رقم حقيقي — بس مش موزّع على الأيام.": "not the number of messages.\n        The message totals below are real — they are just not spread across days.",
+  "مش معروف": "Unknown",
+  "مش ممكن الحفظ من هنا": "Cannot be saved from here",
+  "مش نسبة تحويل الموقع: شوبيفاي مابيديناش عدد زوار المتجر أصلاً.\n      دي طلبات البوت في الفترة دي مقسومة على المحادثات اللي البوت اشتغل فيها — رقم على رقم، والمحادثة\n      اللي ابتدت قبل الفترة أو الطلب اللي اتقفل بعدها مش متطابقين بالظبط. لو فلترت بطريقة الدفع\n      الرقم ده بيختفي، لأن المحادثة مالهاش طريقة دفع تتقسم عليها.": "is not the website's conversion rate: Shopify gives us no visitor count at all.\n      It is the bot's orders in this period divided by the conversations the bot worked — a count over a count, and a conversation\n      that started before the period, or an order closed after it, do not line up exactly. Filter by payment method and\n      this figure disappears, because a conversation has no payment method to divide by.",
+  "مصدرها شوبيفاي مباشرة — طلبات البوت وطلبات الموقع مع بعض": "Straight from Shopify — bot orders and website orders together",
+  "مظبوط": "Configured",
+  "مع البوت": "With the bot",
+  "مع الفريق": "With staff",
+  "مع الفريق دلوقتي": "With staff right now",
+  "معلّق": "Pending",
+  "مفتاح الموديل": "Model key",
+  "مفصول بفاصلة": "comma separated",
+  "مفيش أرقام اختبار": "No test numbers",
+  "مفيش استخدام مسجّل": "No recorded usage",
+  "مفيش بيانات": "No data",
+  "مفيش بيانات للتصدير": "Nothing to export",
+  "مفيش تحويلات في الفترة دي": "No handoffs in this period",
+  "مفيش تعليقات متسجلة": "No comments recorded",
+  "مفيش حاجة مستنية منك دلوقتي": "Nothing is waiting on you right now",
+  "مفيش صلاحيات لسه": "No permissions yet",
+  "مفيش طلب تبديل ولا تنبيه مستني مراجعة": "No swap request or alert awaiting review",
+  "مفيش طلبات": "No orders",
+  "مفيش طلبات بالفلتر ده": "No orders match this filter",
+  "مفيش طلبات في الفترة دي": "No orders in this period",
+  "مفيش عملاء": "No customers",
+  "مفيش مبيعات في الفترة دي": "No sales in this period",
+  "مفيش مجموعات": "No collections",
+  "مفيش محادثات": "No conversations",
+  "مفيش محادثات هنا": "No conversations here",
+  "مفيش منتجات": "No products",
+  "مفيش نتائج": "No results",
+  "مفيش نتيجة": "No result",
+  "مقارنة بأول نص الفترة": "vs. the first half of the period",
+  "مقاس": "Size",
+  "مقاس *": "Size *",
+  "مقاس — الأقل أولاً": "Size — lowest first",
+  "مقاسات خلصت": "sizes out of stock",
+  "مقدرناش ننسخ": "Could not copy",
+  "ملاحظة": "Note",
+  "ملغي": "Cancelled",
+  "ملغية": "Cancelled",
+  "من": "From",
+  "من البوت": "From the bot",
+  "من البوت ومن الموقع — مصدرها شوبيفاي": "From the bot and the website — sourced from Shopify",
+  "من الطلبات الفعّالة": "of active orders",
+  "من العملاء": "From customers",
+  "من العميل": "From the customer",
+  "من الفريق": "From staff",
+  "من الموقع": "From the website",
+  "من شوبيفاي، البوت والموقع مع بعض": "From Shopify — bot and website together",
+  "من غير محافظة": "No governorate",
+  "من مقاس": "From size",
+  "منتج": "product",
+  "منتج جديد": "New product",
+  "منشور": "Published",
+  "موقوف": "Deactivated",
+  "مين يدخل اللوحة، وكل واحد بيشوف إيه": "Who can log in, and what each of them sees",
+  "ناقص": "Missing",
+  "ناقص بيانات": "Missing details",
+  "ناقص — يعني مفيش رسايل تتبع": "Missing — which means no tracking messages",
+  "نسخ رقم الطلب": "Copy the order number",
+  "نشاط المحادثات": "Conversation activity",
+  "نشاط المحادثات يوميًا": "Conversation activity per day",
+  "نشط": "Active",
+  "نظام إدارة المتجر": "Store operations",
+  "نظرة سريعة على المتجر والمحادثات": "A quick look at the store and the conversations",
+  "نهاري": "Light",
+  "هودي": "Hoodie",
+  "هيتلغي": "will be cancelled",
+  "و": "W",
+  "واتساب": "WhatsApp",
+  "واتساب وانستجرام في مكان واحد": "WhatsApp and Instagram in one place",
+  "وافق على التبديل": "Approve the swap",
+  "والمحادثة رجعت للبوت": "and the conversation went back to the bot",
+  "وسائط مش مدعومة": "Unsupported media",
+  "وسيط زمن الإغلاق": "Median time to close",
+  "وصف قصير يظهر في شوبيفاي": "A short description shown in Shopify",
+  "وهيترجع للمخزون، والعميل هيوصله إشعار": "and it returns to stock; the customer is notified",
+  "ويبهوك شوبيفاي": "Shopify webhook",
+  "ي": "d",
+  "يدوية": "Manual",
+  "يوم": "days",
+  "يوم واحد؟ حط نفس التاريخ في الاتنين.": "One day? Put the same date in both.",
+  "١": "1",
+  "٢": "2",
+  "٣": "3",
+  "٨ حروف على الأقل.": "At least 8 characters.",
+};
+/* ---- 8< ---- END EN DICTIONARY ---- 8< ---- */
+
+/* For payloads that carry their own translations (`label_ar`/`label_en` on
+   the feature flags and the permission catalog) -- those strings live on the
+   server, so the dictionary above has never seen them. */
+function pick(row, field) {
+  return (LANG === "en" ? row[field + "_en"] : row[field + "_ar"]) || row[field + "_ar"] || "";
+}
+
+function trText(text) {
+  if (LANG === "ar") return text;
+  return text.replace(I18N_SEGMENT, (run) => {
+    const key = run.trim();
+    const hit = EN[key];
+    // Replaced inside the run rather than returned bare, so the whitespace
+    // that positioned the phrase in its markup survives.
+    return hit === undefined ? run : run.replace(key, () => hit);
+  });
+}
+
+const tr = trText;
+
+function TR(chunks, ...values) {
+  let out = trText(chunks[0]);
+  for (let i = 0; i < values.length; i++) out += values[i] + trText(chunks[i + 1]);
+  return out;
+}
+
+function setLang(lang) {
+  try { localStorage.setItem(LANG_KEY, lang); } catch { /* private window */ }
+  // A reload rather than a re-render: half the labels on this page live in
+  // module-level constants (NAV, ORDER_STATUS, CHANNELS, ...) that were built
+  // once at load. Re-rendering would leave those in the old language, which
+  // reads as a bug. Language is a session preference, not a live toggle.
+  location.reload();
+}
 
 /* --------------------------------------------------------------------------
    tiny DOM + format helpers
@@ -1071,64 +1700,92 @@ const nf = new Intl.NumberFormat("en-US");
 const nf1 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 const num = (v) => nf.format(Math.round(Number(v) || 0));
-const money = (v) => nf.format(Math.round(Number(v) || 0)) + " ج.م";
+const money = (v) => nf.format(Math.round(Number(v) || 0)) + tr(" ج.م");
 const pct = (v) => nf1.format((Number(v) || 0) * 100) + "%";
+
+//: Month names follow the UI language; the digits are Latin in both, because
+//: `nf`/`nf1` above are pinned to en-US and a date in Arabic-Indic numerals
+//: next to a Latin order total reads like two different pages.
+const DATE_LOCALE = LANG === "en" ? "en-GB" : "ar-EG-u-nu-latn";
 
 function shortDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleDateString("ar-EG", { day: "numeric", month: "short" });
+  return d.toLocaleDateString(DATE_LOCALE, { day: "numeric", month: "short" });
 }
 
 function dateTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(DATE_LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function ago(iso) {
   if (!iso) return "";
   const secs = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (secs < 60) return "الآن";
-  if (secs < 3600) return `${Math.floor(secs / 60)} د`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)} س`;
-  if (secs < 86400 * 30) return `${Math.floor(secs / 86400)} ي`;
+  if (secs < 60) return tr("الآن");
+  if (secs < 3600) return TR`${Math.floor(secs / 60)} د`;
+  if (secs < 86400) return TR`${Math.floor(secs / 3600)} س`;
+  if (secs < 86400 * 30) return TR`${Math.floor(secs / 86400)} ي`;
   return shortDate(iso);
 }
 
 const CHANNELS = {
-  whatsapp:     { label: "واتساب", tone: "teal", short: "و" },
-  instagram_dm: { label: "انستجرام", tone: "lilac", short: "ا" },
+  whatsapp:     { label: tr("واتساب"), tone: "teal", short: tr("و") },
+  instagram_dm: { label: tr("انستجرام"), tone: "lilac", short: tr("ا") },
 };
-const channelInfo = (ch) => CHANNELS[ch] || { label: ch || "—", tone: "sky", short: "؟" };
+const channelInfo = (ch) => CHANNELS[ch] || { label: ch || "—", tone: "sky", short: tr("؟") };
+
+/* An *order's* channel, which has one value a conversation never has: an
+   order nobody talked to the bot about came from the website. See
+   `dashboard/shopify_api.py::_order_channel` -- it is read off the local
+   order row, not off the Shopify tags, so an Instagram sale says Instagram. */
+const ORDER_CHANNELS = { web: tr("الموقع"), whatsapp: tr("واتساب"), instagram_dm: tr("انستجرام"), all: tr("كل القنوات") };
+const channelLabel = (ch) => ORDER_CHANNELS[ch] || ch || "—";
+
+const PAYMENT_LABELS = { cod: tr("عند الاستلام"), online: tr("أونلاين"), unknown: tr("غير محدد") };
+const PAYMENT_TONES = { cod: "amber", online: "teal", unknown: "sky" };
+/* `unknown` is its own chip, never folded into "أونلاين": an order with no
+   gateway is not evidence that somebody paid a card, and the whole point of
+   the toggle is to keep the two apart. */
+const paymentChip = (method) =>
+  chipHTML(PAYMENT_LABELS[method] || method || "—", PAYMENT_TONES[method] || "sky", "dot");
+
+const CUSTOMER_KIND_LABELS = { returning: tr("عميل قديم"), new: tr("عميل جديد"), unknown: "—" };
+const customerKindChip = (kind, count) => {
+  if (!kind || kind === "unknown") return `<span class="cellsub">—</span>`;
+  const label = CUSTOMER_KIND_LABELS[kind];
+  const detail = count ? `${label} · ${num(count)}` : label;
+  return chipHTML(detail, kind === "returning" ? "clay" : "sky");
+};
 
 const HANDOFF_REASONS = {
-  manual: "الفريق استلم المحادثة",
-  complaint: "شكوى",
-  human_request: "طلب موظف",
-  unclear: "البوت مش فاهم",
-  media_unsupported: "وسائط مش مدعومة",
-  comment_handoff: "تعليق انستجرام",
-  low_stock: "مخزون منخفض",
-  order_modified: "طلب اتعدّل",
-  negative_comment: "تعليق سلبي",
-  comment_flood: "تعليقات كتير",
+  manual: tr("الفريق استلم المحادثة"),
+  complaint: tr("شكوى"),
+  human_request: tr("طلب موظف"),
+  unclear: tr("البوت مش فاهم"),
+  media_unsupported: tr("وسائط مش مدعومة"),
+  comment_handoff: tr("تعليق انستجرام"),
+  low_stock: tr("مخزون منخفض"),
+  order_modified: tr("طلب اتعدّل"),
+  negative_comment: tr("تعليق سلبي"),
+  comment_flood: tr("تعليقات كتير"),
 };
 const reasonLabel = (r) => HANDOFF_REASONS[r] || r || "—";
 
 const ORDER_STATUS = {
-  FULFILLED:          { label: "متشحن", tone: "teal" },
-  UNFULFILLED:        { label: "لسه", tone: "amber" },
-  PARTIALLY_FULFILLED:{ label: "جزئي", tone: "sky" },
-  IN_PROGRESS:        { label: "شغال", tone: "sky" },
-  ON_HOLD:            { label: "معلّق", tone: "amber" },
-  PAID:               { label: "مدفوع", tone: "teal" },
-  PENDING:            { label: "معلّق", tone: "amber" },
-  REFUNDED:           { label: "مسترجع", tone: "rose" },
-  cancelled:          { label: "ملغي", tone: "rose" },
+  FULFILLED:          { label: tr("متشحن"), tone: "teal" },
+  UNFULFILLED:        { label: tr("لسه"), tone: "amber" },
+  PARTIALLY_FULFILLED:{ label: tr("جزئي"), tone: "sky" },
+  IN_PROGRESS:        { label: tr("شغال"), tone: "sky" },
+  ON_HOLD:            { label: tr("معلّق"), tone: "amber" },
+  PAID:               { label: tr("مدفوع"), tone: "teal" },
+  PENDING:            { label: tr("معلّق"), tone: "amber" },
+  REFUNDED:           { label: tr("مسترجع"), tone: "rose" },
+  cancelled:          { label: tr("ملغي"), tone: "rose" },
 };
 const statusChip = (raw, cancelled) => {
-  if (cancelled) return chipHTML("ملغي", "rose", "bar");
+  if (cancelled) return chipHTML(tr("ملغي"), "rose", "bar");
   const s = ORDER_STATUS[raw] || { label: raw || "—", tone: "sky" };
   return chipHTML(s.label, s.tone, s.tone === "amber" ? "ring" : "dot");
 };
@@ -1163,7 +1820,7 @@ async function api(path, { method = "GET", body, quiet = false } = {}) {
   } catch (err) {
     // A dropped connection is not a server answer; saying "الخادم رفض" here
     // would send someone hunting a bug that is their wifi.
-    throw new ApiError(0, { error: "network", detail: "الاتصال بالسيرفر اتقطع" });
+    throw new ApiError(0, { error: "network", detail: tr("الاتصال بالسيرفر اتقطع") });
   }
 
   if (response.status === 401) {
@@ -1187,9 +1844,13 @@ async function api(path, { method = "GET", body, quiet = false } = {}) {
    than merely report: half the pages are live reads, and "المتجر مش راضي
    يرد" is actionable where a 503 is not. */
 function errorBanner(err, what) {
+  // A 403 is not a failure to report. It means this account was never meant
+  // to see that panel, and "تعذر تحميل الطلبات" would send someone hunting a
+  // bug that is a permission working exactly as configured.
+  if (err.code === "forbidden") return "";
   const store = err.code === "store_unavailable";
   const tone = store ? "warn" : "bad";
-  const title = store ? "شوبيفاي مش راجع دلوقتي" : `تعذر تحميل ${what}`;
+  const title = store ? tr("شوبيفاي مش راجع دلوقتي") : TR`تعذر تحميل ${what}`;
   return `<div class="banner" data-tone="${tone === "warn" ? "" : "bad"}">
     ${icon("alert", 16)}
     <div><strong>${esc(title)}</strong><br>${esc(err.message || "")}</div>
@@ -1271,7 +1932,7 @@ const overlay = {
         onclick: () => { this.close(); resolve(true); },
       });
       const no = el("button", {
-        class: "btn", text: "إلغاء", onclick: () => { this.close(); resolve(false); },
+        class: "btn", text: tr("إلغاء"), onclick: () => { this.close(); resolve(false); },
       });
       this.modal(title, `<p style="font-size:13.5px;color:var(--ink-2)">${esc(message)}</p>`, [yes, no]);
     });
@@ -1330,7 +1991,7 @@ function lineChart(points, { height = 190, tone = "clay", fmt = num, label = "" 
   const W = 720, H = height, padL = 44, padR = 12, padT = 14, padB = 26;
   const svg = svgEl("svg", {
     class: "chart", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none",
-    role: "img", "aria-label": label || "رسم بياني زمني", height,
+    role: "img", "aria-label": label || tr("رسم بياني زمني"), height,
   });
   if (!points.length) return svg;
 
@@ -1429,7 +2090,7 @@ function barChart(points, { height = 190, tone = "lilac", fmt = num, label = "" 
   const W = 720, H = height, padL = 44, padR = 12, padT = 14, padB = 26;
   const svg = svgEl("svg", {
     class: "chart", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none",
-    role: "img", "aria-label": label || "رسم بياني أعمدة", height,
+    role: "img", "aria-label": label || tr("رسم بياني أعمدة"), height,
   });
   if (!points.length) return svg;
   const max = Math.max(...points.map((p) => Number(p.value) || 0), 1);
@@ -1581,17 +2242,17 @@ function tableHTML(headers, rowsHTML, { minWidth } = {}) {
 
 /* Copy-to-clipboard for the ids and phone numbers staff paste into Shopify
    and WhatsApp all day. */
-async function copy(text, what = "النص") {
+async function copy(text, what = tr("النص")) {
   try {
     await navigator.clipboard.writeText(text);
-    toast(`${what} اتنسخ`, text.length > 40 ? "" : text);
+    toast(TR`${what} اتنسخ`, text.length > 40 ? "" : text);
   } catch {
-    toast("مقدرناش ننسخ", "المتصفح رافض الوصول للحافظة", "warn");
+    toast(tr("مقدرناش ننسخ"), tr("المتصفح رافض الوصول للحافظة"), "warn");
   }
 }
 document.addEventListener("click", (event) => {
   const trigger = event.target.closest("[data-copy]");
-  if (trigger) { event.preventDefault(); copy(trigger.dataset.copy, trigger.dataset.copyWhat || "النص"); }
+  if (trigger) { event.preventDefault(); copy(trigger.dataset.copy, trigger.dataset.copyWhat || tr("النص")); }
 });
 
 /* CSV export: every table view offers one, because the thing staff ask for
@@ -1605,7 +2266,7 @@ function exportCSV(filename, headers, rows) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast("الملف اتحمّل", filename);
+  toast(tr("الملف اتحمّل"), filename);
 }
 
 /* ==========================================================================
@@ -1643,34 +2304,80 @@ $("#themeBtn").addEventListener("click", () => {
   applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 });
 
+/* Shows the language it switches *to*, not the one you are in -- a button
+   labelled with the current state reads as a status and nobody presses it. */
+$("#langBtn").textContent = LANG === "en" ? "ع" : "EN";
+$("#langBtn").addEventListener("click", () => setLang(LANG === "en" ? "ar" : "en"));
+
 /* --- navigation ----------------------------------------------------------- */
 
 const NAV = [
-  { group: "التشغيل اليومي" },
-  { id: "overview",    label: "اليوم",            icon: "home",    title: "اليوم",              sub: "نظرة سريعة على المتجر والمحادثات" },
-  { id: "inbox",       label: "الوارد",           icon: "inbox",   title: "الوارد الموحّد",      sub: "واتساب وانستجرام في مكان واحد", badge: "inbox" },
-  { id: "comments",    label: "تعليقات انستجرام", icon: "comment", title: "تعليقات انستجرام",   sub: "سجل التعليقات وردودها" },
-  { id: "queue",       label: "المراجعة",         icon: "flag",    title: "قائمة المراجعة",     sub: "تبديل المنتجات والتنبيهات", badge: "queue" },
+  { group: tr("التشغيل اليومي") },
+  { id: "overview",    label: tr("اليوم"),            icon: "home",    title: tr("اليوم"),              sub: tr("نظرة سريعة على المتجر والمحادثات") },
+  { id: "inbox",       label: tr("الوارد"),           icon: "inbox",   title: tr("الوارد الموحّد"),      sub: tr("واتساب وانستجرام في مكان واحد"), badge: "inbox", perm: "inbox" },
+  { id: "comments",    label: tr("تعليقات انستجرام"), icon: "comment", title: tr("تعليقات انستجرام"),   sub: tr("سجل التعليقات وردودها"), perm: "inbox" },
+  { id: "queue",       label: tr("المراجعة"),         icon: "flag",    title: tr("قائمة المراجعة"),     sub: tr("تبديل المنتجات والتنبيهات"), badge: "queue", perm: "queue" },
 
-  { group: "المتجر" },
-  { id: "orders",      label: "الطلبات",     icon: "bag",    title: "الطلبات",     sub: "من البوت ومن الموقع — مصدرها شوبيفاي" },
-  { id: "products",    label: "المنتجات",    icon: "tag",    title: "المنتجات",    sub: "إنشاء وتعديل، والتغيير بيروح لشوبيفاي" },
-  { id: "inventory",   label: "المخزون",     icon: "boxes",  title: "المخزون",     sub: "كل مقاس ولون، الأقل أولاً", badge: "stock" },
-  { id: "collections", label: "المجموعات",   icon: "layers", title: "المجموعات",   sub: "تجميعات شوبيفاي وأعضاؤها" },
-  { id: "customers",   label: "العملاء",     icon: "users",  title: "العملاء",     sub: "عملاء المتجر وعملاء البوت" },
+  { group: tr("المتجر") },
+  { id: "orders",      label: tr("الطلبات"),     icon: "bag",    title: tr("الطلبات"),     sub: tr("من البوت ومن الموقع — مصدرها شوبيفاي"), perm: "orders" },
+  { id: "products",    label: tr("المنتجات"),    icon: "tag",    title: tr("المنتجات"),    sub: tr("إنشاء وتعديل، والتغيير بيروح لشوبيفاي"), perm: "products" },
+  { id: "inventory",   label: tr("المخزون"),     icon: "boxes",  title: tr("المخزون"),     sub: tr("كل مقاس ولون، الأقل أولاً"), badge: "stock", perm: "inventory" },
+  { id: "collections", label: tr("المجموعات"),   icon: "layers", title: tr("المجموعات"),   sub: tr("تجميعات شوبيفاي وأعضاؤها"), perm: "collections" },
+  { id: "customers",   label: tr("العملاء"),     icon: "users",  title: tr("العملاء"),     sub: tr("عملاء المتجر وعملاء البوت"), perm: "customers" },
 
-  { group: "القرار" },
-  { id: "analytics",   label: "التحليلات",   icon: "chart",  title: "التحليلات",   sub: "المبيعات والمحادثات في صفحة واحدة" },
-  { id: "settings",    label: "الإعدادات",   icon: "gear",   title: "الإعدادات",   sub: "المزايا وأرقام الاختبار وحالة النظام" },
+  { group: tr("القرار") },
+  { id: "analytics",   label: tr("التحليلات"),   icon: "chart",  title: tr("التحليلات"),   sub: tr("المبيعات والمحادثات في صفحة واحدة"), perm: "analytics" },
+  { id: "staff",       label: tr("الفريق"),      icon: "user",   title: tr("الفريق والصلاحيات"), sub: tr("مين يدخل اللوحة، وكل واحد بيشوف إيه"), perm: "manage_staff" },
+  { id: "settings",    label: tr("الإعدادات"),   icon: "gear",   title: tr("الإعدادات"),   sub: tr("المزايا وأرقام الاختبار وحالة النظام"), perm: "settings" },
 ];
 
 const ROUTES = Object.fromEntries(NAV.filter((n) => n.id).map((n) => [n.id, n]));
 
+/* Whether this account may open a section.
+   Cosmetic only. The endpoint behind every one of these is guarded on the
+   server (`dashboard/guard.py::require_permission`) -- hiding a button is a
+   courtesy to the person reading the sidebar, not a control. */
+function may(permission) {
+  if (!permission) return true;
+  const granted = (state.me && state.me.permissions) || null;
+  // No list at all means an older `/api/me` payload; treat it as unscoped
+  // rather than hiding the whole dashboard from someone who can use it.
+  return granted === null ? true : granted.includes(permission);
+}
+
+function visibleNav() {
+  return NAV.filter((n) => (n.id ? may(n.perm) : true));
+}
+
+/* The shell around the app -- the search button, the boot text, the brand
+   subtitle -- is static HTML rather than something a view renders, so it is
+   marked up with `data-i18n` and translated once here. `data-i18n` carries the
+   Arabic key so the markup stays readable in the source. */
+function translateShell() {
+  if (LANG === "ar") return;
+  $$("[data-i18n]").forEach((node) => { node.textContent = trText(node.dataset.i18n); });
+  $$("[data-i18n-title]").forEach((node) => {
+    const text = trText(node.dataset.i18nTitle);
+    node.title = text;
+    node.setAttribute("aria-label", text);
+  });
+  document.title = "Wanas Gallery — " + trText("نظام إدارة المتجر");
+}
+
 function buildNav() {
   const nav = $("#nav");
   nav.innerHTML = "";
-  for (const item of NAV) {
-    if (item.group) { nav.append(el("div", { class: "nav-group", text: item.group })); continue; }
+  const items = visibleNav();
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    if (item.group) {
+      // A heading with nothing left under it is a heading for a section this
+      // account cannot see -- drop it rather than leaving a bare label.
+      const next = items[i + 1];
+      if (!next || next.group) continue;
+      nav.append(el("div", { class: "nav-group", text: item.group }));
+      continue;
+    }
     const button = el("button", {
       class: "nav-item", type: "button", dataset: { route: item.id },
       onclick: () => go(item.id),
@@ -1699,6 +2406,10 @@ const VIEWS = {};   // id -> { mount(force) }
 
 function go(route, options = {}) {
   if (!ROUTES[route]) route = "overview";
+  // A hash typed straight into the URL bar is not a way past a permission:
+  // the route falls back to the one page everybody can see, and the request
+  // behind it would have been refused anyway.
+  if (!may(ROUTES[route].perm)) route = "overview";
   state.route = route;
   if (location.hash.slice(1) !== route) history.replaceState(null, "", `#${route}`);
 
@@ -1726,21 +2437,28 @@ const palette = {
   items: [], index: 0,
 
   base() {
-    const routes = NAV.filter((n) => n.id).map((n) => ({
-      group: "الأقسام", label: n.title, icon: n.icon, run: () => go(n.id),
+    const routes = NAV.filter((n) => n.id && may(n.perm)).map((n) => ({
+      group: tr("الأقسام"), label: n.title, icon: n.icon, run: () => go(n.id),
     }));
-    return routes.concat([
-      { group: "أوامر", label: "تحديث الصفحة الحالية", icon: "refresh", run: () => go(state.route, { force: true }) },
-      { group: "أوامر", label: "تبديل الوضع الليلي / النهاري", icon: "spark",
+    // Same rule as the sidebar: a command that jumps into a section this
+    // account cannot open has no business being offered.
+    const commands = [
+      { group: tr("أوامر"), label: tr("تحديث الصفحة الحالية"), icon: "refresh", run: () => go(state.route, { force: true }) },
+      { group: tr("أوامر"), label: tr("تبديل الوضع الليلي / النهاري"), icon: "spark",
         run: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
-      { group: "أوامر", label: "منتج جديد", icon: "plus", run: () => { go("products"); setTimeout(productCreateForm, 120); } },
-      { group: "أوامر", label: "مجموعة جديدة", icon: "plus", run: () => { go("collections"); setTimeout(collectionCreateForm, 120); } },
-      { group: "أوامر", label: "المحادثات المستنية رد", icon: "inbox",
+      { group: tr("أوامر"), label: tr("منتج جديد"), icon: "plus", perm: "products",
+        run: () => { go("products"); setTimeout(productCreateForm, 120); } },
+      { group: tr("أوامر"), label: tr("مجموعة جديدة"), icon: "plus", perm: "collections",
+        run: () => { go("collections"); setTimeout(collectionCreateForm, 120); } },
+      { group: tr("أوامر"), label: tr("المحادثات المستنية رد"), icon: "inbox", perm: "inbox",
         run: () => { state.inbox.status = "needs_reply"; go("inbox", { force: true }); } },
-      { group: "أوامر", label: "المخزون اللي خلص", icon: "alert",
+      { group: tr("أوامر"), label: tr("المخزون اللي خلص"), icon: "alert", perm: "inventory",
         run: () => { inventoryView.filter = "out"; go("inventory", { force: true }); } },
-      { group: "أوامر", label: "تسجيل الخروج", icon: "x", run: logout },
-    ]);
+      { group: tr("أوامر"), label: tr("عضو فريق جديد"), icon: "plus", perm: "manage_staff",
+        run: () => { go("staff"); staffCreateForm(); } },
+      { group: tr("أوامر"), label: tr("تسجيل الخروج"), icon: "x", run: logout },
+    ].filter((c) => may(c.perm));
+    return routes.concat(commands);
   },
 
   open() {
@@ -1775,7 +2493,7 @@ const palette = {
             <span class="t">${esc(item.label)}</span>
             <span class="grp">${esc(item.group)}</span>
           </button>`).join("")
-      : `<div class="empty" style="padding:var(--s-5)"><div class="d">مفيش نتيجة</div></div>`;
+      : TR`<div class="empty" style="padding:var(--s-5)"><div class="d">مفيش نتيجة</div></div>`;
     $$(".pitem", list).forEach((node) => {
       node.addEventListener("click", () => this.run(Number(node.dataset.i)));
       node.addEventListener("mousemove", () => {
@@ -1833,17 +2551,18 @@ async function logout() {
 $("#logoutBtn").addEventListener("click", logout);
 
 async function loadStatus() {
+  if (!may("settings")) { $("#sysText").textContent = ""; return; }
   const status = await api("/dashboard/api/settings/status", { quiet: true });
   if (status.__error) return;
   state.status = status;
   const problems = [];
-  if (!status.llm_key_set) problems.push("مفتاح الموديل");
-  if (!status.shopify_configured) problems.push("شوبيفاي");
-  if (!status.whatsapp_configured) problems.push("واتساب");
-  if (!status.shopify_webhooks_configured) problems.push("ويبهوك شوبيفاي");
+  if (!status.llm_key_set) problems.push(tr("مفتاح الموديل"));
+  if (!status.shopify_configured) problems.push(tr("شوبيفاي"));
+  if (!status.whatsapp_configured) problems.push(tr("واتساب"));
+  if (!status.shopify_webhooks_configured) problems.push(tr("ويبهوك شوبيفاي"));
   $("#sysDot").dataset.tone = problems.length ? (problems.length > 1 ? "bad" : "warn") : "";
-  $("#sysText").textContent = problems.length ? `${problems.length} إعداد ناقص` : "كل الأنظمة شغالة";
-  $("#sysText").parentElement.title = problems.length ? problems.join("، ") : "كل الأنظمة شغالة";
+  $("#sysText").textContent = problems.length ? TR`${problems.length} إعداد ناقص` : tr("كل الأنظمة شغالة");
+  $("#sysText").parentElement.title = problems.length ? problems.join(tr("، ")) : tr("كل الأنظمة شغالة");
 }
 
 /* ==========================================================================
@@ -1859,15 +2578,21 @@ VIEWS.overview = {
     body.innerHTML = skeletonTiles(4) + skeletonTable(5);
 
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`,
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`,
         onclick: () => this.mount(true) }),
     );
 
+    // Today's page is the one screen everybody lands on, so it asks only for
+    // the sections this account may see. An unasked panel is skipped, not
+    // shown as a red "couldn't load" banner for something they were never
+    // meant to have.
+    const skipped = { __error: { code: "forbidden", message: "", status: 403 } };
+    const ask = (permission, path) => (may(permission) ? api(path, { quiet: true }) : skipped);
     const [stats, inbox, queue, inventory] = await Promise.all([
-      api("/dashboard/api/stats?days=7", { quiet: true }),
-      api("/dashboard/api/inbox", { quiet: true }),
-      api("/dashboard/api/queue", { quiet: true }),
-      api("/dashboard/api/shopify/inventory?status=low", { quiet: true }),
+      ask("analytics", "/dashboard/api/stats?days=7"),
+      ask("inbox", "/dashboard/api/inbox"),
+      ask("queue", "/dashboard/api/queue"),
+      ask("inventory", "/dashboard/api/shopify/inventory?status=low"),
     ]);
 
     body.innerHTML = "";
@@ -1886,41 +2611,41 @@ VIEWS.overview = {
   tiles(stats, inbox, queue, inventory) {
     const grid = el("div", { class: "grid g-kpi" });
     if (stats.__error) {
-      grid.innerHTML = errorBanner(stats.__error, "أرقام المبيعات");
+      grid.innerHTML = errorBanner(stats.__error, tr("أرقام المبيعات"));
       return grid;
     }
     const series = stats.revenue_by_day.map((d) => Number(d.revenue));
     grid.append(
-      kpi({ label: "مبيعات آخر ٧ أيام", value: money(stats.revenue), tone: "clay", iconName: "money",
+      kpi({ label: tr("مبيعات آخر ٧ أيام"), value: money(stats.revenue), tone: "clay", iconName: "money",
         spark: series,
-        foot: `<span>${num(stats.order_count)} طلب</span>` }),
-      kpi({ label: "متوسط الطلب", value: money(stats.average_order_value), tone: "teal", iconName: "bag",
-        foot: `<span>${num(stats.customer_count)} عميل مختلف</span>` }),
-      kpi({ label: "مستنية رد", value: num(inbox.__error ? 0 : inbox.counts.needs_reply), tone: "rose", iconName: "inbox",
-        foot: inbox.__error ? "" : `<span>${num(inbox.counts.all)} محادثة نشطة</span>` }),
-      kpi({ label: "مخزون خلص", value: num(inventory.__error ? 0 : inventory.totals.out_of_stock_count),
+        foot: TR`<span>${num(stats.order_count)} طلب</span>` }),
+      kpi({ label: tr("متوسط الطلب"), value: money(stats.average_order_value), tone: "teal", iconName: "bag",
+        foot: TR`<span>${num(stats.customer_count)} عميل مختلف</span>` }),
+      kpi({ label: tr("مستنية رد"), value: num(inbox.__error ? 0 : inbox.counts.needs_reply), tone: "rose", iconName: "inbox",
+        foot: inbox.__error ? "" : TR`<span>${num(inbox.counts.all)} محادثة نشطة</span>` }),
+      kpi({ label: tr("مخزون خلص"), value: num(inventory.__error ? 0 : inventory.totals.out_of_stock_count),
         tone: "amber", iconName: "boxes",
-        foot: inventory.__error ? "" : `<span>${num(inventory.totals.low_stock_count)} على وشك الخلاص</span>` }),
+        foot: inventory.__error ? "" : TR`<span>${num(inventory.totals.low_stock_count)} على وشك الخلاص</span>` }),
     );
     return grid;
   },
 
   revenueCard(stats) {
     const wrap = el("div");
-    if (stats.__error) { wrap.innerHTML = card("المبيعات", "", errorBanner(stats.__error, "المبيعات")); return wrap; }
+    if (stats.__error) { wrap.innerHTML = card(tr("المبيعات"), "", errorBanner(stats.__error, tr("المبيعات"))); return wrap; }
     const points = stats.revenue_by_day.map((d) => ({
       label: shortDate(d.date), short: d.date.slice(8), value: Number(d.revenue),
     }));
-    wrap.innerHTML = card("المبيعات — آخر ٧ أيام", "من شوبيفاي، البوت والموقع مع بعض",
+    wrap.innerHTML = card(tr("المبيعات — آخر ٧ أيام"), tr("من شوبيفاي، البوت والموقع مع بعض"),
       `<div id="ovRevenue"></div>`,
-      `<a class="btn sm ghost" href="#analytics">التفاصيل</a>`);
+      TR`<a class="btn sm ghost" href="#analytics">التفاصيل</a>`);
     setTimeout(() => {
       const slot = $("#ovRevenue", wrap);
       if (!slot) return;
       slot.innerHTML = "";
       slot.append(points.length
-        ? lineChart(points, { tone: "clay", fmt: money, label: "مبيعات آخر ٧ أيام" })
-        : emptyState("لسه مفيش مبيعات", "أول طلب هيظهر هنا", "bag"));
+        ? lineChart(points, { tone: "clay", fmt: money, label: tr("مبيعات آخر ٧ أيام") })
+        : emptyState(tr("لسه مفيش مبيعات"), tr("أول طلب هيظهر هنا"), "bag"));
     }, 0);
     return wrap;
   },
@@ -1930,32 +2655,32 @@ VIEWS.overview = {
     if (!inbox.__error) {
       inbox.conversations.filter((c) => c.paused).slice(0, 4).forEach((c) => rows.push({
         tone: "rose", title: c.customer_name || c.external_id,
-        sub: `${reasonLabel(c.reason)} · مستني من ${ago(c.waiting_since)}`,
+        sub: TR`${reasonLabel(c.reason)} · مستني من ${ago(c.waiting_since)}`,
         action: () => { state.inbox.selected = c; go("inbox"); openConversation(c.channel, c.external_id); },
       }));
     }
     if (!queue.__error) {
       queue.items.slice(0, 3).forEach((item) => rows.push({
         tone: "amber", title: reasonLabel(item.reason),
-        sub: item.summary || "بند مراجعة",
+        sub: item.summary || tr("بند مراجعة"),
         action: () => go("queue"),
       }));
     }
     if (!inventory.__error) {
       inventory.rows.slice(0, 3).forEach((r) => rows.push({
         tone: "sky", title: `${r.product_title} — ${[r.color, r.size].filter(Boolean).join(" / ")}`,
-        sub: `فاضل ${r.quantity}`,
+        sub: TR`فاضل ${r.quantity}`,
         action: () => go("inventory"),
       }));
     }
 
     const wrap = el("div");
-    wrap.innerHTML = card("محتاج تدخّل", "أول حاجة تتعمل النهاردة", "<div id='ovAttention'></div>", "", { flush: false });
+    wrap.innerHTML = card(tr("محتاج تدخّل"), tr("أول حاجة تتعمل النهاردة"), "<div id='ovAttention'></div>", "", { flush: false });
     setTimeout(() => {
       const slot = $("#ovAttention", wrap);
       if (!slot) return;
       slot.innerHTML = "";
-      if (!rows.length) { slot.append(emptyState("كل حاجة تمام", "مفيش حاجة مستنية منك دلوقتي", "check")); return; }
+      if (!rows.length) { slot.append(emptyState(tr("كل حاجة تمام"), tr("مفيش حاجة مستنية منك دلوقتي"), "check")); return; }
       rows.forEach((r) => {
         const row = el("button", { class: "mini", type: "button", style: "width:100%;text-align:start;background:none;border:0;border-bottom:1px solid var(--line)", onclick: r.action });
         row.innerHTML = `<span class="chip" data-tone="${r.tone}" data-shape="dot"><i class="glyph"></i></span>
@@ -1975,9 +2700,9 @@ VIEWS.overview = {
       tone: (ORDER_STATUS[k] || {}).tone || CHART_TONES[i % CHART_TONES.length],
     }));
     const sources = Object.entries(stats.source_breakdown).map(([k, v]) => ({
-      label: k === "chatbot" ? "البوت" : "الموقع", value: v, tone: k === "chatbot" ? "teal" : "lilac",
+      label: k === "chatbot" ? tr("البوت") : tr("الموقع"), value: v, tone: k === "chatbot" ? "teal" : "lilac",
     }));
-    wrap.innerHTML = card("الطلبات حسب الحالة", "آخر ٧ أيام",
+    wrap.innerHTML = card(tr("الطلبات حسب الحالة"), tr("آخر ٧ أيام"),
       `<div class="donutwrap"><div id="ovDonut"></div>
         <div style="flex:1;min-width:170px">${barList(sources, { tone: "lilac" })}</div></div>`);
     setTimeout(() => {
@@ -1993,14 +2718,14 @@ VIEWS.overview = {
 
   stockCard(inventory) {
     const wrap = el("div");
-    if (inventory.__error) { wrap.innerHTML = card("المخزون", "", errorBanner(inventory.__error, "المخزون")); return wrap; }
+    if (inventory.__error) { wrap.innerHTML = card(tr("المخزون"), "", errorBanner(inventory.__error, tr("المخزون"))); return wrap; }
     const rows = inventory.rows.slice(0, 8).map((r) => ({
       label: `${r.product_title} — ${[r.color, r.size].filter(Boolean).join(" / ") || r.sku}`,
       value: r.quantity, tone: r.quantity === 0 ? "rose" : "amber",
     }));
-    wrap.innerHTML = card("على وشك الخلاص", `${num(inventory.totals.low_stock_count)} مقاس`,
-      rows.length ? barList(rows, { tone: "amber" }) : `<div class="empty"><div class="d">المخزون كويس</div></div>`,
-      `<a class="btn sm ghost" href="#inventory">كل المخزون</a>`);
+    wrap.innerHTML = card(tr("على وشك الخلاص"), TR`${num(inventory.totals.low_stock_count)} مقاس`,
+      rows.length ? barList(rows, { tone: "amber" }) : TR`<div class="empty"><div class="d">المخزون كويس</div></div>`,
+      TR`<a class="btn sm ghost" href="#inventory">كل المخزون</a>`);
     return wrap;
   },
 };
@@ -2010,18 +2735,18 @@ VIEWS.overview = {
    ========================================================================== */
 
 const INBOX_STATUSES = [
-  { id: "all", label: "الكل" },
-  { id: "needs_reply", label: "مستني رد" },
-  { id: "unanswered", label: "آخر كلمة للعميل" },
-  { id: "paused", label: "مع الفريق" },
-  { id: "bot", label: "مع البوت" },
+  { id: "all", label: tr("الكل") },
+  { id: "needs_reply", label: tr("مستني رد") },
+  { id: "unanswered", label: tr("آخر كلمة للعميل") },
+  { id: "paused", label: tr("مع الفريق") },
+  { id: "bot", label: tr("مع البوت") },
 ];
 
 VIEWS.inbox = {
   loaded: false,
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`,
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`,
         onclick: () => this.load(true) }),
     );
     if (!this.loaded) {
@@ -2049,7 +2774,7 @@ VIEWS.inbox = {
       this.load(true);
     }));
 
-    const channels = [{ id: "", label: "كل القنوات" }, { id: "whatsapp", label: "واتساب" }, { id: "instagram_dm", label: "انستجرام" }];
+    const channels = [{ id: "", label: tr("كل القنوات") }, { id: "whatsapp", label: tr("واتساب") }, { id: "instagram_dm", label: tr("انستجرام") }];
     $("#inboxChannel").innerHTML = channels.map((c) => `
       <button class="fchip" type="button" data-channel="${c.id}" aria-pressed="${c.id === state.inbox.channel}">
         ${esc(c.label)}<span class="n" data-chcount="${c.id}"></span></button>`).join("");
@@ -2092,7 +2817,7 @@ VIEWS.inbox = {
     if (state.inbox.status !== "all") params.set("status", state.inbox.status);
     const data = await api(`/dashboard/api/inbox?${params}`, { quiet: true });
     if (data.__error) {
-      $("#convList").innerHTML = `<div style="padding:var(--s-4)">${errorBanner(data.__error, "المحادثات")}</div>`;
+      $("#convList").innerHTML = `<div style="padding:var(--s-4)">${errorBanner(data.__error, tr("المحادثات"))}</div>`;
       return;
     }
     state.inbox.items = data.conversations;
@@ -2116,7 +2841,7 @@ VIEWS.inbox = {
     const items = state.inbox.items;
     if (!items.length) {
       list.innerHTML = "";
-      list.append(emptyState("مفيش محادثات هنا", "جرّب فلتر تاني أو امسح البحث", "inbox"));
+      list.append(emptyState(tr("مفيش محادثات هنا"), tr("جرّب فلتر تاني أو امسح البحث"), "inbox"));
       return;
     }
     const selected = state.inbox.selected;
@@ -2125,7 +2850,7 @@ VIEWS.inbox = {
       const isSelected = selected && selected.channel === c.channel && selected.external_id === c.external_id;
       const tags = [];
       if (c.paused) tags.push(chipHTML(reasonLabel(c.reason), c.reason === "manual" ? "clay" : "rose", "ring"));
-      if (c.last_role === "customer" && !c.paused) tags.push(chipHTML("محتاج متابعة", "amber", "dot"));
+      if (c.last_role === "customer" && !c.paused) tags.push(chipHTML(tr("محتاج متابعة"), "amber", "dot"));
       tags.push(chipHTML(info.label, info.tone, "bar"));
       return `<button class="conv" role="option" aria-selected="${!!isSelected}"
           data-ch="${esc(c.channel)}" data-id="${esc(c.external_id)}">
@@ -2159,7 +2884,7 @@ async function openConversation(channel, externalId) {
 
   const data = await api(`/dashboard/api/conversations/${encodeURIComponent(channel)}/${encodeURIComponent(externalId)}`, { quiet: true });
   if (data.__error) {
-    $("#log").innerHTML = errorBanner(data.__error, "المحادثة");
+    $("#log").innerHTML = errorBanner(data.__error, tr("المحادثة"));
     return;
   }
   state.inbox.detail = data;
@@ -2172,42 +2897,42 @@ function renderThread(data) {
   $("#threadAvatar").dataset.ch = data.channel;
   const summary = state.inbox.items.find((c) => c.channel === data.channel && c.external_id === data.external_id);
   $("#threadName").textContent = (summary && summary.customer_name) || data.external_id;
-  $("#threadSub").innerHTML = `${chipHTML(info.label, info.tone, "bar")}
+  $("#threadSub").innerHTML = TR`${chipHTML(info.label, info.tone, "bar")}
     <span class="num" data-copy="${esc(data.external_id)}" data-copy-what="المعرّف"
       style="cursor:pointer" title="اضغط للنسخ">${esc(data.external_id)}</span>
-    ${data.paused ? chipHTML(reasonLabel(data.reason), "rose", "ring") : chipHTML("البوت شغال", "teal", "dot")}`;
+    ${data.paused ? chipHTML(reasonLabel(data.reason), "rose", "ring") : chipHTML(tr("البوت شغال"), "teal", "dot")}`;
 
   const actions = $("#threadActions");
   actions.innerHTML = "";
   if (data.paused) {
-    actions.append(el("button", { class: "btn sm", type: "button", html: `${icon("bot", 14)} رجّع البوت`,
-      onclick: () => conversationAction("release", "الرد رجع للبوت") }));
+    actions.append(el("button", { class: "btn sm", type: "button", html: TR`${icon("bot", 14)} رجّع البوت`,
+      onclick: () => conversationAction("release", tr("الرد رجع للبوت")) }));
   } else {
-    actions.append(el("button", { class: "btn sm", type: "button", html: `${icon("user", 14)} استلم المحادثة`,
-      onclick: () => conversationAction("takeover", "المحادثة بقت معاك") }));
+    actions.append(el("button", { class: "btn sm", type: "button", html: TR`${icon("user", 14)} استلم المحادثة`,
+      onclick: () => conversationAction("takeover", tr("المحادثة بقت معاك")) }));
   }
   actions.append(el("button", {
-    class: "btn sm icon ghost", type: "button", title: "إعادة تعيين المحادثة", "aria-label": "إعادة تعيين المحادثة",
+    class: "btn sm icon ghost", type: "button", title: tr("إعادة تعيين المحادثة"), "aria-label": tr("إعادة تعيين المحادثة"),
     html: icon("refresh", 15),
     onclick: async () => {
-      const ok = await overlay.confirm("إعادة تعيين المحادثة؟",
-        "ده بيمسح تاريخ المحادثة والسلة عشان العميل يبدأ من الأول. بيانات العميل وطلباته مش بتتمس.",
-        "امسح وابدأ من الأول", { danger: true });
-      if (ok) conversationAction("reset", "المحادثة رجعت من الأول");
+      const ok = await overlay.confirm(tr("إعادة تعيين المحادثة؟"),
+        tr("ده بيمسح تاريخ المحادثة والسلة عشان العميل يبدأ من الأول. بيانات العميل وطلباته مش بتتمس."),
+        tr("امسح وابدأ من الأول"), { danger: true });
+      if (ok) conversationAction("reset", tr("المحادثة رجعت من الأول"));
     },
   }));
 
   const log = $("#log");
   log.innerHTML = "";
   if (!data.history.length) {
-    log.append(emptyState("المحادثة فاضية", "لسه محصلش كلام هنا", "inbox"));
+    log.append(emptyState(tr("المحادثة فاضية"), tr("لسه محصلش كلام هنا"), "inbox"));
   }
   for (const item of data.history) {
     if (item.kind === "user") {
       const bubble = el("div", { class: "bubble user" });
-      bubble.innerHTML = `<span class="by">${icon("user", 11)} العميل</span>${esc(item.text || "")}`;
+      bubble.innerHTML = TR`<span class="by">${icon("user", 11)} العميل</span>${esc(item.text || "")}`;
       (item.images || []).forEach((src) => bubble.insertAdjacentHTML("beforeend",
-        `<img class="att" loading="lazy" alt="صورة من العميل" src="${mediaURL(src)}">`));
+        TR`<img class="att" loading="lazy" alt="صورة من العميل" src="${mediaURL(src)}">`));
       (item.audio || []).forEach((src) => bubble.insertAdjacentHTML("beforeend",
         `<audio controls preload="none" src="${mediaURL(src)}"></audio>`));
       log.append(bubble);
@@ -2217,15 +2942,15 @@ function renderThread(data) {
       // nudges) that the shop sends on its own. They all reach the same
       // WhatsApp thread, so the transcript has to say which is which.
       const who = item.by === "staff" ? "staff" : item.by === "system" ? "system" : "bot";
-      const LABEL = { staff: "الفريق", system: "رسالة تلقائية", bot: "البوت" };
+      const LABEL = { staff: tr("الفريق"), system: tr("رسالة تلقائية"), bot: tr("البوت") };
       const GLYPH = { staff: "user", system: "spark", bot: "bot" };
       const bubble = el("div", { class: `bubble ${who}` });
       bubble.innerHTML = `<span class="by">${icon(GLYPH[who], 11)} ${LABEL[who]}</span>${esc(item.text || "")}`;
       (item.attachments || []).forEach((src) => bubble.insertAdjacentHTML("beforeend",
-        `<img class="att" loading="lazy" alt="صورة اتبعتت للعميل" src="${mediaURL(src)}">`));
+        TR`<img class="att" loading="lazy" alt="صورة اتبعتت للعميل" src="${mediaURL(src)}">`));
       log.append(bubble);
     } else if (item.kind === "tools") {
-      log.append(el("div", { class: "sysline", html: `${icon("spark", 12)} ${esc((item.names || []).join("، "))}` }));
+      log.append(el("div", { class: "sysline", html: `${icon("spark", 12)} ${esc((item.names || []).join(tr("، ")))}` }));
     } else if (item.kind === "refusals") {
       log.append(el("div", { class: "sysline", dataset: { tone: "bad" },
         html: `${icon("alert", 12)} ${esc((item.refusals || []).map((r) => `${r.name}: ${r.error}`).join(" · "))}` }));
@@ -2245,8 +2970,8 @@ function renderThread(data) {
     box.focus();
   }));
   $("#composerNote").innerHTML = data.paused
-    ? `${icon("check", 13)} أول ما تبعت، المحادثة بترجع للبوت تلقائيًا.`
-    : `${icon("bot", 13)} البوت ماسك المحادثة دلوقتي — استلمها الأول عشان ترد بنفسك.`;
+    ? TR`${icon("check", 13)} أول ما تبعت، المحادثة بترجع للبوت تلقائيًا.`
+    : TR`${icon("bot", 13)} البوت ماسك المحادثة دلوقتي — استلمها الأول عشان ترد بنفسك.`;
 
   renderContext(data, summary);
 }
@@ -2269,7 +2994,7 @@ async function conversationAction(action, successMessage) {
     `/dashboard/api/conversations/${encodeURIComponent(channel)}/${encodeURIComponent(externalId)}/${action}`,
     { method: "POST", quiet: true },
   );
-  if (result.__error) return toastError(result.__error, "الأمر مانفذش");
+  if (result.__error) return toastError(result.__error, tr("الأمر مانفذش"));
   toast(successMessage);
   await VIEWS.inbox.load(false);
   openConversation(channel, externalId);
@@ -2290,13 +3015,13 @@ async function sendReply() {
     // 409 here means the bot took the conversation back between load and
     // send; saying so is the difference between "try again" and "why".
     const message = result.__error.code === "not_paused"
-      ? "المحادثة رجعت للبوت — استلمها تاني وابعت"
+      ? tr("المحادثة رجعت للبوت — استلمها تاني وابعت")
       : result.__error.message;
-    return toast("الرسالة مابعتتش", message, "bad", 6000);
+    return toast(tr("الرسالة مابعتتش"), message, "bad", 6000);
   }
   box.value = "";
   box.style.height = "auto";
-  toast("الرسالة اتبعتت", "والمحادثة رجعت للبوت");
+  toast(tr("الرسالة اتبعتت"), tr("والمحادثة رجعت للبوت"));
   await VIEWS.inbox.load(false);
   openConversation(channel, externalId);
 }
@@ -2307,17 +3032,17 @@ function renderContext(data, summary) {
   context.hidden = false;
   const blocks = [];
 
-  blocks.push(`<div class="ctx-block">
+  blocks.push(TR`<div class="ctx-block">
     <h3>الحالة</h3>
     <div class="kv"><span class="k">القناة</span><span class="v">${esc(channelInfo(data.channel).label)}</span></div>
     <div class="kv"><span class="k">المعرّف</span><span class="v num">${esc(data.external_id)}</span></div>
-    <div class="kv"><span class="k">المسؤول</span><span class="v">${data.paused ? "الفريق" : "البوت"}</span></div>
-    ${summary ? `<div class="kv"><span class="k">آخر نشاط</span><span class="v">${esc(dateTime(summary.updated_at))}</span></div>` : ""}
-    ${summary ? `<div class="kv"><span class="k">عدد الرسايل</span><span class="v num">${num(summary.message_count)}</span></div>` : ""}
+    <div class="kv"><span class="k">المسؤول</span><span class="v">${data.paused ? tr("الفريق") : tr("البوت")}</span></div>
+    ${summary ? TR`<div class="kv"><span class="k">آخر نشاط</span><span class="v">${esc(dateTime(summary.updated_at))}</span></div>` : ""}
+    ${summary ? TR`<div class="kv"><span class="k">عدد الرسايل</span><span class="v num">${num(summary.message_count)}</span></div>` : ""}
   </div>`);
 
   if (data.reason && data.reason !== "manual") {
-    blocks.push(`<div class="ctx-block">
+    blocks.push(TR`<div class="ctx-block">
       <h3>سبب التحويل</h3>
       <div class="banner" style="margin-bottom:var(--s-2)">${icon("alert", 15)}<div>${esc(reasonLabel(data.reason))}</div></div>
       ${data.summary ? `<p style="font-size:12.5px;color:var(--ink-2)">${esc(data.summary)}</p>` : ""}
@@ -2325,7 +3050,7 @@ function renderContext(data, summary) {
   }
 
   if (summary && summary.client_id) {
-    blocks.push(`<div class="ctx-block" id="ctxClient"><h3>العميل</h3>
+    blocks.push(TR`<div class="ctx-block" id="ctxClient"><h3>العميل</h3>
       <div class="skel skel-row" style="margin:0 0 8px"></div></div>`);
   }
 
@@ -2335,7 +3060,7 @@ function renderContext(data, summary) {
     api(`/dashboard/api/customers/${summary.client_id}`, { quiet: true }).then((client) => {
       const slot = $("#ctxClient", context);
       if (!slot || client.__error) return;
-      slot.innerHTML = `<h3>العميل</h3>
+      slot.innerHTML = TR`<h3>العميل</h3>
         <div class="kv"><span class="k">الاسم</span><span class="v">${esc(client.full_name)}</span></div>
         <div class="kv"><span class="k">التليفون</span><span class="v num" data-copy="${esc(client.phone)}" data-copy-what="التليفون" style="cursor:pointer">${esc(client.phone)}</span></div>
         <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(client.governorate || "—")}</span></div>
@@ -2344,7 +3069,7 @@ function renderContext(data, summary) {
         ${client.orders.length ? client.orders.slice(0, 5).map((o) => `
           <div class="kv"><span class="k num">${esc(o.reference)}</span>
           <span class="v">${esc(money(o.total))} · ${esc(o.status)}</span></div>`).join("")
-          : '<div class="kv"><span class="v" style="color:var(--ink-3)">مفيش طلبات</span></div>'}`;
+          : tr('<div class="kv"><span class="v" style="color:var(--ink-3)">مفيش طلبات</span></div>')}`;
     });
   }
 }
@@ -2356,22 +3081,37 @@ function renderContext(data, summary) {
 /* Shopify's search syntax is powerful and nobody remembers it. These are the
    filters staff actually ask for, written once, as buttons. */
 const ORDER_PRESETS = [
-  { id: "", label: "الكل", q: "" },
-  { id: "open", label: "مستنية شحن", q: "fulfillment_status:unfulfilled AND status:open" },
-  { id: "shipped", label: "متشحنة", q: "fulfillment_status:shipped" },
-  { id: "bot", label: "من البوت", q: "tag:chatbot" },
-  { id: "site", label: "من الموقع", q: "-tag:chatbot" },
-  { id: "cancelled", label: "ملغية", q: "status:cancelled" },
+  { id: "", label: tr("الكل"), q: "" },
+  { id: "open", label: tr("مستنية شحن"), q: "fulfillment_status:unfulfilled AND status:open" },
+  { id: "shipped", label: tr("متشحنة"), q: "fulfillment_status:shipped" },
+  { id: "bot", label: tr("من البوت"), q: "tag:chatbot" },
+  { id: "site", label: tr("من الموقع"), q: "-tag:chatbot" },
+  { id: "cancelled", label: tr("ملغية"), q: "status:cancelled" },
+];
+
+/* The two server-side toggles. Unlike ORDER_PRESETS above these are *not*
+   Shopify search syntax: `payment` is classified from the order's gateways
+   and `customer` from the buyer's lifetime order count, neither of which the
+   search query can express -- see `integrations/shopify/admin_orders.py`. */
+const ORDER_PAYMENTS = [
+  { id: "all", label: tr("كل الدفع") },
+  { id: "cod", label: tr("عند الاستلام") },
+  { id: "online", label: tr("أونلاين") },
+];
+const ORDER_CUSTOMERS = [
+  { id: "all", label: tr("كل العملاء") },
+  { id: "returning", label: tr("عملاء قدامى") },
+  { id: "new", label: tr("عملاء جدد") },
 ];
 
 VIEWS.orders = {
-  preset: "", search: "", rows: [],
+  preset: "", search: "", payment: "all", customer: "all", rows: [], truncated: false,
 
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("download", 15)} تصدير`,
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("download", 15)} تصدير`,
         onclick: () => this.export() }),
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`,
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`,
         onclick: () => this.load() }),
     );
     if (force || !this.rows.length) await this.load();
@@ -2385,14 +3125,20 @@ VIEWS.orders = {
     const preset = ORDER_PRESETS.find((p) => p.id === this.preset);
     const parts = [preset && preset.q, this.search].filter(Boolean);
     const query = parts.join(" AND ");
-    const data = await api(`/dashboard/api/shopify/orders${query ? `?q=${encodeURIComponent(query)}` : ""}`, { quiet: true });
-    if (data.__error) { body.innerHTML = this.toolbar() + errorBanner(data.__error, "الطلبات"); this.wire(); return; }
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (this.payment !== "all") params.set("payment", this.payment);
+    if (this.customer !== "all") params.set("customer", this.customer);
+    const qs = params.toString();
+    const data = await api(`/dashboard/api/shopify/orders${qs ? `?${qs}` : ""}`, { quiet: true });
+    if (data.__error) { body.innerHTML = this.toolbar() + errorBanner(data.__error, tr("الطلبات")); this.wire(); return; }
     this.rows = data.orders;
+    this.truncated = !!data.truncated;
     this.render();
   },
 
   toolbar() {
-    return `<div class="pagehead">
+    return TR`<div class="pagehead">
       <div class="t">
         <h2>الطلبات</h2>
         <div class="d">مصدرها شوبيفاي مباشرة — طلبات البوت وطلبات الموقع مع بعض</div>
@@ -2401,6 +3147,14 @@ VIEWS.orders = {
         <div class="field" style="min-width:230px">
           ${icon("search", 15)}
           <input id="ordersSearch" type="search" placeholder="رقم طلب، اسم، أو صيغة شوبيفاي" value="${esc(this.search)}">
+        </div>
+        <div class="seg">
+          ${ORDER_CUSTOMERS.map((c) => `<button type="button" data-ocust="${c.id}"
+            aria-pressed="${c.id === this.customer}">${esc(c.label)}</button>`).join("")}
+        </div>
+        <div class="seg">
+          ${ORDER_PAYMENTS.map((p) => `<button type="button" data-opay="${p.id}"
+            aria-pressed="${p.id === this.payment}">${esc(p.label)}</button>`).join("")}
         </div>
       </div>
       <div class="inbox-filters" style="width:100%">
@@ -2420,6 +3174,12 @@ VIEWS.orders = {
     $$("[data-preset]").forEach((b) => b.addEventListener("click", () => {
       this.preset = b.dataset.preset; this.load();
     }));
+    $$("[data-ocust]").forEach((b) => b.addEventListener("click", () => {
+      this.customer = b.dataset.ocust; this.load();
+    }));
+    $$("[data-opay]").forEach((b) => b.addEventListener("click", () => {
+      this.payment = b.dataset.opay; this.load();
+    }));
   },
 
   render() {
@@ -2438,105 +3198,117 @@ VIEWS.orders = {
         <td><div class="cellmain">${esc(o.customer_name || "—")}</div>
             <div class="cellsub num">${esc(o.customer_phone || "")}</div></td>
         <td>${esc(o.governorate || "—")}</td>
-        <td>${(o.line_items || []).length ? esc(`${o.line_items.length} صنف`) : "—"}</td>
+        <td>${(o.line_items || []).length ? esc(TR`${o.line_items.length} صنف`) : "—"}</td>
         <td>${statusChip(o.fulfillment_status, o.cancelled)}</td>
-        <td>${chipHTML(o.source === "chatbot" ? "البوت" : "الموقع", o.source === "chatbot" ? "teal" : "lilac")}</td>
+        <td>${paymentChip(o.payment_method)}</td>
+        <td>${customerKindChip(o.customer_kind, o.customer_order_count)}</td>
+        <td>${chipHTML(channelLabel(o.channel), o.channel === "web" ? "lilac" : "teal")}</td>
         <td class="num">${esc(money(o.total))}</td>
       </tr>`).join("");
 
-    body.innerHTML = this.toolbar() + `
+    const truncated = this.truncated
+      ? TR`<div class="banner">${icon("alert", 15)}
+          <div>الطلبات المطابقة أكتر من اللي بنقراه في نداء واحد — الأرقام دي حد أدنى، مش كل الفترة.</div></div>`
+      : "";
+
+    body.innerHTML = this.toolbar() + truncated + `
       <div class="grid g-kpi">
-        ${[["إجمالي المعروض", money(totals.revenue), "clay", "money"],
-           ["طلبات فعّالة", num(totals.count), "teal", "bag"],
-           ["مستنية شحن", num(totals.pending), "amber", "truck"],
-           ["من البوت", num(totals.bot), "lilac", "bot"]]
+        ${[[tr("إجمالي المعروض"), money(totals.revenue), "clay", "money"],
+           [tr("طلبات فعّالة"), num(totals.count), "teal", "bag"],
+           [tr("مستنية شحن"), num(totals.pending), "amber", "truck"],
+           [tr("من البوت"), num(totals.bot), "lilac", "bot"]]
           .map(([l, v, t, ic]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
             <div class="kpi-label">${icon(ic, 14)}${esc(l)}</div>
             <div class="kpi-value">${esc(v)}</div></div>`).join("")}
       </div>` +
       (this.rows.length
-        ? card("قائمة الطلبات", `${this.rows.length} طلب`, tableHTML(
-            ["الطلب", "العميل", "المحافظة", "الأصناف", "الشحن", "المصدر", { label: "الإجمالي", num: true }],
-            rowsHTML, { minWidth: 860 }), "", { flush: true })
+        ? card(tr("قائمة الطلبات"), TR`${this.rows.length} طلب`, tableHTML(
+            [tr("الطلب"), tr("العميل"), tr("المحافظة"), tr("الأصناف"), tr("الشحن"), tr("الدفع"), tr("العميل ده"), tr("المصدر"),
+             { label: tr("الإجمالي"), num: true }],
+            rowsHTML, { minWidth: 1040 }), "", { flush: true })
         : `<div class="card"><div class="card-body"></div></div>`);
 
     this.wire();
     if (!this.rows.length) {
       $("#ordersBody .card:last-child .card-body").append(
-        emptyState("مفيش طلبات بالفلتر ده", "جرّب فلتر تاني أو امسح البحث", "bag"));
+        emptyState(tr("مفيش طلبات بالفلتر ده"), tr("جرّب فلتر تاني أو امسح البحث"), "bag"));
     }
     $$("#ordersBody tr[data-gid]").forEach((tr) =>
       tr.addEventListener("click", () => openOrder(tr.dataset.gid)));
   },
 
   export() {
-    if (!this.rows.length) return toast("مفيش بيانات للتصدير", "", "warn");
+    if (!this.rows.length) return toast(tr("مفيش بيانات للتصدير"), "", "warn");
     exportCSV("orders.csv",
-      ["رقم الطلب", "التاريخ", "العميل", "التليفون", "المحافظة", "الحالة", "المصدر", "الإجمالي"],
+      [tr("رقم الطلب"), tr("التاريخ"), tr("العميل"), tr("التليفون"), tr("المحافظة"), tr("الحالة"), tr("الدفع"),
+       tr("عميل قديم/جديد"), tr("عدد طلباته"), tr("القناة"), tr("المصدر"), tr("الإجمالي")],
       this.rows.map((o) => [o.name, o.created_at, o.customer_name, o.customer_phone,
-        o.governorate, o.cancelled ? "ملغي" : (o.fulfillment_status || ""), o.source, o.total]));
+        o.governorate, o.cancelled ? tr("ملغي") : (o.fulfillment_status || ""),
+        PAYMENT_LABELS[o.payment_method] || o.payment_method,
+        CUSTOMER_KIND_LABELS[o.customer_kind] || o.customer_kind, o.customer_order_count,
+        channelLabel(o.channel), o.source, o.total]));
   },
 };
 
 async function openOrder(gid) {
-  const body = overlay.drawer("جاري التحميل…", '<div class="skel" style="height:260px"></div>');
+  const body = overlay.drawer(tr("جاري التحميل…"), '<div class="skel" style="height:260px"></div>');
   const order = await api(`/dashboard/api/shopify/orders/${encodeURIComponent(gid)}`, { quiet: true });
-  if (order.__error) { body.innerHTML = errorBanner(order.__error, "الطلب"); return; }
+  if (order.__error) { body.innerHTML = errorBanner(order.__error, tr("الطلب")); return; }
 
-  $("#drawerTitle").textContent = `طلب ${order.name}`;
+  $("#drawerTitle").textContent = TR`طلب ${order.name}`;
   const lines = (order.line_items || []).map((li) => `
     <tr>
       <td><div class="cellmain">${esc(li.title || "—")}</div><div class="cellsub num">${esc(li.sku || "")}</div></td>
       <td class="num">${num(li.quantity)}</td>
-      <td>${li.sku ? `<button class="btn sm ghost" type="button" data-qty="${esc(li.sku)}" data-cur="${num(li.quantity)}">تعديل الكمية</button>` : ""}</td>
+      <td>${li.sku ? TR`<button class="btn sm ghost" type="button" data-qty="${esc(li.sku)}" data-cur="${num(li.quantity)}">تعديل الكمية</button>` : ""}</td>
     </tr>`).join("");
 
   body.innerHTML = `
     <div class="row" style="margin-bottom:var(--s-4)">
       ${statusChip(order.fulfillment_status, order.cancelled)}
       ${chipHTML(order.financial_status || "—", "sky")}
-      ${chipHTML(order.local ? "طلب البوت" : "طلب الموقع", order.local ? "teal" : "lilac")}
+      ${chipHTML(order.local ? tr("طلب البوت") : tr("طلب الموقع"), order.local ? "teal" : "lilac")}
       <span class="spacer"></span>
       <span class="cellsub">${esc(dateTime(order.created_at))}</span>
     </div>
 
     <div class="grid g-2" style="margin-bottom:var(--s-4)">
-      ${card("العميل", "", `
+      ${card(tr("العميل"), "", TR`
         <div class="kv"><span class="k">الاسم</span><span class="v">${esc(order.customer_name || "—")}</span></div>
         <div class="kv"><span class="k">التليفون</span><span class="v num" data-copy="${esc(order.customer_phone || "")}" data-copy-what="التليفون" style="cursor:pointer">${esc(order.customer_phone || "—")}</span></div>
         <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(order.governorate || "—")}</span></div>
         <div class="kv"><span class="k">العنوان</span><span class="v">${esc(order.address || "—")}</span></div>`)}
-      ${card("الحساب", "", `
+      ${card(tr("الحساب"), "", TR`
         <div class="kv"><span class="k">المنتجات</span><span class="v num">${esc(money(order.subtotal))}</span></div>
         <div class="kv"><span class="k">الشحن</span><span class="v num">${esc(money(order.shipping_fee))}</span></div>
         <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px">
           <span class="k" style="font-weight:700">الإجمالي</span>
           <span class="v num" style="font-size:16px;font-weight:700">${esc(money(order.total))}</span></div>
-        ${order.note ? `<div class="kv"><span class="k">ملاحظة</span><span class="v">${esc(order.note)}</span></div>` : ""}`)}
+        ${order.note ? TR`<div class="kv"><span class="k">ملاحظة</span><span class="v">${esc(order.note)}</span></div>` : ""}`)}
     </div>
 
-    ${card("الأصناف", "", tableHTML(["الصنف", { label: "الكمية", num: true }, ""], lines, { minWidth: 420 }), "", { flush: true })}`;
+    ${card(tr("الأصناف"), "", tableHTML([tr("الصنف"), { label: tr("الكمية"), num: true }, ""], lines, { minWidth: 420 }), "", { flush: true })}`;
 
   const foot = [];
   if (!order.cancelled) {
-    foot.push(el("button", { class: "btn primary", type: "button", html: `${icon("truck", 15)} شحن الطلب`,
+    foot.push(el("button", { class: "btn primary", type: "button", html: TR`${icon("truck", 15)} شحن الطلب`,
       onclick: () => fulfillForm(order) }));
-    foot.push(el("button", { class: "btn danger", type: "button", html: `${icon("x", 15)} إلغاء الطلب`,
+    foot.push(el("button", { class: "btn danger", type: "button", html: TR`${icon("x", 15)} إلغاء الطلب`,
       onclick: async () => {
-        const ok = await overlay.confirm("إلغاء الطلب؟",
-          `طلب ${order.name} هيتلغي${order.local ? " وهيترجع للمخزون، والعميل هيوصله إشعار" : " على شوبيفاي"}.`,
-          "أكيد، ألغِ الطلب", { danger: true });
+        const ok = await overlay.confirm(tr("إلغاء الطلب؟"),
+          TR`طلب ${order.name} هيتلغي${order.local ? tr(" وهيترجع للمخزون، والعميل هيوصله إشعار") : tr(" على شوبيفاي")}.`,
+          tr("أكيد، ألغِ الطلب"), { danger: true });
         if (!ok) return;
         const result = await api(`/dashboard/api/shopify/orders/${encodeURIComponent(gid)}/cancel`,
           { method: "POST", quiet: true });
-        if (result.__error) return toastError(result.__error, "الإلغاء مانفذش");
-        toast("الطلب اتلغى");
+        if (result.__error) return toastError(result.__error, tr("الإلغاء مانفذش"));
+        toast(tr("الطلب اتلغى"));
         overlay.close();
         VIEWS.orders.load();
       } }));
   }
-  foot.push(el("button", { class: "btn ghost", type: "button", text: "نسخ رقم الطلب",
-    onclick: () => copy(order.name, "رقم الطلب") }));
+  foot.push(el("button", { class: "btn ghost", type: "button", text: tr("نسخ رقم الطلب"),
+    onclick: () => copy(order.name, tr("رقم الطلب")) }));
   $("#drawerFoot").innerHTML = "";
   $("#drawerFoot").append(...foot);
   $("#drawerFoot").hidden = false;
@@ -2547,7 +3319,7 @@ async function openOrder(gid) {
 
 function fulfillForm(order) {
   const form = el("div");
-  form.innerHTML = `
+  form.innerHTML = TR`
     <p class="hint" style="margin-bottom:var(--s-4)">شحن ${esc(order.name)}. رقم التتبع اختياري، لكنه اللي بيوصل للعميل في رسالة الشحن.</p>
     <label class="lbl" for="trackNo">رقم التتبع</label>
     <input class="inp" id="trackNo" placeholder="مثلاً 1234567890">
@@ -2558,7 +3330,7 @@ function fulfillForm(order) {
     <label class="row" style="gap:var(--s-2);cursor:pointer">
       <input type="checkbox" id="notifyCust" checked> <span style="font-size:13px">ابعت إشعار للعميل من شوبيفاي</span>
     </label>`;
-  const confirm = el("button", { class: "btn primary", text: "أكّد الشحن", onclick: async () => {
+  const confirm = el("button", { class: "btn primary", text: tr("أكّد الشحن"), onclick: async () => {
     confirm.disabled = true;
     const result = await api(`/dashboard/api/shopify/orders/${encodeURIComponent(order.id)}/fulfill`, {
       method: "POST", quiet: true,
@@ -2568,33 +3340,33 @@ function fulfillForm(order) {
         notify_customer: $("#notifyCust").checked,
       },
     });
-    if (result.__error) { confirm.disabled = false; return toastError(result.__error, "الشحن مانفذش"); }
+    if (result.__error) { confirm.disabled = false; return toastError(result.__error, tr("الشحن مانفذش")); }
     overlay.close();
-    toast("الطلب اتشحن", "العميل هيوصله التتبع");
+    toast(tr("الطلب اتشحن"), tr("العميل هيوصله التتبع"));
     VIEWS.orders.load();
   } });
-  overlay.modal("شحن الطلب", form, [confirm, el("button", { class: "btn", text: "إلغاء", onclick: () => overlay.close() })]);
+  overlay.modal(tr("شحن الطلب"), form, [confirm, el("button", { class: "btn", text: tr("إلغاء"), onclick: () => overlay.close() })]);
 }
 
 function quantityForm(gid, sku, current) {
   const form = el("div");
-  form.innerHTML = `
+  form.innerHTML = TR`
     <p class="hint" style="margin-bottom:var(--s-4)">تعديل كمية <span class="num">${esc(sku)}</span>. صفر معناه شيل الصنف من الطلب.</p>
     <label class="lbl" for="qtyVal">الكمية الجديدة</label>
     <input class="inp num" id="qtyVal" type="number" min="0" step="1" value="${current}">`;
-  const save = el("button", { class: "btn primary", text: "احفظ", onclick: async () => {
+  const save = el("button", { class: "btn primary", text: tr("احفظ"), onclick: async () => {
     const quantity = parseInt($("#qtyVal").value, 10);
-    if (!Number.isInteger(quantity) || quantity < 0) return toast("رقم غير صحيح", "", "warn");
+    if (!Number.isInteger(quantity) || quantity < 0) return toast(tr("رقم غير صحيح"), "", "warn");
     save.disabled = true;
     const result = await api(`/dashboard/api/shopify/orders/${encodeURIComponent(gid)}/quantity`, {
       method: "POST", quiet: true, body: { variant_id: sku, quantity },
     });
-    if (result.__error) { save.disabled = false; return toastError(result.__error, "التعديل مانفذش"); }
+    if (result.__error) { save.disabled = false; return toastError(result.__error, tr("التعديل مانفذش")); }
     overlay.close();
-    toast("الكمية اتعدلت");
+    toast(tr("الكمية اتعدلت"));
     openOrder(gid);
   } });
-  overlay.modal("تعديل الكمية", form, [save, el("button", { class: "btn", text: "إلغاء", onclick: () => overlay.close() })]);
+  overlay.modal(tr("تعديل الكمية"), form, [save, el("button", { class: "btn", text: tr("إلغاء"), onclick: () => overlay.close() })]);
 }
 
 /* ==========================================================================
@@ -2606,9 +3378,9 @@ VIEWS.products = {
 
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm primary", type: "button", html: `${icon("plus", 15)} منتج جديد`,
+      el("button", { class: "btn sm primary", type: "button", html: TR`${icon("plus", 15)} منتج جديد`,
         onclick: productCreateForm }),
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
     );
     if (force || !this.rows.length) await this.load();
     else this.render();
@@ -2619,13 +3391,13 @@ VIEWS.products = {
     body.innerHTML = this.toolbar() + skeletonTable(8);
     this.wire();
     const data = await api(`/dashboard/api/shopify/products${this.search ? `?q=${encodeURIComponent(this.search)}` : ""}`, { quiet: true });
-    if (data.__error) { body.innerHTML = this.toolbar() + errorBanner(data.__error, "المنتجات"); this.wire(); return; }
+    if (data.__error) { body.innerHTML = this.toolbar() + errorBanner(data.__error, tr("المنتجات")); this.wire(); return; }
     this.rows = data.products;
     this.render();
   },
 
   toolbar() {
-    return `<div class="pagehead">
+    return TR`<div class="pagehead">
       <div class="t"><h2>المنتجات</h2>
         <div class="d">الإنشاء والتعديل بيروح لشوبيفاي الأول، وبعدين بيتسجل محليًا</div></div>
       <div class="field" style="min-width:240px">${icon("search", 15)}
@@ -2648,21 +3420,21 @@ VIEWS.products = {
           ? `<img class="thumb" src="${esc(p.image_url)}" alt="" loading="lazy">`
           : `<span class="thumb" style="display:grid;place-items:center;color:var(--ink-3)">${icon("tag", 16)}</span>`}</td>
         <td><div class="cellmain">${esc(p.title)}</div><div class="cellsub">${esc(p.category || "—")}</div></td>
-        <td>${chipHTML(p.status === "ACTIVE" ? "منشور" : p.status, p.status === "ACTIVE" ? "teal" : "amber", "dot")}</td>
+        <td>${chipHTML(p.status === "ACTIVE" ? tr("منشور") : p.status, p.status === "ACTIVE" ? "teal" : "amber", "dot")}</td>
         <td class="num">${num(p.variant_count)}</td>
-        <td>${p.any_in_stock ? chipHTML("متوفر", "teal", "dot") : chipHTML("خلص", "rose", "bar")}</td>
+        <td>${p.any_in_stock ? chipHTML(tr("متوفر"), "teal", "dot") : chipHTML(tr("خلص"), "rose", "bar")}</td>
       </tr>`).join("");
 
     body.innerHTML = this.toolbar() + (this.rows.length
-      ? card("كل المنتجات", `${this.rows.length} منتج`,
-          tableHTML(["", "المنتج", "الحالة", { label: "المقاسات", num: true }, "المخزون"], rowsHTML, { minWidth: 640 }),
+      ? card(tr("كل المنتجات"), TR`${this.rows.length} منتج`,
+          tableHTML(["", tr("المنتج"), tr("الحالة"), { label: tr("المقاسات"), num: true }, tr("المخزون")], rowsHTML, { minWidth: 640 }),
           "", { flush: true })
       : `<div class="card"><div class="card-body"></div></div>`);
     this.wire();
     if (!this.rows.length) {
       $("#productsBody .card:last-child .card-body").append(
-        emptyState("مفيش منتجات", "ابدأ بإضافة منتج جديد", "tag",
-          el("button", { class: "btn primary", html: `${icon("plus", 15)} منتج جديد`, onclick: productCreateForm })));
+        emptyState(tr("مفيش منتجات"), tr("ابدأ بإضافة منتج جديد"), "tag",
+          el("button", { class: "btn primary", html: TR`${icon("plus", 15)} منتج جديد`, onclick: productCreateForm })));
     }
     $$("#productsBody tr[data-gid]").forEach((tr) =>
       tr.addEventListener("click", () => openProduct(tr.dataset.gid)));
@@ -2670,9 +3442,9 @@ VIEWS.products = {
 };
 
 async function openProduct(gid) {
-  const body = overlay.drawer("جاري التحميل…", '<div class="skel" style="height:280px"></div>');
+  const body = overlay.drawer(tr("جاري التحميل…"), '<div class="skel" style="height:280px"></div>');
   const product = await api(`/dashboard/api/shopify/products/${encodeURIComponent(gid)}`, { quiet: true });
-  if (product.__error) { body.innerHTML = errorBanner(product.__error, "المنتج"); return; }
+  if (product.__error) { body.innerHTML = errorBanner(product.__error, tr("المنتج")); return; }
   $("#drawerTitle").textContent = product.title;
 
   const local = product.local;
@@ -2685,16 +3457,16 @@ async function openProduct(gid) {
             data-vid="${esc(v.sku || "")}" data-f="price" value="${esc(v.price ?? "")}"></td>
       <td><input class="inp num" style="width:104px" type="number" min="0" step="1"
             data-vid="${esc(v.sku || "")}" data-f="stock_qty" value="${esc(v.inventory_quantity ?? 0)}"></td>
-      <td>${(v.inventory_quantity || 0) > 0 ? chipHTML("متوفر", "teal", "dot") : chipHTML("خلص", "rose", "bar")}</td>
+      <td>${(v.inventory_quantity || 0) > 0 ? chipHTML(tr("متوفر"), "teal", "dot") : chipHTML(tr("خلص"), "rose", "bar")}</td>
     </tr>`).join("");
 
   body.innerHTML = `
     ${product.image_url ? `<img src="${esc(product.image_url)}" alt="" style="width:100%;max-height:230px;object-fit:cover;border-radius:var(--r-md);margin-bottom:var(--s-4)">` : ""}
-    ${!local ? `<div class="banner" style="margin-bottom:var(--s-4)">${icon("alert", 15)}
+    ${!local ? TR`<div class="banner" style="margin-bottom:var(--s-4)">${icon("alert", 15)}
       <div><strong>المنتج ده مالوش نسخة محلية</strong><br>اتعمل من شوبيفاي مباشرة. أسعار ومخزون تقدر تعدلهم من شوبيفاي،
       لكن القسم والستايل والمجموعة محتاجين مزامنة الأول (scripts/shopify_sync.py).</div></div>` : ""}
 
-    ${card("بيانات المنتج", "", `
+    ${card(tr("بيانات المنتج"), "", TR`
       <label class="lbl" for="pTitle">الاسم</label>
       <input class="inp" id="pTitle" value="${esc(product.title)}">
       <div class="grid g-3" style="margin-top:var(--s-3)">
@@ -2705,19 +3477,19 @@ async function openProduct(gid) {
         <div><label class="lbl" for="pColl">المجموعة</label>
           <input class="inp" id="pColl" value="${esc(local ? local.collection || "" : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pStyle">الستايل (مفصول بفاصلة)</label>
-          <input class="inp" id="pStyle" value="${esc(local && local.style ? local.style.join("، ") : "")}" ${local ? "" : "disabled"}></div>
+          <input class="inp" id="pStyle" value="${esc(local && local.style ? local.style.join(tr("، ")) : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pChart">جدول المقاسات</label>
           <input class="inp" id="pChart" value="${esc(local ? local.size_chart || "" : "")}" ${local ? "" : "disabled"}></div>
       </div>`)}
 
     <div style="height:var(--s-4)"></div>
-    ${card("المقاسات والأسعار", `${product.variants.length} مقاس`,
-      tableHTML(["", "المقاس", "السعر", "المخزون", "الحالة"], variantRows, { minWidth: 560 }), "", { flush: true })}`;
+    ${card(tr("المقاسات والأسعار"), TR`${product.variants.length} مقاس`,
+      tableHTML(["", tr("المقاس"), tr("السعر"), tr("المخزون"), tr("الحالة")], variantRows, { minWidth: 560 }), "", { flush: true })}`;
 
   const save = el("button", {
-    class: "btn primary", html: `${icon("check", 15)} احفظ التغييرات`,
+    class: "btn primary", html: TR`${icon("check", 15)} احفظ التغييرات`,
     onclick: async () => {
-      if (!product.local_product_id) return toast("مش ممكن الحفظ من هنا", "المنتج مالوش نسخة محلية", "warn");
+      if (!product.local_product_id) return toast(tr("مش ممكن الحفظ من هنا"), tr("المنتج مالوش نسخة محلية"), "warn");
       save.disabled = true;
       const updates = {};
       $$("[data-vid]", body).forEach((input) => {
@@ -2738,19 +3510,19 @@ async function openProduct(gid) {
       const result = await api(`/dashboard/api/shopify/products/${encodeURIComponent(product.local_product_id)}/update`,
         { method: "POST", quiet: true, body: payload });
       save.disabled = false;
-      if (result.__error) return toastError(result.__error, "الحفظ مانفذش");
-      toast("المنتج اتحدّث", "التغيير راح لشوبيفاي");
+      if (result.__error) return toastError(result.__error, tr("الحفظ مانفذش"));
+      toast(tr("المنتج اتحدّث"), tr("التغيير راح لشوبيفاي"));
       overlay.close();
       VIEWS.products.load();
     },
   });
   $("#drawerFoot").innerHTML = "";
-  $("#drawerFoot").append(save, el("button", { class: "btn", text: "إغلاق", onclick: () => overlay.close() }));
+  $("#drawerFoot").append(save, el("button", { class: "btn", text: tr("إغلاق"), onclick: () => overlay.close() }));
   $("#drawerFoot").hidden = false;
 }
 
 function productCreateForm() {
-  const body = overlay.drawer("منتج جديد", `
+  const body = overlay.drawer(tr("منتج جديد"), TR`
     <div class="grid g-2">
       <div><label class="lbl" for="nTitle">اسم المنتج *</label><input class="inp" id="nTitle" placeholder="مثلاً: هودي ونس الشتوي"></div>
       <div><label class="lbl" for="nCat">التصنيف *</label><input class="inp" id="nCat" placeholder="هودي"></div>
@@ -2773,7 +3545,7 @@ function productCreateForm() {
 
   const addRow = (values = {}) => {
     const row = el("div", { class: "grid", style: "grid-template-columns:repeat(5,1fr) auto;gap:var(--s-2);margin-bottom:var(--s-2)" });
-    row.innerHTML = `
+    row.innerHTML = TR`
       <input class="inp" data-v="size" placeholder="مقاس *" value="${esc(values.size || "")}">
       <input class="inp" data-v="color" placeholder="لون" value="${esc(values.color || "")}">
       <input class="inp" data-v="length" placeholder="طول" value="${esc(values.length || "")}">
@@ -2786,7 +3558,7 @@ function productCreateForm() {
   $("#addVariant", body).addEventListener("click", () => addRow());
   addRow();
 
-  const create = el("button", { class: "btn primary", html: `${icon("check", 15)} أنشئ المنتج`, onclick: async () => {
+  const create = el("button", { class: "btn primary", html: TR`${icon("check", 15)} أنشئ المنتج`, onclick: async () => {
     const variants = $$("#variantRows > div", body).map((row) => {
       const values = {};
       $$("[data-v]", row).forEach((input) => { values[input.dataset.v] = input.value.trim(); });
@@ -2803,18 +3575,18 @@ function productCreateForm() {
       image_url: $("#nImage").value.trim() || undefined, variants,
     };
     if (!payload.title || !payload.category || !payload.department || !variants.length) {
-      return toast("ناقص بيانات", "الاسم والتصنيف والقسم ومقاس واحد على الأقل مطلوبين", "warn");
+      return toast(tr("ناقص بيانات"), tr("الاسم والتصنيف والقسم ومقاس واحد على الأقل مطلوبين"), "warn");
     }
     create.disabled = true;
     const result = await api("/dashboard/api/shopify/products", { method: "POST", quiet: true, body: payload });
     create.disabled = false;
-    if (result.__error) return toastError(result.__error, "الإنشاء مانفذش");
-    toast("المنتج اتعمل", result.product_id || "");
+    if (result.__error) return toastError(result.__error, tr("الإنشاء مانفذش"));
+    toast(tr("المنتج اتعمل"), result.product_id || "");
     overlay.close();
     go("products", { force: true });
   } });
   $("#drawerFoot").innerHTML = "";
-  $("#drawerFoot").append(create, el("button", { class: "btn", text: "إلغاء", onclick: () => overlay.close() }));
+  $("#drawerFoot").append(create, el("button", { class: "btn", text: tr("إلغاء"), onclick: () => overlay.close() }));
   $("#drawerFoot").hidden = false;
 }
 
@@ -2827,8 +3599,8 @@ const inventoryView = VIEWS.inventory = {
 
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("download", 15)} تصدير`, onclick: () => this.export() }),
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("download", 15)} تصدير`, onclick: () => this.export() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
     );
     if (force || !this.data) await this.load();
     else this.render();
@@ -2841,7 +3613,7 @@ const inventoryView = VIEWS.inventory = {
     const params = new URLSearchParams({ status: this.filter });
     if (this.search) params.set("q", this.search);
     const data = await api(`/dashboard/api/shopify/inventory?${params}`, { quiet: true });
-    if (data.__error) { body.innerHTML = errorBanner(data.__error, "المخزون"); return; }
+    if (data.__error) { body.innerHTML = errorBanner(data.__error, tr("المخزون")); return; }
     this.data = data;
     setBadge("stock", data.totals.out_of_stock_count, "warn");
     this.render();
@@ -2850,36 +3622,36 @@ const inventoryView = VIEWS.inventory = {
   render() {
     const { rows, totals } = this.data;
     const filters = [
-      { id: "all", label: "الكل" },
-      { id: "low", label: `على وشك الخلاص (${totals.low_stock_count})` },
-      { id: "out", label: `خلص (${totals.out_of_stock_count})` },
-      { id: "in_stock", label: "متوفر" },
+      { id: "all", label: tr("الكل") },
+      { id: "low", label: TR`على وشك الخلاص (${totals.low_stock_count})` },
+      { id: "out", label: TR`خلص (${totals.out_of_stock_count})` },
+      { id: "in_stock", label: tr("متوفر") },
     ];
-    const rowsHTML = rows.map((r) => `
+    const rowsHTML = rows.map((r) => TR`
       <tr>
         <td style="width:52px">${r.image_url ? `<img class="thumb" src="${esc(r.image_url)}" alt="" loading="lazy">` : ""}</td>
         <td><div class="cellmain">${esc(r.product_title)}</div>
             <div class="cellsub">${esc([r.color, r.size, r.length].filter(Boolean).join(" / ") || "—")}</div></td>
         <td class="num cellsub" data-copy="${esc(r.sku)}" data-copy-what="SKU" style="cursor:pointer">${esc(r.sku)}</td>
         <td class="num">${esc(money(r.price))}</td>
-        <td>${r.quantity <= 0 ? chipHTML("خلص", "rose", "bar")
-             : r.quantity <= totals.low_stock_at ? chipHTML(`فاضل ${r.quantity}`, "amber", "ring")
-             : chipHTML(`${r.quantity} متاح`, "teal", "dot")}</td>
+        <td>${r.quantity <= 0 ? chipHTML(tr("خلص"), "rose", "bar")
+             : r.quantity <= totals.low_stock_at ? chipHTML(TR`فاضل ${r.quantity}`, "amber", "ring")
+             : chipHTML(TR`${r.quantity} متاح`, "teal", "dot")}</td>
         <td><input class="inp num" style="width:92px" type="number" min="0" step="1"
               value="${r.quantity}" data-item="${esc(r.inventory_item_id || "")}" data-was="${r.quantity}"
               aria-label="مخزون ${esc(r.sku)}"></td>
       </tr>`).join("");
 
-    $("#inventoryBody").innerHTML = `
+    $("#inventoryBody").innerHTML = TR`
       <div class="grid g-kpi">
-        ${[["مقاسات خلصت", num(totals.out_of_stock_count), "rose", "alert"],
-           ["على وشك الخلاص", num(totals.low_stock_count), "amber", "boxes"],
-           ["إجمالي القطع", num(totals.total_units), "teal", "boxes"],
-           ["قيمة المخزون بالبيع", money(totals.retail_value), "clay", "money"]]
+        ${[[tr("مقاسات خلصت"), num(totals.out_of_stock_count), "rose", "alert"],
+           [tr("على وشك الخلاص"), num(totals.low_stock_count), "amber", "boxes"],
+           [tr("إجمالي القطع"), num(totals.total_units), "teal", "boxes"],
+           [tr("قيمة المخزون بالبيع"), money(totals.retail_value), "clay", "money"]]
           .map(([l, v, t, ic]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
             <div class="kpi-label">${icon(ic, 14)}${esc(l)}</div><div class="kpi-value">${esc(v)}</div></div>`).join("")}
       </div>
-      ${this.data.truncated ? `<div class="banner">${icon("alert", 15)}<div>المتجر أكبر من إننا نقراه كله في نداء واحد — الأرقام دي حد أدنى.</div></div>` : ""}
+      ${this.data.truncated ? TR`<div class="banner">${icon("alert", 15)}<div>المتجر أكبر من إننا نقراه كله في نداء واحد — الأرقام دي حد أدنى.</div></div>` : ""}
       <div class="row">
         <div class="inbox-filters" style="flex:1">
           ${filters.map((f) => `<button class="fchip" type="button" data-inv="${f.id}"
@@ -2888,13 +3660,13 @@ const inventoryView = VIEWS.inventory = {
         <div class="field" style="min-width:210px">${icon("search", 15)}
           <input id="invSearch" type="search" placeholder="اسم، SKU، لون…" value="${esc(this.search)}"></div>
       </div>
-      ${card("المخزون", `${num(this.data.match_count)} مقاس — الأقل أولاً`,
-        rows.length ? tableHTML(["", "المنتج", "SKU", "السعر", "الحالة", "تعديل"], rowsHTML, { minWidth: 780 }) : "",
+      ${card(tr("المخزون"), TR`${num(this.data.match_count)} مقاس — الأقل أولاً`,
+        rows.length ? tableHTML(["", tr("المنتج"), "SKU", tr("السعر"), tr("الحالة"), tr("تعديل")], rowsHTML, { minWidth: 780 }) : "",
         `<span id="invSaveSlot"></span>`, { flush: true })}`;
 
     if (!rows.length) {
       $("#inventoryBody .card:last-child .card-body").append(
-        emptyState("مفيش نتائج", "غيّر الفلتر أو امسح البحث", "boxes"));
+        emptyState(tr("مفيش نتائج"), tr("غيّر الفلتر أو امسح البحث"), "boxes"));
     }
 
     $$("[data-inv]").forEach((b) => b.addEventListener("click", () => { this.filter = b.dataset.inv; this.load(); }));
@@ -2921,13 +3693,13 @@ const inventoryView = VIEWS.inventory = {
     slot.innerHTML = "";
     if (!this.dirty.size) return;
     const save = el("button", {
-      class: "btn sm primary", html: `${icon("check", 14)} احفظ ${this.dirty.size} تعديل`,
+      class: "btn sm primary", html: TR`${icon("check", 14)} احفظ ${this.dirty.size} تعديل`,
       onclick: async () => {
         save.disabled = true;
         const updates = Array.from(this.dirty, ([inventory_item_id, quantity]) => ({ inventory_item_id, quantity }));
         const result = await api("/dashboard/api/shopify/inventory/set", { method: "POST", quiet: true, body: { updates } });
-        if (result.__error) { save.disabled = false; return toastError(result.__error, "الحفظ مانفذش"); }
-        toast("المخزون اتحدّث", `${updates.length} مقاس`);
+        if (result.__error) { save.disabled = false; return toastError(result.__error, tr("الحفظ مانفذش")); }
+        toast(tr("المخزون اتحدّث"), TR`${updates.length} مقاس`);
         this.load();
       },
     });
@@ -2936,7 +3708,7 @@ const inventoryView = VIEWS.inventory = {
 
   export() {
     if (!this.data) return;
-    exportCSV("inventory.csv", ["المنتج", "SKU", "اللون", "المقاس", "السعر", "المخزون"],
+    exportCSV("inventory.csv", [tr("المنتج"), "SKU", tr("اللون"), tr("المقاس"), tr("السعر"), tr("المخزون")],
       this.data.rows.map((r) => [r.product_title, r.sku, r.color, r.size, r.price, r.quantity]));
   },
 };
@@ -2950,8 +3722,8 @@ VIEWS.collections = {
 
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm primary", type: "button", html: `${icon("plus", 15)} مجموعة جديدة`, onclick: collectionCreateForm }),
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
+      el("button", { class: "btn sm primary", type: "button", html: TR`${icon("plus", 15)} مجموعة جديدة`, onclick: collectionCreateForm }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
     );
     if (force || !this.rows) await this.load();
     else this.render();
@@ -2960,7 +3732,7 @@ VIEWS.collections = {
   async load() {
     $("#collectionsBody").innerHTML = skeletonTiles(3);
     const data = await api("/dashboard/api/shopify/collections", { quiet: true });
-    if (data.__error) { $("#collectionsBody").innerHTML = errorBanner(data.__error, "المجموعات"); return; }
+    if (data.__error) { $("#collectionsBody").innerHTML = errorBanner(data.__error, tr("المجموعات")); return; }
     this.rows = data.collections;
     this.render();
   },
@@ -2969,16 +3741,16 @@ VIEWS.collections = {
     const body = $("#collectionsBody");
     if (!this.rows.length) {
       body.innerHTML = "";
-      body.append(emptyState("مفيش مجموعات", "المجموعات بتخلي عرض المنتجات أسهل على العميل", "layers",
-        el("button", { class: "btn primary", html: `${icon("plus", 15)} مجموعة جديدة`, onclick: collectionCreateForm })));
+      body.append(emptyState(tr("مفيش مجموعات"), tr("المجموعات بتخلي عرض المنتجات أسهل على العميل"), "layers",
+        el("button", { class: "btn primary", html: TR`${icon("plus", 15)} مجموعة جديدة`, onclick: collectionCreateForm })));
       return;
     }
-    body.innerHTML = `<div class="grid g-3">${this.rows.map((c) => `
+    body.innerHTML = `<div class="grid g-3">${this.rows.map((c) => TR`
       <button class="card" type="button" data-gid="${esc(c.id)}" style="text-align:start;border:1px solid var(--line);cursor:pointer">
         <div style="height:96px;background:${c.image_url ? `center/cover url('${esc(c.image_url)}')` : "linear-gradient(135deg,var(--clay-tint),var(--lilac-tint))"}"></div>
         <div class="card-body" style="padding:var(--s-4)">
           <div class="row" style="gap:6px;margin-bottom:6px">
-            ${chipHTML(c.smart ? "ذكية" : "يدوية", c.smart ? "lilac" : "sky", "dot")}
+            ${chipHTML(c.smart ? tr("ذكية") : tr("يدوية"), c.smart ? "lilac" : "sky", "dot")}
             <span class="spacer"></span>
             <span class="cellsub num">${num(c.product_count)} منتج</span>
           </div>
@@ -2991,25 +3763,25 @@ VIEWS.collections = {
 };
 
 async function openCollection(gid) {
-  const body = overlay.drawer("جاري التحميل…", '<div class="skel" style="height:240px"></div>');
+  const body = overlay.drawer(tr("جاري التحميل…"), '<div class="skel" style="height:240px"></div>');
   const collection = await api(`/dashboard/api/shopify/collections/${encodeURIComponent(gid)}`, { quiet: true });
-  if (collection.__error) { body.innerHTML = errorBanner(collection.__error, "المجموعة"); return; }
+  if (collection.__error) { body.innerHTML = errorBanner(collection.__error, tr("المجموعة")); return; }
   $("#drawerTitle").textContent = collection.title;
 
-  const products = collection.products.map((p) => `
+  const products = collection.products.map((p) => TR`
     <tr>
       <td style="width:52px">${p.image_url ? `<img class="thumb" src="${esc(p.image_url)}" alt="" loading="lazy">` : ""}</td>
       <td><div class="cellmain">${esc(p.title)}</div>
-          <div class="cellsub">${esc(p.status === "ACTIVE" ? "منشور" : p.status)} · ${num(p.inventory)} قطعة</div></td>
-      <td>${collection.smart ? "" : `<button class="btn sm ghost" type="button" data-rm="${esc(p.id)}">شيل</button>`}</td>
+          <div class="cellsub">${esc(p.status === "ACTIVE" ? tr("منشور") : p.status)} · ${num(p.inventory)} قطعة</div></td>
+      <td>${collection.smart ? "" : TR`<button class="btn sm ghost" type="button" data-rm="${esc(p.id)}">شيل</button>`}</td>
     </tr>`).join("");
 
   body.innerHTML = `
-    ${collection.smart ? `<div class="banner" data-tone="info" style="margin-bottom:var(--s-4)">${icon("alert", 15)}
+    ${collection.smart ? TR`<div class="banner" data-tone="info" style="margin-bottom:var(--s-4)">${icon("alert", 15)}
       <div><strong>مجموعة ذكية</strong><br>أعضاؤها بيتحددوا بقواعد شوبيفاي، فمش بنضيف أو نشيل منها من هنا —
       أي تعديل يدوي شوبيفاي هيلغيه أول ما يعيد تطبيق القواعد.</div></div>` : ""}
 
-    ${card("بيانات المجموعة", "", `
+    ${card(tr("بيانات المجموعة"), "", TR`
       <label class="lbl" for="cTitle">الاسم</label>
       <input class="inp" id="cTitle" value="${esc(collection.title)}">
       <div style="height:var(--s-3)"></div>
@@ -3017,45 +3789,45 @@ async function openCollection(gid) {
       <textarea class="inp" id="cDesc" rows="3">${esc((collection.description_html || "").replace(/<[^>]+>/g, ""))}</textarea>`)}
 
     <div style="height:var(--s-4)"></div>
-    ${card("المنتجات", `${collection.products.length} منتج`,
-      products ? tableHTML(["", "المنتج", ""], products, { minWidth: 420 })
-               : `<div class="empty"><div class="d">المجموعة فاضية</div></div>`, "", { flush: true })}`;
+    ${card(tr("المنتجات"), TR`${collection.products.length} منتج`,
+      products ? tableHTML(["", tr("المنتج"), ""], products, { minWidth: 420 })
+               : TR`<div class="empty"><div class="d">المجموعة فاضية</div></div>`, "", { flush: true })}`;
 
   $$("[data-rm]", body).forEach((button) => button.addEventListener("click", async () => {
     button.disabled = true;
     const result = await api(`/dashboard/api/shopify/collections/${encodeURIComponent(gid)}/products/remove`,
       { method: "POST", quiet: true, body: { product_ids: [button.dataset.rm] } });
-    if (result.__error) { button.disabled = false; return toastError(result.__error, "الحذف مانفذش"); }
-    toast("المنتج اتشال", "شوبيفاي بيطبّق التغيير خلال ثواني");
+    if (result.__error) { button.disabled = false; return toastError(result.__error, tr("الحذف مانفذش")); }
+    toast(tr("المنتج اتشال"), tr("شوبيفاي بيطبّق التغيير خلال ثواني"));
     setTimeout(() => openCollection(gid), 900);
   }));
 
-  const foot = [el("button", { class: "btn primary", html: `${icon("check", 15)} احفظ`, onclick: async () => {
+  const foot = [el("button", { class: "btn primary", html: TR`${icon("check", 15)} احفظ`, onclick: async () => {
     const result = await api(`/dashboard/api/shopify/collections/${encodeURIComponent(gid)}/update`, {
       method: "POST", quiet: true,
       body: { title: $("#cTitle").value.trim(), description_html: $("#cDesc").value.trim() },
     });
-    if (result.__error) return toastError(result.__error, "الحفظ مانفذش");
-    toast("المجموعة اتحدّثت");
+    if (result.__error) return toastError(result.__error, tr("الحفظ مانفذش"));
+    toast(tr("المجموعة اتحدّثت"));
     overlay.close();
     VIEWS.collections.load();
   } })];
   if (!collection.smart) {
-    foot.push(el("button", { class: "btn", html: `${icon("plus", 15)} ضيف منتجات`, onclick: () => addToCollectionForm(gid) }));
+    foot.push(el("button", { class: "btn", html: TR`${icon("plus", 15)} ضيف منتجات`, onclick: () => addToCollectionForm(gid) }));
   }
-  foot.push(el("button", { class: "btn ghost", text: "إغلاق", onclick: () => overlay.close() }));
+  foot.push(el("button", { class: "btn ghost", text: tr("إغلاق"), onclick: () => overlay.close() }));
   $("#drawerFoot").innerHTML = "";
   $("#drawerFoot").append(...foot);
   $("#drawerFoot").hidden = false;
 }
 
 async function addToCollectionForm(gid) {
-  const body = overlay.modal("ضيف منتجات للمجموعة", '<div class="skel" style="height:200px"></div>');
+  const body = overlay.modal(tr("ضيف منتجات للمجموعة"), '<div class="skel" style="height:200px"></div>');
   const data = await api("/dashboard/api/shopify/products", { quiet: true });
-  if (data.__error) { body.innerHTML = errorBanner(data.__error, "المنتجات"); return; }
-  body.innerHTML = `<div class="field" style="margin-bottom:var(--s-3)">${icon("search", 15)}
+  if (data.__error) { body.innerHTML = errorBanner(data.__error, tr("المنتجات")); return; }
+  body.innerHTML = TR`<div class="field" style="margin-bottom:var(--s-3)">${icon("search", 15)}
       <input id="acSearch" type="search" placeholder="فلترة سريعة"></div>
-    <div id="acList" style="max-height:44dvh;overflow:auto">${data.products.map((p) => `
+    <div id="acList" style="max-height:44dvh;overflow:auto">${data.products.map((p) => TR`
       <label class="mini" style="cursor:pointer">
         <input type="checkbox" value="${esc(p.id)}">
         ${p.image_url ? `<img class="thumb" src="${esc(p.image_url)}" alt="" loading="lazy">` : ""}
@@ -3068,57 +3840,63 @@ async function addToCollectionForm(gid) {
       row.style.display = row.textContent.toLowerCase().includes(needle) ? "" : "none";
     });
   });
-  const add = el("button", { class: "btn primary", text: "ضيف المختار", onclick: async () => {
+  const add = el("button", { class: "btn primary", text: tr("ضيف المختار"), onclick: async () => {
     const ids = $$('#acList input:checked', body).map((i) => i.value);
-    if (!ids.length) return toast("اختار منتج على الأقل", "", "warn");
+    if (!ids.length) return toast(tr("اختار منتج على الأقل"), "", "warn");
     add.disabled = true;
     const result = await api(`/dashboard/api/shopify/collections/${encodeURIComponent(gid)}/products/add`,
       { method: "POST", quiet: true, body: { product_ids: ids } });
-    if (result.__error) { add.disabled = false; return toastError(result.__error, "الإضافة مانفذتش"); }
+    if (result.__error) { add.disabled = false; return toastError(result.__error, tr("الإضافة مانفذتش")); }
     overlay.close();
-    toast("المنتجات اتضافت", `${ids.length} منتج`);
+    toast(tr("المنتجات اتضافت"), TR`${ids.length} منتج`);
     setTimeout(() => openCollection(gid), 600);
   } });
   $("#modalFoot").innerHTML = "";
-  $("#modalFoot").append(add, el("button", { class: "btn", text: "إلغاء", onclick: () => overlay.close() }));
+  $("#modalFoot").append(add, el("button", { class: "btn", text: tr("إلغاء"), onclick: () => overlay.close() }));
   $("#modalFoot").hidden = false;
 }
 
 function collectionCreateForm() {
-  const create = el("button", { class: "btn primary", text: "أنشئ", onclick: async () => {
+  const create = el("button", { class: "btn primary", text: tr("أنشئ"), onclick: async () => {
     const title = $("#ncTitle").value.trim();
-    if (!title) return toast("الاسم مطلوب", "", "warn");
+    if (!title) return toast(tr("الاسم مطلوب"), "", "warn");
     create.disabled = true;
     const result = await api("/dashboard/api/shopify/collections", {
       method: "POST", quiet: true,
       body: { title, description_html: $("#ncDesc").value.trim() },
     });
     create.disabled = false;
-    if (result.__error) return toastError(result.__error, "الإنشاء مانفذش");
+    if (result.__error) return toastError(result.__error, tr("الإنشاء مانفذش"));
     overlay.close();
-    toast("المجموعة اتعملت", title);
+    toast(tr("المجموعة اتعملت"), title);
     go("collections", { force: true });
   } });
-  overlay.modal("مجموعة جديدة", `
+  overlay.modal(tr("مجموعة جديدة"), TR`
     <label class="lbl" for="ncTitle">الاسم *</label>
     <input class="inp" id="ncTitle" placeholder="مثلاً: صيف ٢٠٢٦">
     <div style="height:var(--s-3)"></div>
     <label class="lbl" for="ncDesc">الوصف</label>
     <textarea class="inp" id="ncDesc" rows="3"></textarea>
     <p class="hint">المجموعة بتتعمل يدوية — تقدر تضيف منتجاتها بعد الإنشاء.</p>`,
-    [create, el("button", { class: "btn", text: "إلغاء", onclick: () => overlay.close() })]);
+    [create, el("button", { class: "btn", text: tr("إلغاء"), onclick: () => overlay.close() })]);
 }
 
 /* ==========================================================================
    view: العملاء / customers
    ========================================================================== */
 
+/* The order-count presets the owner asked for by name, plus an "any other
+   number" escape hatch -- a shop that wants "who ordered exactly 7 times"
+   should not need a new deploy to ask it. */
+const CUSTOMER_ORDER_PRESETS = ["", "1", "2", "3"];
+
 VIEWS.customers = {
   tab: "shopify", search: "", data: null,
+  ordersCount: "", ordersOp: "eq", governorate: "", sort: "recent",
 
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
     );
     if (force || !this.data) await this.load();
     else this.render();
@@ -3127,17 +3905,26 @@ VIEWS.customers = {
   async load() {
     $("#customersBody").innerHTML = this.toolbar() + skeletonTable(8);
     this.wire();
-    const path = this.tab === "shopify"
-      ? `/dashboard/api/shopify/customers${this.search ? `?q=${encodeURIComponent(this.search)}` : ""}`
-      : `/dashboard/api/customers${this.search ? `?q=${encodeURIComponent(this.search)}` : ""}`;
-    const data = await api(path, { quiet: true });
-    if (data.__error) { $("#customersBody").innerHTML = this.toolbar() + errorBanner(data.__error, "العملاء"); this.wire(); return; }
+    const params = new URLSearchParams();
+    if (this.search) params.set("q", this.search);
+    if (this.tab === "shopify") {
+      // Order count, governorate and the sort are Shopify-side facts the bot
+      // customer list simply does not carry, so they ride only on this tab.
+      if (this.ordersCount !== "") params.set("orders_count", this.ordersCount);
+      if (this.ordersCount !== "") params.set("orders_op", this.ordersOp);
+      if (this.governorate) params.set("governorate", this.governorate);
+      if (this.sort !== "recent") params.set("sort", this.sort);
+    }
+    const qs = params.toString();
+    const base = this.tab === "shopify" ? "/dashboard/api/shopify/customers" : "/dashboard/api/customers";
+    const data = await api(`${base}${qs ? `?${qs}` : ""}`, { quiet: true });
+    if (data.__error) { $("#customersBody").innerHTML = this.toolbar() + errorBanner(data.__error, tr("العملاء")); this.wire(); return; }
     this.data = data;
     this.render();
   },
 
   toolbar() {
-    return `<div class="pagehead">
+    return TR`<div class="pagehead">
       <div class="t"><h2>العملاء</h2>
         <div class="d">عملاء شوبيفاي هم كل المتجر؛ عملاء البوت هم اللي اشتروا من المحادثة — الاتنين مش نفس القايمة عن قصد</div></div>
       <div class="row">
@@ -3148,6 +3935,42 @@ VIEWS.customers = {
         <div class="field" style="min-width:220px">${icon("search", 15)}
           <input id="custSearch" type="search" placeholder="اسم أو تليفون" value="${esc(this.search)}"></div>
       </div>
+      ${this.tab === "shopify" ? this.filtersHTML() : ""}
+    </div>`;
+  },
+
+  filtersHTML() {
+    const governorates = (this.data && this.data.governorates) || [];
+    const custom = this.ordersCount !== "" && !CUSTOMER_ORDER_PRESETS.includes(this.ordersCount);
+    return TR`<div class="row" style="width:100%;flex-wrap:wrap">
+      <label class="lbl" for="custOrders" style="margin:0">عدد الطلبات</label>
+      <select class="inp" id="custOrders" style="max-width:150px">
+        <option value="" ${this.ordersCount === "" ? "selected" : ""}>الكل</option>
+        <option value="1" ${this.ordersCount === "1" ? "selected" : ""}>١</option>
+        <option value="2" ${this.ordersCount === "2" ? "selected" : ""}>٢</option>
+        <option value="3" ${this.ordersCount === "3" ? "selected" : ""}>٣</option>
+        <option value="custom" ${custom ? "selected" : ""}>رقم تاني…</option>
+      </select>
+      <input class="inp num" id="custOrdersN" type="number" min="0" step="1" placeholder="اكتب رقم"
+        style="max-width:120px" value="${esc(custom ? this.ordersCount : "")}" ${custom ? "" : "hidden"}>
+      <div class="seg" ${this.ordersCount === "" ? "hidden" : ""}>
+        <button type="button" data-cop="eq" aria-pressed="${this.ordersOp === "eq"}">بالظبط</button>
+        <button type="button" data-cop="gte" aria-pressed="${this.ordersOp === "gte"}">أو أكتر</button>
+      </div>
+
+      <label class="lbl" for="custGov" style="margin:0">المحافظة</label>
+      <select class="inp" id="custGov" style="max-width:180px">
+        <option value="">كل المحافظات</option>
+        ${governorates.map((g) => `<option value="${esc(g.key)}"
+          ${this.governorate === g.key ? "selected" : ""}>${esc(LANG === "en" ? g.key : g.label_ar)}</option>`).join("")}
+        <option value="__unknown__" ${this.governorate === "__unknown__" ? "selected" : ""}>من غير محافظة</option>
+      </select>
+
+      <div class="seg">
+        <button type="button" data-csort="recent" aria-pressed="${this.sort === "recent"}">الأحدث</button>
+        <button type="button" data-csort="orders_desc" aria-pressed="${this.sort === "orders_desc"}">الأكتر طلبات</button>
+        <button type="button" data-csort="orders_asc" aria-pressed="${this.sort === "orders_asc"}">الأقل طلبات</button>
+      </div>
     </div>`;
   },
 
@@ -3157,11 +3980,34 @@ VIEWS.customers = {
     if (search) search.addEventListener("keydown", (event) => {
       if (event.key === "Enter") { this.search = search.value.trim(); this.load(); }
     });
+
+    const orders = $("#custOrders");
+    if (orders) orders.addEventListener("change", () => {
+      if (orders.value === "custom") {
+        // Wait for a number before asking the server anything -- reloading on
+        // "رقم تاني…" alone would clear the list and look like a bug.
+        const field = $("#custOrdersN");
+        field.hidden = false;
+        field.focus();
+        return;
+      }
+      this.ordersCount = orders.value;
+      this.load();
+    });
+    const custom = $("#custOrdersN");
+    if (custom) custom.addEventListener("change", () => {
+      this.ordersCount = custom.value.trim();
+      this.load();
+    });
+    $$("[data-cop]").forEach((b) => b.addEventListener("click", () => { this.ordersOp = b.dataset.cop; this.load(); }));
+    $$("[data-csort]").forEach((b) => b.addEventListener("click", () => { this.sort = b.dataset.csort; this.load(); }));
+    const gov = $("#custGov");
+    if (gov) gov.addEventListener("change", () => { this.governorate = gov.value; this.load(); });
   },
 
   render() {
     const shopify = this.tab === "shopify";
-    const rows = shopify ? this.data.customers : this.data.customers;
+    const rows = this.data.customers;
     const rowsHTML = rows.map((c) => shopify ? `
       <tr data-clickable data-gid="${esc(c.id)}">
         <td><div class="cellmain">${esc(c.name || "—")}</div><div class="cellsub num">${esc(c.phone || c.email || "")}</div></td>
@@ -3172,20 +4018,25 @@ VIEWS.customers = {
       <tr data-clickable data-cid="${esc(c.client_id)}">
         <td><div class="cellmain">${esc(c.full_name)}</div><div class="cellsub num">${esc(c.phone)}</div></td>
         <td>${esc(c.governorate || "—")}</td>
-        <td>${chipHTML(c.status === "active" ? "نشط" : c.status, c.status === "active" ? "teal" : "amber", "dot")}</td>
+        <td>${chipHTML(c.status === "active" ? tr("نشط") : c.status, c.status === "active" ? "teal" : "amber", "dot")}</td>
         <td class="cellsub">${esc(shortDate(c.created_at))}</td>
       </tr>`).join("");
 
-    $("#customersBody").innerHTML = this.toolbar() + card(
-      shopify ? "عملاء شوبيفاي" : "عملاء البوت", `${rows.length}`,
+    const truncated = shopify && this.data.truncated
+      ? TR`<div class="banner">${icon("alert", 15)}
+          <div>العملاء أكتر من اللي بنقراه في نداء واحد — القايمة دي حد أدنى، مش كل اللي مطابق.</div></div>`
+      : "";
+
+    $("#customersBody").innerHTML = this.toolbar() + truncated + card(
+      shopify ? tr("عملاء شوبيفاي") : tr("عملاء البوت"), `${rows.length}`,
       rows.length ? tableHTML(
-        shopify ? ["العميل", "المحافظة", { label: "طلبات", num: true }, { label: "أنفق", num: true }]
-                : ["العميل", "المحافظة", "الحالة", "أول ظهور"],
+        shopify ? [tr("العميل"), tr("المحافظة"), { label: tr("طلبات"), num: true }, { label: tr("أنفق"), num: true }]
+                : [tr("العميل"), tr("المحافظة"), tr("الحالة"), tr("أول ظهور")],
         rowsHTML, { minWidth: 560 }) : "", "", { flush: true });
     this.wire();
     if (!rows.length) {
       $("#customersBody .card:last-child .card-body").append(
-        emptyState("مفيش عملاء", shopify ? "لسه محدش اشترى" : "أول طلب من البوت هيعمل عميل هنا", "users"));
+        emptyState(tr("مفيش عملاء"), shopify ? tr("لسه محدش اشترى") : tr("أول طلب من البوت هيعمل عميل هنا"), "users"));
     }
     $$("#customersBody tr[data-gid]").forEach((tr) => tr.addEventListener("click", () => openShopifyCustomer(tr.dataset.gid)));
     $$("#customersBody tr[data-cid]").forEach((tr) => tr.addEventListener("click", () => openLocalCustomer(tr.dataset.cid)));
@@ -3193,48 +4044,48 @@ VIEWS.customers = {
 };
 
 async function openShopifyCustomer(gid) {
-  const body = overlay.drawer("جاري التحميل…", '<div class="skel" style="height:220px"></div>');
+  const body = overlay.drawer(tr("جاري التحميل…"), '<div class="skel" style="height:220px"></div>');
   const customer = await api(`/dashboard/api/shopify/customers/${encodeURIComponent(gid)}`, { quiet: true });
-  if (customer.__error) { body.innerHTML = errorBanner(customer.__error, "العميل"); return; }
-  $("#drawerTitle").textContent = customer.name || "عميل";
+  if (customer.__error) { body.innerHTML = errorBanner(customer.__error, tr("العميل")); return; }
+  $("#drawerTitle").textContent = customer.name || tr("عميل");
   const orders = (customer.orders || []).map((o) => `
     <tr><td class="num">${esc(o.name)}</td><td>${esc(shortDate(o.created_at))}</td>
     <td>${statusChip(o.fulfillment_status)}</td><td class="num">${esc(money(o.total))}</td></tr>`).join("");
-  body.innerHTML = `
+  body.innerHTML = TR`
     <div class="grid g-kpi" style="margin-bottom:var(--s-4)">
       <div class="card kpi" style="--accent:var(--teal)"><div class="kpi-label">عدد الطلبات</div>
         <div class="kpi-value">${num(customer.order_count)}</div></div>
       <div class="card kpi" style="--accent:var(--clay)"><div class="kpi-label">إجمالي الإنفاق</div>
         <div class="kpi-value">${esc(money(customer.amount_spent))}</div></div>
     </div>
-    ${card("بيانات التواصل", "", `
+    ${card(tr("بيانات التواصل"), "", TR`
       <div class="kv"><span class="k">التليفون</span><span class="v num">${esc(customer.phone || "—")}</span></div>
       <div class="kv"><span class="k">الإيميل</span><span class="v" dir="ltr">${esc(customer.email || "—")}</span></div>
       <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(customer.governorate || "—")}</span></div>`)}
     <div style="height:var(--s-4)"></div>
-    ${card("الطلبات", "", orders ? tableHTML(["الطلب", "التاريخ", "الحالة", { label: "الإجمالي", num: true }], orders)
-      : `<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
+    ${card(tr("الطلبات"), "", orders ? tableHTML([tr("الطلب"), tr("التاريخ"), tr("الحالة"), { label: tr("الإجمالي"), num: true }], orders)
+      : TR`<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
 }
 
 async function openLocalCustomer(clientId) {
-  const body = overlay.drawer("جاري التحميل…", '<div class="skel" style="height:220px"></div>');
+  const body = overlay.drawer(tr("جاري التحميل…"), '<div class="skel" style="height:220px"></div>');
   const customer = await api(`/dashboard/api/customers/${clientId}`, { quiet: true });
-  if (customer.__error) { body.innerHTML = errorBanner(customer.__error, "العميل"); return; }
+  if (customer.__error) { body.innerHTML = errorBanner(customer.__error, tr("العميل")); return; }
   $("#drawerTitle").textContent = customer.full_name;
   const orders = (customer.orders || []).map((o) => `
     <tr><td class="num">${esc(o.reference)}</td><td>${esc(shortDate(o.placed_at))}</td>
     <td>${esc(o.status)}</td><td>${chipHTML(o.source_channel || "—", "sky")}</td>
     <td class="num">${esc(money(o.total))}</td></tr>`).join("");
   body.innerHTML = `
-    ${card("بيانات العميل", "", `
+    ${card(tr("بيانات العميل"), "", TR`
       <div class="kv"><span class="k">التليفون</span><span class="v num" data-copy="${esc(customer.phone)}" data-copy-what="التليفون" style="cursor:pointer">${esc(customer.phone)}</span></div>
       <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(customer.governorate || "—")}</span></div>
       <div class="kv"><span class="k">العنوان</span><span class="v">${esc(customer.address || "—")}</span></div>
       <div class="kv"><span class="k">أول ظهور</span><span class="v">${esc(dateTime(customer.created_at))}</span></div>`)}
     <div style="height:var(--s-4)"></div>
-    ${card("الطلبات", `${(customer.orders || []).length}`,
-      orders ? tableHTML(["الطلب", "التاريخ", "الحالة", "القناة", { label: "الإجمالي", num: true }], orders)
-             : `<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
+    ${card(tr("الطلبات"), `${(customer.orders || []).length}`,
+      orders ? tableHTML([tr("الطلب"), tr("التاريخ"), tr("الحالة"), tr("القناة"), { label: tr("الإجمالي"), num: true }], orders)
+             : TR`<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
 }
 
 /* ==========================================================================
@@ -3245,7 +4096,7 @@ VIEWS.comments = {
   data: null,
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
     );
     if (force || !this.data) await this.load();
     else this.render();
@@ -3254,7 +4105,7 @@ VIEWS.comments = {
   async load() {
     $("#commentsBody").innerHTML = skeletonTiles(3) + skeletonTable(6);
     const data = await api("/dashboard/api/inbox/comments?days=30", { quiet: true });
-    if (data.__error) { $("#commentsBody").innerHTML = errorBanner(data.__error, "التعليقات"); return; }
+    if (data.__error) { $("#commentsBody").innerHTML = errorBanner(data.__error, tr("التعليقات")); return; }
     this.data = data;
     this.render();
   },
@@ -3265,28 +4116,28 @@ VIEWS.comments = {
       <tr>
         <td class="num cellsub" dir="ltr">${esc(c.comment_id)}</td>
         <td class="num cellsub" dir="ltr">${esc(c.commenter_igsid || "—")}</td>
-        <td>${c.public_replied ? chipHTML("رد عام", "teal", "dot") : chipHTML("بدون رد عام", "sky", "bar")}</td>
-        <td>${c.private_replied ? chipHTML("رسالة خاصة", "lilac", "dot") : chipHTML("بدون خاصة", "sky", "bar")}</td>
+        <td>${c.public_replied ? chipHTML(tr("رد عام"), "teal", "dot") : chipHTML(tr("بدون رد عام"), "sky", "bar")}</td>
+        <td>${c.private_replied ? chipHTML(tr("رسالة خاصة"), "lilac", "dot") : chipHTML(tr("بدون خاصة"), "sky", "bar")}</td>
         <td class="cellsub">${esc(dateTime(c.created_at))}</td>
       </tr>`).join("");
 
-    $("#commentsBody").innerHTML = `
+    $("#commentsBody").innerHTML = TR`
       <div class="banner" data-tone="info">${icon("alert", 15)}
         <div>كل تعليق بياخد رسالة خاصة واحدة بس، مرة واحدة للأبد — القيد ده متسجّل في قاعدة البيانات قبل ما الرسالة تتبعت،
         عشان أي كراش ما يسمحش برسالة تانية. التعليق اللي مالوش أي رد اتشاف واتقرر إن الرد عليه مش مناسب.</div></div>
       <div class="grid g-kpi">
-        ${[["تعليقات آخر ٣٠ يوم", num(comments.length), "lilac", "comment"],
-           ["ردود عامة", num(pub), "teal", "check"],
-           ["رسايل خاصة", num(priv), "clay", "inbox"]]
+        ${[[tr("تعليقات آخر ٣٠ يوم"), num(comments.length), "lilac", "comment"],
+           [tr("ردود عامة"), num(pub), "teal", "check"],
+           [tr("رسايل خاصة"), num(priv), "clay", "inbox"]]
           .map(([l, v, t, ic]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
             <div class="kpi-label">${icon(ic, 14)}${esc(l)}</div><div class="kpi-value">${esc(v)}</div></div>`).join("")}
       </div>
-      ${card("سجل التعليقات", "", comments.length
-        ? tableHTML(["التعليق", "الحساب", "الرد العام", "الرسالة الخاصة", "الوقت"], rowsHTML, { minWidth: 700 })
+      ${card(tr("سجل التعليقات"), "", comments.length
+        ? tableHTML([tr("التعليق"), tr("الحساب"), tr("الرد العام"), tr("الرسالة الخاصة"), tr("الوقت")], rowsHTML, { minWidth: 700 })
         : "", "", { flush: true })}`;
     if (!comments.length) {
       $("#commentsBody .card:last-child .card-body").append(
-        emptyState("مفيش تعليقات متسجلة", "لو ميزة التعليقات مقفولة، ده الوضع الطبيعي", "comment"));
+        emptyState(tr("مفيش تعليقات متسجلة"), tr("لو ميزة التعليقات مقفولة، ده الوضع الطبيعي"), "comment"));
     }
   },
 };
@@ -3295,13 +4146,31 @@ VIEWS.comments = {
    view: التحليلات / analytics — commerce and conversations on one page
    ========================================================================== */
 
+/* The two commerce toggles. They narrow every number on the sales tab, not
+   one chart -- see `domain/services/dashboard_stats.summarize`. */
+const ANALYTICS_PAYMENTS = [
+  { id: "all", label: tr("كل الدفع") },
+  { id: "cod", label: tr("عند الاستلام") },
+  { id: "online", label: tr("أونلاين") },
+];
+const ANALYTICS_CHANNELS = [
+  { id: "all", label: tr("كل القنوات") },
+  { id: "web", label: tr("الموقع") },
+  { id: "whatsapp", label: tr("واتساب") },
+  { id: "instagram_dm", label: tr("انستجرام") },
+];
+
 VIEWS.analytics = {
-  days: 30, stats: null, insights: null, tab: "sales",
+  days: 30, stats: null, insights: null, tab: "sales", payment: "all", channel: "all",
+  // A custom window, both ends inclusive. Null means "use the `days` preset";
+  // the two are never both in play, which is also how the server reads them
+  // (`dashboard/ranges.py`).
+  start: null, end: null,
 
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("download", 15)} تصدير`, onclick: () => this.export() }),
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("download", 15)} تصدير`, onclick: () => this.export() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
     );
     if (force || !this.stats) await this.load();
     else this.render();
@@ -3309,9 +4178,19 @@ VIEWS.analytics = {
 
   async load() {
     $("#analyticsBody").innerHTML = skeletonTiles(4) + `<div class="skel" style="height:230px;border-radius:var(--r-lg)"></div>`;
+    const params = new URLSearchParams();
+    if (this.start && this.end) { params.set("start", this.start); params.set("end", this.end); }
+    else params.set("days", String(this.days));
+    const window_ = params.toString();
+    if (this.payment !== "all") params.set("payment", this.payment);
+    if (this.channel !== "all") params.set("channel", this.channel);
     const [stats, insights] = await Promise.all([
-      api(`/dashboard/api/stats?days=${this.days}`, { quiet: true }),
-      api(`/dashboard/api/insights?days=${this.days}`, { quiet: true }),
+      api(`/dashboard/api/stats?${params}`, { quiet: true }),
+      // The conversations side has no notion of payment method, and its
+      // channel filter would mean something different (a conversation, not an
+      // order), so it is asked the unfiltered question -- but over the *same*
+      // window, or the two tabs of one page answer about different fortnights.
+      api(`/dashboard/api/insights?${window_}`, { quiet: true }),
     ]);
     this.stats = stats;
     this.insights = insights;
@@ -3319,7 +4198,9 @@ VIEWS.analytics = {
   },
 
   head() {
-    return `<div class="pagehead">
+    const custom = Boolean(this.start && this.end);
+    const today = new Date().toISOString().slice(0, 10);
+    return TR`<div class="pagehead">
       <div class="t"><h2>التحليلات</h2>
         <div class="d">المبيعات من شوبيفاي (المتجر كله)، والمحادثات من قاعدة البيانات المحلية</div></div>
       <div class="row">
@@ -3328,9 +4209,29 @@ VIEWS.analytics = {
           <button type="button" data-antab="talk" aria-pressed="${this.tab === "talk"}">المحادثات</button>
         </div>
         <div class="seg" id="anRange">
-          ${[7, 30, 90].map((d) => `<button type="button" data-days="${d}" aria-pressed="${d === this.days}">${d} يوم</button>`).join("")}
+          ${[7, 30, 90].map((d) => TR`<button type="button" data-days="${d}"
+            aria-pressed="${!custom && d === this.days}">${d} يوم</button>`).join("")}
+          <button type="button" data-anrange="custom" aria-pressed="${custom}">${tr("فترة محددة")}</button>
         </div>
       </div>
+      ${custom ? TR`<div class="row" style="width:100%;flex-wrap:wrap">
+        <label class="lbl" for="anStart" style="margin:0">من</label>
+        <input class="inp" id="anStart" type="date" style="max-width:170px" max="${today}" value="${esc(this.start || "")}">
+        <label class="lbl" for="anEnd" style="margin:0">إلى</label>
+        <input class="inp" id="anEnd" type="date" style="max-width:170px" max="${today}" value="${esc(this.end || "")}">
+        <button class="btn sm" type="button" id="anToday">اليوم بس</button>
+        <span class="hint">يوم واحد؟ حط نفس التاريخ في الاتنين.</span>
+      </div>` : ""}
+      ${this.tab === "sales" ? `<div class="row" style="width:100%;flex-wrap:wrap">
+        <div class="seg">
+          ${ANALYTICS_PAYMENTS.map((x) => `<button type="button" data-anpay="${x.id}"
+            aria-pressed="${x.id === this.payment}">${esc(x.label)}</button>`).join("")}
+        </div>
+        <div class="seg">
+          ${ANALYTICS_CHANNELS.map((x) => `<button type="button" data-anch="${x.id}"
+            aria-pressed="${x.id === this.channel}">${esc(x.label)}</button>`).join("")}
+        </div>
+      </div>` : ""}
     </div>`;
   },
 
@@ -3338,8 +4239,48 @@ VIEWS.analytics = {
     const body = $("#analyticsBody");
     body.innerHTML = this.head() + (this.tab === "sales" ? this.salesHTML() : this.talkHTML());
 
-    $$("[data-days]").forEach((b) => b.addEventListener("click", () => { this.days = Number(b.dataset.days); this.load(); }));
+    $$("[data-days]").forEach((b) => b.addEventListener("click", () => {
+      this.days = Number(b.dataset.days);
+      // Picking a preset leaves the custom window rather than remembering it:
+      // a range still stored while "30 days" is lit is the kind of state that
+      // makes the next click answer a question nobody asked.
+      this.start = this.end = null;
+      this.load();
+    }));
+    $$("[data-anrange]").forEach((b) => b.addEventListener("click", () => {
+      // Open the pickers pre-filled with the preset currently on screen, so
+      // the first thing shown is the range they were already looking at.
+      const end = new Date();
+      const start = new Date(end.getTime() - (this.days - 1) * 86400000);
+      this.start = start.toISOString().slice(0, 10);
+      this.end = end.toISOString().slice(0, 10);
+      // Refetch rather than re-render. The window is the same span as the
+      // preset it came from, so the numbers barely move -- but re-rendering
+      // would paint the *old* payload under the new date labels, and a chart
+      // captioned with a window it was not computed from is the exact
+      // mislabelling the server's range allow-list exists to prevent.
+      this.load();
+    }));
+    const applyRange = () => {
+      const start = $("#anStart").value, end = $("#anEnd").value;
+      if (!start || !end) return;
+      if (start > end) return toast(tr("تاريخ البداية بعد النهاية"), "", "warn");
+      this.start = start;
+      this.end = end;
+      this.load();
+    };
+    ["#anStart", "#anEnd"].forEach((sel) => {
+      const node = $(sel);
+      if (node) node.addEventListener("change", applyRange);
+    });
+    const todayBtn = $("#anToday");
+    if (todayBtn) todayBtn.addEventListener("click", () => {
+      this.start = this.end = new Date().toISOString().slice(0, 10);
+      this.load();
+    });
     $$("[data-antab]").forEach((b) => b.addEventListener("click", () => { this.tab = b.dataset.antab; this.render(); }));
+    $$("[data-anpay]").forEach((b) => b.addEventListener("click", () => { this.payment = b.dataset.anpay; this.load(); }));
+    $$("[data-anch]").forEach((b) => b.addEventListener("click", () => { this.channel = b.dataset.anch; this.load(); }));
 
     if (this.tab === "sales") this.drawSales();
     else this.drawTalk();
@@ -3347,7 +4288,7 @@ VIEWS.analytics = {
 
   salesHTML() {
     const stats = this.stats;
-    if (stats.__error) return errorBanner(stats.__error, "أرقام المبيعات");
+    if (stats.__error) return errorBanner(stats.__error, tr("أرقام المبيعات"));
     const days = stats.revenue_by_day;
     const half = Math.floor(days.length / 2);
     const sum = (arr) => arr.reduce((a, d) => a + Number(d.revenue), 0);
@@ -3356,9 +4297,9 @@ VIEWS.analytics = {
     const dir = Math.abs(trend) < 0.02 ? "flat" : trend > 0 ? "up" : "down";
     const arrow = dir === "up" ? "▲" : dir === "down" ? "▼" : "■";
 
-    return `
-      ${stats.truncated ? `<div class="banner">${icon("alert", 15)}<div>الفترة دي فيها طلبات أكتر من اللي بنقراه في نداء واحد — الأرقام حد أدنى.</div></div>` : ""}
-      ${stats.excluded_test_orders ? `<div class="banner" data-tone="info">${icon("alert", 15)}
+    return TR`
+      ${stats.truncated ? TR`<div class="banner">${icon("alert", 15)}<div>الفترة دي فيها طلبات أكتر من اللي بنقراه في نداء واحد — الأرقام حد أدنى.</div></div>` : ""}
+      ${stats.excluded_test_orders ? TR`<div class="banner" data-tone="info">${icon("alert", 15)}
         <div>${num(stats.excluded_test_orders)} طلب اختبار من أرقام الفريق مستبعد من كل رقم في الصفحة دي.</div></div>` : ""}
       <div class="grid g-kpi">
         <div class="card kpi" style="--accent:var(--clay)">
@@ -3381,21 +4322,92 @@ VIEWS.analytics = {
           <div class="kpi-label">${icon("users", 14)}عملاء مختلفين</div>
           <div class="kpi-value">${num(stats.customer_count)}</div>
         </div>
+        ${this.conversionCard()}
       </div>
+      ${this.conversionNote()}
 
-      ${card("الإيرادات يوم بيوم", `${this.days} يوم`, `<div id="anRevenue"></div>`)}
+      ${card(tr("الإيرادات يوم بيوم"), this.rangeLabel(), `<div id="anRevenue"></div>`)}
 
       <div class="grid g-2">
-        ${card("عدد الطلبات يوميًا", "", `<div id="anOrders"></div>`)}
-        ${card("الأكثر مبيعًا", "بالقطعة", this.stats.best_sellers.length
+        ${card(tr("عدد الطلبات يوميًا"), "", `<div id="anOrders"></div>`)}
+        ${card(tr("الأكثر مبيعًا"), tr("بالقطعة"), this.stats.best_sellers.length
           ? barList(this.stats.best_sellers.map((b) => ({ label: b.title, value: b.quantity })), { tone: "clay" })
-          : `<div class="empty"><div class="d">مفيش مبيعات في الفترة دي</div></div>`)}
+          : TR`<div class="empty"><div class="d">مفيش مبيعات في الفترة دي</div></div>`)}
+      </div>
+
+      ${card(tr("الطلبات حسب المحافظة"), this.rangeLabel(), `<div id="anGovernorate"></div>`)}
+
+      <div class="grid g-2">
+        ${card(tr("حالة الطلبات"), "", `<div class="donutwrap"><div id="anStatus"></div><div id="anStatusLegend" style="flex:1"></div></div>`)}
+        ${card(tr("القنوات"), tr("الموقع مقابل البوت"), `<div class="donutwrap"><div id="anChannelMix"></div><div id="anChannelLegend" style="flex:1"></div></div>`)}
       </div>
 
       <div class="grid g-2">
-        ${card("حالة الطلبات", "", `<div class="donutwrap"><div id="anStatus"></div><div id="anStatusLegend" style="flex:1"></div></div>`)}
-        ${card("البوت مقابل الموقع", "من إجمالي الطلبات", `<div class="donutwrap"><div id="anSource"></div><div id="anSourceLegend" style="flex:1"></div></div>`)}
+        ${card(tr("طريقة الدفع"), tr("من الطلبات الفعّالة"), `<div class="donutwrap"><div id="anPayment"></div><div id="anPaymentLegend" style="flex:1"></div></div>`)}
+        ${card(tr("قدامى وجدد"), tr("حسب عدد طلبات العميل الكلي في المتجر"), `<div class="donutwrap"><div id="anKind"></div><div id="anKindLegend" style="flex:1"></div></div>`)}
       </div>`;
+  },
+
+  /* What the cards say they are showing. A custom window has to name its own
+     dates -- "30 days" over a chart of five is exactly the mislabelling the
+     preset allow-list exists to prevent. */
+  rangeLabel() {
+    if (this.start && this.end) {
+      return this.start === this.end
+        ? shortDate(this.start)
+        : `${shortDate(this.start)} → ${shortDate(this.end)}`;
+    }
+    return `${this.days} ${tr("يوم")}`;
+  },
+
+  /* Orders the bot closed, over conversations the bot held.
+
+     Not a site-wide conversion rate and never labelled as one: the Shopify
+     Admin API this app reads has no traffic or session data at all (see
+     `domain/services/dashboard_stats.py`). It is a count over a count, from
+     two different sources, and the caption under it says exactly that.
+
+     The numerator moves with the toggles and the denominator has to move with
+     it, or the card renders a confident percentage that is simply wrong low.
+     The channel toggle has a matching denominator (`insights.by_channel`).
+     The payment toggle has none -- a conversation has no payment method --
+     and the website has no bot conversations at all, so in both of those
+     cases the honest answer is not to show the card rather than to divide by
+     something that does not match. */
+  conversion() {
+    const stats = this.stats, insights = this.insights;
+    if (!stats || stats.__error || !insights || insights.__error) return null;
+    // Filtering the orders by how they were paid leaves nothing to divide by:
+    // `conversations` counts every conversation regardless.
+    if (this.payment !== "all") return null;
+    // "الموقع" is by definition the orders no conversation preceded.
+    if (this.channel === "web") return null;
+
+    const conversations = this.channel === "all"
+      ? insights.totals.conversations
+      : (insights.by_channel[this.channel] || 0);
+    if (!conversations) return null;
+    return { rate: (stats.bot_order_count || 0) / conversations, orders: stats.bot_order_count || 0, conversations };
+  },
+
+  conversionCard() {
+    const c = this.conversion();
+    if (!c) return "";
+    return TR`<div class="card kpi" style="--accent:var(--amber)">
+      <div class="kpi-label">${icon("spark", 14)}محادثة ← طلب</div>
+      <div class="kpi-value">${esc(pct(c.rate))}</div>
+      <div class="kpi-foot"><span>${num(c.orders)} طلب من ${num(c.conversations)} محادثة</span></div>
+    </div>`;
+  },
+
+  conversionNote() {
+    if (!this.conversion()) return "";
+    const scope = this.channel === "all" ? "" : TR` (${esc(channelLabel(this.channel))} بس)`;
+    return TR`<div class="banner" data-tone="info">${icon("alert", 15)}
+      <div><strong>محادثة ← طلب</strong>${scope} مش نسبة تحويل الموقع: شوبيفاي مابيديناش عدد زوار المتجر أصلاً.
+      دي طلبات البوت في الفترة دي مقسومة على المحادثات اللي البوت اشتغل فيها — رقم على رقم، والمحادثة
+      اللي ابتدت قبل الفترة أو الطلب اللي اتقفل بعدها مش متطابقين بالظبط. لو فلترت بطريقة الدفع
+      الرقم ده بيختفي، لأن المحادثة مالهاش طريقة دفع تتقسم عليها.</div></div>`;
   },
 
   drawSales() {
@@ -3411,14 +4423,14 @@ VIEWS.analytics = {
     const revenue = $("#anRevenue");
     if (revenue) {
       revenue.innerHTML = "";
-      revenue.append(points.length ? lineChart(points, { tone: "clay", fmt: money, height: 230, label: "الإيرادات يوميًا" })
-        : emptyState("مفيش بيانات", "مفيش طلبات في الفترة دي", "chart"));
+      revenue.append(points.length ? lineChart(points, { tone: "clay", fmt: money, height: 230, label: tr("الإيرادات يوميًا") })
+        : emptyState(tr("مفيش بيانات"), tr("مفيش طلبات في الفترة دي"), "chart"));
     }
     const orders = $("#anOrders");
     if (orders) {
       orders.innerHTML = "";
-      orders.append(orderPoints.length ? barChart(orderPoints, { tone: "teal", label: "عدد الطلبات يوميًا" })
-        : emptyState("مفيش بيانات", "", "chart"));
+      orders.append(orderPoints.length ? barChart(orderPoints, { tone: "teal", label: tr("عدد الطلبات يوميًا") })
+        : emptyState(tr("مفيش بيانات"), "", "chart"));
     }
 
     const statuses = Object.entries(stats.status_breakdown).map(([k, v], i) => ({
@@ -3430,21 +4442,49 @@ VIEWS.analytics = {
       statusSlot.append(donut(statuses, { center: num(stats.order_count + stats.cancelled_count) }));
       $("#anStatusLegend").innerHTML = barList(statuses, { tone: "teal" });
     }
-    const sources = Object.entries(stats.source_breakdown).map(([k, v]) => ({
-      label: k === "chatbot" ? "البوت" : "الموقع", value: v, tone: k === "chatbot" ? "teal" : "lilac",
+    const governorates = (stats.orders_by_governorate || []).map((g) => ({
+      // The empty key is a real bucket -- an order whose address carried no
+      // province. Dropping it would stop the bars adding up to the order
+      // count printed above them.
+      label: g.governorate || tr("غير محدد"),
+      short: (g.governorate || tr("غير محدد")).slice(0, 6),
+      value: g.orders,
     }));
-    const sourceSlot = $("#anSource");
-    if (sourceSlot) {
-      sourceSlot.append(donut(sources, { center: num(sources.reduce((a, s) => a + s.value, 0)) }));
-      $("#anSourceLegend").innerHTML = barList(sources, { tone: "lilac" });
+    const govSlot = $("#anGovernorate");
+    if (govSlot) {
+      govSlot.innerHTML = "";
+      govSlot.append(governorates.length
+        ? barChart(governorates, { tone: "sky", label: tr("الطلبات حسب المحافظة"), height: 230 })
+        : emptyState(tr("مفيش بيانات"), tr("مفيش طلبات في الفترة دي"), "chart"));
+    }
+
+    const mixes = [
+      ["anChannelMix", "anChannelLegend", Object.entries(stats.channel_breakdown || {}).map(([k, v]) => ({
+        label: channelLabel(k), value: v, tone: k === "web" ? "lilac" : channelInfo(k).tone,
+      })), "lilac"],
+      ["anPayment", "anPaymentLegend", Object.entries(stats.payment_breakdown || {}).map(([k, v]) => ({
+        label: PAYMENT_LABELS[k] || k, value: v, tone: PAYMENT_TONES[k] || "sky",
+      })), "amber"],
+      ["anKind", "anKindLegend", Object.entries(stats.customer_kind_breakdown || {}).map(([k, v]) => ({
+        label: CUSTOMER_KIND_LABELS[k] === "—" ? tr("مش معروف") : (CUSTOMER_KIND_LABELS[k] || k),
+        value: v, tone: k === "returning" ? "clay" : k === "new" ? "sky" : "lilac",
+      })), "clay"],
+    ];
+    for (const [slotId, legendId, slices, tone] of mixes) {
+      const slot = $(`#${slotId}`);
+      if (!slot) continue;
+      slot.innerHTML = "";
+      if (!slices.length) { slot.append(emptyState(tr("مفيش بيانات"), "", "chart")); continue; }
+      slot.append(donut(slices, { center: num(slices.reduce((a, x) => a + x.value, 0)) }));
+      $(`#${legendId}`).innerHTML = barList(slices, { tone });
     }
   },
 
   talkHTML() {
     const data = this.insights;
-    if (data.__error) return errorBanner(data.__error, "أرقام المحادثات");
+    if (data.__error) return errorBanner(data.__error, tr("أرقام المحادثات"));
     const t = data.totals;
-    return `
+    return TR`
       <div class="grid g-kpi">
         <div class="card kpi" style="--accent:var(--lilac)">
           <div class="kpi-label">${icon("inbox", 14)}محادثات نشطة</div>
@@ -3458,7 +4498,7 @@ VIEWS.analytics = {
         </div>
         <div class="card kpi" style="--accent:var(--clay)">
           <div class="kpi-label">${icon("clock", 14)}وسيط زمن الإغلاق</div>
-          <div class="kpi-value">${t.median_resolution_minutes === null ? "—" : `${nf1.format(t.median_resolution_minutes)} د`}</div>
+          <div class="kpi-value">${t.median_resolution_minutes === null ? "—" : TR`${nf1.format(t.median_resolution_minutes)} د`}</div>
           <div class="kpi-foot"><span>${num(t.queue_open_now)} بند مفتوح دلوقتي</span></div>
         </div>
         <div class="card kpi" style="--accent:var(--rose)">
@@ -3472,25 +4512,25 @@ VIEWS.analytics = {
         <div>الرسايل المحفوظة مالهاش توقيت لكل رسالة، فالرسوم اليومية بتعدّ <strong>نشاط المحادثات</strong> مش عدد الرسايل.
         إجمالي الرسايل تحت رقم حقيقي — بس مش موزّع على الأيام.</div></div>
 
-      ${card("نشاط المحادثات يوميًا", `${this.days} يوم`, `<div id="inActive"></div>`)}
+      ${card(tr("نشاط المحادثات يوميًا"), this.rangeLabel(), `<div id="inActive"></div>`)}
 
       <div class="grid g-2">
-        ${card("تحويلات للفريق", "كل تحويل هو سؤال البوت مقدرش عليه", `<div id="inHandoff"></div>`)}
-        ${card("عملاء جدد", "أول ظهور على أي قناة", `<div id="inNew"></div>`)}
+        ${card(tr("تحويلات للفريق"), tr("كل تحويل هو سؤال البوت مقدرش عليه"), `<div id="inHandoff"></div>`)}
+        ${card(tr("عملاء جدد"), tr("أول ظهور على أي قناة"), `<div id="inNew"></div>`)}
       </div>
 
       <div class="grid g-2">
-        ${card("القنوات", "", `<div class="donutwrap"><div id="inChannels"></div><div id="inChannelsLegend" style="flex:1"></div></div>`)}
-        ${card("الأدوات اللي البوت بيستخدمها", "أكتر ١٢ أداة", data.top_tools.length
+        ${card(tr("القنوات"), "", `<div class="donutwrap"><div id="inChannels"></div><div id="inChannelsLegend" style="flex:1"></div></div>`)}
+        ${card(tr("الأدوات اللي البوت بيستخدمها"), tr("أكتر ١٢ أداة"), data.top_tools.length
           ? barList(data.top_tools.map((x) => ({ label: x.name, value: x.count })), { tone: "lilac", limit: 12 })
-          : `<div class="empty"><div class="d">مفيش استخدام مسجّل</div></div>`)}
+          : TR`<div class="empty"><div class="d">مفيش استخدام مسجّل</div></div>`)}
       </div>
 
       <div class="grid g-2">
-        ${card("أسباب التحويل والتنبيه", "", Object.keys(data.queue_by_reason).length
+        ${card(tr("أسباب التحويل والتنبيه"), "", Object.keys(data.queue_by_reason).length
           ? barList(Object.entries(data.queue_by_reason).map(([k, v]) => ({ label: reasonLabel(k), value: v })), { tone: "amber" })
-          : `<div class="empty"><div class="d">مفيش تحويلات في الفترة دي</div></div>`)}
-        ${card("حجم الرسايل", "إجمالي الفترة", `
+          : TR`<div class="empty"><div class="d">مفيش تحويلات في الفترة دي</div></div>`)}
+        ${card(tr("حجم الرسايل"), tr("إجمالي الفترة"), TR`
           <div class="grid g-3">
             <div class="stat-inline"><span class="v">${num(t.customer_messages)}</span><span class="l">من العملاء</span></div>
             <div class="stat-inline"><span class="v">${num(t.bot_messages)}</span><span class="l">من البوت</span></div>
@@ -3501,8 +4541,8 @@ VIEWS.analytics = {
           </div>`)}
       </div>
 
-      ${card("أكتر محادثات نشاطًا", "", data.busiest_conversations.length ? tableHTML(
-        ["المحادثة", "القناة", { label: "الرسايل", num: true }, { label: "من العميل", num: true }, "آخر نشاط"],
+      ${card(tr("أكتر محادثات نشاطًا"), "", data.busiest_conversations.length ? tableHTML(
+        [tr("المحادثة"), tr("القناة"), { label: tr("الرسايل"), num: true }, { label: tr("من العميل"), num: true }, tr("آخر نشاط")],
         data.busiest_conversations.map((c) => `
           <tr data-clickable data-ch="${esc(c.channel)}" data-ext="${esc(c.external_id)}">
             <td class="num cellmain" dir="ltr">${esc(c.external_id)}</td>
@@ -3510,7 +4550,7 @@ VIEWS.analytics = {
             <td class="num">${num(c.messages)}</td>
             <td class="num">${num(c.customer_messages)}</td>
             <td class="cellsub">${esc(ago(c.updated_at))}</td>
-          </tr>`).join(""), { minWidth: 600 }) : `<div class="empty"><div class="d">مفيش محادثات</div></div>`,
+          </tr>`).join(""), { minWidth: 600 }) : TR`<div class="empty"><div class="d">مفيش محادثات</div></div>`,
         "", { flush: true })}`;
   },
 
@@ -3520,11 +4560,11 @@ VIEWS.analytics = {
     const toPoints = (series) => series.map((d) => ({ label: shortDate(d.date), short: d.date.slice(8), value: d.count }));
 
     const active = $("#inActive");
-    if (active) { active.innerHTML = ""; active.append(lineChart(toPoints(data.active_conversations_by_day), { tone: "lilac", height: 210, label: "نشاط المحادثات" })); }
+    if (active) { active.innerHTML = ""; active.append(lineChart(toPoints(data.active_conversations_by_day), { tone: "lilac", height: 210, label: tr("نشاط المحادثات") })); }
     const handoff = $("#inHandoff");
-    if (handoff) { handoff.innerHTML = ""; handoff.append(barChart(toPoints(data.handoffs_by_day), { tone: "rose", label: "تحويلات للفريق" })); }
+    if (handoff) { handoff.innerHTML = ""; handoff.append(barChart(toPoints(data.handoffs_by_day), { tone: "rose", label: tr("تحويلات للفريق") })); }
     const fresh = $("#inNew");
-    if (fresh) { fresh.innerHTML = ""; fresh.append(barChart(toPoints(data.new_contacts_by_day), { tone: "teal", label: "عملاء جدد" })); }
+    if (fresh) { fresh.innerHTML = ""; fresh.append(barChart(toPoints(data.new_contacts_by_day), { tone: "teal", label: tr("عملاء جدد") })); }
 
     const channels = Object.entries(data.by_channel).map(([k, v]) => ({
       label: channelInfo(k).label, value: v, tone: channelInfo(k).tone,
@@ -3542,10 +4582,12 @@ VIEWS.analytics = {
 
   export() {
     if (this.tab === "sales" && this.stats && !this.stats.__error) {
-      exportCSV("sales.csv", ["اليوم", "الإيراد", "الطلبات"],
+      exportCSV("sales.csv", [tr("اليوم"), tr("الإيراد"), tr("الطلبات")],
         this.stats.revenue_by_day.map((d) => [d.date, d.revenue, d.orders]));
+      exportCSV("orders-by-governorate.csv", [tr("المحافظة"), tr("الطلبات"), tr("الإيراد")],
+        (this.stats.orders_by_governorate || []).map((g) => [g.governorate || tr("غير محدد"), g.orders, g.revenue]));
     } else if (this.insights && !this.insights.__error) {
-      exportCSV("conversations.csv", ["اليوم", "محادثات نشطة", "تحويلات", "عملاء جدد"],
+      exportCSV("conversations.csv", [tr("اليوم"), tr("محادثات نشطة"), tr("تحويلات"), tr("عملاء جدد")],
         this.insights.active_conversations_by_day.map((d, i) => [
           d.date, d.count,
           this.insights.handoffs_by_day[i] ? this.insights.handoffs_by_day[i].count : 0,
@@ -3563,7 +4605,7 @@ VIEWS.queue = {
   items: null,
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
     );
     if (force || !this.items) await this.load();
     else this.render();
@@ -3572,7 +4614,7 @@ VIEWS.queue = {
   async load() {
     $("#queueBody").innerHTML = skeletonTable(5);
     const data = await api("/dashboard/api/queue", { quiet: true });
-    if (data.__error) { $("#queueBody").innerHTML = errorBanner(data.__error, "قائمة المراجعة"); return; }
+    if (data.__error) { $("#queueBody").innerHTML = errorBanner(data.__error, tr("قائمة المراجعة")); return; }
     this.items = data.items;
     setBadge("queue", data.items.length, "warn");
     this.render();
@@ -3582,7 +4624,7 @@ VIEWS.queue = {
     const body = $("#queueBody");
     if (!this.items.length) {
       body.innerHTML = "";
-      body.append(emptyState("القايمة فاضية", "مفيش طلب تبديل ولا تنبيه مستني مراجعة", "check"));
+      body.append(emptyState(tr("القايمة فاضية"), tr("مفيش طلب تبديل ولا تنبيه مستني مراجعة"), "check"));
       return;
     }
     body.innerHTML = this.items.map((item) => {
@@ -3590,22 +4632,22 @@ VIEWS.queue = {
       const payload = item.payload || {};
       return `<section class="card" data-qid="${esc(item.queue_id)}">
         <div class="card-head">
-          ${chipHTML(swap ? "طلب تبديل" : "تنبيه", swap ? "clay" : "amber", swap ? "ring" : "dot")}
+          ${chipHTML(swap ? tr("طلب تبديل") : tr("تنبيه"), swap ? "clay" : "amber", swap ? "ring" : "dot")}
           <h2>${esc(reasonLabel(item.reason))}</h2>
           <span class="sub">${esc(dateTime(item.created_at))}</span>
         </div>
         <div class="card-body">
           <p style="font-size:13.5px;color:var(--ink-2)">${esc(item.summary || "—")}</p>
-          ${item.order_id ? `<div class="kv" style="margin-top:var(--s-2)"><span class="k">الطلب</span>
+          ${item.order_id ? TR`<div class="kv" style="margin-top:var(--s-2)"><span class="k">الطلب</span>
             <span class="v num">${esc(item.order_id)}</span></div>` : ""}
-          ${swap ? `<div class="grid g-2" style="margin-top:var(--s-3)">
+          ${swap ? TR`<div class="grid g-2" style="margin-top:var(--s-3)">
             <div><label class="lbl">من مقاس</label><input class="inp num" disabled value="${esc(payload.from_variant_id || "—")}"></div>
             <div><label class="lbl">إلى مقاس</label>
               <input class="inp num" data-to="${esc(item.queue_id)}" value="${esc(payload.to_variant_id || "")}" placeholder="SKU البديل"></div>
           </div>` : ""}
           <div class="row" style="margin-top:var(--s-4)">
-            ${swap ? `<button class="btn primary" type="button" data-approve="${esc(item.queue_id)}">${icon("check", 15)} وافق على التبديل</button>` : ""}
-            <button class="btn" type="button" data-resolve="${esc(item.queue_id)}">${swap ? "ارفض واقفل" : "تمام، اتفهم"}</button>
+            ${swap ? TR`<button class="btn primary" type="button" data-approve="${esc(item.queue_id)}">${icon("check", 15)} وافق على التبديل</button>` : ""}
+            <button class="btn" type="button" data-resolve="${esc(item.queue_id)}">${swap ? tr("ارفض واقفل") : tr("تمام، اتفهم")}</button>
           </div>
         </div>
       </section>`;
@@ -3614,8 +4656,8 @@ VIEWS.queue = {
     $$("[data-resolve]").forEach((b) => b.addEventListener("click", async () => {
       b.disabled = true;
       const result = await api(`/dashboard/api/queue/${encodeURIComponent(b.dataset.resolve)}/resolve`, { method: "POST", quiet: true });
-      if (result.__error) { b.disabled = false; return toastError(result.__error, "مانفعش نقفله"); }
-      toast("البند اتقفل");
+      if (result.__error) { b.disabled = false; return toastError(result.__error, tr("مانفعش نقفله")); }
+      toast(tr("البند اتقفل"));
       this.load();
     }));
     $$("[data-approve]").forEach((b) => b.addEventListener("click", async () => {
@@ -3624,8 +4666,8 @@ VIEWS.queue = {
       const result = await api(`/dashboard/api/queue/${encodeURIComponent(b.dataset.approve)}/approve-swap`, {
         method: "POST", quiet: true, body: to && to.value.trim() ? { to_variant_id: to.value.trim() } : {},
       });
-      if (result.__error) { b.disabled = false; return toastError(result.__error, "التبديل مانفذش"); }
-      toast("التبديل اتعمل", "المخزون والطلب اتحدثوا");
+      if (result.__error) { b.disabled = false; return toastError(result.__error, tr("التبديل مانفذش")); }
+      toast(tr("التبديل اتعمل"), tr("المخزون والطلب اتحدثوا"));
       this.load();
     }));
   },
@@ -3635,10 +4677,192 @@ VIEWS.queue = {
    view: الإعدادات / settings
    ========================================================================== */
 
+/* ==========================================================================
+   view: الفريق / staff — who can log in, and what each of them sees
+   ========================================================================== */
+
+const ROLE_LABELS = { owner: tr("المالك"), staff: tr("عضو فريق") };
+
+VIEWS.staff = {
+  data: null,
+
+  async mount(force) {
+    $("#pageActions").append(
+      el("button", { class: "btn primary sm", type: "button", html: TR`${icon("plus", 15)} عضو جديد`,
+        onclick: () => staffCreateForm() }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`,
+        onclick: () => this.load() }),
+    );
+    if (force || !this.data) await this.load();
+    else this.render();
+  },
+
+  async load() {
+    $("#staffBody").innerHTML = skeletonTable(5);
+    const data = await api("/dashboard/api/staff", { quiet: true });
+    if (data.__error) { $("#staffBody").innerHTML = errorBanner(data.__error, tr("الفريق")); return; }
+    this.data = data;
+    this.render();
+  },
+
+  render() {
+    const { staff, permissions, me } = this.data;
+    const label = (key) => pick(permissions.find((p) => p.key === key) || {}, "label") || key;
+
+    const rows = staff.map((s) => {
+      const owner = s.role === "owner";
+      const scope = owner
+        ? chipHTML(tr("كل الأقسام"), "clay")
+        : (s.permissions.length
+            ? s.permissions.map((k) => chipHTML(label(k), "sky")).join(" ")
+            : TR`<span class="cellsub">مفيش صلاحيات لسه</span>`);
+      return `
+        <tr data-clickable data-staff="${esc(s.staff_id)}">
+          <td><div class="cellmain">${esc(s.username)}${s.staff_id === me ? tr(" <span class=\"cellsub\">(انت)</span>") : ""}</div>
+              <div class="cellsub">${esc(shortDate(s.created_at))}</div></td>
+          <td>${chipHTML(ROLE_LABELS[s.role] || s.role, owner ? "clay" : "lilac")}</td>
+          <td>${chipHTML(s.is_active ? tr("نشط") : tr("موقوف"), s.is_active ? "teal" : "rose", "dot")}</td>
+          <td style="max-width:340px">${scope}</td>
+        </tr>`;
+    }).join("");
+
+    $("#staffBody").innerHTML = TR`
+      <div class="banner" data-tone="info">${icon("alert", 15)}
+        <div>المالك بيشوف كل حاجة، وعضو الفريق بيشوف اللي اتظبط له بس. الحساب اللي اتعمل قبل ما الصلاحيات
+        تنزل بيفضل مالك — عشان محدش يتقفل بره الشاشة اللي بتوزّع الصلاحيات.</div></div>
+      ${card(tr("الفريق"), `${staff.length}`, tableHTML(
+        [tr("الحساب"), tr("الدور"), tr("الحالة"), tr("بيشوف إيه")], rows, { minWidth: 620 }), "", { flush: true })}`;
+
+    $$("#staffBody tr[data-staff]").forEach((tr) => tr.addEventListener("click", () => {
+      const member = staff.find((s) => String(s.staff_id) === tr.dataset.staff);
+      staffEditForm(member, permissions, member.staff_id === me);
+    }));
+  },
+};
+
+/* The permission tick-list, shared by the create and edit forms so the two can
+   never drift into offering different sets. */
+function permissionChecklist(permissions, granted, { disabled = false } = {}) {
+  return `<div class="grid g-2" id="permGrid">${permissions.map((p) => `
+    <label class="flagrow" style="cursor:${disabled ? "default" : "pointer"}">
+      <div class="i">
+        <div class="l">${esc(pick(p, "label"))}</div>
+        <div class="d">${esc(pick(p, "description"))}</div>
+      </div>
+      <input type="checkbox" data-perm="${esc(p.key)}" ${granted.includes(p.key) ? "checked" : ""}
+        ${disabled ? "disabled" : ""} aria-label="${esc(pick(p, "label"))}">
+    </label>`).join("")}</div>`;
+}
+
+function checkedPermissions() {
+  return $$("#permGrid [data-perm]").filter((i) => i.checked).map((i) => i.dataset.perm);
+}
+
+async function staffCreateForm() {
+  // The tick-list is built from the catalog the Team list carries. Opening
+  // this before that fetch has landed would render an empty grid, and
+  // creating from it would post `permissions: []` -- an account with no
+  // access at all, silently, because a panel had not loaded yet.
+  if (!VIEWS.staff.data) await VIEWS.staff.load();
+  const permissions = (VIEWS.staff.data || {}).permissions || [];
+  const body = overlay.drawer(tr("عضو فريق جديد"), TR`
+    <div class="grid g-2">
+      <div><label class="lbl" for="stUser">اسم الدخول *</label>
+        <input class="inp" id="stUser" autocomplete="off" dir="ltr"></div>
+      <div><label class="lbl" for="stPass">كلمة السر *</label>
+        <input class="inp" id="stPass" type="password" autocomplete="new-password" dir="ltr"></div>
+    </div>
+    <div class="hint" style="margin:var(--s-2) 0">٨ حروف على الأقل.</div>
+    <label class="lbl" for="stRole">الدور</label>
+    <select class="inp" id="stRole">
+      <option value="staff">عضو فريق — بيشوف اللي تحت بس</option>
+      <option value="owner">مالك — بيشوف كل حاجة</option>
+    </select>
+    <div style="height:var(--s-4)"></div>
+    <div id="stPerms">${permissionChecklist(permissions, [])}</div>
+    <div style="height:var(--s-4)"></div>
+    <div class="row"><button class="btn primary" type="button" id="stSave">${icon("check", 15)} إنشاء الحساب</button></div>`);
+
+  const syncRole = () => { $("#stPerms").hidden = $("#stRole").value === "owner"; };
+  $("#stRole").addEventListener("change", syncRole);
+  syncRole();
+
+  $("#stSave").addEventListener("click", async () => {
+    const role = $("#stRole").value;
+    const result = await api("/dashboard/api/staff", {
+      method: "POST", quiet: true,
+      body: {
+        username: $("#stUser").value.trim(),
+        password: $("#stPass").value,
+        role,
+        permissions: role === "owner" ? null : checkedPermissions(),
+      },
+    });
+    if (result.__error) return toastError(result.__error, tr("مانفعش نعمل الحساب"));
+    toast(tr("الحساب اتعمل"), result.username);
+    overlay.close();
+    VIEWS.staff.load();
+  });
+  return body;
+}
+
+function staffEditForm(member, permissions, isMe) {
+  const owner = member.role === "owner";
+  overlay.drawer(member.username, TR`
+    ${isMe ? TR`<div class="banner" data-tone="info">${icon("alert", 15)}
+      <div>ده حسابك انت. الدور والصلاحيات بتاعتك مش بتتغير من هنا — عشان محدش يقفل على نفسه بالغلط.</div></div>
+      <div style="height:var(--s-3)"></div>` : ""}
+    <label class="lbl" for="stRole">الدور</label>
+    <select class="inp" id="stRole" ${isMe ? "disabled" : ""}>
+      <option value="staff" ${owner ? "" : "selected"}>عضو فريق</option>
+      <option value="owner" ${owner ? "selected" : ""}>مالك</option>
+    </select>
+    <div style="height:var(--s-4)"></div>
+    <div id="stPerms">${permissionChecklist(permissions, member.permissions, { disabled: isMe })}</div>
+    <div style="height:var(--s-4)"></div>
+    <label class="lbl" for="stPass">كلمة سر جديدة (سيبها فاضية لو مش هتتغير)</label>
+    <input class="inp" id="stPass" type="password" autocomplete="new-password" dir="ltr">
+    <div style="height:var(--s-4)"></div>
+    <div class="row">
+      <button class="btn primary" type="button" id="stSave">${icon("check", 15)} حفظ</button>
+      ${isMe ? "" : `<button class="btn ${member.is_active ? "danger" : ""}" type="button" id="stToggle">
+        ${member.is_active ? tr("إيقاف الحساب") : tr("تفعيل الحساب")}</button>`}
+    </div>`);
+
+  const syncRole = () => { $("#stPerms").hidden = $("#stRole").value === "owner"; };
+  $("#stRole").addEventListener("change", syncRole);
+  syncRole();
+
+  const save = async (extra) => {
+    const role = $("#stRole").value;
+    const body = { ...extra };
+    if (!isMe) {
+      body.role = role;
+      if (role !== "owner") body.permissions = checkedPermissions();
+    }
+    const password = $("#stPass").value;
+    if (password) body.password = password;
+    const result = await api(`/dashboard/api/staff/${member.staff_id}`,
+      { method: "POST", quiet: true, body });
+    if (result.__error) return toastError(result.__error, tr("التعديل مانفذش"));
+    toast(tr("اتحفظ"));
+    overlay.close();
+    VIEWS.staff.load();
+  };
+
+  $("#stSave").addEventListener("click", () => save({}));
+  const toggle = $("#stToggle");
+  if (toggle) toggle.addEventListener("click", () => save({ is_active: !member.is_active }));
+}
+
+/* ==========================================================================
+   view: الإعدادات / settings
+   ========================================================================== */
+
 VIEWS.settings = {
   async mount(force) {
     $("#pageActions").append(
-      el("button", { class: "btn sm", type: "button", html: `${icon("refresh", 15)} تحديث`, onclick: () => this.mount(true) }),
+      el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.mount(true) }),
     );
     const body = $("#settingsBody");
     body.innerHTML = skeletonTable(4);
@@ -3649,51 +4873,51 @@ VIEWS.settings = {
     ]);
 
     body.innerHTML = `
-      ${card("مزايا البوت", "التغيير بيسري فورًا على كل المحادثات", flags.__error
-        ? errorBanner(flags.__error, "المزايا")
+      ${card(tr("مزايا البوت"), tr("التغيير بيسري فورًا على كل المحادثات"), flags.__error
+        ? errorBanner(flags.__error, tr("المزايا"))
         : flags.flags.map((f) => `
           <div class="flagrow">
             <div class="i">
-              <div class="l">${esc(f.label_ar)}</div>
-              <div class="d">${esc(f.description_ar)}</div>
-              ${f.overridden ? `<div class="m">اتغيرت بواسطة ${esc(f.updated_by || "الفريق")} · ${esc(dateTime(f.updated_at))}</div>` : ""}
+              <div class="l">${esc(pick(f, "label"))}</div>
+              <div class="d">${esc(pick(f, "description"))}</div>
+              ${f.overridden ? TR`<div class="m">اتغيرت بواسطة ${esc(f.updated_by || tr("الفريق"))} · ${esc(dateTime(f.updated_at))}</div>` : ""}
             </div>
             <label class="switch">
               <input type="checkbox" data-flag="${esc(f.key)}" ${f.value ? "checked" : ""}
-                aria-label="${esc(f.label_ar)}">
+                aria-label="${esc(pick(f, "label"))}">
               <span class="track"></span><span class="knob"></span>
             </label>
           </div>`).join(""), "", { flush: true })}
 
-      ${card("أرقام الاختبار", "الأرقام دي مستبعدة من كل أرقام صفحة التحليلات", `
+      ${card(tr("أرقام الاختبار"), tr("الأرقام دي مستبعدة من كل أرقام صفحة التحليلات"), TR`
         <div class="row" style="margin-bottom:var(--s-3)">
           <input class="inp num" id="tnPhone" placeholder="رقم التليفون" style="max-width:200px" dir="ltr">
           <input class="inp" id="tnNote" placeholder="ملاحظة (اختياري)" style="max-width:260px">
           <button class="btn primary" type="button" id="tnAdd">${icon("plus", 15)} ضيف</button>
         </div>
-        <div id="tnList">${numbers.__error ? errorBanner(numbers.__error, "الأرقام")
-          : numbers.numbers.length ? numbers.numbers.map((n) => `
+        <div id="tnList">${numbers.__error ? errorBanner(numbers.__error, tr("الأرقام"))
+          : numbers.numbers.length ? numbers.numbers.map((n) => TR`
             <div class="mini">
               <span class="m1"><span class="a num" dir="ltr">${esc(n.phone)}</span>
                 <span class="b">${esc(n.note || "")} ${n.added_by ? `· ${esc(n.added_by)}` : ""}</span></span>
               <button class="btn sm ghost" type="button" data-rmnum="${esc(n.phone)}" aria-label="حذف">${icon("x", 15)}</button>
             </div>`).join("")
-          : `<div class="empty" style="padding:var(--s-4)"><div class="d">مفيش أرقام اختبار</div></div>`}</div>`)}
+          : TR`<div class="empty" style="padding:var(--s-4)"><div class="d">مفيش أرقام اختبار</div></div>`}</div>`)}
 
-      ${card("حالة النظام", "قراءة فقط", status.__error ? errorBanner(status.__error, "الحالة") : `
+      ${card(tr("حالة النظام"), tr("قراءة فقط"), status.__error ? errorBanner(status.__error, tr("الحالة")) : `
         <div class="grid g-2">
-          ${[["مزود الموديل", status.llm_provider, true],
-             ["مفتاح الموديل", status.llm_key_set ? "متسجّل" : "ناقص", status.llm_key_set],
-             ["واتساب", status.whatsapp_configured ? "مظبوط" : "ناقص", status.whatsapp_configured],
-             ["شوبيفاي", status.shopify_configured ? "مظبوط" : "ناقص", status.shopify_configured],
-             ["ويبهوك شوبيفاي", status.shopify_webhooks_configured ? "مظبوط" : "ناقص — يعني مفيش رسايل تتبع", status.shopify_webhooks_configured],
-             ["دخول اللوحة", status.dashboard_configured ? "مظبوط" : "ناقص", status.dashboard_configured]]
+          ${[[tr("مزود الموديل"), status.llm_provider, true],
+             [tr("مفتاح الموديل"), status.llm_key_set ? tr("متسجّل") : tr("ناقص"), status.llm_key_set],
+             [tr("واتساب"), status.whatsapp_configured ? tr("مظبوط") : tr("ناقص"), status.whatsapp_configured],
+             [tr("شوبيفاي"), status.shopify_configured ? tr("مظبوط") : tr("ناقص"), status.shopify_configured],
+             [tr("ويبهوك شوبيفاي"), status.shopify_webhooks_configured ? tr("مظبوط") : tr("ناقص — يعني مفيش رسايل تتبع"), status.shopify_webhooks_configured],
+             [tr("دخول اللوحة"), status.dashboard_configured ? tr("مظبوط") : tr("ناقص"), status.dashboard_configured]]
             .map(([label, value, ok]) => `<div class="kv">
               <span class="k">${esc(label)}</span>
               <span class="v">${chipHTML(String(value), ok ? "teal" : "rose", ok ? "dot" : "bar")}</span></div>`).join("")}
         </div>`)}
 
-      ${card("المظهر", "بيتحفظ في المتصفح ده بس", `
+      ${card(tr("المظهر"), tr("بيتحفظ في المتصفح ده بس"), TR`
         <div class="row">
           <div class="seg">
             <button type="button" data-theme-set="light" aria-pressed="${document.documentElement.dataset.theme === "light"}">نهاري</button>
@@ -3702,11 +4926,11 @@ VIEWS.settings = {
           <span class="hint">اختصار: زرار القمر في الشريط الجانبي.</span>
         </div>`)}
 
-      ${card("اختصارات لوحة المفاتيح", "", `
+      ${card(tr("اختصارات لوحة المفاتيح"), "", `
         <div class="grid g-2">
-          ${[["Ctrl K أو /", "لوحة الأوامر والبحث"], ["I", "الوارد"], ["O", "الطلبات"], ["P", "المنتجات"],
-             ["S", "المخزون"], ["A", "التحليلات"], ["H", "اليوم"], ["R", "تحديث الصفحة"],
-             ["Ctrl Enter", "إرسال الرد"], ["Esc", "إغلاق أي نافذة"]]
+          ${[[tr("Ctrl K أو /"), tr("لوحة الأوامر والبحث")], ["I", tr("الوارد")], ["O", tr("الطلبات")], ["P", tr("المنتجات")],
+             ["S", tr("المخزون")], ["A", tr("التحليلات")], ["H", tr("اليوم")], ["R", tr("تحديث الصفحة")],
+             ["Ctrl Enter", tr("إرسال الرد")], ["Esc", tr("إغلاق أي نافذة")]]
             .map(([k, d]) => `<div class="kv"><span class="k"><kbd style="font-family:var(--font-num);background:var(--surface-3);border-radius:var(--r-xs);padding:2px 7px">${esc(k)}</kbd></span>
               <span class="v">${esc(d)}</span></div>`).join("")}
         </div>`)}`;
@@ -3714,26 +4938,26 @@ VIEWS.settings = {
     $$("[data-flag]").forEach((input) => input.addEventListener("change", async () => {
       const result = await api(`/dashboard/api/settings/flags/${encodeURIComponent(input.dataset.flag)}`,
         { method: "POST", quiet: true, body: { value: input.checked } });
-      if (result.__error) { input.checked = !input.checked; return toastError(result.__error, "مانفعش نغيّر الميزة"); }
-      toast(input.checked ? "الميزة اتفتحت" : "الميزة اتقفلت");
+      if (result.__error) { input.checked = !input.checked; return toastError(result.__error, tr("مانفعش نغيّر الميزة")); }
+      toast(input.checked ? tr("الميزة اتفتحت") : tr("الميزة اتقفلت"));
     }));
 
     const add = $("#tnAdd");
     if (add) add.addEventListener("click", async () => {
       const phone = $("#tnPhone").value.trim();
-      if (!phone) return toast("اكتب الرقم", "", "warn");
+      if (!phone) return toast(tr("اكتب الرقم"), "", "warn");
       const result = await api("/dashboard/api/settings/test-numbers",
         { method: "POST", quiet: true, body: { phone, note: $("#tnNote").value.trim() } });
-      if (result.__error) return toastError(result.__error, "الإضافة مانفذتش");
-      toast("الرقم اتضاف");
+      if (result.__error) return toastError(result.__error, tr("الإضافة مانفذتش"));
+      toast(tr("الرقم اتضاف"));
       this.mount(true);
     });
 
     $$("[data-rmnum]").forEach((b) => b.addEventListener("click", async () => {
       const result = await api(`/dashboard/api/settings/test-numbers/${encodeURIComponent(b.dataset.rmnum)}`,
         { method: "DELETE", quiet: true });
-      if (result.__error) return toastError(result.__error, "الحذف مانفذش");
-      toast("الرقم اتشال");
+      if (result.__error) return toastError(result.__error, tr("الحذف مانفذش"));
+      toast(tr("الرقم اتشال"));
       this.mount(true);
     }));
 
@@ -3754,8 +4978,9 @@ async function boot() {
   state.me = me;
 
   $("#meName").textContent = me.username;
-  $("#meAvatar").textContent = (me.username || "؟").slice(0, 1).toUpperCase();
+  $("#meAvatar").textContent = (me.username || tr("؟")).slice(0, 1).toUpperCase();
 
+  translateShell();
   buildNav();
   $("#boot").remove();
   $("#app").hidden = false;
@@ -3767,10 +4992,14 @@ async function boot() {
   // someone sits on a page that has nothing to do with them.
   setInterval(async () => {
     if (document.visibilityState !== "visible") return;
-    const inbox = await api("/dashboard/api/inbox?status=needs_reply", { quiet: true });
-    if (!inbox.__error) setBadge("inbox", inbox.counts.needs_reply || 0);
-    const queue = await api("/dashboard/api/queue", { quiet: true });
-    if (!queue.__error) setBadge("queue", queue.items.length, "warn");
+    if (may("inbox")) {
+      const inbox = await api("/dashboard/api/inbox?status=needs_reply", { quiet: true });
+      if (!inbox.__error) setBadge("inbox", inbox.counts.needs_reply || 0);
+    }
+    if (may("queue")) {
+      const queue = await api("/dashboard/api/queue", { quiet: true });
+      if (!queue.__error) setBadge("queue", queue.items.length, "warn");
+    }
   }, 60000);
 }
 

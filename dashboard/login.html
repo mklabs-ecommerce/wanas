@@ -4,7 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>ونس — دخول الفريق</title>
+<script>
+(function () {
+  var lang = "ar";
+  try { lang = localStorage.getItem("wanas.lang") === "en" ? "en" : "ar"; } catch (e) { /* private window */ }
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
+})();
+</script>
+<title>Wanas Gallery — دخول الفريق</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;family=Inter:wght@500;700&amp;display=swap" rel="stylesheet">
@@ -66,12 +74,20 @@ body::before {
 main { position: relative; width: min(420px, 100%); }
 
 .mark {
-  width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
-  background: linear-gradient(145deg, var(--clay), var(--lilac));
-  color: #fff; font-weight: 700; font-size: 22px; box-shadow: var(--shadow-3);
+  width: 52px; height: 52px; border-radius: 16px; display: block;
+  object-fit: contain; background: var(--surface-3);
+  box-shadow: var(--shadow-3);
   margin-bottom: 18px;
 }
-h1 { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+/* Latin in both languages -- the shop's name is not translated. */
+h1 { margin: 0; font-size: 24px; letter-spacing: -.02em; font-family: var(--font-num); }
+.langbtn {
+  margin-top: 18px; padding: 5px 12px; width: auto;
+  background: none; border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  color: var(--ink-3); font-family: var(--font-num); font-size: 11.5px; font-weight: 700;
+  cursor: pointer;
+}
+.langbtn:hover { color: var(--ink); border-color: var(--ink-3); }
 .sub { color: var(--ink-3); font-size: 13.5px; margin: 4px 0 24px; }
 
 form {
@@ -113,28 +129,67 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
 </head>
 <body>
 <main>
-  <div class="mark" aria-hidden="true">و</div>
-  <h1>ونس جاليري</h1>
-  <p class="sub">نظام إدارة المتجر — المحادثات والطلبات والمخزون في مكان واحد.</p>
+  <img class="mark" src="/dashboard/logo.webp" alt="Wanas Gallery" width="52" height="52">
+  <h1 dir="ltr">Wanas Gallery</h1>
+  <p class="sub" data-i18n="نظام إدارة المتجر — المحادثات والطلبات والمخزون في مكان واحد.">نظام إدارة المتجر — المحادثات والطلبات والمخزون في مكان واحد.</p>
 
   <form id="login" novalidate>
     <div>
-      <label for="username">اسم المستخدم</label>
+      <label for="username" data-i18n="اسم المستخدم">اسم المستخدم</label>
       <input id="username" name="username" autocomplete="username" required autofocus>
     </div>
     <div>
-      <label for="password">كلمة السر</label>
+      <label for="password" data-i18n="كلمة السر">كلمة السر</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required>
     </div>
     <div id="error" role="alert" aria-live="assertive"></div>
-    <button id="submit" type="submit">دخول</button>
+    <button id="submit" type="submit" data-i18n="دخول">دخول</button>
   </form>
 
-  <p class="foot">الدخول للفريق فقط. كل جلسة بتنتهي تلقائيًا بعد فترة.</p>
+  <button id="langBtn" type="button" class="langbtn" title="العربية / English"
+    aria-label="العربية / English">EN</button>
+
+  <p class="foot" data-i18n="الدخول للفريق فقط. كل جلسة بتنتهي تلقائيًا بعد فترة.">الدخول للفريق فقط. كل جلسة بتنتهي تلقائيًا بعد فترة.</p>
 </main>
 
 <script>
 "use strict";
+
+/* The login page's own small dictionary. It reads the same `wanas.lang` key
+   the dashboard writes, so whichever language the staff member chose is the
+   one that greets them next time. Fallback is the Arabic, as it is there. */
+const LANG = document.documentElement.lang === "en" ? "en" : "ar";
+const EN = {
+  "دخول الفريق": "Staff login",
+  "نظام إدارة المتجر — المحادثات والطلبات والمخزون في مكان واحد.":
+    "Store operations — conversations, orders and inventory in one place.",
+  "اسم المستخدم": "Username",
+  "كلمة السر": "Password",
+  "دخول": "Log in",
+  "الدخول للفريق فقط. كل جلسة بتنتهي تلقائيًا بعد فترة.":
+    "Staff only. Every session expires automatically after a while.",
+  "اكتب اسم المستخدم وكلمة السر.": "Enter a username and a password.",
+  "بنتأكد…": "Checking…",
+  "اللوحة لسه مش متفعّلة على السيرفر ده — ناقص DASHBOARD_SESSION_SECRET.":
+    "The dashboard is not enabled on this server — DASHBOARD_SESSION_SECRET is missing.",
+  "اسم المستخدم أو كلمة السر غلط.": "Wrong username or password.",
+  "مفيش اتصال بالسيرفر دلوقتي.": "No connection to the server right now.",
+  "العربية / English": "العربية / English",
+};
+const tr = (s) => (LANG === "en" && EN[s]) || s;
+
+document.querySelectorAll("[data-i18n]").forEach((node) => {
+  node.textContent = tr(node.dataset.i18n);
+});
+document.title = "Wanas Gallery — " + tr("دخول الفريق");
+
+const langBtn = document.getElementById("langBtn");
+langBtn.textContent = LANG === "en" ? "ع" : "EN";
+langBtn.addEventListener("click", () => {
+  try { localStorage.setItem("wanas.lang", LANG === "en" ? "ar" : "en"); } catch (e) { /* private window */ }
+  location.reload();
+});
+
 const form = document.getElementById("login");
 const errorBox = document.getElementById("error");
 const submit = document.getElementById("submit");
@@ -151,10 +206,10 @@ form.addEventListener("submit", async (event) => {
 
   const username = document.getElementById("username").value.trim();
   const password = document.getElementById("password").value;
-  if (!username || !password) return showError("اكتب اسم المستخدم وكلمة السر.", "warn");
+  if (!username || !password) return showError(tr("اكتب اسم المستخدم وكلمة السر."), "warn");
 
   submit.disabled = true;
-  submit.innerHTML = '<span class="spin"></span> بنتأكد…';
+  submit.innerHTML = '<span class="spin"></span> ' + tr("بنتأكد…");
   try {
     const response = await fetch("/dashboard/api/login", {
       method: "POST",
@@ -166,15 +221,15 @@ form.addEventListener("submit", async (event) => {
     // login could ever work here. Saying "غلط" would send someone hunting a
     // typo instead of an env var.
     if (response.status === 503) {
-      showError("اللوحة لسه مش متفعّلة على السيرفر ده — ناقص DASHBOARD_SESSION_SECRET.", "warn");
+      showError(tr("اللوحة لسه مش متفعّلة على السيرفر ده — ناقص DASHBOARD_SESSION_SECRET."), "warn");
     } else {
-      showError("اسم المستخدم أو كلمة السر غلط.");
+      showError(tr("اسم المستخدم أو كلمة السر غلط."));
     }
   } catch {
-    showError("مفيش اتصال بالسيرفر دلوقتي.");
+    showError(tr("مفيش اتصال بالسيرفر دلوقتي."));
   } finally {
     submit.disabled = false;
-    submit.textContent = "دخول";
+    submit.textContent = tr("دخول");
   }
 });
 </script>

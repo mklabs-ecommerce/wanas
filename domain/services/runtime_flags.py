@@ -24,9 +24,20 @@ from domain.models import RuntimeSetting, utcnow
 
 @dataclass(frozen=True)
 class FlagInfo:
+    """A flag's identity plus both display languages.
+
+    The English half is here rather than in the dashboard's own dictionary
+    because these strings *are* server data -- they travel to the browser in
+    the `/settings/flags` payload, and a translation table in the page would
+    have to be kept in step with this tuple by hand. Adding a flag adds both
+    labels in one place, which is the only way the two stay married.
+    """
+
     key: str
     label_ar: str
     description_ar: str
+    label_en: str
+    description_en: str
 
 
 #: Order is display order in the dashboard settings panel.
@@ -35,16 +46,22 @@ KNOWN_FLAGS: tuple[FlagInfo, ...] = (
         "voice_notes_enabled",
         "الرسايل الصوتية",
         "لو مقفولة، كل رسالة صوتية تتحول لحد من الفريق من غير ما البوت يحاول يسمعها.",
+        "Voice notes",
+        "When off, every voice note goes to a person instead of the bot trying to hear it.",
     ),
     FlagInfo(
         "image_understanding_enabled",
         "فهم الصور",
         "لو مقفولة، كل صورة تتحول لحد من الفريق من غير ما البوت يحاول يشوفها.",
+        "Image understanding",
+        "When off, every photo goes to a person instead of the bot trying to look at it.",
     ),
     FlagInfo(
         "interactive_messages_enabled",
         "القوايم التفاعلية",
         "لو مقفولة، البوت يسأل عن المحافظة بالكلام العادي بدل القايمة القابلة للمس.",
+        "Interactive lists",
+        "When off, the bot asks for the governorate in plain text instead of a tappable list.",
     ),
 )
 

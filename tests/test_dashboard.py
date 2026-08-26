@@ -554,3 +554,21 @@ def test_opening_a_stale_conversation_shows_it_in_full_and_keeps_it(logged_in, s
 
     assert [b["text"] for b in body["history"]] == ["عايز تيشيرت"]
     assert seeded.get(SessionRow, (CHANNEL, CUSTOMER)).history, "still stored"
+
+
+# --------------------------------------------------------------------------
+# the brand mark
+# --------------------------------------------------------------------------
+
+
+def test_the_logo_is_public_like_the_login_page_that_shows_it(client):
+    """No session: the login page renders it before anybody has one."""
+    res = client.get("/dashboard/logo.webp")
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "image/webp"
+    assert "max-age" in res.headers.get("cache-control", "")
+
+
+def test_a_missing_logo_is_a_404_not_a_traceback(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(dashboard, "LOGO_FILE", tmp_path / "gone.webp")
+    assert client.get("/dashboard/logo.webp").status_code == 404
