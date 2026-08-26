@@ -176,7 +176,12 @@ def test_an_abandoned_instagram_cart_is_nudged(seeded, cairo_rate, senders):
 @needs_real_datetime_db
 def test_check_back_in_stock_reads_the_channel_off_the_waitlist_row(seeded, senders):
     """Plan: 'check_back_in_stock already reads the channel off the waitlist
-    row -- verify with a test, change nothing.'"""
+    row -- verify with a test, change nothing.'
+
+    The entry is baselined at zero on purpose: a restock message describes a
+    *verified transition*, so an entry with no `observed_stock` is baselined
+    and left silent. This test is about which channel the notice goes out on,
+    which needs a notice to go out at all."""
     from domain.models import StockWaitlistEntry, Variant, utcnow
 
     ig, _wa = senders
@@ -190,6 +195,7 @@ def test_check_back_in_stock_reads_the_channel_off_the_waitlist_row(seeded, send
                 channel=Channel.INSTAGRAM_DM.value,
                 external_id=IGSID,
                 requested_at=utcnow(),
+                observed_stock=0,
             )
         )
 
