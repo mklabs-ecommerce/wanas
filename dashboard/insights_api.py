@@ -21,14 +21,14 @@ conversation, which is exactly as precise as the data actually is.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from common.timeutil import as_aware
-from dashboard.guard import staff_for, unauthenticated
+from dashboard import ranges
+from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import (
     ChannelIdentity,
@@ -41,10 +41,10 @@ from domain.models import (
 
 router = APIRouter(prefix="/dashboard/api/insights", tags=["dashboard-insights"])
 
-#: Same three presets the Statistics page offers, refused rather than clamped
-#: for the same reason (`dashboard/stats_api.py`): a header reading "30 days"
-#: has to be 30 days.
-ALLOWED_RANGES = (7, 30, 90)
+#: The same window the Statistics tab uses, parsed by the same code
+#: (`dashboard/ranges.py`) -- two tabs of one page answering about different
+#: fortnights is the failure that shares this module.
+ALLOWED_RANGES = ranges.ALLOWED_RANGES
 
 #: How many distinct tool names to report.
 TOP_TOOLS = 12
@@ -55,16 +55,16 @@ def _day(value) -> str | None:
     return aware.date().isoformat() if aware else None
 
 
-def _empty_days(days: int) -> dict[str, int]:
-    """Every day in the range, zero-filled. A line chart with holes in it
-    reads as "no data" where the truth is "no activity", and the two look
-    identical only until someone makes a decision on it."""
-    today = datetime.now(UTC).date()
-    return {(today - timedelta(days=offset)).isoformat(): 0 for offset in range(days - 1, -1, -1)}
+def _series(counter: dict[str, int], window: ranges.Window) -> list[dict]:
+    """Every day in the window, zero-filled, in order.
 
-
-def _series(counter: dict[str, int], days: int) -> list[dict]:
-    filled = _empty_days(days)
+    Built from the window's own dates, never from "the last N days counting
+    back from today". A line chart with holes in it reads as "no data" where
+    the truth is "no activity"; a chart anchored on today reads as "no
+    activity" for a historical range whose every point was real, because each
+    of those dates falls outside the keys that were pre-filled.
+    """
+    filled = dict.fromkeys(window.each_day(), 0)
     for day, count in counter.items():
         if day in filled:
             filled[day] = count
@@ -115,17 +115,26 @@ def _conversation_facts(history: list) -> dict:
 
 @router.get("")
 def insights(
-    days: int = Query(default=30), wanas_staff: str | None = Cookie(default=None)
+    days: int | None = Query(default=None, description="one of the presets: 7, 30, 90"),
+    start: str | None = Query(default=None, description="custom range start, YYYY-MM-DD (with end)"),
+    end: str | None = Query(default=None, description="custom range end, YYYY-MM-DD (inclusive)"),
+    wanas_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
-    if days not in ALLOWED_RANGES:
-        detail = f"days must be one of {ALLOWED_RANGES}"
-        return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
+    try:
+        window = ranges.parse(days=days, start=start, end=end)
+    except ranges.BadRange as exc:
+        return JSONResponse({"error": "bad_arguments", "detail": str(exc)}, status_code=400)
 
-    since = datetime.now(UTC) - timedelta(days=days)
+    # Both bounds, always. Every filter below used to be `>= since` alone,
+    # which is correct only while the window ends today -- a custom range
+    # would have swept in everything after its end date and reported it as
+    # part of the fortnight on screen.
+    since, until = window.bounds()
 
     with session_scope() as db:
-        if staff_for(db, wanas_staff) is None:
-            return unauthenticated()
+        _, refused = require_permission(db, wanas_staff, "analytics")
+        if refused is not None:
+            return refused
 
         rows = db.scalars(select(SessionRow)).all()
 
@@ -137,7 +146,7 @@ def insights(
 
         for row in rows:
             updated = as_aware(row.updated_at)
-            if updated is None or updated < since:
+            if updated is None or updated < since or updated > until:
                 continue
             facts = _conversation_facts(row.history or [])
             day = _day(row.updated_at)
@@ -164,7 +173,9 @@ def insights(
 
         new_contacts: Counter[str] = Counter()
         identity_rows = db.scalars(
-            select(ChannelIdentity).where(ChannelIdentity.first_seen_at >= since)
+            select(ChannelIdentity).where(
+                ChannelIdentity.first_seen_at >= since, ChannelIdentity.first_seen_at <= until
+            )
         ).all()
         for identity in identity_rows:
             day = _day(identity.first_seen_at)
@@ -179,7 +190,11 @@ def insights(
             ).all()
         )
 
-        queue_rows = db.scalars(select(StaffQueueItem).where(StaffQueueItem.created_at >= since)).all()
+        queue_rows = db.scalars(
+            select(StaffQueueItem).where(
+                StaffQueueItem.created_at >= since, StaffQueueItem.created_at <= until
+            )
+        ).all()
         handoffs_by_day: Counter[str] = Counter()
         queue_by_kind: Counter[str] = Counter()
         queue_by_reason: Counter[str] = Counter()
@@ -200,7 +215,10 @@ def insights(
                 resolution_minutes.append((resolved - created).total_seconds() / 60)
 
         comment_rows = db.scalars(
-            select(InstagramCommentReply).where(InstagramCommentReply.created_at >= since)
+            select(InstagramCommentReply).where(
+                InstagramCommentReply.created_at >= since,
+                InstagramCommentReply.created_at <= until,
+            )
         ).all()
         comments_by_day: Counter[str] = Counter()
         comment_public = comment_private = 0
@@ -225,7 +243,7 @@ def insights(
 
     return JSONResponse(
         {
-            "range_days": days,
+            **window.as_payload(),
             "totals": {
                 "conversations": conversations,
                 "customer_messages": totals["customer_messages"],
@@ -249,10 +267,10 @@ def insights(
                 "instagram_comment_public_replies": comment_public,
                 "instagram_comment_private_replies": comment_private,
             },
-            "active_conversations_by_day": _series(active_by_day, days),
-            "new_contacts_by_day": _series(new_contacts, days),
-            "handoffs_by_day": _series(handoffs_by_day, days),
-            "instagram_comments_by_day": _series(comments_by_day, days),
+            "active_conversations_by_day": _series(active_by_day, window),
+            "new_contacts_by_day": _series(new_contacts, window),
+            "handoffs_by_day": _series(handoffs_by_day, window),
+            "instagram_comments_by_day": _series(comments_by_day, window),
             "by_channel": dict(by_channel),
             "queue_by_kind": dict(queue_by_kind),
             "queue_by_reason": dict(queue_by_reason.most_common(10)),

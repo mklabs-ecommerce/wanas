@@ -220,3 +220,111 @@ def test_stats_endpoint_reflects_a_placed_order(logged_in, cairo_rate, seeded, s
 def test_stats_endpoint_reports_an_outage(logged_in, shopify):
     shopify.down = True
     assert logged_in.get("/dashboard/api/stats?days=30").status_code == 503
+
+
+# --------------------------------------------------------------------------
+# the Analytics page's toggles, and the two series added with them
+# --------------------------------------------------------------------------
+
+
+def test_payment_filter_narrows_every_number_not_just_a_chart():
+    """A page that filtered the chart but left the KPI above it counting
+    everything would be worse than no toggle at all."""
+    orders_in = [
+        {**_order(total=100, customer_phone="1"), "payment_method": "cod"},
+        {**_order(total=300, customer_phone="2"), "payment_method": "online"},
+    ]
+    cod = dashboard_stats.summarize([dict(o) for o in orders_in], payment="cod")
+    assert cod["order_count"] == 1
+    assert cod["revenue"] == "100"
+    assert cod["customer_count"] == 1
+
+    online = dashboard_stats.summarize([dict(o) for o in orders_in], payment="online")
+    assert online["revenue"] == "300"
+
+    both = dashboard_stats.summarize([dict(o) for o in orders_in], payment="all")
+    assert both["revenue"] == "400"
+
+
+def test_an_order_with_no_payment_method_lands_in_unknown():
+    result = dashboard_stats.summarize([_order(total=100)])
+    assert result["payment_breakdown"] == {"unknown": 1}
+
+
+def test_channel_comes_from_the_map_and_defaults_to_web():
+    a, b = _order(total=100, customer_phone="1"), _order(total=200, customer_phone="2")
+    result = dashboard_stats.summarize(
+        [a, b], channel_by_order_id={a["id"]: "instagram_dm"}
+    )
+    assert result["channel_breakdown"] == {"instagram_dm": 1, "web": 1}
+    assert result["bot_order_count"] == 1
+
+
+def test_channel_filter_narrows_the_totals():
+    a, b = _order(total=100, customer_phone="1"), _order(total=200, customer_phone="2")
+    result = dashboard_stats.summarize(
+        [a, b], channel_by_order_id={a["id"]: "whatsapp"}, channel="whatsapp"
+    )
+    assert result["order_count"] == 1
+    assert result["revenue"] == "100"
+
+
+def test_orders_by_governorate_counts_and_ranks():
+    orders_in = [
+        _order(total=100, customer_phone="1"),
+        _order(total=200, customer_phone="2"),
+        {**_order(total=50, customer_phone="3"), "governorate": "Giza"},
+    ]
+    rows = dashboard_stats.summarize(orders_in)["orders_by_governorate"]
+    assert rows[0] == {"governorate": "Cairo", "orders": 2, "revenue": "300"}
+    assert rows[1] == {"governorate": "Giza", "orders": 1, "revenue": "50"}
+
+
+def test_an_order_with_no_governorate_is_bucketed_not_dropped():
+    """Otherwise the chart's slices stop adding up to the order count printed
+    directly above them, and nothing on screen says why."""
+    orders_in = [
+        _order(total=100, customer_phone="1"),
+        {**_order(total=50, customer_phone="2"), "governorate": None},
+    ]
+    result = dashboard_stats.summarize(orders_in)
+    rows = result["orders_by_governorate"]
+    assert sum(r["orders"] for r in rows) == result["order_count"]
+    assert any(r["governorate"] == "" for r in rows)
+
+
+def test_customer_kind_breakdown_keeps_unknown_separate_from_new():
+    orders_in = [
+        {**_order(total=100, customer_phone="1"), "customer_kind": "new"},
+        {**_order(total=100, customer_phone="2"), "customer_kind": "returning"},
+        _order(total=100, customer_phone="3"),  # no customer record at all
+    ]
+    breakdown = dashboard_stats.summarize(orders_in)["customer_kind_breakdown"]
+    assert breakdown == {"new": 1, "returning": 1, "unknown": 1}
+
+
+def test_stats_endpoint_rejects_an_unknown_payment_or_channel(logged_in):
+    assert logged_in.get("/dashboard/api/stats?days=30&payment=bitcoin").status_code == 400
+    assert logged_in.get("/dashboard/api/stats?days=30&channel=telegram").status_code == 400
+
+
+def test_stats_endpoint_attributes_a_bot_order_to_its_channel(
+    logged_in, cairo_rate, seeded, shopify
+):
+    carts.add(seeded, "instagram_dm", "ig-777", VARIANT, 1)
+    result = orders.place_order(
+        seeded, channel="instagram_dm", external_id="ig-777", customer_name="IG Buyer",
+        governorate="Cairo", address="1 St", contact_phone="01000000111",
+    )
+    assert "error" not in result, result
+    seeded.commit()
+
+    body = logged_in.get("/dashboard/api/stats?days=30").json()
+    assert body["channel_breakdown"].get("instagram_dm") == 1
+
+    # And the toggle finds it under Instagram, not under WhatsApp -- which is
+    # what the `whatsapp` tag on every bot order would have said.
+    ig = logged_in.get("/dashboard/api/stats?days=30&channel=instagram_dm").json()
+    assert ig["order_count"] == 1
+    wa = logged_in.get("/dashboard/api/stats?days=30&channel=whatsapp").json()
+    assert wa["order_count"] == 0
