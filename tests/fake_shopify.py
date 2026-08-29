@@ -366,6 +366,7 @@ class FakeShopify:
         items,
         shipping_fee=0,
         payment_gateways=("shopify_payments",),
+        financial_status="PENDING",
     ):
         """A order as if placed on the storefront directly -- never through
         `create_order`, so it carries none of the bot's own tags. This is the
@@ -393,6 +394,7 @@ class FakeShopify:
                 # a COD website order (or none at all, for the `unknown`
                 # bucket) passes its own list.
                 "payment_gateways": list(payment_gateways),
+                "financial_status": financial_status,
                 "lines": {},
                 "line_meta": {},
             }
@@ -656,7 +658,7 @@ class FakeShopify:
             "id": order["id"],
             "name": order["name"],
             "created_at": order["created_at"],
-            "financial_status": "PENDING",
+            "financial_status": order.get("financial_status") or "PENDING",
             "fulfillment_status": "FULFILLED" if order["fulfilled"] else "UNFULFILLED",
             "cancelled": order["cancelled"],
             "tags": list(order["tags"]),
@@ -776,6 +778,19 @@ class FakeShopify:
                 }
             ],
         }
+
+    def mark_as_paid(self, shopify_order_id):
+        self._guard()
+        with self._lock:
+            order = self.orders.get(shopify_order_id)
+            if order is None:
+                return {"error": "payment_rejected", "detail": "order not found"}
+            # Shopify refuses an order with nothing outstanding, and the whole
+            # point of this action is that it is one-way.
+            if order["cancelled"] or (order.get("financial_status") or "PENDING") == "PAID":
+                return {"error": "payment_rejected", "detail": "order cannot be marked paid"}
+            order["financial_status"] = "PAID"
+            return {"id": shopify_order_id, "financial_status": "PAID"}
 
     def fulfill(self, shopify_order_id, *, tracking_number=None, tracking_company=None, notify_customer=False):
         self._guard()
@@ -968,6 +983,7 @@ class FakeShopify:
             shopify_admin_orders, "cached_first_order_ids", self.first_order_ids
         )
         monkeypatch.setattr(shopify_admin_orders, "fulfill", self.fulfill)
+        monkeypatch.setattr(shopify_admin_orders, "mark_as_paid", self.mark_as_paid)
         monkeypatch.setattr(shopify_admin_products, "list_products", self.list_products)
         monkeypatch.setattr(shopify_admin_products, "get_product", self.get_product)
         monkeypatch.setattr(

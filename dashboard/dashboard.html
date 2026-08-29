@@ -1402,6 +1402,22 @@ const EN = {
   "طلب اتعدّل": "Order modified",
   "طلب اختبار من أرقام الفريق مستبعد من كل رقم في الصفحة دي.": "test order(s) from staff numbers are excluded from every figure on this page.",
   "طلب البوت": "Bot order",
+  "حالة الدفع": "Payment status",
+  "مدفوعة": "Paid",
+  "مستنية دفع": "Awaiting payment",
+  "مسترجعة": "Refunded",
+  "مستني دفع": "Awaiting payment",
+  "مدفوع جزئيًا": "Partially paid",
+  "مسترجع جزئيًا": "Partially refunded",
+  "ملغي الدفع": "Voided",
+  "محجوز": "Authorized",
+  "منتهي": "Expired",
+  "علّم كمدفوع": "Mark as paid",
+  "تأكيد استلام الفلوس؟": "Confirm the cash was collected?",
+  "هيتسجل مدفوع على شوبيفاي. مفيش رجوع في الخطوة دي.": " will be recorded as paid on Shopify. This step cannot be undone.",
+  "أيوة، اتسلمت": "Yes, it was collected",
+  "الطلب اتسجل مدفوع": "Order recorded as paid",
+  "التسجيل مانفذش": "Could not record the payment",
   "الشحن من هنا مقفول": "Shipping is locked here",
   "صلاحية أوامر الشحن مش مدّية للتطبيق على شوبيفاي. الطلب بيتقرا عادي، لكن الشحن لازم يتعمل من لوحة شوبيفاي لحد ما الصلاحية تتضاف.": "The app has no fulfillment-order permission on Shopify. The order still reads fine, but shipping has to be done from Shopify Admin until the scope is added.",
   "طلب الموقع": "Website order",
@@ -1752,6 +1768,24 @@ const PAYMENT_TONES = { cod: "amber", online: "teal", unknown: "sky" };
    the toggle is to keep the two apart. */
 const paymentChip = (method) =>
   chipHTML(PAYMENT_LABELS[method] || method || "—", PAYMENT_TONES[method] || "sky", "dot");
+
+/* Shopify's financial status, in words. Cash on delivery means every bot
+   order sits at PENDING until somebody says the courier handed the money
+   over, so this is a column staff read all day -- not an enum to leak. */
+const FINANCIAL_STATUS = {
+  PAID: { label: tr("مدفوع"), tone: "teal" },
+  PENDING: { label: tr("مستني دفع"), tone: "amber" },
+  PARTIALLY_PAID: { label: tr("مدفوع جزئيًا"), tone: "amber" },
+  REFUNDED: { label: tr("مسترجع"), tone: "rose" },
+  PARTIALLY_REFUNDED: { label: tr("مسترجع جزئيًا"), tone: "rose" },
+  VOIDED: { label: tr("ملغي الدفع"), tone: "rose" },
+  AUTHORIZED: { label: tr("محجوز"), tone: "sky" },
+  EXPIRED: { label: tr("منتهي"), tone: "rose" },
+};
+const financialChip = (raw) => {
+  const s = FINANCIAL_STATUS[raw] || { label: raw || "—", tone: "sky" };
+  return chipHTML(s.label, s.tone, "dot");
+};
 
 const CUSTOMER_KIND_LABELS = { returning: tr("عميل قديم"), new: tr("عميل جديد"), unknown: "—" };
 const customerKindChip = (kind, count) => {
@@ -3123,6 +3157,12 @@ const ORDER_PRESETS = [
   { id: "bot", label: tr("من البوت"), q: "tag:chatbot" },
   { id: "site", label: tr("من الموقع"), q: "-tag:chatbot" },
   { id: "cancelled", label: tr("ملغية"), q: "status:cancelled" },
+  // Payment status. Shopify's own search expresses this one, so unlike the
+  // payment *method* toggle beside it (which is classified server-side from
+  // the tags) these cost nothing but a query string.
+  { id: "paid", label: tr("مدفوعة"), q: "financial_status:paid" },
+  { id: "unpaid", label: tr("مستنية دفع"), q: "financial_status:pending" },
+  { id: "refunded", label: tr("مسترجعة"), q: "financial_status:refunded" },
 ];
 
 /* The two server-side toggles. Unlike ORDER_PRESETS above these are *not*
@@ -3236,6 +3276,7 @@ VIEWS.orders = {
         <td>${esc(o.governorate || "—")}</td>
         <td>${(o.line_items || []).length ? esc(TR`${o.line_items.length} صنف`) : "—"}</td>
         <td>${statusChip(o.fulfillment_status, o.cancelled)}</td>
+        <td>${financialChip(o.financial_status)}</td>
         <td>${paymentChip(o.payment_method)}</td>
         <td>${customerKindChip(o.customer_kind, o.customer_order_count)}</td>
         <td>${chipHTML(channelLabel(o.channel), o.channel === "web" ? "lilac" : "teal")}</td>
@@ -3259,7 +3300,7 @@ VIEWS.orders = {
       </div>` +
       (this.rows.length
         ? card(tr("قائمة الطلبات"), TR`${this.rows.length} طلب`, tableHTML(
-            [tr("الطلب"), tr("العميل"), tr("المحافظة"), tr("الأصناف"), tr("الشحن"), tr("الدفع"), tr("العميل ده"), tr("المصدر"),
+            [tr("الطلب"), tr("العميل"), tr("المحافظة"), tr("الأصناف"), tr("الشحن"), tr("حالة الدفع"), tr("الدفع"), tr("العميل ده"), tr("المصدر"),
              { label: tr("الإجمالي"), num: true }],
             rowsHTML, { minWidth: 1040 }), "", { flush: true })
         : `<div class="card"><div class="card-body"></div></div>`);
@@ -3276,10 +3317,12 @@ VIEWS.orders = {
   export() {
     if (!this.rows.length) return toast(tr("مفيش بيانات للتصدير"), "", "warn");
     exportCSV("orders.csv",
-      [tr("رقم الطلب"), tr("التاريخ"), tr("العميل"), tr("التليفون"), tr("المحافظة"), tr("الحالة"), tr("الدفع"),
+      [tr("رقم الطلب"), tr("التاريخ"), tr("العميل"), tr("التليفون"), tr("المحافظة"), tr("الحالة"),
+       tr("حالة الدفع"), tr("الدفع"),
        tr("عميل قديم/جديد"), tr("عدد طلباته"), tr("القناة"), tr("المصدر"), tr("الإجمالي")],
       this.rows.map((o) => [o.name, o.created_at, o.customer_name, o.customer_phone,
         o.governorate, o.cancelled ? tr("ملغي") : (o.fulfillment_status || ""),
+        (FINANCIAL_STATUS[o.financial_status] || {}).label || o.financial_status,
         PAYMENT_LABELS[o.payment_method] || o.payment_method,
         CUSTOMER_KIND_LABELS[o.customer_kind] || o.customer_kind, o.customer_order_count,
         channelLabel(o.channel), o.source, o.total]));
@@ -3302,7 +3345,7 @@ async function openOrder(gid) {
   body.innerHTML = `
     <div class="row" style="margin-bottom:var(--s-4)">
       ${statusChip(order.fulfillment_status, order.cancelled)}
-      ${chipHTML(order.financial_status || "—", "sky")}
+      ${financialChip(order.financial_status)}
       ${chipHTML(order.local ? tr("طلب البوت") : tr("طلب الموقع"), order.local ? "teal" : "lilac")}
       <span class="spacer"></span>
       <span class="cellsub">${esc(dateTime(order.created_at))}</span>
@@ -3334,6 +3377,24 @@ async function openOrder(gid) {
     if (order.fulfillment_access !== false) {
       foot.push(el("button", { class: "btn primary", type: "button", html: TR`${icon("truck", 15)} شحن الطلب`,
         onclick: () => fulfillForm(order) }));
+    }
+    // Cash on delivery: the money moves in the street, so nothing but a
+    // person can tell this shop the order settled. One way only -- Shopify
+    // has no "mark as unpaid" to offer back.
+    if (order.financial_status !== "PAID") {
+      foot.push(el("button", { class: "btn", type: "button", html: TR`${icon("money", 15)} علّم كمدفوع`,
+        onclick: async () => {
+          const ok = await overlay.confirm(tr("تأكيد استلام الفلوس؟"),
+            TR`طلب ${order.name} هيتسجل مدفوع على شوبيفاي. مفيش رجوع في الخطوة دي.`,
+            tr("أيوة، اتسلمت"));
+          if (!ok) return;
+          const result = await api(`/dashboard/api/shopify/orders/${encodeURIComponent(gid)}/mark-paid`,
+            { method: "POST", quiet: true });
+          if (result.__error) return toastError(result.__error, tr("التسجيل مانفذش"));
+          toast(tr("الطلب اتسجل مدفوع"));
+          openOrder(gid);
+          VIEWS.orders.load();
+        } }));
     }
     foot.push(el("button", { class: "btn danger", type: "button", html: TR`${icon("x", 15)} إلغاء الطلب`,
       onclick: async () => {

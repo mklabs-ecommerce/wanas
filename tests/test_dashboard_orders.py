@@ -667,3 +667,64 @@ def test_nothing_is_relabelled_when_shopify_would_not_answer():
                "customer_kind": "returning"}]
     admin_orders.annotate_customer_kind(orders, frozenset())
     assert orders[0]["customer_kind"] == "returning"
+
+
+# --------------------------------------------------------------------------
+# marking a cash-on-delivery order paid
+#
+# The money moves in the street, so nothing but a person can tell this shop an
+# order settled -- which is why every bot order sits at PENDING until somebody
+# says the courier handed it over.
+# --------------------------------------------------------------------------
+
+
+def test_marking_an_order_paid_moves_the_financial_status(logged_in, bot_order, shopify):
+    res = logged_in.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-paid"
+    )
+    assert res.status_code == 200
+    assert res.json()["financial_status"] == "PAID"
+
+    detail = logged_in.get(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}").json()
+    assert detail["financial_status"] == "PAID"
+
+
+def test_the_local_row_is_kept_in_step(logged_in, bot_order, seeded):
+    """Shopify owns the financial status, and the local `payment_status` is a
+    mirror of it. Left behind, the customer's own order history would still
+    say the order was unpaid after the cash was collected."""
+    logged_in.post(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-paid")
+    seeded.expire_all()
+    assert seeded.get(Order, bot_order.order_id).payment_status == "paid"
+
+
+def test_marking_a_website_order_paid_needs_no_local_row(logged_in, website_order):
+    res = logged_in.post(f"/dashboard/api/shopify/orders/{website_order}/mark-paid")
+    assert res.status_code == 200
+    assert res.json()["financial_status"] == "PAID"
+
+
+def test_marking_the_same_order_paid_twice_is_refused(logged_in, bot_order):
+    """Shopify decides, and its refusal is passed through as a reason rather
+    than swallowed -- a second click must not read as success."""
+    assert logged_in.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-paid"
+    ).status_code == 200
+    second = logged_in.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-paid"
+    )
+    assert second.status_code == 409
+    assert second.json()["error"] == "payment_rejected"
+
+
+def test_marking_paid_requires_login(client, bot_order):
+    assert client.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-paid"
+    ).status_code == 401
+
+
+def test_a_shopify_outage_marking_paid_is_an_outage_not_a_refusal(logged_in, bot_order, shopify):
+    shopify.down = True
+    res = logged_in.post(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-paid")
+    assert res.status_code == 503
+    assert res.json()["error"] == "store_unavailable"

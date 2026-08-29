@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — Payment status, and a way to change it
+
+- **Payment status is a column and three filters.** "مدفوعة", "مستنية دفع"
+  and "مسترجعة" sit beside the shipping filters, and the status has its own
+  column in the table, the drawer and the CSV export — in words, not as the
+  raw `PENDING`/`PAID` enum it used to print. These three are plain Shopify
+  search syntax, unlike the payment *method* toggle next to them, which is
+  classified server-side from the order's tags.
+- **A cash-on-delivery order can be marked paid.** Nothing else can ever tell
+  this shop that one settled: the money moves in the street, so every bot
+  order sits at PENDING until a person says the courier handed it over —
+  which is exactly what left the whole chatbot history looking unpaid.
+  Shopify first (`orderMarkAsPaid`), the local `Order.payment_status` after,
+  so a row saying "paid" that Shopify never accepted cannot exist. One way
+  only, and the confirmation says so: Shopify has no "mark as unpaid" to
+  offer back.
+
 ## Unreleased — A conversation is called by its customer's name
 
 The inbox is titled by the customer's name where the shop knows it, their

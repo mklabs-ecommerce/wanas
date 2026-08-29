@@ -215,6 +215,33 @@ def fulfill_order(
     return JSONResponse(result)
 
 
+@router.post("/orders/{order_gid:path}/mark-paid")
+def mark_order_paid(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """Settle a cash-on-delivery order once the courier has handed the money
+    over.
+
+    Shopify first, the local row after -- the same order the product edits use
+    (`admin_products`): Shopify owns the financial status, and a local row
+    saying "paid" that Shopify never accepted is the version staff would
+    believe. There is no inverse; Shopify has no "mark as unpaid".
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "orders")
+        if refused is not None:
+            return refused
+        try:
+            result = shopify_admin_orders.mark_as_paid(order_gid)
+        except (ShopifyUnavailable, ShopifyConfigError) as exc:
+            return _outage(exc)
+        if "error" in result:
+            return JSONResponse(result, status_code=409)
+
+        local = _local_order_for(db, order_gid)
+        if local is not None:
+            local.payment_status = "paid"
+    return JSONResponse(result)
+
+
 @router.post("/orders/{order_gid:path}/cancel")
 def cancel_order(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:

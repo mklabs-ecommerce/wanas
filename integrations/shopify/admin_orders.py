@@ -124,6 +124,19 @@ query($id: ID!) {
 }
 """
 
+#: Settling a cash-on-delivery order once the courier hands the money over.
+#: Shopify has no inverse -- there is no "mark as unpaid" -- so this is a
+#: one-way door, and the dashboard says so rather than offering a toggle it
+#: cannot honour.
+MARK_AS_PAID = """
+mutation($input: OrderMarkAsPaidInput!) {
+  orderMarkAsPaid(input: $input) {
+    order { id displayFinancialStatus }
+    userErrors { field message }
+  }
+}
+"""
+
 FULFILLMENT_CREATE = """
 mutation($fulfillment: FulfillmentInput!) {
   fulfillmentCreate(fulfillment: $fulfillment) {
@@ -650,6 +663,33 @@ def fulfill(
     return {"fulfillment_id": created.get("id"), "status": created.get("status")}
 
 
+def mark_as_paid(shopify_order_id: str) -> dict:
+    """Record that a cash-on-delivery order was paid.
+
+    The money moves in the street, not through Shopify, so nothing else can
+    ever tell this shop an order settled -- which is why every bot order sits
+    at PENDING until somebody says otherwise. Returns the new financial
+    status, or a payload with "error" set; raises ShopifyUnavailable /
+    ShopifyConfigError for the dashboard to show as an outage rather than a
+    refusal, the same as `fulfill`.
+
+    Shopify decides whether it *can* be marked paid (an already-paid or
+    cancelled order cannot), and its refusal is passed through as a reason
+    rather than retried or reinterpreted here.
+    """
+    client = get_admin_client()
+    data = client(MARK_AS_PAID, {"input": {"id": shopify_order_id}})
+    result = data.get("orderMarkAsPaid") or {}
+    errors = result.get("userErrors") or []
+    if errors:
+        message = "; ".join(e.get("message", "") for e in errors)
+        log.warning("Shopify refused to mark %s paid: %s", shopify_order_id, message)
+        return {"error": "payment_rejected", "detail": message}
+
+    order = result.get("order") or {}
+    return {"id": order.get("id"), "financial_status": order.get("displayFinancialStatus")}
+
+
 __all__ = [
     "OrderRejected",
     "ShopifyConfigError",
@@ -669,4 +709,5 @@ __all__ = [
     "annotate_customer_kind",
     "get_order",
     "fulfill",
+    "mark_as_paid",
 ]
