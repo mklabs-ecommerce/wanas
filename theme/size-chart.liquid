@@ -70,9 +70,20 @@
           </table>
         </div>
 
-        {%- if diagram -%}
+        {%- comment -%}
+          A file_reference resolves to an `image` for an image file and a
+          `generic_file` for anything else. Only the first understands
+          `image_url`; asking a generic_file for one yields an empty src and a
+          broken picture, so each is asked for what it can answer.
+        {%- endcomment -%}
+        {%- if diagram.width -%}
           <img class="wns-sizechart__diagram"
                src="{{ diagram | image_url: width: 900 }}"
+               alt="{{ chart.title }} — قياسات · measurements"
+               loading="lazy">
+        {%- elsif diagram.url -%}
+          <img class="wns-sizechart__diagram"
+               src="{{ diagram.url }}"
                alt="{{ chart.title }} — قياسات · measurements"
                loading="lazy">
         {%- endif -%}
