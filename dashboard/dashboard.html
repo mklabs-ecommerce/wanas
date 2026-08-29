@@ -1219,6 +1219,8 @@ const EN = {
   "الشحن مانفذش": "The shipment did not go through",
   "الشحن من هنا مقفول": "Shipping is locked here",
   "الصنف": "Item",
+  "الصورة": "Photo",
+  "الصورة بتتحط على كل مقاسات اللون ده، مش السطر لوحده.": "The photo goes on every size in this colour, not on the row alone.",
   "الطلب": "Order",
   "الطلب اتسجل متسلّم": "Order recorded as delivered",
   "الطلب اتسجل مدفوع": "Order recorded as paid",
@@ -1460,6 +1462,7 @@ const EN = {
   "عميل مختلف": "distinct customer",
   "عند الاستلام": "Cash on delivery",
   "غير محدد": "Unspecified",
+  "غيّر الصورة": "Change the photo",
   "غيّر الفلتر أو امسح البحث": "Change the filter or clear the search",
   "فاضل": "left",
   "فترة محددة": "Custom range",
@@ -3658,6 +3661,9 @@ async function openProduct(gid) {
       <td><input class="inp num" style="width:104px" type="number" min="0" step="1"
             data-vid="${esc(v.sku || "")}" data-f="stock_qty" value="${esc(v.inventory_quantity ?? 0)}"></td>
       <td>${(v.inventory_quantity || 0) > 0 ? chipHTML(tr("متوفر"), "teal", "dot") : chipHTML(tr("خلص"), "rose", "bar")}</td>
+      <td><input class="inp" type="file" style="width:150px"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            data-img="${esc(v.sku || "")}" aria-label="${tr("غيّر الصورة")}"></td>
     </tr>`).join("");
 
   body.innerHTML = `
@@ -3675,7 +3681,9 @@ async function openProduct(gid) {
         <div><label class="lbl" for="pDept">القسم</label>
           <input class="inp" id="pDept" value="${esc(local ? local.department || "" : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pColl">المجموعة</label>
-          <input class="inp" id="pColl" value="${esc(local ? local.collection || "" : "")}" ${local ? "" : "disabled"}></div>
+          <select class="inp" id="pColl" ${local ? "" : "disabled"}>
+            <option value="${esc(local ? local.collection || "" : "")}">${esc(local && local.collection ? local.collection : tr("من غير مجموعة"))}</option>
+          </select></div>
         <div><label class="lbl" for="pStyle">الستايل (مفصول بفاصلة)</label>
           <input class="inp" id="pStyle" value="${esc(local && local.style ? local.style.join(tr("، ")) : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pChart">جدول المقاسات</label>
@@ -3684,7 +3692,17 @@ async function openProduct(gid) {
 
     <div style="height:var(--s-4)"></div>
     ${card(tr("المقاسات والأسعار"), TR`${product.variants.length} مقاس`,
-      tableHTML(["", tr("المقاس"), tr("السعر"), tr("المخزون"), tr("الحالة")], variantRows, { minWidth: 560 }), "", { flush: true })}`;
+      tableHTML(["", tr("المقاس"), tr("السعر"), tr("المخزون"), tr("الحالة"), tr("الصورة")],
+        variantRows, { minWidth: 700 })
+      + TR`<div class="hint" style="padding:var(--s-3)">الصورة بتتحط على كل مقاسات اللون ده، مش السطر لوحده.</div>`,
+      "", { flush: true })}`;
+
+  /* The same picker the create form offers, and for the same reason: a typed
+     collection name is a merchandising label that matches nothing. The
+     product's current value leads the list even if Shopify no longer has a
+     collection by that name -- an edit should not silently drop a field
+     nobody touched. */
+  if (local) fillCollectionPicker($("#pColl", body), local.collection || "");
 
   const save = el("button", {
     class: "btn primary", html: TR`${icon("check", 15)} احفظ التغييرات`,
@@ -3697,11 +3715,24 @@ async function openProduct(gid) {
         if (!sku) return;
         (updates[sku] ||= { variant_id: sku })[input.dataset.f] = Number(input.value);
       });
+      /* Pictures first, as in the create form: an upload that fails costs
+         nothing, while one that failed after the fields were saved would
+         leave the drawer looking like it had not saved at all. */
+      const variantImages = [];
+      for (const input of $$("[data-img]", body)) {
+        const file = (input.files || [])[0];
+        if (!file || !input.dataset.img) continue;
+        const uploaded = await uploadImage(file, "product_image");
+        if (uploaded.__error) { save.disabled = false; return toastError(uploaded.__error, tr("رفع الصورة مانفعش")); }
+        variantImages.push({ variant_id: input.dataset.img, source: uploaded.source });
+      }
+
       const payload = {
         title: $("#pTitle").value.trim(),
         category: $("#pCat").value.trim(),
         department: $("#pDept").value.trim() || undefined,
-        collection: $("#pColl").value.trim() || undefined,
+        collection: $("#pColl").value || undefined,
+        variant_images: variantImages.length ? variantImages : undefined,
         size_chart: $("#pChart").value.trim() || undefined,
         style: $("#pStyle").value.trim()
           ? $("#pStyle").value.split(/[،,]/).map((s) => s.trim()).filter(Boolean) : undefined,
@@ -3730,6 +3761,24 @@ function readAsBase64(file) {
     reader.onload = () => resolve(String(reader.result).split(",", 2)[1] || "");
     reader.readAsDataURL(file);
   });
+}
+
+/* The collection picker, shared by the create form and the edit drawer.
+   `current` leads the list and stays selected even when Shopify no longer
+   has a collection by that name: an edit must not silently drop a field
+   nobody touched. */
+async function fillCollectionPicker(select, current = "") {
+  if (!select) return;
+  const data = await api("/dashboard/api/shopify/collections", { quiet: true }).catch(() => ({ __error: 1 }));
+  if (data.__error || !data.collections) {
+    select.innerHTML = TR`<option value="">المجموعات مش متاحة دلوقتي</option>`;
+    if (current) select.insertAdjacentHTML("afterbegin", `<option value="${esc(current)}" selected>${esc(current)}</option>`);
+    return;
+  }
+  const titles = data.collections.map((c) => c.title);
+  if (current && !titles.includes(current)) titles.unshift(current);
+  select.innerHTML = TR`<option value="">من غير مجموعة</option>` +
+    titles.map((t) => `<option value="${esc(t)}"${t === current ? " selected" : ""}>${esc(t)}</option>`).join("");
 }
 
 async function uploadImage(file, purpose) {
@@ -3775,17 +3824,7 @@ function productCreateForm() {
   /* Both pickers are filled from what exists rather than typed: a collection
      Shopify does not have and a chart id `size_charts.json` does not have are
      the same bug -- a value that looks saved and answers nothing. */
-  (async () => {
-    const collections = await api("/dashboard/api/shopify/collections", { quiet: true }).catch(() => ({ __error: 1 }));
-    const select = $("#nColl", body);
-    if (!select) return;
-    if (collections.__error || !collections.collections) {
-      select.innerHTML = TR`<option value="">المجموعات مش متاحة دلوقتي</option>`;
-      return;
-    }
-    select.innerHTML = TR`<option value="">من غير مجموعة</option>` +
-      collections.collections.map((c) => `<option value="${esc(c.title)}">${esc(c.title)}</option>`).join("");
-  })();
+  fillCollectionPicker($("#nColl", body));
 
   (async () => {
     const charts = await api("/dashboard/api/shopify/size-charts", { quiet: true }).catch(() => ({ __error: 1 }));

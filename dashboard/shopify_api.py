@@ -543,6 +543,7 @@ def update_product(
                 collection=payload.get("collection"),
                 size_chart=payload.get("size_chart"),
                 variant_updates=payload.get("variant_updates"),
+                variant_images=payload.get("variant_images"),
             )
         except shopify_admin_products.ProductRejected as exc:
             return JSONResponse({"error": "product_rejected", "detail": str(exc)}, status_code=409)

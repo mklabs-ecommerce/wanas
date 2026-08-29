@@ -318,3 +318,15 @@ def test_creating_a_product_carries_its_photos_and_its_chart(logged_in, seeded, 
     assert shopify.chart_metafields[res.json()["shopify_id"]] == "gid://shopify/MediaImage/chart.png"
     assert shopify.variant_images["dashboard-tee-s-olive"] == "https://staged.example/olive.png"
     assert shopify.variant_images["dashboard-tee-m-navy"] == "https://staged.example/navy.png"
+
+
+def test_the_edit_route_carries_a_new_photo_through(logged_in, shopify):
+    """The thin layer this file tests: that the field reaches the service.
+    Which variants it lands on is `test_shopify_admin_products.py`'s subject."""
+    res = logged_in.post(
+        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        json={"variant_images": [{"variant_id": VARIANT, "source": "https://x/olive.png"}]},
+    )
+
+    assert res.status_code == 200, res.text
+    assert shopify.variant_images[VARIANT] == "https://x/olive.png"

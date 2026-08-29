@@ -803,6 +803,72 @@ def _mirror_local(
 # --------------------------------------------------------------------------
 
 
+def _replace_variant_images(
+    session: Session, product: Product, product_gid: str, variant_images: list[dict]
+) -> None:
+    """Attach each new picture and point its whole colourway at it.
+
+    The variants are resolved *before* anything is uploaded. Attaching first
+    and discovering afterwards that the row does not belong to this product
+    leaves a picture on the product that nothing references and nothing here
+    can remove.
+    """
+    wanted = []
+    for image in variant_images:
+        variant = session.get(Variant, image["variant_id"])
+        if variant is None or variant.product_id != product.product_id:
+            log.info("ignoring a photo for %r, which is not this product's", image["variant_id"])
+            continue
+        wanted.append((image, variant))
+    if not wanted:
+        return
+
+    attached = shopify_attach_images(
+        product_gid,
+        [{"source": image["source"], "alt": product.name or ""} for image, _ in wanted],
+    )
+
+    #: Every variant that shares a colour with the row the picture was set on
+    #: -- and, for a product nobody split by colour, just that row.
+    targets: dict[str, str] = {}
+    color_urls: dict[str, str] = {}
+    for (_, variant), media in zip(wanted, attached, strict=False):
+        if not media.get("id"):
+            continue
+        if variant.color:
+            siblings = [v for v in product.variants if v.color == variant.color]
+            if media.get("url"):
+                color_urls[variant.color] = media["url"]
+        else:
+            siblings = [variant]
+        for sibling in siblings:
+            targets[sibling.variant_id] = media["id"]
+
+    if not targets:
+        return
+
+    live_by_id = shopify_catalog.fetch_skus(list(targets))
+    shopify_assign_variant_media(
+        product_gid,
+        [
+            {"id": live.shopify_id, "media_id": targets[variant_id]}
+            for variant_id, live in live_by_id.items()
+            if live is not None
+        ],
+    )
+
+    #: The local fallback for when Shopify is unreachable. Additive: a colour
+    #: nobody changed keeps the photo it had.
+    if color_urls:
+        product.color_images = {
+            **(product.color_images or {}),
+            **{c: [u] for c, u in color_urls.items()},
+        }
+    fresh = list(color_urls.values())
+    if fresh:
+        product.images = fresh + [u for u in (product.images or []) if u not in fresh]
+
+
 def update_product(
     session: Session,
     product_id: str,
@@ -815,11 +881,19 @@ def update_product(
     collection: str | None = None,
     size_chart: str | None = None,
     variant_updates: list[dict] | None = None,
+    variant_images: list[dict] | None = None,
 ) -> dict:
     """Edit an existing product's Shopify-owned fields and/or wanas.db-owned
     fields. `variant_updates` is `[{"variant_id", "price"?, "original_price"?,
     "stock_qty"?}]` -- existing variants only; see the module docstring for
     why adding or removing one is out of scope here.
+
+    `variant_images` is `[{"variant_id", "source"}]`, a new picture for the
+    row a staff member picked it on. It lands on **every variant of that
+    colourway**, not only the one row: a colour is what a photo is of, and
+    leaving M/Olive on the old picture while S/Olive has the new one gives
+    `catalog._overlay_images` two photos for one colour and the customer
+    whichever came first.
     """
     product = session.get(Product, product_id)
     if product is None:
@@ -866,6 +940,9 @@ def update_product(
         if bulk:
             shopify_update_variants(product_gid, bulk)
         shopify_set_inventory(quantities)
+
+    if product_gid and variant_images:
+        _replace_variant_images(session, product, product_gid, variant_images)
 
     # wanas.db side: always applied, whether or not Shopify was reachable for
     # the fields above -- `category`/`department`/`style`/`collection`/

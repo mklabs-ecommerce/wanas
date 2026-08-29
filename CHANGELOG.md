@@ -18,10 +18,21 @@
   in only when no colour has one -- otherwise a product where Navy has a photo
   and Olive does not would show the Navy photo on the Olive variant,
   confidently and wrongly.
-- **Collection is a picker, not a text box.** It lists the shop's actual
-  Shopify collections; making a new one is a button that takes you to the
-  Collections screen. A typed collection name was a merchandising label that
-  matched nothing.
+- **Collection is a picker, not a text box**, in both the create form and the
+  edit drawer. It lists the shop's actual Shopify collections; making a new
+  one is a button that takes you to the Collections screen. A typed collection
+  name was a merchandising label that matched nothing. A product's current
+  value leads the list even when Shopify no longer has a collection by that
+  name -- an edit must not silently drop a field nobody touched.
+- **A photo can be changed on a product that already exists.** Every row in
+  the edit drawer takes a file, and the new picture lands on *every variant of
+  that colourway*, not only the row it was picked on: a photo is of a colour,
+  and leaving M/Olive on the old one while S/Olive has the new one gives
+  `catalog._overlay_images` two photos for one colour. The local
+  `color_images` fallback is merged, not replaced, so a colour nobody touched
+  keeps what it had -- and a row belonging to another product is dropped
+  before anything is uploaded, since a picture attached and then orphaned is
+  one nothing in here can remove.
 - **The size chart is two fields, both of them real choices**: a dropdown of
   the charts `data/size_charts.json` actually publishes, and an upload for a
   chart picture that has no measurements behind it. The upload lands in

@@ -405,3 +405,90 @@ def test_the_options_are_declared_when_the_product_is_created(seeded, shopify):
         {"name": "Color", "values": [{"name": "Navy"}, {"name": "Olive"}]},
     ]
 
+# --------------------------------------------------------------------------
+# changing a photo on a product that already exists
+# --------------------------------------------------------------------------
+
+
+def _olive_variants(session):
+    return sorted(
+        v.variant_id
+        for v in session.get(Product, "wanas-hoodie").variants
+        if v.color == "Olive"
+    )
+
+
+def test_a_new_photo_covers_the_whole_colourway_not_just_the_row(seeded, shopify):
+    """A photo is of a colour. Leaving M/Olive on the old picture while
+    S/Olive has the new one hands `catalog._overlay_images` two photos for one
+    colour and the customer whichever came first."""
+    olive = _olive_variants(seeded)
+    assert len(olive) > 1, "this test needs a colour with more than one size"
+
+    sap.update_product(
+        seeded,
+        "wanas-hoodie",
+        variant_images=[{"variant_id": olive[0], "source": "https://x/new-olive.png"}],
+    )
+
+    assert {shopify.variant_images[v] for v in olive} == {"https://x/new-olive.png"}
+
+
+def test_another_colour_is_left_alone(seeded, shopify):
+    olive = _olive_variants(seeded)
+    black = [
+        v.variant_id for v in seeded.get(Product, "wanas-hoodie").variants if v.color == "Black"
+    ]
+
+    sap.update_product(
+        seeded,
+        "wanas-hoodie",
+        variant_images=[{"variant_id": olive[0], "source": "https://x/new-olive.png"}],
+    )
+
+    assert not any(v in shopify.variant_images for v in black)
+
+
+def test_the_local_fallback_keeps_the_colours_nobody_changed(seeded, shopify):
+    """`color_images` is what the bot sends when Shopify is unreachable, so a
+    write here has to be additive -- replacing the map would blank every
+    colour the staff member did not touch."""
+    product = seeded.get(Product, "wanas-hoodie")
+    product.color_images = {"Black": ["data/images/black.png"]}
+    seeded.flush()
+
+    sap.update_product(
+        seeded,
+        "wanas-hoodie",
+        variant_images=[{"variant_id": _olive_variants(seeded)[0], "source": "https://x/new-olive.png"}],
+    )
+
+    product = seeded.get(Product, "wanas-hoodie")
+    assert product.color_images["Black"] == ["data/images/black.png"]
+    assert product.color_images["Olive"] == ["https://x/new-olive.png"]
+    assert product.images[0] == "https://x/new-olive.png"
+
+
+def test_changing_a_photo_touches_neither_price_nor_stock(seeded, shopify):
+    variant = seeded.get(Variant, _olive_variants(seeded)[0])
+    price_before, qty_before = variant.price, shopify.qty(variant.variant_id)
+
+    sap.update_product(
+        seeded,
+        "wanas-hoodie",
+        variant_images=[{"variant_id": variant.variant_id, "source": "https://x/new-olive.png"}],
+    )
+
+    assert seeded.get(Variant, variant.variant_id).price == price_before
+    assert shopify.qty(variant.variant_id) == qty_before
+
+
+def test_a_variant_id_that_is_not_this_products_is_ignored_not_guessed(seeded, shopify):
+    sap.update_product(
+        seeded,
+        "wanas-hoodie",
+        variant_images=[{"variant_id": "no-such-variant", "source": "https://x/nope.png"}],
+    )
+
+    assert shopify.variant_images == {}
+    assert shopify.media == {}
