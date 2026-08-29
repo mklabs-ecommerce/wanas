@@ -62,6 +62,8 @@ class FakeShopify:
         self.variant_images: dict[str, str] = {}
         # product gid -> the file gid its custom.size_chart metafield holds
         self.chart_metafields: dict[str, str] = {}
+        # product gid -> the option set it was created with
+        self.product_options: dict[str, list] = {}
         self._product_seq = 0
         # [{"id","topic","callbackUrl"}, ...]
         self.webhook_subscriptions: list[dict] = []
@@ -476,8 +478,21 @@ class FakeShopify:
         self._guard()
         return self.variant_to_product.get(variant_id)
 
-    def shopify_create_product(self, *, title, description, category):
+    def shopify_create_product(self, *, title, description, category, options=None):
+        """The options arrive here, with the product.
+
+        Shape-checked rather than modelled: an option value is an
+        `OptionValueCreateInput`, and Shopify refuses the whole document for a
+        bare list of strings. A fake that shrugged at that let every product
+        created here fail live while the suite stayed green.
+        """
         self._guard()
+        for option in options or []:
+            assert option.get("name"), f"an option with no name: {option!r}"
+            for value in option["values"]:
+                assert isinstance(value, dict) and value.get("name"), (
+                    f"option value {value!r} must be a key-value object"
+                )
         with self._lock:
             self._product_seq += 1
             gid = f"gid://shopify/Product/{self._product_seq}"
@@ -489,24 +504,8 @@ class FakeShopify:
                 "description_html": description or "",
                 "image_url": None,
             }
+            self.product_options[gid] = list(options or [])
             return gid
-
-    def shopify_set_product_options(self, product_gid, options):
-        """Nothing to model -- the options are implied by the variants below.
-
-        What is checked is the *shape*, because it is the half a fake can
-        get wrong for free: an option value is an `OptionValueCreateInput`,
-        and Shopify rejects the whole document for a bare list of strings.
-        A fake that shrugged at that let every product created here fail
-        live while the suite stayed green.
-        """
-        self._guard()
-        for option in options:
-            assert option.get("name"), f"an option with no name: {option!r}"
-            for value in option["values"]:
-                assert isinstance(value, dict) and value.get("name"), (
-                    f"option value {value!r} must be a key-value object"
-                )
 
     def shopify_create_variants(self, product_gid, bulk_input):
         self._guard()
@@ -1104,9 +1103,6 @@ class FakeShopify:
             shopify_admin_products, "product_gid_for_variant_id", self.product_gid_for_variant_id
         )
         monkeypatch.setattr(shopify_admin_products, "shopify_create_product", self.shopify_create_product)
-        monkeypatch.setattr(
-            shopify_admin_products, "shopify_set_product_options", self.shopify_set_product_options
-        )
         monkeypatch.setattr(shopify_admin_products, "shopify_create_variants", self.shopify_create_variants)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_media", self.shopify_attach_media)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_images", self.shopify_attach_images)

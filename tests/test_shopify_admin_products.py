@@ -380,3 +380,28 @@ def test_the_sku_travels_under_the_inventory_item(seeded, shopify):
     assert seeded.get(Variant, "shape-tee-s") is not None
     assert shopify.qty("shape-tee-s") == 1
 
+
+def test_the_options_are_declared_when_the_product_is_created(seeded, shopify):
+    """Not bolted on afterwards. A product created without them keeps the
+    default `Title` option Shopify made it with, and every real variant is
+    then refused with "Option does not exist"."""
+    result = sap.create_product(
+        seeded,
+        title="Option Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[
+            {"size": "S", "color": "Olive", "price": 300, "stock_qty": 1},
+            {"size": "M", "color": "Navy", "price": 300, "stock_qty": 1},
+        ],
+    )
+
+    assert shopify.product_options[result["shopify_id"]] == [
+        {"name": "Size", "values": [{"name": "M"}, {"name": "S"}]},
+        {"name": "Color", "values": [{"name": "Navy"}, {"name": "Olive"}]},
+    ]
+

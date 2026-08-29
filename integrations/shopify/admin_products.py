@@ -86,18 +86,31 @@ query($query: String!) {
 }
 """
 
+#: `productCreate` takes a `ProductCreateInput` under `product`, and that is
+#: the only place a new product's options can be declared. Handing them to
+#: `productUpdate` afterwards leaves the product with the default `Title`
+#: option Shopify made it with, and every real variant is then refused with
+#: "Option does not exist".
 PRODUCT_CREATE = """
-mutation($input: ProductInput!) {
-  productCreate(input: $input) {
+mutation($product: ProductCreateInput!) {
+  productCreate(product: $product) {
     product { id title }
     userErrors { field message }
   }
 }
 """
 
+#: `REMOVE_STANDALONE_VARIANT` takes the placeholder variant Shopify creates
+#: every product with away as the real ones land. Without it the product keeps
+#: a phantom "Default Title" variant with no SKU, which the bot would read as
+#: a size nobody can order.
 VARIANTS_CREATE = """
 mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-  productVariantsBulkCreate(productId: $productId, variants: $variants) {
+  productVariantsBulkCreate(
+    productId: $productId
+    variants: $variants
+    strategy: REMOVE_STANDALONE_VARIANT
+  ) {
     productVariants { id sku inventoryItem { id } }
     userErrors { field message }
   }
@@ -358,31 +371,30 @@ def _option_values(variant: dict) -> list[dict]:
 #: exercise it.
 
 
-def shopify_create_product(*, title: str, description: str, category: str) -> str:
-    """Returns the new product's Shopify id."""
+def shopify_create_product(
+    *, title: str, description: str, category: str, options: list[dict] | None = None
+) -> str:
+    """Returns the new product's Shopify id.
+
+    `options` is the whole option set -- Size, and Color/Length where the
+    variants have them. It goes in here rather than in a `productUpdate`
+    afterwards: see `PRODUCT_CREATE`.
+    """
     client = get_admin_client()
     created = client(
         PRODUCT_CREATE,
         {
-            "input": {
+            "product": {
                 "title": title,
                 "descriptionHtml": description or "",
                 "productType": category,
                 "status": "ACTIVE",
+                "productOptions": options or [],
             }
         },
     )
     _errors(created.get("productCreate"), "productCreate")
     return (created["productCreate"]["product"] or {})["id"]
-
-
-def shopify_set_product_options(product_gid: str, options: list[dict]) -> None:
-    """The default variant Shopify creates a product with has to be described
-    by the same options every real variant uses, or `shopify_create_variants`
-    rejects them as belonging to a different option set -- so this runs
-    before that, not after."""
-    client = get_admin_client()
-    client(PRODUCT_UPDATE, {"input": {"id": product_gid, "productOptions": options}})
 
 
 def shopify_create_variants(product_gid: str, bulk_input: list[dict]) -> list[dict]:
@@ -632,8 +644,12 @@ def create_product(
 
     product_id = _unique_product_id(session, title)
 
-    product_gid = shopify_create_product(title=title, description=description, category=category)
-    shopify_set_product_options(product_gid, _build_options(variants))
+    product_gid = shopify_create_product(
+        title=title,
+        description=description,
+        category=category,
+        options=_build_options(variants),
+    )
 
     bulk_input = [
         {

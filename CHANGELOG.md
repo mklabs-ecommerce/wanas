@@ -42,6 +42,18 @@
   fake now asserts both shapes rather than accepting whatever it is handed.
   `product_import.py` wrote the SKU to the same wrong place when it adopted a
   product created in Shopify Admin, so that path is fixed with it.
+- **A product's options are declared when it is created**, in
+  `productCreate`'s own `ProductCreateInput`, not handed to a `productUpdate`
+  afterwards. Bolted on after the fact they never took, so the product kept
+  the default `Title` option Shopify made it with and every real variant was
+  refused with "Option does not exist". `productVariantsBulkCreate` now also
+  passes `REMOVE_STANDALONE_VARIANT`, which takes that placeholder variant
+  away as the real ones land -- otherwise the product keeps a phantom
+  "Default Title" size with no SKU, which the bot would offer for sale.
+- The whole path was rehearsed against the live store once, end to end:
+  photos staged, a product created, variants read back with their SKUs,
+  prices, quantities and per-colour photos, the chart metafield set, the
+  local mirror checked -- and the product deleted again.
 - Uploads are an allowlist of jpeg/png/webp/gif, capped at 20 MB, and the
   filename is rebuilt from what is safe rather than filtered for what is not.
   SVG is refused on purpose: Shopify Files serves it on the shop's own origin.
