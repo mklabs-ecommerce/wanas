@@ -1402,6 +1402,8 @@ const EN = {
   "طلب اتعدّل": "Order modified",
   "طلب اختبار من أرقام الفريق مستبعد من كل رقم في الصفحة دي.": "test order(s) from staff numbers are excluded from every figure on this page.",
   "طلب البوت": "Bot order",
+  "التسليم من هنا مقفول": "Marking delivered is locked here",
+  "صلاحية write_fulfillments مش مدّية للتطبيق على شوبيفاي": "The app has no write_fulfillments permission on Shopify",
   "التوصيل": "Delivery",
   "اتسلّم": "Delivered",
   "في الطريق": "In transit",
@@ -3441,7 +3443,15 @@ async function openOrder(gid) {
           if (!ok) return;
           const result = await api(`/dashboard/api/shopify/orders/${encodeURIComponent(gid)}/mark-delivered`,
             { method: "POST", quiet: true });
-          if (result.__error) return toastError(result.__error, tr("التسجيل مانفذش"));
+          if (result.__error) {
+            // Naming the missing scope, not repeating Shopify's sentence about
+            // it: the person reading this toast is the person who can add it.
+            if (result.__error.code === "delivery_scope_missing") {
+              return toast(tr("التسليم من هنا مقفول"),
+                tr("صلاحية write_fulfillments مش مدّية للتطبيق على شوبيفاي"), "bad", 7000);
+            }
+            return toastError(result.__error, tr("التسجيل مانفذش"));
+          }
           toast(tr("الطلب اتسجل متسلّم"), cod ? tr("واتسجل مدفوع") : "");
           openOrder(gid);
           VIEWS.orders.load();

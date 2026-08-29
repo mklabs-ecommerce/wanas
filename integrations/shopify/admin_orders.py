@@ -723,10 +723,25 @@ def mark_delivered(shopify_order_id: str) -> dict:
         return {"error": "already_delivered"}
 
     client = get_admin_client()
-    data = client(
-        FULFILLMENT_EVENT_CREATE,
-        {"fulfillmentEvent": {"fulfillmentId": order["fulfillment_id"], "status": "DELIVERED"}},
-    )
+    try:
+        data = client(
+            FULFILLMENT_EVENT_CREATE,
+            {"fulfillmentEvent": {"fulfillmentId": order["fulfillment_id"], "status": "DELIVERED"}},
+        )
+    except ShopifyUnavailable as exc:
+        if _ACCESS_DENIED not in str(exc):
+            raise
+        # `fulfillmentEventCreate` still asks for the *legacy* `write_fulfillments`
+        # scope -- the merchant-managed/assigned pair that `fulfillmentCreate`
+        # needs does not cover it. Named, not re-raised, so the dashboard can
+        # say which scope to add instead of showing a GraphQL dump.
+        log.warning(
+            "Shopify denied fulfillmentEventCreate -- the app is missing the "
+            "write_fulfillments scope. Shipping still works; marking an order "
+            "delivered will not until the scope is added."
+        )
+        return {"error": "delivery_scope_missing"}
+
     result = data.get("fulfillmentEventCreate") or {}
     errors = result.get("userErrors") or []
     if errors:

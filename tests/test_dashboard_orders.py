@@ -814,3 +814,46 @@ def test_marking_delivered_requires_login(client, bot_order):
     assert client.post(
         f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-delivered"
     ).status_code == 401
+
+
+@pytest.mark.no_shopify
+def test_a_denied_delivery_event_names_the_scope_rather_than_dumping_graphql(monkeypatch):
+    """`fulfillmentEventCreate` still asks for the legacy `write_fulfillments`
+    scope -- the merchant-managed/assigned pair `fulfillmentCreate` needs does
+    not cover it. Staff saw the raw ACCESS_DENIED body, which named the scope
+    inside a wall of JSON."""
+    from integrations.shopify import admin_orders
+    from integrations.shopify.client import ShopifyUnavailable
+
+    monkeypatch.setattr(
+        admin_orders, "get_order",
+        lambda gid: {"cancelled": False, "fulfillment_id": "gid://shopify/Fulfillment/1",
+                     "delivery_status": "IN_TRANSIT"},
+    )
+
+    def denied(query, variables=None):
+        raise ShopifyUnavailable('[{"extensions": {"code": "ACCESS_DENIED"}}]')
+
+    monkeypatch.setattr(admin_orders, "get_admin_client", lambda: denied)
+    assert admin_orders.mark_delivered("gid://shopify/Order/1") == {
+        "error": "delivery_scope_missing"
+    }
+
+
+@pytest.mark.no_shopify
+def test_a_real_outage_marking_delivered_still_raises(monkeypatch):
+    from integrations.shopify import admin_orders
+    from integrations.shopify.client import ShopifyUnavailable
+
+    monkeypatch.setattr(
+        admin_orders, "get_order",
+        lambda gid: {"cancelled": False, "fulfillment_id": "gid://shopify/Fulfillment/1",
+                     "delivery_status": "IN_TRANSIT"},
+    )
+
+    def down(query, variables=None):
+        raise ShopifyUnavailable("HTTP 503")
+
+    monkeypatch.setattr(admin_orders, "get_admin_client", lambda: down)
+    with pytest.raises(ShopifyUnavailable):
+        admin_orders.mark_delivered("gid://shopify/Order/1")

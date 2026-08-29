@@ -22,9 +22,12 @@ something looks wrong.
       `read_orders` for the bot; `write_products`, `write_inventory`,
       `write_orders`, `write_fulfillments`, `read_customers` for the
       dashboard's product/order management, plus
-      `read_merchant_managed_fulfillment_orders` and
-      `read_assigned_fulfillment_orders`, which `read_orders` does **not**
-      imply and which the Ship button cannot work without -- the order drawer
+      `read_merchant_managed_fulfillment_orders`,
+      `read_assigned_fulfillment_orders` and their `write_` pair, which
+      `read_orders`/`write_orders` do **not** imply and which the Ship button
+      cannot work without -- plus the legacy-named `write_fulfillments`, which
+      the *delivered* button needs on its own: `fulfillmentEventCreate` still
+      asks for that one and the merchant-managed pair does not cover it -- the order drawer
       says so in place of the button, and `fulfill` refuses with
       `fulfillment_scope_missing`, rather than either one failing as an
       outage. A missing write scope shows up as a `store_unavailable`
