@@ -637,6 +637,8 @@ class FakeShopify:
 
     _RANGE_RE = re.compile(r"created_at:(>=|<=)(\S+)")
 
+    _DELIVERY_RE = re.compile(r"delivery_status:(\w+)")
+
     def _matches_query(self, order, query):
         if not query:
             return True
@@ -655,6 +657,14 @@ class FakeShopify:
             if op == ">=" and created < bound:
                 return False
             if op == "<=" and created > bound:
+                return False
+
+        # The one non-date term the order presets rely on. Shopify keeps
+        # delivery out of `fulfillment_status` (which stops at "fulfilled")
+        # and answers it under its own key; matched here so the "متسلّمة"
+        # chip is testable rather than silently passing everything.
+        for value in self._DELIVERY_RE.findall(query):
+            if (order.get("delivery_status") or "").upper() != value.upper():
                 return False
         return True
 

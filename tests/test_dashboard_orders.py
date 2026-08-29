@@ -857,3 +857,17 @@ def test_a_real_outage_marking_delivered_still_raises(monkeypatch):
     monkeypatch.setattr(admin_orders, "get_admin_client", lambda: down)
     with pytest.raises(ShopifyUnavailable):
         admin_orders.mark_delivered("gid://shopify/Order/1")
+
+
+def test_the_delivered_filter_narrows_to_orders_that_arrived(logged_in, bot_order, website_order):
+    """Delivery is not part of `fulfillment_status`, which stops at
+    "fulfilled" -- a shipped order and an arrived one look identical there.
+    Shopify answers it under its own search key."""
+    _ship(logged_in, bot_order.shopify_order_id)
+    _ship(logged_in, website_order)
+    logged_in.post(f"/dashboard/api/shopify/orders/{website_order}/mark-delivered")
+
+    delivered = logged_in.get(
+        "/dashboard/api/shopify/orders?q=delivery_status:delivered"
+    ).json()["orders"]
+    assert [o["id"] for o in delivered] == [website_order]
