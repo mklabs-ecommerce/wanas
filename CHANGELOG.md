@@ -20,7 +20,9 @@
 - Sizes cross over as an ordered array rather than a JSON object. Liquid
   iterates an object in whatever order it arrives in and cannot sort it back,
   so a chart listing XL before S would be unfixable in the theme.
-- Needs the `write_files` scope, and says so plainly if it is missing.
+- The panel replaces the theme's own `snippets/size-chart.liquid`, which
+  showed one shop-wide page for every product. That page stays as the
+  fallback for a product with no chart of its own.
 
 ## Unreleased — Stock writes, on the Shopify inventory API as it is now
 

@@ -22,8 +22,9 @@ Which product gets which chart comes from `Product.size_chart` in the
 database, so `DATABASE_URL` must point at the same database the shop runs on.
 Matching that product to Shopify's is by variant SKU.
 
-Needs the `write_files` scope on top of the product scopes -- uploading a
-diagram is a file write. It says so plainly if the scope is missing.
+Uploading a diagram is a file write, which `write_products` already covers on
+this shop's token. If a store's token does not, the run stops and names the
+`read_files` / `write_files` scopes rather than failing as an outage.
 """
 
 from __future__ import annotations

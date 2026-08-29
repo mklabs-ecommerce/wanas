@@ -19,7 +19,12 @@ metafields:
 | `custom.size_chart_data` | JSON | the measurements, with Arabic *and* English labels |
 
 The snippet renders the measurements as a table and the diagram beneath it,
-in a modal behind a "دليل المقاسات · Size guide" button.
+in the `<details>` panel that already sits under the product description.
+
+It **replaces** the theme's existing `snippets/size-chart.liquid`, which read
+one shop-wide page (`section.settings.size_chart`) for every product. That
+page is still honoured as a fallback for a product with no chart of its own,
+so nothing that worked before stops working.
 
 **Install** (once):
 
@@ -30,22 +35,21 @@ in a modal behind a "دليل المقاسات · Size guide" button.
    python scripts/shopify_size_charts.py --apply
    ```
 
-   It needs `DATABASE_URL` pointing at the shop's real database (that is where
-   `Product.size_chart` lives) and the `write_files` scope on the Shopify
-   token, since uploading a diagram is a file write.
+   It needs `DATABASE_URL` pointing at the shop's real database — that is
+   where `Product.size_chart` lives.
 
 2. Shopify Admin → Online Store → Themes → **⋯ → Edit code**.
-3. Under **Snippets**, *Add a new snippet* named `size-chart`, and paste this
-   file's contents in.
-4. Under **Sections**, open `main-product.liquid` and add one line where the
-   button should appear — just after the variant picker block reads well:
+3. Under **Snippets**, open `size-chart.liquid` and replace its contents with
+   this file's.
+4. Under **Sections**, open `main-product.liquid` and drop the `if` around the
+   render, so the panel no longer depends on a page being configured:
 
    ```liquid
-   {% render 'size-chart', product: product %}
+   {% render 'size-chart', product: product, page: section.settings.size_chart %}
    ```
 
-A product with no chart renders nothing at all, so that one line is safe on
-every product.
+A product with neither a chart nor a fallback page renders nothing at all, so
+that line is safe on every product.
 
 **Re-run the script** after adding a product, changing a chart, or editing
 `data/size_charts.json`. It is idempotent: diagrams already in Shopify Files
