@@ -304,7 +304,7 @@ def load_settings() -> Settings:
         dashboard_session_hours=_int("DASHBOARD_SESSION_HOURS", 12),
         shopify_store_domain=os.getenv("SHOPIFY_STORE_DOMAIN", "").strip(),
         shopify_admin_token=os.getenv("SHOPIFY_ADMIN_TOKEN", "").strip(),
-        shopify_api_version=os.getenv("SHOPIFY_API_VERSION", "2025-01").strip(),
+        shopify_api_version=os.getenv("SHOPIFY_API_VERSION", "2026-07").strip(),
         shopify_webhook_secret=_first_env(
             "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_API_SECRET", default=""
         ),

@@ -26,6 +26,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -460,8 +461,10 @@ mutation($input: ProductInput!) {
 """
 
 INVENTORY_SET = """
-mutation($input: InventorySetQuantitiesInput!) {
-  inventorySetQuantities(input: $input) { userErrors { field message } }
+mutation($input: InventorySetQuantitiesInput!, $key: String!) {
+  inventorySetQuantities(input: $input) @idempotent(key: $key) {
+    userErrors { field message }
+  }
 }
 """
 
@@ -488,6 +491,9 @@ def apply_plan(gql: Shopify, plan, loc):
             "inventoryItemId": v["inventory_item_id"],
             "locationId": loc,
             "quantity": v["qty"][1],
+            # The plan already read what Shopify has; handing it back is what
+            # satisfies the compare Shopify now requires on every set.
+            "changeFromQuantity": v["qty"][0],
         }
         for v in plan["variants"]
         if v["qty"]
@@ -500,9 +506,12 @@ def apply_plan(gql: Shopify, plan, loc):
                 "input": {
                     "name": "available",
                     "reason": "correction",
-                    "ignoreCompareQuantity": True,
                     "quantities": chunk,
-                }
+                },
+                # Shopify requires an idempotency key on this mutation. One
+                # per attempt, so a retried HTTP call is a replay and not a
+                # second correction.
+                "key": uuid.uuid4().hex,
             },
         )
         print(f"  inventory updated: {len(chunk)} variant(s)")
@@ -532,7 +541,7 @@ def main():
     gql = Shopify(
         env["SHOPIFY_STORE_DOMAIN"],
         env["SHOPIFY_ADMIN_TOKEN"],
-        env.get("SHOPIFY_API_VERSION", "2025-01"),
+        env.get("SHOPIFY_API_VERSION", "2026-07"),
     )
 
     shop = gql("{shop{name currencyCode}}")["shop"]

@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — Stock writes, on the Shopify inventory API as it is now
+
+- **Saving a quantity works again.** Every stock write carried
+  `ignoreCompareQuantity`, which Shopify has removed from
+  `InventorySetQuantitiesInput`; an unknown field fails the whole document
+  before the shelf is touched, so the dashboard's "add quantity" answered
+  "Could not save" every time. The same call now sends what 2026-01 onward
+  actually asks for: `changeFromQuantity` (required, and the replacement for
+  the long-gone `compareQuantity`) plus an `@idempotent` key.
+- **The compare is satisfied, not skipped.** A staff correction still gets
+  the last word — it reads what Shopify has, sets against that, and on a
+  genuine race re-reads and re-applies, because the number counted on the
+  shelf is still the right answer. The order path keeps its compare-and-swap:
+  it is what stops two customers buying the same last shirt.
+- **A refused stock write is now raised.** `shopify_set_inventory` discarded
+  Shopify's `userErrors`, so a rejected save would still have reported
+  success and left the numbers on screen a wish.
+- **A lost race reads as a lost race.** Shopify phrases it "The
+  changeFromQuantity argument no longer matches the persisted quantity" —
+  wording the mismatch check did not recognise, which would have told a
+  customer the store was down when somebody had simply bought the last one.
+- The same three fixes land in `scripts/shopify_sync.py`. Inventory writes
+  are refused outright below API 2026-01 rather than run without the compare,
+  and `SHOPIFY_API_VERSION` now defaults to 2026-07 — the version the shop
+  actually runs — instead of 2025-01.
+
 ## Unreleased — Delivery status, and the button that settles a COD order
 
 - **Where the parcel is, as its own column.** Shopify's order-level

@@ -119,9 +119,22 @@ mutation($productId: ID!, $media: [CreateMediaInput!]!) {
 """
 
 INVENTORY_SET = """
-mutation($input: InventorySetQuantitiesInput!) {
-  inventorySetQuantities(input: $input) {
+mutation($input: InventorySetQuantitiesInput!, $key: String!) {
+  inventorySetQuantities(input: $input) @idempotent(key: $key) {
     userErrors { field message }
+  }
+}
+"""
+
+INVENTORY_LEVELS = """
+query($ids: [ID!]!, $location: ID!) {
+  nodes(ids: $ids) {
+    ... on InventoryItem {
+      id
+      inventoryLevel(locationId: $location) {
+        quantities(names: ["available"]) { name quantity }
+      }
+    }
   }
 }
 """
@@ -129,6 +142,17 @@ mutation($input: InventorySetQuantitiesInput!) {
 
 class ProductRejected(RuntimeError):
     """Shopify refused the write and said why -- a bad request, not an outage."""
+
+
+def _is_stale_compare(errors: list[dict]) -> bool:
+    """Shopify refused because the shelf moved between our read and our write."""
+    for error in errors:
+        message = (error.get("message") or "").lower()
+        if "changefromquantity" in message.replace(" ", "") or "quantity has changed" in message:
+            return True
+        if "compare" in message and "quantity" in message:
+            return True
+    return False
 
 
 def _errors(block: dict | None, key: str) -> None:
@@ -338,36 +362,74 @@ def shopify_attach_media(product_gid: str, image_url: str) -> None:
     _errors(result.get("productCreateMedia"), "productCreateMedia")
 
 
-def shopify_set_inventory(quantities: list[dict]) -> None:
+def _available_now(client, item_ids: list[str]) -> dict[str, int]:
+    """What Shopify currently has at the shop's one location, per item."""
+    location = shopify_inventory.location_id()
+    current: dict[str, int] = {}
+    for i in range(0, len(item_ids), 100):
+        chunk = item_ids[i : i + 100]
+        data = client(INVENTORY_LEVELS, {"ids": chunk, "location": location})
+        for node in data.get("nodes") or []:
+            if not node or not node.get("id"):
+                continue
+            level = node.get("inventoryLevel") or {}
+            available = 0
+            for entry in level.get("quantities") or []:
+                if entry.get("name") == "available":
+                    available = int(entry.get("quantity") or 0)
+            current[node["id"]] = available
+    return current
+
+
+def shopify_set_inventory(quantities: list[dict], *, _retries: int = 1) -> None:
     """`quantities` is `[{"inventory_item_id", "quantity"}]`.
 
-    `ignoreCompareQuantity: True` -- unlike `shopify_inventory.py`'s
-    compare-locked writes, a staff-driven stock correction here is not racing
-    a concurrent sale the way the order path is, so there is nothing to
-    compare against.
+    A staff-driven stock correction is not racing a concurrent sale the way
+    the order path is, so unlike `shopify_inventory.py` this deliberately
+    wants the last word rather than a compare-and-swap. Shopify no longer
+    offers that as a choice: `ignoreCompareQuantity` is gone from
+    `InventorySetQuantitiesInput` (sending it fails the whole document as an
+    invalid variable, which is how a saved quantity died in production), and
+    `changeFromQuantity` is *required* (as is an `@idempotent` key). So the
+    compare is satisfied rather than skipped -- read what is there, set
+    against it, and on the rare genuine race read again and re-apply, because
+    the number the staff member counted on the shelf is still the right
+    answer.
     """
     if not quantities:
         return
     client = get_admin_client()
+    shopify_inventory.require_write_api(client.version)
+    current = _available_now(client, [q["inventory_item_id"] for q in quantities])
     payload = [
         {
             "inventoryItemId": q["inventory_item_id"],
             "locationId": shopify_inventory.location_id(),
             "quantity": q["quantity"],
+            shopify_inventory.COMPARE_FIELD: current.get(q["inventory_item_id"], 0),
         }
         for q in quantities
     ]
-    client(
+    result = client(
         INVENTORY_SET,
         {
             "input": {
                 "name": "available",
                 "reason": "correction",
-                "ignoreCompareQuantity": True,
                 "quantities": payload,
-            }
+            },
+            # One per attempt: it makes the client's retry of a throttled
+            # write a replay rather than a second correction, and the
+            # re-read below mints a fresh one for its fresh numbers.
+            "key": shopify_inventory.idempotency_key(),
         },
     )
+    errors = (result.get("inventorySetQuantities") or {}).get("userErrors") or []
+    if errors and _retries > 0 and _is_stale_compare(errors):
+        log.info("Stock moved under the correction; re-reading and re-applying")
+        shopify_set_inventory(quantities, _retries=_retries - 1)
+        return
+    _errors(result.get("inventorySetQuantities"), "inventorySetQuantities")
 
 
 def shopify_update_product_fields(product_gid: str, fields: dict) -> None:

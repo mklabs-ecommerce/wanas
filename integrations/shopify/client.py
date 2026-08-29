@@ -51,7 +51,12 @@ class ShopifyConfigError(RuntimeError):
 # config
 # --------------------------------------------------------------------------
 
-DEFAULT_API_VERSION = "2025-01"
+#: The shop runs 2026-07; this is the floor a deployment that forgets
+#: SHOPIFY_API_VERSION lands on. It must not sit below 2026-01: that is where
+#: `inventorySetQuantities` grew its required `changeFromQuantity` and
+#: `@idempotent`, and `integrations/shopify/inventory.py` refuses to write
+#: stock at all on anything older rather than oversell without the compare.
+DEFAULT_API_VERSION = "2026-07"
 
 #: How long a single customer-facing call may take before we give up and say
 #: so. A WhatsApp reply that arrives after 30s has already failed socially,

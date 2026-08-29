@@ -146,3 +146,143 @@ def test_set_refuses_bad_input(logged_in, shopify, bad):
 def test_set_requires_login(client):
     res = client.post("/dashboard/api/shopify/inventory/set", json={"updates": []})
     assert res.status_code == 401
+
+
+# --------------------------------------------------------------------------
+# what actually goes over the wire
+# --------------------------------------------------------------------------
+#
+# The fake shelf stands in for `shopify_set_inventory` itself, so nothing above
+# this line ever looks at the mutation's variables. That is exactly where a
+# saved quantity died in production: the input carried `ignoreCompareQuantity`,
+# a field Shopify has removed from `InventorySetQuantitiesInput`, and an
+# unknown field fails the whole document before the shelf is ever touched.
+
+
+class _Recorder:
+    """A client that answers like Shopify and keeps the variables it was sent."""
+
+    version = "2026-07"
+
+    def __init__(self, response=None, on_shelf=0):
+        self.calls = []
+        self.on_shelf = on_shelf
+        self.response = response or {"inventorySetQuantities": {"userErrors": []}}
+        #: Set to answer the writes yourself; the reads are answered here
+        #: either way.
+        self.handler = None
+
+    def __call__(self, query, variables=None):
+        if "inventoryLevel" in query:
+            return {
+                "nodes": [
+                    {
+                        "id": item_id,
+                        "inventoryLevel": {
+                            "quantities": [{"name": "available", "quantity": self.on_shelf}]
+                        },
+                    }
+                    for item_id in variables["ids"]
+                ]
+            }
+        self.calls.append(variables)
+        if self.handler is not None:
+            return self.handler(len(self.calls))
+        return self.response
+
+
+@pytest.fixture()
+def recorder(monkeypatch):
+    from integrations.shopify import admin_products, inventory as shopify_inventory
+
+    rec = _Recorder()
+    monkeypatch.setattr(admin_products, "get_admin_client", lambda: rec)
+    monkeypatch.setattr(shopify_inventory, "location_id", lambda: "gid://shopify/Location/1")
+    return rec
+
+
+@pytest.mark.no_shopify
+def test_the_stock_write_sends_only_fields_shopify_still_has(recorder):
+    from integrations.shopify.admin_products import shopify_set_inventory
+
+    recorder.on_shelf = 2
+    shopify_set_inventory([{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 7}])
+
+    sent = recorder.calls[0]["input"]
+    assert "ignoreCompareQuantity" not in sent
+    assert sent["quantities"] == [
+        {
+            "inventoryItemId": "gid://shopify/InventoryItem/9",
+            "locationId": "gid://shopify/Location/1",
+            "quantity": 7,
+            # Not skipped, satisfied: Shopify requires the compare, so the
+            # write states the number it just read rather than the number the
+            # staff member is replacing it with.
+            "changeFromQuantity": 2,
+        }
+    ]
+    assert recorder.calls[0]["key"], "the mutation is refused without one"
+
+
+@pytest.mark.no_shopify
+def test_a_shelf_that_moved_mid_correction_is_re_read_and_re_applied(recorder):
+    """Staff counted seven on the shelf. Somebody sold one while the form was
+    open. Seven is still the right answer -- the correction must land, not
+    bounce back as an error."""
+    from integrations.shopify.admin_products import shopify_set_inventory
+
+    recorder.on_shelf = 2
+    stale = {
+        "inventorySetQuantities": {
+            "userErrors": [
+                {
+                    "field": None,
+                    "message": "The changeFromQuantity argument no longer matches the persisted quantity.",
+                }
+            ]
+        }
+    }
+
+    def someone_sold_one(attempt):
+        if attempt == 1:
+            recorder.on_shelf = 1
+            return stale
+        return {"inventorySetQuantities": {"userErrors": []}}
+
+    recorder.handler = someone_sold_one
+    shopify_set_inventory([{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 7}])
+
+    assert len(recorder.calls) == 2
+    assert recorder.calls[0]["input"]["quantities"][0]["changeFromQuantity"] == 2
+    assert recorder.calls[1]["input"]["quantities"][0]["changeFromQuantity"] == 1
+    assert recorder.calls[1]["input"]["quantities"][0]["quantity"] == 7
+    assert recorder.calls[0]["key"] != recorder.calls[1]["key"]
+
+
+@pytest.mark.no_shopify
+def test_an_api_version_that_cannot_compare_is_refused_before_the_write(recorder):
+    from integrations.shopify.admin_products import shopify_set_inventory
+    from integrations.shopify.client import ShopifyUnavailable
+
+    recorder.version = "2025-01"
+
+    with pytest.raises(ShopifyUnavailable, match="SHOPIFY_API_VERSION"):
+        shopify_set_inventory(
+            [{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 7}]
+        )
+
+    assert recorder.calls == []
+
+
+@pytest.mark.no_shopify
+def test_a_refused_stock_write_is_raised_not_swallowed(recorder):
+    """Absent this, Shopify could reject the save and the dashboard would
+    still say it worked -- the numbers on screen would be a wish."""
+    from integrations.shopify.admin_products import ProductRejected, shopify_set_inventory
+
+    recorder.response = {
+        "inventorySetQuantities": {"userErrors": [{"field": None, "message": "no such item"}]}
+    }
+
+    with pytest.raises(ProductRejected, match="no such item"):
+        shopify_set_inventory([{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 7}])

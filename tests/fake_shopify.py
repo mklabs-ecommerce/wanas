@@ -5,7 +5,7 @@ here, every test that places an order would only prove that a missing token
 refuses -- which is true, and useless.
 
 This is not a mock that records calls and asserts on them. It is a working
-shelf: it holds quantities, honours `compareQuantity`, and refuses to go
+shelf: it holds quantities, honours the compare-and-swap, and refuses to go
 negative, so the tests exercise the real reserve-and-compensate logic rather
 than a script of expected calls. Seeded from the same `Variant` rows the tests
 already assert against, so "Shopify agrees with wanas.db" is the default and a

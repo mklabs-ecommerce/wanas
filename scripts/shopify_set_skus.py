@@ -296,7 +296,7 @@ def main():
     shop = Shopify(
         env["SHOPIFY_STORE_DOMAIN"],
         env["SHOPIFY_ADMIN_TOKEN"],
-        env.get("SHOPIFY_API_VERSION", "2025-01"),
+        env.get("SHOPIFY_API_VERSION", "2026-07"),
     )
 
     db_products, db_variants = read_db()

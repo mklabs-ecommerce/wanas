@@ -143,7 +143,7 @@ def test_sold_out_on_shopify_is_refused_even_when_the_local_row_disagrees(priced
 def test_stock_that_moved_between_the_check_and_the_write_is_not_oversold(
     priced, shopify, monkeypatch
 ):
-    """`compareQuantity` is the guard. Shopify refuses the adjustment rather
+    """The compare-and-swap is the guard. Shopify refuses the adjustment rather
     than letting two orders both take the last unit.
 
     The storefront sells the last one in the gap between our read and our
@@ -269,3 +269,114 @@ def test_a_successful_order_does_not_hand_the_stock_back(priced, shopify):
     assert "order_id" in place(priced)
     assert shopify.qty(VARIANT) == 3
     assert shopify.released == []
+
+
+# --------------------------------------------------------------------------
+# the compare-and-swap itself
+# --------------------------------------------------------------------------
+#
+# Everything above reserves through the fake shelf, which honours the compare
+# without caring what the field is called. Shopify does care: it renamed
+# `compareQuantity` to `changeFromQuantity` in 2026-01, and versions before
+# that have no compare field at all -- a reserve there would be a
+# last-write-wins set, which is the oversell this module exists to prevent.
+
+
+class _Recorder:
+    def __init__(self, version, errors=()):
+        self.version = version
+        self.calls = []
+        self.errors = list(errors)
+
+    def __call__(self, query, variables=None):
+        self.calls.append(variables)
+        return {"inventorySetQuantities": {"userErrors": self.errors}}
+
+
+@pytest.mark.no_shopify
+def test_a_reservation_names_the_quantity_it_expects_to_find(monkeypatch):
+    from integrations.shopify import inventory as shopify_inventory
+
+    rec = _Recorder("2026-07")
+    monkeypatch.setattr(shopify_inventory, "get_client", lambda: rec)
+    monkeypatch.setattr(shopify_inventory, "location_id", lambda: "gid://shopify/Location/1")
+
+    shopify_inventory.reserve(
+        [{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 2, "expected": 5}],
+        "W-1",
+    )
+
+    line = rec.calls[0]["input"]["quantities"][0]
+    assert line["quantity"] == 3
+    assert line["changeFromQuantity"] == 5, "the shelf we believe we read"
+    assert "compareQuantity" not in line
+    assert "ignoreCompareQuantity" not in rec.calls[0]["input"]
+    assert rec.calls[0]["key"], "Shopify refuses the mutation without one"
+
+
+@pytest.mark.no_shopify
+def test_an_api_version_without_the_compare_refuses_rather_than_oversells(monkeypatch):
+    """Better to tell the customer the store is unavailable than to sell the
+    last shirt twice because the guard quietly was not there."""
+    from integrations.shopify import inventory as shopify_inventory
+    from integrations.shopify.client import ShopifyUnavailable
+
+    rec = _Recorder("2025-01")
+    monkeypatch.setattr(shopify_inventory, "get_client", lambda: rec)
+    monkeypatch.setattr(shopify_inventory, "location_id", lambda: "gid://shopify/Location/1")
+
+    with pytest.raises(ShopifyUnavailable, match="SHOPIFY_API_VERSION"):
+        shopify_inventory.reserve(
+            [{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 1, "expected": 5}],
+            "W-1",
+        )
+
+    assert rec.calls == [], "nothing may reach Shopify unguarded"
+
+
+@pytest.mark.no_shopify
+def test_shopifys_own_words_for_a_lost_race_are_read_as_one(monkeypatch):
+    """Verbatim from a live refusal. Read as anything else, the customer is
+    told the store is down when in truth somebody just bought the last one --
+    and the honest answer, a re-read of the shelf, never happens."""
+    from integrations.shopify import inventory as shopify_inventory
+
+    rec = _Recorder(
+        "2026-07",
+        errors=[
+            {
+                "field": None,
+                "code": None,
+                "message": (
+                    "The changeFromQuantity argument no longer matches "
+                    "the persisted quantity."
+                ),
+            }
+        ],
+    )
+    monkeypatch.setattr(shopify_inventory, "get_client", lambda: rec)
+    monkeypatch.setattr(shopify_inventory, "location_id", lambda: "gid://shopify/Location/1")
+
+    with pytest.raises(shopify_inventory.StockMoved):
+        shopify_inventory.reserve(
+            [{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 1, "expected": 5}],
+            "W-1",
+        )
+
+
+@pytest.mark.no_shopify
+def test_two_reservations_of_the_same_thing_are_two_writes(monkeypatch):
+    """The idempotency key Shopify demands is per attempt, not per order. A
+    key derived from the order and the numbers would make an item removed and
+    added back come off the shelf once and be sold twice."""
+    from integrations.shopify import inventory as shopify_inventory
+
+    rec = _Recorder("2026-07")
+    monkeypatch.setattr(shopify_inventory, "get_client", lambda: rec)
+    monkeypatch.setattr(shopify_inventory, "location_id", lambda: "gid://shopify/Location/1")
+
+    change = [{"inventory_item_id": "gid://shopify/InventoryItem/9", "quantity": 1, "expected": 5}]
+    shopify_inventory.reserve(change, "W-1")
+    shopify_inventory.reserve(change, "W-1")
+
+    assert rec.calls[0]["key"] != rec.calls[1]["key"]
