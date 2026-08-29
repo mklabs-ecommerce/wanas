@@ -2683,7 +2683,7 @@ VIEWS.overview = {
     const rows = [];
     if (!inbox.__error) {
       inbox.conversations.filter((c) => c.paused).slice(0, 4).forEach((c) => rows.push({
-        tone: "rose", title: c.customer_name || c.external_id,
+        tone: "rose", title: c.display_name || c.external_id,
         sub: TR`${reasonLabel(c.reason)} · مستني من ${ago(c.waiting_since)}`,
         action: () => { state.inbox.selected = c; go("inbox"); openConversation(c.channel, c.external_id); },
       }));
@@ -2886,7 +2886,7 @@ VIEWS.inbox = {
         <span class="avatar" data-ch="${esc(c.channel)}" aria-hidden="true">${esc(info.short)}</span>
         <span class="meta">
           <span class="line1">
-            <span class="nm">${esc(c.customer_name || c.external_id)}</span>
+            <span class="nm">${esc(c.display_name || c.external_id)}</span>
             <span class="tm">${esc(ago(c.updated_at))}</span>
           </span>
           <span class="pv">${esc(c.preview || "—")}</span>
@@ -2924,8 +2924,12 @@ function renderThread(data) {
   const info = channelInfo(data.channel);
   $("#threadAvatar").textContent = info.short;
   $("#threadAvatar").dataset.ch = data.channel;
-  const summary = state.inbox.items.find((c) => c.channel === data.channel && c.external_id === data.external_id);
-  $("#threadName").textContent = (summary && summary.customer_name) || data.external_id;
+  // The server names the conversation (`web.customer_labels`). This used to
+  // hunt the loaded inbox list for a matching row, so opening a thread from
+  // search, from the command palette or from the dashboard's attention card
+  // -- anywhere the row was not in `state.inbox.items` -- fell back to the
+  // raw id even for a customer whose name we hold.
+  $("#threadName").textContent = data.display_name || data.external_id;
   $("#threadSub").innerHTML = TR`${chipHTML(info.label, info.tone, "bar")}
     <span class="num" data-copy="${esc(data.external_id)}" data-copy-what="المعرّف"
       style="cursor:pointer" title="اضغط للنسخ">${esc(data.external_id)}</span>
@@ -3064,6 +3068,9 @@ function renderContext(data, summary) {
   blocks.push(TR`<div class="ctx-block">
     <h3>الحالة</h3>
     <div class="kv"><span class="k">القناة</span><span class="v">${esc(channelInfo(data.channel).label)}</span></div>
+    ${data.customer_name ? TR`<div class="kv"><span class="k">الاسم</span><span class="v">${esc(data.customer_name)}</span></div>` : ""}
+    ${data.customer_phone && data.customer_phone !== data.external_id
+      ? TR`<div class="kv"><span class="k">التليفون</span><span class="v num">${esc(data.customer_phone)}</span></div>` : ""}
     <div class="kv"><span class="k">المعرّف</span><span class="v num">${esc(data.external_id)}</span></div>
     <div class="kv"><span class="k">المسؤول</span><span class="v">${data.paused ? tr("الفريق") : tr("البوت")}</span></div>
     ${summary ? TR`<div class="kv"><span class="k">آخر نشاط</span><span class="v">${esc(dateTime(summary.updated_at))}</span></div>` : ""}
@@ -4658,7 +4665,7 @@ VIEWS.analytics = {
         [tr("المحادثة"), tr("القناة"), { label: tr("الرسايل"), num: true }, { label: tr("من العميل"), num: true }, tr("آخر نشاط")],
         data.busiest_conversations.map((c) => `
           <tr data-clickable data-ch="${esc(c.channel)}" data-ext="${esc(c.external_id)}">
-            <td class="num cellmain" dir="ltr">${esc(c.external_id)}</td>
+            <td class="cellmain">${esc(c.display_name || c.external_id)}</td>
             <td>${chipHTML(channelInfo(c.channel).label, channelInfo(c.channel).tone, "bar")}</td>
             <td class="num">${num(c.messages)}</td>
             <td class="num">${num(c.customer_messages)}</td>

@@ -29,6 +29,7 @@ from sqlalchemy import select
 from common.timeutil import as_aware
 from dashboard import ranges
 from dashboard.guard import require_permission
+from dashboard.web import client_directory, customer_labels
 from domain.db import session_scope
 from domain.models import (
     ChannelIdentity,
@@ -143,6 +144,9 @@ def insights(
         tool_totals: Counter[str] = Counter()
         totals = Counter()
         busiest: list[dict] = []
+        # Named the same way the inbox names them -- a table of raw ids is a
+        # table nobody can act on.
+        directory = client_directory(db)
 
         for row in rows:
             updated = as_aware(row.updated_at)
@@ -162,6 +166,11 @@ def insights(
             totals["media_messages"] += facts["media"]
             busiest.append(
                 {
+                    **customer_labels(
+                        directory.get((row.channel, row.external_id)),
+                        row.channel,
+                        row.external_id,
+                    ),
                     "channel": row.channel,
                     "external_id": row.external_id,
                     "messages": facts["customer"] + facts["bot"] + facts["staff"],

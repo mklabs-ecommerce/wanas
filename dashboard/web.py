@@ -46,10 +46,11 @@ from sqlalchemy import and_, or_, select
 from assistant import messages as msg, session as session_store
 from assistant.display import display_history
 from assistant.media_serving import resolve_servable_path
+from common.identifiers import is_phone_number
 from config.settings import settings
 from dashboard.guard import require_permission
 from domain.db import session_scope
-from domain.models import ChannelIdentity, QueueKind, SessionRow
+from domain.models import ChannelIdentity, Client, QueueKind, SessionRow
 from domain.services import (
     auth,
     conversation_reset,
@@ -158,8 +159,64 @@ def _preview(history: list[dict]) -> str:
     return ""
 
 
-def _conversation_summary(row: SessionRow, *, paused: bool, handoff) -> dict:
+def client_directory(db) -> dict[tuple[str, str], Client]:
+    """Every conversation that belongs to a known customer, keyed by
+    `(channel, external_id)`.
+
+    Two queries for the whole page, never one per conversation. A link exists
+    only once the customer has confirmed it or placed an order
+    (`domain/services/identities.py`), so a conversation missing from this map
+    is a person nobody has a name for yet -- not an error.
+    """
+    links = {
+        (i.channel, i.external_id): i.client_id
+        for i in db.scalars(select(ChannelIdentity)).all()
+        if i.client_id is not None
+    }
+    if not links:
+        return {}
+    clients = {c.client_id: c for c in db.scalars(select(Client)).all()}
+    return {key: clients[cid] for key, cid in links.items() if cid in clients}
+
+
+#: The one channel whose `external_id` can itself be a phone number. On
+#: Instagram it is an IGSID -- all digits, and `is_phone_number` says yes to
+#: it, which is the whole reason this is decided by channel rather than by
+#: looking at the string.
+PHONE_CHANNELS = ("whatsapp",)
+
+
+def customer_labels(client: Client | None, channel: str, external_id: str) -> dict:
+    """What to call a conversation, decided once and server-side.
+
+    The customer's name, else their phone number, else the id the channel
+    handed us. The phone matters because `external_id` is not always one: a
+    WhatsApp customer using a username arrives as a business-scoped id
+    (`EG.1754797805572316`) and an Instagram customer as an IGSID, and a
+    screenful of those is a screenful of nothing anybody can act on. Where the
+    customer *is* known, their real number is on the client record whatever
+    the channel calls them.
+
+    `display_name` is the one the UI titles with, so the inbox list, the open
+    thread, the dashboard's attention card and the busiest-conversations table
+    cannot drift apart -- the thread header used to work it out for itself
+    from the list it happened to have loaded, and fell back to the raw id
+    whenever the conversation was opened from anywhere else.
+    """
+    name = ((client.full_name if client else "") or "").strip()
+    phone = ((client.phone if client else "") or "").strip()
+    if not phone and channel in PHONE_CHANNELS and is_phone_number(external_id):
+        phone = external_id
     return {
+        "customer_name": name or None,
+        "customer_phone": phone or None,
+        "display_name": name or phone or external_id,
+    }
+
+
+def _conversation_summary(row: SessionRow, *, paused: bool, handoff, client: Client | None = None) -> dict:
+    return {
+        **customer_labels(client, row.channel, row.external_id),
         "channel": row.channel,
         "external_id": row.external_id,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -306,11 +363,13 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
             ]
             rows.extend(db.scalars(select(SessionRow).where(or_(*conditions))).all())
 
+        directory = client_directory(db)
         items = [
             _conversation_summary(
                 row,
                 paused=(row.channel, row.external_id) in paused_keys,
                 handoff=handoffs.get((row.channel, row.external_id)),
+                client=directory.get((row.channel, row.external_id)),
             )
             for row in rows
         ]
@@ -341,6 +400,9 @@ def conversation_detail(
 
         return JSONResponse(
             {
+                **customer_labels(
+                    identities.client_for(db, channel, external_id), channel, external_id
+                ),
                 "channel": channel,
                 "external_id": external_id,
                 "history": display_history(history),

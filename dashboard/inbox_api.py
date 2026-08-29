@@ -29,9 +29,14 @@ from sqlalchemy import select
 
 from common.timeutil import as_aware
 from dashboard.guard import require_permission
-from dashboard.web import _conversation_summary, _open_handoffs, _paused_identity_keys
+from dashboard.web import (
+    _conversation_summary,
+    _open_handoffs,
+    _paused_identity_keys,
+    client_directory,
+)
 from domain.db import session_scope
-from domain.models import ChannelIdentity, Client, InstagramCommentReply, SessionRow
+from domain.models import InstagramCommentReply, SessionRow
 
 router = APIRouter(prefix="/dashboard/api/inbox", tags=["dashboard-inbox"])
 
@@ -119,36 +124,34 @@ def inbox(
         rows = list(db.scalars(select(SessionRow).order_by(SessionRow.updated_at.desc())).all())
 
         # A conversation belonging to a known customer shows their name, not
-        # a bare phone number. Two queries, not one per row.
-        identities = {
-            (i.channel, i.external_id): i.client_id
-            for i in db.scalars(select(ChannelIdentity)).all()
-            if i.client_id is not None
-        }
-        clients = {c.client_id: c for c in db.scalars(select(Client)).all()} if identities else {}
+        # a bare phone number -- and where there is no name, their number
+        # rather than whatever id the channel happened to hand us. Decided by
+        # `web.customer_labels`, the one place that answers it, so this list
+        # and the thread it opens cannot disagree.
+        directory = client_directory(db)
 
         needle = (q or "").strip().lower()
         items: list[dict] = []
         for row in rows:
             key = (row.channel, row.external_id)
             history = row.history or []
-            client = clients.get(identities.get(key)) if identities else None
+            client = directory.get(key)
 
             if needle:
                 hit = (
                     needle in row.external_id.lower()
                     or (client is not None and needle in (client.full_name or "").lower())
+                    or (client is not None and needle in (client.phone or "").lower())
                     or _searchable(history, needle)
                 )
                 if not hit:
                     continue
 
             summary = _conversation_summary(
-                row, paused=key in paused_keys, handoff=handoffs.get(key)
+                row, paused=key in paused_keys, handoff=handoffs.get(key), client=client
             )
             summary["last_role"] = _last_role(history)
             summary["message_count"] = _message_count(history)
-            summary["customer_name"] = client.full_name if client else None
             summary["client_id"] = client.client_id if client else None
             items.append(summary)
 

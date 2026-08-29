@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased — A conversation is called by its customer's name
+
+The inbox is titled by the customer's name where the shop knows it, their
+phone number where it does not, and the channel's own id only when there is
+nothing else — decided once, in `web.customer_labels`, and used by the inbox
+list, the open thread, the dashboard's attention card and the
+busiest-conversations table.
+
+- **The open thread used to name itself from whichever list was loaded.** It
+  looked its own row up in `state.inbox.items`, so a conversation opened from
+  search, from the command palette, or from the attention card showed a raw id
+  for a customer whose name was right there in the database. The endpoint
+  answers it now, so those four surfaces cannot drift apart.
+- **A phone number, not whatever id the channel handed us.** Since Meta
+  started sending business-scoped ids, a WhatsApp customer using a username
+  arrives as `EG.1754797805572316` and nothing else; where that person is a
+  known customer their real number is on the client record, and it is what the
+  inbox shows. Scoped to WhatsApp on purpose: an Instagram IGSID is all
+  digits, so `is_phone_number` says yes to it, and it is not a number anybody
+  can ring.
+- The thread's context panel gained the name and the phone as their own rows,
+  and inbox search now matches a saved phone number as well as the id — the
+  two are no longer the same string for every customer.
+
 ## Unreleased — Three things the Orders screen was getting wrong
 
 - **The order page stopped responding after opening the Ship form.** The

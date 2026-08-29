@@ -233,3 +233,85 @@ def test_an_automated_push_does_not_count_as_answering_the_customer(logged_in, s
     with SessionLocal() as db:
         history = session_store.transcript(db, "whatsapp", "201000000998")
     assert [m.get("by") for m in history if m["role"] == "assistant"] == ["system"]
+
+
+# --------------------------------------------------------------------------
+# what a conversation is called
+#
+# One rule, in `web.customer_labels`: the customer's name, else their phone
+# number, else the id the channel handed us. Tested through the endpoints
+# because the bug it closes was two surfaces answering it differently -- the
+# open thread worked the title out from whichever list the page happened to
+# have loaded, and showed a raw id whenever the row was not in it.
+# --------------------------------------------------------------------------
+
+
+def _link_client(session, channel, external_id, *, name, phone):
+    from domain.models import Client
+
+    client = Client(full_name=name, phone=phone, address="", governorate="Cairo")
+    session.add(client)
+    session.flush()
+    identity = identities.get_or_create(session, channel, external_id)
+    identity.client_id = client.client_id
+    session.commit()
+    return client
+
+
+def test_a_known_customer_is_listed_by_name(logged_in, seeded):
+    _conversation(seeded, "whatsapp", "201000000111", texts=[("user", "السلام عليكم")])
+    _link_client(seeded, "whatsapp", "201000000111", name="سارة أحمد", phone="201000000111")
+
+    row = logged_in.get("/dashboard/api/inbox").json()["conversations"][0]
+    assert row["customer_name"] == "سارة أحمد"
+    assert row["display_name"] == "سارة أحمد"
+
+
+def test_a_customer_who_never_gave_a_name_is_listed_by_phone(logged_in, seeded):
+    _conversation(seeded, "whatsapp", "201000000222", texts=[("user", "بكام؟")])
+
+    row = logged_in.get("/dashboard/api/inbox").json()["conversations"][0]
+    assert row["customer_name"] is None
+    assert row["display_name"] == "201000000222"
+    assert row["customer_phone"] == "201000000222"
+
+
+def test_a_business_scoped_id_shows_the_real_number_when_we_know_it(logged_in, seeded):
+    """A WhatsApp customer using a username arrives as `EG.1754797805572316`
+    and nothing else. That is not a phone number and not something to show a
+    staff member -- but their real one is on the client record."""
+    _conversation(seeded, "whatsapp", "EG.1754797805572316", texts=[("user", "عايز أطلب")])
+    _link_client(seeded, "whatsapp", "EG.1754797805572316", name="", phone="201000000333")
+
+    row = logged_in.get("/dashboard/api/inbox").json()["conversations"][0]
+    assert row["display_name"] == "201000000333"
+
+
+def test_an_unknown_business_scoped_id_falls_back_to_the_id_itself(logged_in, seeded):
+    """Nothing on this conversation says who it is. The id is all there is,
+    and inventing a number would be worse than showing it."""
+    _conversation(seeded, "instagram_dm", "17841400000000", texts=[("user", "hi")])
+
+    row = logged_in.get("/dashboard/api/inbox").json()["conversations"][0]
+    assert row["customer_phone"] is None
+    assert row["display_name"] == "17841400000000"
+
+
+def test_the_open_thread_is_named_by_the_server_not_by_the_list(logged_in, seeded):
+    """The thread header used to read the name off `state.inbox.items`, so a
+    conversation opened from search or the command palette -- anywhere the row
+    was not loaded -- showed the raw id for a customer we could name."""
+    _conversation(seeded, "whatsapp", "201000000444", texts=[("user", "أهلاً")])
+    _link_client(seeded, "whatsapp", "201000000444", name="منى", phone="201000000444")
+
+    detail = logged_in.get("/dashboard/api/conversations/whatsapp/201000000444").json()
+    assert detail["display_name"] == "منى"
+    assert detail["customer_phone"] == "201000000444"
+
+
+def test_the_inbox_search_finds_a_customer_by_their_saved_number(logged_in, seeded):
+    _conversation(seeded, "whatsapp", "EG.1754797805572316", texts=[("user", "عايز أطلب")])
+    _link_client(seeded, "whatsapp", "EG.1754797805572316", name="هاني", phone="201000000555")
+
+    found = logged_in.get("/dashboard/api/inbox?q=201000000555").json()["conversations"]
+    assert [c["display_name"] for c in found] == ["هاني"]
