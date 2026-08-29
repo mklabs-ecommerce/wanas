@@ -2,6 +2,27 @@
 
 ## Unreleased — Adding a product, with the pictures on it
 
+- **A created product was invisible three different ways**, all of them
+  Shopify defaults nobody had had to think about while products were made by
+  hand in Admin:
+  - **Vendor** came out as the *store's* name ("My Store"), not the brand.
+    `SHOPIFY_VENDOR` (default `Wanas Gallery`) is now stamped on every
+    product this app creates.
+  - **It was on no sales channel.** `status: ACTIVE` only means "not a
+    draft": a new product has no `publishedAt`, no storefront url, and
+    appears in no collection *on the site*. It is now published to the Online
+    Store. That needs `read_publications`/`write_publications`; a shop whose
+    token lacks them still gets its product -- and gets told, in the create
+    panel, that it is not on the website yet.
+  - **Category is a picker now.** Every category collection on this shop is a
+    *smart* collection whose only rule is `TYPE EQUALS "<something>"`, so a
+    product typed "T-shirt" instead of "T-Shirts" joins nothing at all. The
+    field offers the types the shop already uses and still lets a new one be
+    typed.
+- Choosing a **manual** collection now actually puts the product in it. A
+  smart one is labelled "(automatic)" in the picker and left to its rules --
+  asking Shopify to add a manual member to one only earns a refusal.
+
 - **Photos come off the staff member's own laptop now.** The new-product form
   had one field for an image *url*, which meant a picture had to already be
   hosted somewhere before a product could show it. Each variant row now takes

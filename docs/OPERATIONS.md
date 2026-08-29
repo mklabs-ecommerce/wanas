@@ -34,7 +34,19 @@ something looks wrong.
       (config) refusal from the dashboard action that needed it, not a crash.
       `scripts/shopify_size_charts.py` uploads the size-chart diagrams to
       Shopify Files, which `write_products` already covers -- it says so
-      plainly if a store's token does not
+      plainly if a store's token does not. Deleting a file is the other half
+      and needs `write_files`, which nothing here does automatically
+- [ ] `read_publications` + `write_publications`, if products are to be
+      created from the dashboard. **`status: ACTIVE` is not the same as being
+      on the website.** A product Shopify creates is on no sales channel: no
+      `publishedAt`, no storefront url, and it shows in no collection on the
+      site. Without these two scopes the product is still created and still
+      sells through the bot, and the create panel says in as many words that
+      it is not on the website yet -- somebody then has to publish it by hand
+      in Admin. With them, `shopify_publish_to_online_store` does it
+- [ ] `SHOPIFY_VENDOR` set to the brand name (default `Wanas Gallery`).
+      Shopify stamps a new product's vendor with the *store's* name unless
+      told otherwise, which is not what the products already on the shelf say
 - [ ] `SHOPIFY_WEBHOOK_SECRET` set — without it orders stay `Confirmed`
       forever and no tracking message ever goes out. The subscriptions
       themselves register automatically on boot once `SHOPIFY_STORE_DOMAIN`

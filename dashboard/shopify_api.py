@@ -396,6 +396,27 @@ def list_size_charts(wanas_staff: str | None = Cookie(default=None)) -> JSONResp
     )
 
 
+@router.get("/product-types")
+def list_product_types(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """The `productType` values the shop already uses.
+
+    Not cosmetic: every one of this shop's category collections is a *smart*
+    collection whose only rule is `TYPE EQUALS "<something>"`. A product typed
+    "Tshirt" instead of "T-Shirts" lands in no collection at all and is
+    invisible everywhere the site groups by category -- so the field offers
+    what exists and lets a genuinely new type be typed anyway.
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+    try:
+        types = shopify_admin_products.product_types()
+    except (ShopifyUnavailable, ShopifyConfigError) as exc:
+        return _outage(exc)
+    return JSONResponse({"product_types": types})
+
+
 # --------------------------------------------------------------------------
 # uploads
 # --------------------------------------------------------------------------
@@ -515,6 +536,7 @@ def create_product(payload: dict = Body(...), wanas_staff: str | None = Cookie(d
                 images=payload.get("images") or None,
                 size_chart_file_gid=payload.get("size_chart_file_gid") or None,
                 size_chart_url=payload.get("size_chart_url") or None,
+                collection_gid=payload.get("collection_gid") or None,
             )
         except shopify_admin_products.ProductRejected as exc:
             return JSONResponse({"error": "product_rejected", "detail": str(exc)}, status_code=409)

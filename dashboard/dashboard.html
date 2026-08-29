@@ -1189,6 +1189,7 @@ const EN = {
   "التشغيل اليومي": "Day to day",
   "التصنيف": "Category",
   "التصنيف *": "Category *",
+  "التصنيف هو اللي بيحط المنتج في مجموعته على الموقع، فاختاره من القايمة.": "The category is what puts the product in its collection on the site, so pick one from the list.",
   "التعديل مانفذش": "The edit did not go through",
   "التعليق": "Comment",
   "التعليقات": "Comments",
@@ -1300,6 +1301,7 @@ const EN = {
   "المنتج اتحدّث": "Product updated",
   "المنتج اتشال": "Product removed",
   "المنتج اتعمل": "Product created",
+  "المنتج اتعمل، بس": "Product created, but",
   "المنتج ده مالوش نسخة محلية": "This product has no local copy",
   "المنتج مالوش نسخة محلية": "The product has no local copy",
   "المنتجات": "Products",
@@ -1355,6 +1357,7 @@ const EN = {
   "تعليقات انستجرام": "Instagram comments",
   "تعليقات كتير": "Comment flood",
   "تفعيل الحساب": "Activate account",
+  "تلقائية": "automatic",
   "تمام، اتفهم": "Got it",
   "تنبيه": "Alert",
   "ج.م": "EGP",
@@ -1617,7 +1620,6 @@ const EN = {
   "نظام إدارة المتجر": "Store operations",
   "نظرة سريعة على المتجر والمحادثات": "A quick look at the store and the conversations",
   "نهاري": "Light",
-  "هودي": "Hoodie",
   "هيتسجل متسلّم على شوبيفاي.": " will be recorded as delivered on Shopify.",
   "هيتسجل متسلّم، وبما إنه دفع عند الاستلام هيتسجل مدفوع كمان.": " will be recorded as delivered, and since it is cash on delivery it will be recorded as paid too.",
   "هيتسجل مدفوع على شوبيفاي. مفيش رجوع في الخطوة دي.": " will be recorded as paid on Shopify. This step cannot be undone.",
@@ -3677,7 +3679,8 @@ async function openProduct(gid) {
       <input class="inp" id="pTitle" value="${esc(product.title)}">
       <div class="grid g-3" style="margin-top:var(--s-3)">
         <div><label class="lbl" for="pCat">التصنيف</label>
-          <input class="inp" id="pCat" value="${esc(product.category || "")}"></div>
+          <input class="inp" id="pCat" list="pCatList" value="${esc(product.category || "")}">
+          <datalist id="pCatList"></datalist></div>
         <div><label class="lbl" for="pDept">القسم</label>
           <input class="inp" id="pDept" value="${esc(local ? local.department || "" : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pColl">المجموعة</label>
@@ -3703,6 +3706,7 @@ async function openProduct(gid) {
      collection by that name -- an edit should not silently drop a field
      nobody touched. */
   if (local) fillCollectionPicker($("#pColl", body), local.collection || "");
+  fillProductTypes("pCatList");
 
   const save = el("button", {
     class: "btn primary", html: TR`${icon("check", 15)} احفظ التغييرات`,
@@ -3775,10 +3779,31 @@ async function fillCollectionPicker(select, current = "") {
     if (current) select.insertAdjacentHTML("afterbegin", `<option value="${esc(current)}" selected>${esc(current)}</option>`);
     return;
   }
-  const titles = data.collections.map((c) => c.title);
-  if (current && !titles.includes(current)) titles.unshift(current);
+  const rows = data.collections.map((c) => ({ title: c.title, gid: c.id, smart: !!c.smart }));
+  if (current && !rows.some((r) => r.title === current)) rows.unshift({ title: current, gid: "", smart: false });
   select.innerHTML = TR`<option value="">من غير مجموعة</option>` +
-    titles.map((t) => `<option value="${esc(t)}"${t === current ? " selected" : ""}>${esc(t)}</option>`).join("");
+    rows.map((r) => `<option value="${esc(r.title)}" data-gid="${esc(r.gid)}" data-smart="${r.smart ? "1" : ""}"${
+      r.title === current ? " selected" : ""}>${esc(r.title)}${r.smart ? " (" + esc(tr("تلقائية")) + ")" : ""}</option>`).join("");
+}
+
+/* The gid to actually put the product in, or "" for a smart collection --
+   whose membership is its rules' business, and whose rule on this shop is the
+   product's category. Sending one anyway just earns a refusal from Shopify. */
+function joinableCollection(select) {
+  const option = select && select.selectedOptions[0];
+  if (!option || option.dataset.smart) return undefined;
+  return option.dataset.gid || undefined;
+}
+
+/* Every category collection on this shop is a smart collection whose only
+   rule is TYPE EQUALS "<something>". A product typed "T-shirt" instead of
+   "T-Shirts" therefore lands in no collection at all -- so the field offers
+   what the shop already uses, while still letting a new type be typed. */
+async function fillProductTypes(listId) {
+  const data = await api("/dashboard/api/shopify/product-types", { quiet: true }).catch(() => ({ __error: 1 }));
+  const list = document.getElementById(listId);
+  if (!list || data.__error || !data.product_types) return;
+  list.innerHTML = data.product_types.map((t) => `<option value="${esc(t)}"></option>`).join("");
 }
 
 async function uploadImage(file, purpose) {
@@ -3792,7 +3817,10 @@ function productCreateForm() {
   const body = overlay.drawer(tr("منتج جديد"), TR`
     <div class="grid g-2">
       <div><label class="lbl" for="nTitle">اسم المنتج *</label><input class="inp" id="nTitle" placeholder="مثلاً: هودي ونس الشتوي"></div>
-      <div><label class="lbl" for="nCat">التصنيف *</label><input class="inp" id="nCat" placeholder="هودي"></div>
+      <div><label class="lbl" for="nCat">التصنيف *</label>
+        <input class="inp" id="nCat" list="nCatList" placeholder="T-Shirts">
+        <datalist id="nCatList"></datalist>
+        <div class="hint" style="margin-top:var(--s-1)">التصنيف هو اللي بيحط المنتج في مجموعته على الموقع، فاختاره من القايمة.</div></div>
       <div><label class="lbl" for="nDept">القسم *</label><input class="inp" id="nDept" placeholder="رجالي"></div>
       <div>
         <label class="lbl" for="nColl">المجموعة</label>
@@ -3825,6 +3853,7 @@ function productCreateForm() {
      Shopify does not have and a chart id `size_charts.json` does not have are
      the same bug -- a value that looks saved and answers nothing. */
   fillCollectionPicker($("#nColl", body));
+  fillProductTypes("nCatList");
 
   (async () => {
     const charts = await api("/dashboard/api/shopify/size-charts", { quiet: true }).catch(() => ({ __error: 1 }));
@@ -3872,7 +3901,9 @@ function productCreateForm() {
     const payload = {
       title: $("#nTitle").value.trim(), category: $("#nCat").value.trim(),
       department: $("#nDept").value.trim(), description: $("#nDesc").value.trim(),
-      collection: $("#nColl").value || undefined, size_chart: $("#nChart").value || undefined,
+      collection: $("#nColl").value || undefined,
+      collection_gid: joinableCollection($("#nColl")),
+      size_chart: $("#nChart").value || undefined,
       variants,
     };
     if (!payload.title || !payload.category || !payload.department || !variants.length) {
@@ -3903,7 +3934,8 @@ function productCreateForm() {
 
       const result = await api("/dashboard/api/shopify/products", { method: "POST", quiet: true, body: payload });
       if (result.__error) return toastError(result.__error, tr("الإنشاء مانفذش"));
-      toast(tr("المنتج اتعمل"), result.product_id || "");
+      if ((result.warnings || []).length) toast(tr("المنتج اتعمل، بس"), result.warnings.join(" · "), "warn");
+      else toast(tr("المنتج اتعمل"), result.product_id || "");
       overlay.close();
       go("products", { force: true });
     } finally {

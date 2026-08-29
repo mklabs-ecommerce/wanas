@@ -175,6 +175,11 @@ class Settings:
     shopify_store_domain: str
     shopify_admin_token: str
     shopify_api_version: str
+    #: The brand name on every product this app creates. Shopify defaults a
+    #: new product's vendor to the *store's* name ("My Store"), which is not
+    #: what the 18 products already on the shelf say, and vendor is shown on
+    #: the storefront and filtered on in Admin.
+    shopify_vendor: str
     #: The Shopify app's webhook signing secret. Without it the status webhook
     #: refuses every delivery rather than trusting an unsigned one.
     shopify_webhook_secret: str
@@ -305,6 +310,7 @@ def load_settings() -> Settings:
         shopify_store_domain=os.getenv("SHOPIFY_STORE_DOMAIN", "").strip(),
         shopify_admin_token=os.getenv("SHOPIFY_ADMIN_TOKEN", "").strip(),
         shopify_api_version=os.getenv("SHOPIFY_API_VERSION", "2026-07").strip(),
+        shopify_vendor=os.getenv("SHOPIFY_VENDOR", "Wanas Gallery").strip(),
         shopify_webhook_secret=_first_env(
             "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_API_SECRET", default=""
         ),

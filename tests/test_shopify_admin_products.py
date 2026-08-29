@@ -492,3 +492,72 @@ def test_a_variant_id_that_is_not_this_products_is_ignored_not_guessed(seeded, s
 
     assert shopify.variant_images == {}
     assert shopify.media == {}
+
+# --------------------------------------------------------------------------
+# the three things a created product needs before anyone can see it
+# --------------------------------------------------------------------------
+
+
+def _create(session, **kwargs):
+    defaults = {
+        "title": "Visible Tee",
+        "description": "",
+        "category": "T-Shirts",
+        "department": "unisex",
+        "style": None,
+        "collection": None,
+        "size_chart": None,
+        "variants": [{"size": "S", "price": 300, "stock_qty": 1}],
+    }
+    return sap.create_product(session, **{**defaults, **kwargs})
+
+
+def test_a_new_product_is_published_to_the_online_store(seeded, shopify):
+    """`status: ACTIVE` only means "not a draft". Until it is published to the
+    Online Store it has no storefront url and appears in no collection on the
+    site -- which is how the first product created here came out invisible."""
+    result = _create(seeded)
+
+    assert result["shopify_id"] in shopify.published
+    assert result["warnings"] == []
+
+
+def test_a_shop_that_cannot_publish_still_gets_its_product(seeded, shopify):
+    """A token without the publications scope is a product that exists and
+    sells through the bot but is not on the website yet. Refusing the whole
+    creation over it would be the worse answer -- saying nothing would be the
+    worst."""
+    shopify.publish_problem = "add the read_publications and write_publications scopes"
+
+    result = _create(seeded)
+
+    assert seeded.get(Product, result["product_id"]) is not None
+    assert result["warnings"] == ["add the read_publications and write_publications scopes"]
+
+
+def test_the_brand_is_the_shops_not_shopifys_default(seeded, shopify):
+    """Left unset, Shopify stamps the *store's* name on it ("My Store"), which
+    is not what the products already on the shelf say."""
+    from config.settings import settings
+
+    result = _create(seeded, title="Vendor Tee")
+
+    assert shopify.products[result["shopify_id"]]["vendor"] == settings.shopify_vendor
+
+
+def test_a_manual_collection_is_joined_when_one_is_chosen(seeded, shopify):
+    result = _create(seeded, title="Joined Tee", collection="Winter Collection",
+                     collection_gid="gid://shopify/Collection/1")
+
+    assert shopify.collection_members["gid://shopify/Collection/1"] == [result["shopify_id"]]
+    assert seeded.get(Product, result["product_id"]).collection == "Winter Collection"
+
+
+def test_a_label_with_no_gid_stays_a_label(seeded, shopify):
+    """A smart collection's membership is its rules' business -- on this shop,
+    the product's category. Asking Shopify to add a manual member earns a
+    refusal, so the picker sends no gid for one."""
+    result = _create(seeded, title="Smart Tee", collection="T-Shirts")
+
+    assert shopify.collection_members == {}
+    assert seeded.get(Product, result["product_id"]).collection == "T-Shirts"

@@ -64,6 +64,13 @@ class FakeShopify:
         self.chart_metafields: dict[str, str] = {}
         # product gid -> the option set it was created with
         self.product_options: dict[str, list] = {}
+        # product gids published to the Online Store sales channel
+        self.published: set[str] = set()
+        # collection gid -> the product gids manually added to it
+        self.collection_members: dict[str, list[str]] = {}
+        #: What `shopify_publish_to_online_store` should answer, so a test can
+        #: play a shop whose token has no publications scope.
+        self.publish_problem: str | None = None
         self._product_seq = 0
         # [{"id","topic","callbackUrl"}, ...]
         self.webhook_subscriptions: list[dict] = []
@@ -478,7 +485,7 @@ class FakeShopify:
         self._guard()
         return self.variant_to_product.get(variant_id)
 
-    def shopify_create_product(self, *, title, description, category, options=None):
+    def shopify_create_product(self, *, title, description, category, options=None, vendor=None):
         """The options arrive here, with the product.
 
         Shape-checked rather than modelled: an option value is an
@@ -503,6 +510,9 @@ class FakeShopify:
                 "category": category,
                 "description_html": description or "",
                 "image_url": None,
+                # Recorded, not invented: Shopify would default this to the
+                # store's own name, so what matters is that a vendor is sent.
+                "vendor": vendor,
             }
             self.product_options[gid] = list(options or [])
             return gid
@@ -571,6 +581,18 @@ class FakeShopify:
                     continue
                 sku = str(pair["id"]).rsplit("/", 1)[-1]
                 self.variant_images[sku] = self.media[pair["media_id"]]["url"]
+
+    def shopify_publish_to_online_store(self, product_gid):
+        self._guard()
+        if self.publish_problem:
+            return self.publish_problem
+        self.published.add(product_gid)
+        return None
+
+    def shopify_add_to_collection(self, collection_gid, product_gid):
+        self._guard()
+        self.collection_members.setdefault(collection_gid, []).append(product_gid)
+        return None
 
     def set_product_chart_image(self, product_gid, file_gid):
         self._guard()
@@ -1106,6 +1128,14 @@ class FakeShopify:
         monkeypatch.setattr(shopify_admin_products, "shopify_create_variants", self.shopify_create_variants)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_media", self.shopify_attach_media)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_images", self.shopify_attach_images)
+        monkeypatch.setattr(
+            shopify_admin_products,
+            "shopify_publish_to_online_store",
+            self.shopify_publish_to_online_store,
+        )
+        monkeypatch.setattr(
+            shopify_admin_products, "shopify_add_to_collection", self.shopify_add_to_collection
+        )
         monkeypatch.setattr(
             shopify_admin_products, "shopify_assign_variant_media", self.shopify_assign_variant_media
         )

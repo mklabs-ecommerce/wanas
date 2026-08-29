@@ -30,6 +30,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from config.settings import settings
 from domain.models import Product, Variant
 from integrations.shopify import (
     catalog as shopify_catalog,
@@ -78,6 +79,10 @@ query($cursor: String, $query: String) {
 }
 """
 
+PRODUCT_TYPES = """
+{ shop { productTypes(first: 100) { edges { node } } } }
+"""
+
 PRODUCT_DETAIL_BY_SKU = """
 query($query: String!) {
   productVariants(first: 1, query: $query) {
@@ -121,6 +126,31 @@ VARIANTS_UPDATE = """
 mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
   productVariantsBulkUpdate(productId: $productId, variants: $variants) {
     productVariants { id sku }
+    userErrors { field message }
+  }
+}
+"""
+
+#: A new product is not on any sales channel. `status: ACTIVE` only means "not
+#: a draft"; until it is *published* to the Online Store it has no
+#: `publishedAt`, no storefront url, and does not appear in a collection on
+#: the site. The 18 products already on the shelf were published by hand in
+#: Admin, which is why nobody noticed.
+PUBLICATIONS = """
+{ publications(first: 25) { nodes { id name } } }
+"""
+
+PUBLISH = """
+mutation($id: ID!, $input: [PublicationInput!]!) {
+  publishablePublish(id: $id, input: $input) {
+    userErrors { field message }
+  }
+}
+"""
+
+COLLECTION_ADD = """
+mutation($id: ID!, $productIds: [ID!]!) {
+  collectionAddProducts(id: $id, productIds: $productIds) {
     userErrors { field message }
   }
 }
@@ -312,6 +342,14 @@ def get_product(shopify_gid: str) -> dict | None:
     return out
 
 
+def product_types() -> list[str]:
+    """Every `productType` the shop already uses, sorted."""
+    client = get_admin_client()
+    data = client(PRODUCT_TYPES)
+    edges = (((data.get("shop") or {}).get("productTypes") or {}).get("edges")) or []
+    return sorted({e["node"] for e in edges if e.get("node")}, key=str.casefold)
+
+
 def product_gid_for_variant_id(variant_id: str) -> str | None:
     """The Shopify product gid that owns the variant with this SKU.
 
@@ -372,7 +410,12 @@ def _option_values(variant: dict) -> list[dict]:
 
 
 def shopify_create_product(
-    *, title: str, description: str, category: str, options: list[dict] | None = None
+    *,
+    title: str,
+    description: str,
+    category: str,
+    options: list[dict] | None = None,
+    vendor: str | None = None,
 ) -> str:
     """Returns the new product's Shopify id.
 
@@ -388,6 +431,9 @@ def shopify_create_product(
                 "title": title,
                 "descriptionHtml": description or "",
                 "productType": category,
+                # Shopify defaults this to the *store's* name, which is not
+                # what the products already on the shelf say.
+                "vendor": vendor or settings.shopify_vendor,
                 "status": "ACTIVE",
                 "productOptions": options or [],
             }
@@ -567,6 +613,56 @@ def shopify_update_variants(product_gid: str, bulk_input: list[dict]) -> None:
     _errors(result.get("productVariantsBulkUpdate"), "productVariantsBulkUpdate")
 
 
+def shopify_publish_to_online_store(product_gid: str) -> str | None:
+    """Put the product on the Online Store sales channel.
+
+    Returns None on success, or a sentence explaining why not -- this is the
+    one step in the create path that is allowed to fail without failing the
+    product. The app needs `read_publications` and `write_publications` for
+    it, and a shop whose token predates that gets a product that exists,
+    sells through the bot, and is simply not on the website yet. Refusing the
+    whole creation over it would be worse; saying nothing would be worse
+    still, which is why the message travels back to the dashboard.
+    """
+    client = get_admin_client()
+    try:
+        data = client(PUBLICATIONS)
+        nodes = (data.get("publications") or {}).get("nodes") or []
+        online = next((n for n in nodes if n.get("name") == "Online Store"), None)
+        if online is None:
+            return "this shop has no Online Store sales channel to publish to"
+        result = client(PUBLISH, {"id": product_gid, "input": [{"publicationId": online["id"]}]})
+        errors = (result.get("publishablePublish") or {}).get("userErrors") or []
+        if errors:
+            return "; ".join(e.get("message", "") for e in errors)
+    except ShopifyUnavailable as exc:
+        if "ACCESS_DENIED" in str(exc) or "access scope" in str(exc):
+            log.warning("cannot publish %s: the app has no publications scope", product_gid)
+            return (
+                "the product is not on the website yet: add the read_publications "
+                "and write_publications scopes to the Shopify app, then publish it "
+                "by hand this once"
+            )
+        raise
+    return None
+
+
+def shopify_add_to_collection(collection_gid: str, product_gid: str) -> str | None:
+    """Add one product to a manual collection. Returns None, or why not.
+
+    A smart collection's membership is its rules' business -- Shopify refuses
+    a manual member, and the right answer is the product's `productType`, not
+    a call here.
+    """
+    client = get_admin_client()
+    try:
+        result = client(COLLECTION_ADD, {"id": collection_gid, "productIds": [product_gid]})
+    except ShopifyUnavailable as exc:
+        return str(exc)
+    errors = (result.get("collectionAddProducts") or {}).get("userErrors") or []
+    return "; ".join(e.get("message", "") for e in errors) or None
+
+
 def _colour_key(color: str | None) -> str:
     """One spelling of a colour name, so "Camel Brown" and "camel brown" are
     the same colourway. The same normalisation `assistant/tools/base.py` uses
@@ -620,6 +716,7 @@ def create_product(
     images: list[dict] | None = None,
     size_chart_file_gid: str | None = None,
     size_chart_url: str | None = None,
+    collection_gid: str | None = None,
 ) -> dict:
     """Create on Shopify, then mirror into wanas.db.
 
@@ -638,6 +735,15 @@ def create_product(
     `size_chart_file_gid` points `custom.size_chart` at a file already in
     Shopify Files (`files.upload_to_files`); `size_chart_url` is that same
     file's url, stored locally so the bot can send it without asking Shopify.
+
+    `collection` is the merchandising label the bot's search reads;
+    `collection_gid` additionally puts the product *in* that Shopify
+    collection, and should only be passed for a manual one -- a smart
+    collection's membership follows from `category`, which is its rule.
+
+    The returned dict carries `warnings`: things that did not work and did
+    not justify failing the product, each already phrased for a staff member
+    to read.
     """
     if not variants:
         raise ProductRejected("a product needs at least one variant")
@@ -649,6 +755,7 @@ def create_product(
         description=description,
         category=category,
         options=_build_options(variants),
+        vendor=settings.shopify_vendor,
     )
 
     bulk_input = [
@@ -701,6 +808,17 @@ def create_product(
     if size_chart_file_gid:
         shopify_size_charts.set_product_chart_image(product_gid, size_chart_file_gid)
 
+    warnings = []
+    #: Last, and never fatal: a product that exists and sells through the bot
+    #: but is not on the website yet is a much better outcome than no product.
+    problem = shopify_publish_to_online_store(product_gid)
+    if problem:
+        warnings.append(problem)
+    if collection_gid:
+        problem = shopify_add_to_collection(collection_gid, product_gid)
+        if problem:
+            warnings.append(f"could not add it to the collection: {problem}")
+
     quantities = []
     for v in variants:
         sku = _variant_id(product_id, v["size"], v.get("color"), v.get("length"))
@@ -728,7 +846,7 @@ def create_product(
         size_chart_url=size_chart_url,
     )
 
-    return {"product_id": product_id, "shopify_id": product_gid}
+    return {"product_id": product_id, "shopify_id": product_gid, "warnings": warnings}
 
 
 def _mirror_local(
@@ -989,5 +1107,6 @@ __all__ = [
     "shopify_assign_variant_media",
     "update_product",
     "product_gid_for_variant_id",
+    "product_types",
     "slugify",
 ]
