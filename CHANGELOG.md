@@ -2,6 +2,16 @@
 
 ## Unreleased — Three things the Orders screen was getting wrong
 
+- **The order page stopped responding after opening the Ship form.** The
+  overlay held one open layer, not a stack, and the Ship form is a modal on
+  top of the order drawer -- so the modal's own close set `overlay.open` to
+  null while the drawer was still on screen. From then on the drawer's ✕, Esc
+  and the scrim all hit `if (!this.open) return` and did nothing: the page was
+  stuck with no error to go on, whatever you did in the form. Layers are
+  pushed and popped now, so closing the top one hands control back to the one
+  underneath. Cancelling an order was the same bug -- its confirmation is a
+  modal too -- as was every other confirm raised from inside a drawer.
+
 - **An order opens again.** `fulfillmentOrders` needs a scope `read_orders`
   does not imply (`read_merchant_managed_fulfillment_orders` /
   `read_assigned_fulfillment_orders`), and this app was never granted it.

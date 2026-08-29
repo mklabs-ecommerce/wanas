@@ -1884,13 +1884,29 @@ const toastError = (err, what) =>
    overlays: scrim, drawer, modal — one focus trap, one Esc handler
    -------------------------------------------------------------------------- */
 
+/* A *stack*, not a single slot. The Ship form is a modal opened on top of an
+   order drawer, and while `open` held one node the modal's own close wiped it:
+   the drawer stayed on screen with `overlay.open` already null, so its ✕, Esc
+   and the scrim all hit `if (!this.open) return` and did nothing. The order
+   page simply stopped responding, with no error to go on. Cancelling an order
+   went the same way -- its confirm is a modal too. So each layer is pushed and
+   popped, and closing the top one hands control back to the layer underneath
+   rather than to nothing. */
 const overlay = {
-  open: null,
-  lastFocus: null,
+  stack: [],
+
+  //: The topmost open layer, or null. Read by the Esc handler and the focus
+  //: trap; never assigned -- `show` and `close` own the stack.
+  get open() {
+    return this.stack.length ? this.stack[this.stack.length - 1].node : null;
+  },
 
   show(kind, title, bodyHTML, footNodes) {
-    this.lastFocus = document.activeElement;
     const node = kind === "drawer" ? $("#drawer") : $("#modal");
+    // Re-rendering the layer that is already on top (openOrder refreshing
+    // itself after a quantity edit) is not a new layer. Pushing it twice
+    // would take two clicks of ✕ to close one drawer.
+    if (this.open !== node) this.stack.push({ node, lastFocus: document.activeElement });
     $(kind === "drawer" ? "#drawerTitle" : "#modalTitle").textContent = title;
     const body = $(kind === "drawer" ? "#drawerBody" : "#modalBody");
     body.innerHTML = typeof bodyHTML === "string" ? bodyHTML : "";
@@ -1903,7 +1919,6 @@ const overlay = {
     $("#scrim").hidden = false;
     node.hidden = false;
     requestAnimationFrame(() => { $("#scrim").classList.add("in"); node.classList.add("in"); });
-    this.open = node;
     body.scrollTop = 0;
     setTimeout(() => {
       const first = node.querySelector("input, textarea, select, button:not([data-close-overlay])");
@@ -1915,14 +1930,26 @@ const overlay = {
   drawer(title, html, foot) { return this.show("drawer", title, html, foot); },
   modal(title, html, foot) { return this.show("modal", title, html, foot); },
 
+  /* Closes the top layer only. The scrim belongs to the stack as a whole, so
+     it stays up while anything is still open -- dismissing the Ship form must
+     not leave the drawer behind it sitting on a bare page with no way out. */
   close() {
-    if (!this.open) return;
-    const node = this.open;
-    node.classList.remove("in");
-    $("#scrim").classList.remove("in");
-    setTimeout(() => { node.hidden = true; $("#scrim").hidden = true; }, 220);
-    this.open = null;
-    if (this.lastFocus && this.lastFocus.isConnected) this.lastFocus.focus();
+    const top = this.stack.pop();
+    if (!top) return;
+    top.node.classList.remove("in");
+    const bare = this.stack.length === 0;
+    if (bare) $("#scrim").classList.remove("in");
+    setTimeout(() => {
+      top.node.hidden = true;
+      if (!this.stack.length) $("#scrim").hidden = true;
+    }, 220);
+    if (top.lastFocus && top.lastFocus.isConnected) top.lastFocus.focus();
+  },
+
+  //: Everything, for the actions that finish with the list behind them
+  //: refreshed -- there is nothing left to come back to.
+  closeAll() {
+    while (this.stack.length) this.close();
   },
 
   /* A confirm that says what will happen, in the words of the thing it will
@@ -3349,7 +3376,9 @@ function fulfillForm(order) {
       },
     });
     if (result.__error) { confirm.disabled = false; return toastError(result.__error, tr("الشحن مانفذش")); }
-    overlay.close();
+    // The form *and* the drawer behind it: the order that drawer is showing
+    // was just shipped, and the list underneath is about to say so.
+    overlay.closeAll();
     toast(tr("الطلب اتشحن"), tr("العميل هيوصله التتبع"));
     VIEWS.orders.load();
   } });
