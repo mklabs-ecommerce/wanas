@@ -482,3 +482,55 @@ def test_a_real_customer_record_still_wins_over_the_address():
     assert row["customer_name"] == "Hazem A."
     assert row["customer_phone"] == "+201000000001"
     assert row["customer_kind"] == "returning"
+
+
+# --------------------------------------------------------------------------
+# reading Shopify's own Channel column
+# --------------------------------------------------------------------------
+#
+# `Order.source_channel` is still what the dashboard prefers -- it is the
+# record of what actually happened. This is the fallback for an order with no
+# local row, and it is the shop owner's own rule for reading the admin: the
+# Channel column says Online Store or the bot's app, and then the tags say
+# which conversation.
+
+
+def channel_of(**node):
+    from integrations.shopify.admin_orders import _channel_hint
+
+    return _channel_hint(node)
+
+
+def test_an_online_store_order_is_a_website_order():
+    assert channel_of(app={"name": "Online Store"}, tags=[]) == "web"
+
+
+def test_a_chatbot_order_tagged_instagram_is_an_instagram_order():
+    assert channel_of(
+        app={"name": "Chatbot Integration"}, tags=["chatbot", "instagram", "cash-on-delivery"]
+    ) == "instagram_dm"
+
+
+def test_a_chatbot_order_tagged_whatsapp_is_a_whatsapp_order():
+    assert channel_of(
+        app={"name": "Chatbot Integration"}, tags=["chatbot", "whatsapp"]
+    ) == "whatsapp"
+
+
+def test_a_chatbot_order_with_no_channel_tag_is_still_not_a_website_order():
+    """Every order the bot placed before the channel tag existed. Calling it a
+    website sale would move the whole of the bot's history to the wrong tab."""
+    assert channel_of(app={"name": "Chatbot Integration"}, tags=["chatbot"]) == "whatsapp"
+
+
+def test_an_order_shopify_says_nothing_about_is_a_website_order():
+    """An order this app cannot recognise is more likely a sale nobody talked
+    to the bot about than a conversation that left no other trace."""
+    assert channel_of(app=None, tags=[]) == "web"
+
+
+def test_a_website_order_carrying_a_stray_whatsapp_tag_is_still_the_website():
+    """The Channel column is read first, on purpose. Staff can tag an order in
+    the admin for their own reasons, and a note about how they reached the
+    customer must not relabel where the sale came from."""
+    assert channel_of(app={"name": "Online Store"}, tags=["whatsapp"]) == "web"

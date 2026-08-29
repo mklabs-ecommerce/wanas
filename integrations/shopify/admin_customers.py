@@ -15,6 +15,7 @@ orders -- an operator running a dry run and reading it, never a request.
 
 from __future__ import annotations
 
+from integrations.shopify import admin_orders
 from integrations.shopify.client import (  # noqa: F401  (re-exported)
     ShopifyConfigError,
     ShopifyUnavailable,
@@ -38,6 +39,12 @@ query($cursor: String, $query: String) {
 }
 """
 
+#: The customer's orders are selected with `admin_orders.ORDER_SUMMARY_FIELDS`
+#: and mapped by `admin_orders.order_summary`, so the drawer's order table is
+#: the Orders screen's order table -- same columns, same cancelled flag, same
+#: channel, and a row that opens the same order. It used to be a shorter
+#: hand-written selection, which is how a cancelled order showed here with a
+#: fulfilment chip and no sign it had been cancelled at all.
 CUSTOMER_DETAIL_QUERY = """
 query($id: ID!) {
   customer(id: $id) {
@@ -48,15 +55,12 @@ query($id: ID!) {
     numberOfOrders
     amountSpent { amount currencyCode }
     defaultAddress { address1 city province }
-    orders(first: 20, sortKey: CREATED_AT, reverse: true) {
-      nodes {
-        id name createdAt displayFinancialStatus displayFulfillmentStatus
-        totalPriceSet { shopMoney { amount } }
-      }
+    orders(first: 50, sortKey: CREATED_AT, reverse: true) {
+      nodes {%FIELDS%}
     }
   }
 }
-"""
+""".replace("%FIELDS%", admin_orders.ORDER_SUMMARY_FIELDS)
 
 
 def _order_count(node: dict) -> int:
@@ -142,15 +146,7 @@ def get_customer(shopify_gid: str) -> dict | None:
     address = node.get("defaultAddress") or {}
     out["address"] = address.get("address1")
     out["orders"] = [
-        {
-            "id": o["id"],
-            "name": o.get("name"),
-            "created_at": o.get("createdAt"),
-            "financial_status": o.get("displayFinancialStatus"),
-            "fulfillment_status": o.get("displayFulfillmentStatus"),
-            "total": ((o.get("totalPriceSet") or {}).get("shopMoney") or {}).get("amount") or "0.00",
-        }
-        for o in (node.get("orders") or {}).get("nodes") or []
+        admin_orders.order_summary(o) for o in (node.get("orders") or {}).get("nodes") or []
     ]
     return out
 

@@ -173,6 +173,17 @@ dashboard/                 staff dashboard, its own top-level package:
                             a courtesy, the route refusal is the control.
                             ranges.py parses the one date window both analytics
                             tabs use (presets, or an explicit start/end).
+                            customer_filters.py holds the one filter vocabulary
+                            the Customers screen offers, and customer_ledger.py
+                            folds what a customer's orders come to -- orders
+                            that stand, what they came to, orders cancelled,
+                            what those came to, and the channels they bought
+                            through -- out of the order list rather than off
+                            Shopify's `numberOfOrders`/`amountSpent`, which are
+                            one number each, count cancelled sales, and are
+                            blank on every customer the backfill created. The
+                            Customers screen's three tabs (all / bot / web) are
+                            that one list segmented, not three routes.
                             dashboard.html is bilingual: Arabic is the source
                             language, `EN` is keyed on the Arabic, and the
                             tagged template `TR` translates only a template's

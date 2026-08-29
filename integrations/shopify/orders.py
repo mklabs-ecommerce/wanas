@@ -37,7 +37,29 @@ log = logging.getLogger("wanas.shopify.orders")
 #: Every order this service creates carries these. `chatbot` is the one that
 #: matters operationally -- it is what lets staff filter the admin down to
 #: "orders a person never typed" when something looks wrong.
-ORDER_TAGS = ("chatbot", "whatsapp", "cash-on-delivery")
+ORDER_TAGS = ("chatbot", "cash-on-delivery")
+
+#: The channel tag, which is the *other* half of what the admin's Channel
+#: column can tell staff: "Chatbot Integration" says a person never typed the
+#: order, and this says which conversation they typed it in.
+#:
+#: It used to be the literal string `whatsapp` on every order the bot placed,
+#: Instagram sales included -- which made the admin quietly disagree with the
+#: dashboard about where half the sales came from. Orders created before this
+#: still carry the wrong tag; `Order.source_channel` in Postgres has always
+#: been right, and is what the dashboard reads first.
+CHANNEL_TAGS = {"whatsapp": "whatsapp", "instagram_dm": "instagram"}
+DEFAULT_CHANNEL_TAG = "whatsapp"
+
+
+#: How the order note names the channel. The note is what a delivery driver
+#: and a member of staff read on the packing slip, so an Instagram sale saying
+#: "WhatsApp order" is a small lie in the one place nobody checks.
+CHANNEL_NOTES = {"whatsapp": "WhatsApp", "instagram_dm": "Instagram"}
+
+
+def channel_tag(channel: str | None) -> str:
+    return CHANNEL_TAGS.get(channel or "", DEFAULT_CHANNEL_TAG)
 
 #: Shown in the admin next to the order instead of "Online Store".
 SOURCE_NAME = "wanas-chatbot"
@@ -238,6 +260,7 @@ def create_order(
     governorate: str,
     shipping_fee,
     note: str | None = None,
+    channel: str | None = None,
 ) -> dict:
     """Create the order on Shopify. Returns {"id", "name"}.
 
@@ -256,7 +279,7 @@ def create_order(
         "billingAddress": _address(
             name=customer_name, phone=intl, address=address, governorate=governorate
         ),
-        "tags": list(ORDER_TAGS),
+        "tags": [*ORDER_TAGS, channel_tag(channel)],
         "sourceIdentifier": reference,
         # Cash on delivery: the money has not moved, so the order is
         # deliberately left unpaid rather than marked paid on creation. Marking
@@ -278,7 +301,10 @@ def create_order(
         # not take it as a field, this is the only place the delivery driver
         # can find it.
         "note": note
-        or f"WhatsApp order {reference} (Wanas chatbot). Cash on delivery. Phone: {phone}",
+        or (
+            f"{CHANNEL_NOTES.get(channel or '', 'Chatbot')} order {reference} "
+            f"(Wanas chatbot). Cash on delivery. Phone: {phone}"
+        ),
     }
 
     if intl:

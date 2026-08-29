@@ -609,17 +609,11 @@ class FakeShopify:
             "amount_spent": str(spent),
             "governorate": first.get("governorate"),
             "address": first.get("address"),
-            "orders": [
-                {
-                    "id": o["id"],
-                    "name": o["name"],
-                    "created_at": o["created_at"],
-                    "financial_status": "PENDING",
-                    "fulfillment_status": "FULFILLED" if o["fulfilled"] else "UNFULFILLED",
-                    "total": self._order_summary(o)["total"],
-                }
-                for o in group
-            ],
+            # The real `get_customer` maps these with
+            # `admin_orders.order_summary`, so the drawer's table and the
+            # Orders screen's table are one table. A shorter shape here would
+            # let a test pass on a drawer that cannot say "cancelled".
+            "orders": [self._order_summary(o) for o in group],
         }
 
     # -- admin order list / detail / fulfilment ---------------------------
@@ -662,8 +656,27 @@ class FakeShopify:
             "fulfillment_status": "FULFILLED" if order["fulfilled"] else "UNFULFILLED",
             "cancelled": order["cancelled"],
             "tags": list(order["tags"]),
+            # Grouped by phone here the way `_customers_grouped` does, so the
+            # customer id an order carries is the same one `list_customers`
+            # hands out -- `dashboard/customer_ledger.py` keys on both, and a
+            # fake whose two halves disagree would hide exactly the bug the
+            # ledger exists to prevent.
+            "customer_gid": f"gid://shopify/Customer/{self._customer_key(order)}",
             "customer_name": order["customer_name"],
             "customer_phone": order["phone"],
+            # Classified by the real function, from what Shopify would return:
+            # the admin's Channel column ("Online Store" or the bot's app)
+            # plus the tags.
+            "channel_hint": shopify_admin_orders._channel_hint(
+                {
+                    "tags": list(order["tags"]),
+                    "app": {
+                        "name": "Chatbot Integration"
+                        if "chatbot" in order["tags"]
+                        else "Online Store"
+                    },
+                }
+            ),
             # Classified by the real function, not a second copy of the rule
             # living here -- a fake that decides COD its own way would let the
             # dashboard and production disagree with the test all green.

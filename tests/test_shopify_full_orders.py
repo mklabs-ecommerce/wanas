@@ -484,3 +484,51 @@ def test_a_refusal_that_is_not_about_the_customer_still_propagates(monkeypatch):
     assert "Price is invalid" in str(caught.value)
     assert len(recorder.calls) == 2
     assert "customer" not in recorder.calls[1]["order"]
+
+
+# --------------------------------------------------------------------------
+# the channel tag
+# --------------------------------------------------------------------------
+#
+# The admin's Channel column says "Chatbot Integration" for every order the bot
+# places, which is the shop owner's own rule for reading it: the app means the
+# bot, and then the tag says which conversation. The tag was the literal string
+# `whatsapp` on every order the bot ever placed, Instagram sales included --
+# so the admin quietly disagreed with the dashboard about where a sale came
+# from, and the disagreement was invisible because both said "whatsapp".
+
+
+@pytest.mark.no_shopify
+def test_an_instagram_sale_is_tagged_instagram(monkeypatch):
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder, channel="instagram_dm")
+
+    tags = recorder.calls[0]["order"]["tags"]
+    assert "instagram" in tags
+    assert "whatsapp" not in tags
+    # `chatbot` is what staff filter the admin by; it is on every bot order
+    # whichever conversation placed it.
+    assert "chatbot" in tags
+
+
+@pytest.mark.no_shopify
+def test_a_whatsapp_sale_is_tagged_whatsapp(monkeypatch):
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder, channel="whatsapp")
+
+    assert "whatsapp" in recorder.calls[0]["order"]["tags"]
+
+
+@pytest.mark.no_shopify
+def test_a_sale_from_a_channel_nobody_named_still_carries_a_channel_tag(monkeypatch):
+    """An untagged bot order reads as a website order in the admin, which is
+    the one thing the tag exists to prevent. WhatsApp is the bot's own default
+    channel, and a wrong-but-present tag is recoverable where a missing one is
+    not."""
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder)
+
+    assert "whatsapp" in recorder.calls[0]["order"]["tags"]

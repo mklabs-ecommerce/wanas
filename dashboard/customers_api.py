@@ -14,6 +14,14 @@ customer has are on their own rows, so the questions are answerable on both
 sides even though the data is not shared. What it does *not* do is share the
 store tab's numbers -- `order_count` here counts this customer's orders
 through the bot, which is the smaller number on purpose.
+
+The Customers *screen* no longer lists through this route. Its three tabs are
+one list segmented (`dashboard/shopify_api.py::list_customers`), because the
+owner asked for the bot, website and combined views to have the same columns
+and this route cannot answer what a customer spent -- money is Shopify's to
+report. What the screen still comes here for is `GET /{client_id}`: the
+detail view of a bot customer Shopify has no record of, which is the one thing
+only Postgres knows. The list route stays as the API it always was.
 """
 
 from __future__ import annotations
@@ -23,7 +31,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 
 from common.money import money
-from dashboard import customer_filters
+from dashboard import customer_filters, customer_ledger
 from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import Client, Order
@@ -119,6 +127,48 @@ def list_local_customers(
     )
 
 
+#: Fulfilment as Shopify would report it, so one chip renderer covers a bot
+#: order read from Postgres and a website order read from Shopify. Nothing
+#: here invents a status: `Delivered` is the local record of a delivery, and
+#: everything before `Shipped` is simply not shipped yet.
+_FULFILLMENT_BY_STATUS = {
+    "Confirmed": "UNFULFILLED",
+    "Packed": "UNFULFILLED",
+    "Shipped": "FULFILLED",
+    "Delivered": "FULFILLED",
+    "Cancelled": "UNFULFILLED",
+}
+
+
+def _order(order: Order) -> dict:
+    """One local order in the shape the Orders screen draws.
+
+    Same keys as `admin_orders.order_summary` for everything the table shows,
+    so the customer drawer renders through the same function whichever side
+    the customer came from. `id` is the Shopify gid when there is one, which
+    is what lets a row open the full order.
+    """
+    cancelled = order.status == "Cancelled"
+    return {
+        "id": order.shopify_order_id,
+        "order_id": order.order_id,
+        "name": order.shopify_order_name or order.order_id,
+        "created_at": order.placed_at.isoformat() if order.placed_at else None,
+        "fulfillment_status": _FULFILLMENT_BY_STATUS.get(order.status, "UNFULFILLED"),
+        "financial_status": "PENDING" if order.payment_status == "pending" else "PAID",
+        "cancelled": cancelled,
+        "status": order.status,
+        "channel": order.source_channel,
+        "governorate": order.governorate,
+        "payment_method": "cod" if order.payment_method == "cash_on_delivery" else "online",
+        "total": money(order.total),
+        # Kept for anything still reading the older names.
+        "reference": order.shopify_order_name or order.order_id,
+        "placed_at": order.placed_at.isoformat() if order.placed_at else None,
+        "source_channel": order.source_channel,
+    }
+
+
 @router.get("/{client_id}")
 def local_customer_detail(client_id: int, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
@@ -133,19 +183,18 @@ def local_customer_detail(client_id: int, wanas_staff: str | None = Cookie(defau
         orders = db.scalars(
             select(Order).where(Order.client_id == client_id).order_by(Order.placed_at.desc())
         ).all()
+        shaped = [_order(o) for o in orders]
         result = {
             **_summary(client),
             "address": client.address,
-            "orders": [
-                {
-                    "order_id": o.order_id,
-                    "reference": o.shopify_order_name or o.order_id,
-                    "status": o.status,
-                    "total": money(o.total),
-                    "placed_at": o.placed_at.isoformat() if o.placed_at else None,
-                    "source_channel": o.source_channel,
-                }
-                for o in orders
-            ],
+            # The same four numbers the list row carries, folded out of the
+            # orders below rather than counted a second way -- a drawer whose
+            # KPIs disagree with its own table is worse than no KPIs.
+            **{
+                k: v
+                for k, v in customer_ledger.summarise(shaped).items()
+                if k != "governorate"
+            },
+            "orders": shaped,
         }
     return JSONResponse(result)

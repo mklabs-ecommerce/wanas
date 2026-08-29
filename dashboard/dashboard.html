@@ -1094,7 +1094,6 @@ const EN = {
   "أو أكتر": "or more",
   "أوامر": "Commands",
   "أول حاجة تتعمل النهاردة": "First thing to do today",
-  "أول طلب من البوت هيعمل عميل هنا": "The bot's first order will create a customer here",
   "أول طلب هيظهر هنا": "The first order will show up here",
   "أول ظهور": "First seen",
   "أول ظهور على أي قناة": "First seen on any channel",
@@ -1310,7 +1309,6 @@ const EN = {
   "بند مفتوح دلوقتي": "open item right now",
   "بنفتح لوحة التحكم…": "Opening the dashboard…",
   "بيانات التواصل": "Contact details",
-  "بيانات العميل": "Customer details",
   "بيانات المجموعة": "Collection details",
   "بيانات المنتج": "Product details",
   "بيتحفظ في المتصفح ده بس": "Saved in this browser only",
@@ -1422,11 +1420,13 @@ const EN = {
   "على شوبيفاي": "on Shopify",
   "على وشك الخلاص": "Running low",
   "عملاء البوت": "Bot customers",
-  "طلبات البوت": "Bot orders",
-  "مصدره": "Source",
-  "عملاء المتجر وعملاء البوت": "Store customers and bot customers",
+  "طلبات قايمة": "Orders standing",
+  "طلبات ملغية": "Cancelled orders",
+  "عملاء الموقع": "Website customers",
+  "قيمة الملغي": "Cancelled value",
+  "كل اللي اشترى — من المحادثة أو من الموقع — بنفس الأعمدة": "Everyone who has bought — from a conversation or from the site — in the same columns",
+  "من المحادثة ومن الموقع": "From conversations and from the site",
   "عملاء جدد": "New customers",
-  "عملاء شوبيفاي هم كل المتجر؛ عملاء البوت هم اللي اشتروا من المحادثة — الاتنين مش نفس القايمة عن قصد": "Shopify customers are the whole store; bot customers are the ones who bought in a conversation — two different lists, on purpose",
   "عملاء قدامى": "Returning customers",
   "عملاء مختلفين": "Distinct customers",
   "عميل": "customer",
@@ -1451,7 +1451,6 @@ const EN = {
   "كل الدفع": "All payments",
   "كل العملاء": "All customers",
   "كل القنوات": "All channels",
-  "كل المتجر": "Whole store",
   "كل المحافظات": "All governorates",
   "كل المخزون": "All inventory",
   "كل المنتجات": "All products",
@@ -2324,7 +2323,7 @@ const NAV = [
   { id: "products",    label: tr("المنتجات"),    icon: "tag",    title: tr("المنتجات"),    sub: tr("إنشاء وتعديل، والتغيير بيروح لشوبيفاي"), perm: "products" },
   { id: "inventory",   label: tr("المخزون"),     icon: "boxes",  title: tr("المخزون"),     sub: tr("كل مقاس ولون، الأقل أولاً"), badge: "stock", perm: "inventory" },
   { id: "collections", label: tr("المجموعات"),   icon: "layers", title: tr("المجموعات"),   sub: tr("تجميعات شوبيفاي وأعضاؤها"), perm: "collections" },
-  { id: "customers",   label: tr("العملاء"),     icon: "users",  title: tr("العملاء"),     sub: tr("عملاء المتجر وعملاء البوت"), perm: "customers" },
+  { id: "customers",   label: tr("العملاء"),     icon: "users",  title: tr("العملاء"),     sub: tr("من المحادثة ومن الموقع"), perm: "customers" },
 
   { group: tr("القرار") },
   { id: "analytics",   label: tr("التحليلات"),   icon: "chart",  title: tr("التحليلات"),   sub: tr("المبيعات والمحادثات في صفحة واحدة"), perm: "analytics" },
@@ -3891,8 +3890,27 @@ function collectionCreateForm() {
    should not need a new deploy to ask it. */
 const CUSTOMER_ORDER_PRESETS = ["", "1", "2", "3"];
 
+/* Three tabs over one list, not three lists. They are the same rows filtered
+   server-side (`customer_ledger.in_segment`), so every column exists on every
+   tab -- switching tab used to change the shape of the table, because the two
+   tabs came from two routes returning two different customer dicts.
+
+   A person who bought once in a conversation and once on the site is on both
+   the bot tab and the web tab. That is the honest answer; picking one channel
+   per person means being wrong about the other sale. */
+const CUSTOMER_SEGMENTS = [
+  { id: "all", label: tr("كل العملاء") },
+  { id: "bot", label: tr("عملاء البوت") },
+  { id: "web", label: tr("عملاء الموقع") },
+];
+
+const channelChips = (channels) =>
+  (channels && channels.length)
+    ? channels.map((ch) => chipHTML(channelLabel(ch), ch === "web" ? "sky" : "teal")).join(" ")
+    : `<span class="cellsub">—</span>`;
+
 VIEWS.customers = {
-  tab: "shopify", search: "", data: null, searchTimer: null, searchFocused: false,
+  segment: "all", search: "", data: null, searchTimer: null, searchFocused: false,
   ordersCount: "", ordersOp: "eq", governorate: "", sort: "recent",
 
   async mount(force) {
@@ -3908,18 +3926,14 @@ VIEWS.customers = {
     this.wire();
     this.restoreSearchFocus();
     const params = new URLSearchParams();
+    if (this.segment !== "all") params.set("segment", this.segment);
     if (this.search) params.set("q", this.search);
-    // The same four questions on both tabs. They mean slightly different
-    // things -- the store tab counts a customer's lifetime orders, the bot tab
-    // counts the ones placed in a conversation -- but both sides answer them,
-    // so the filter bar does not change shape when you switch tab.
     if (this.ordersCount !== "") params.set("orders_count", this.ordersCount);
     if (this.ordersCount !== "") params.set("orders_op", this.ordersOp);
     if (this.governorate) params.set("governorate", this.governorate);
     if (this.sort !== "recent") params.set("sort", this.sort);
     const qs = params.toString();
-    const base = this.tab === "shopify" ? "/dashboard/api/shopify/customers" : "/dashboard/api/customers";
-    const data = await api(`${base}${qs ? `?${qs}` : ""}`, { quiet: true });
+    const data = await api(`/dashboard/api/shopify/customers${qs ? `?${qs}` : ""}`, { quiet: true });
     if (data.__error) {
       $("#customersBody").innerHTML = this.toolbar() + errorBanner(data.__error, tr("العملاء"));
       this.wire(); this.restoreSearchFocus(); return;
@@ -3931,11 +3945,11 @@ VIEWS.customers = {
   toolbar() {
     return TR`<div class="pagehead">
       <div class="t"><h2>العملاء</h2>
-        <div class="d">عملاء شوبيفاي هم كل المتجر؛ عملاء البوت هم اللي اشتروا من المحادثة — الاتنين مش نفس القايمة عن قصد</div></div>
+        <div class="d">كل اللي اشترى — من المحادثة أو من الموقع — بنفس الأعمدة</div></div>
       <div class="row">
         <div class="seg">
-          <button type="button" data-tab="shopify" aria-pressed="${this.tab === "shopify"}">كل المتجر</button>
-          <button type="button" data-tab="local" aria-pressed="${this.tab === "local"}">عملاء البوت</button>
+          ${CUSTOMER_SEGMENTS.map((s) => `<button type="button" data-cseg="${s.id}"
+            aria-pressed="${this.segment === s.id}">${esc(s.label)}</button>`).join("")}
         </div>
         <div class="field" style="min-width:220px">${icon("search", 15)}
           <input id="custSearch" type="search" placeholder="اسم أو تليفون" value="${esc(this.search)}"></div>
@@ -3948,7 +3962,7 @@ VIEWS.customers = {
     const governorates = (this.data && this.data.governorates) || [];
     const custom = this.ordersCount !== "" && !CUSTOMER_ORDER_PRESETS.includes(this.ordersCount);
     return TR`<div class="row" style="width:100%;flex-wrap:wrap">
-      <label class="lbl" for="custOrders" style="margin:0">${this.tab === "shopify" ? tr("عدد الطلبات") : tr("طلبات البوت")}</label>
+      <label class="lbl" for="custOrders" style="margin:0">عدد الطلبات</label>
       <select class="inp" id="custOrders" style="max-width:150px">
         <option value="" ${this.ordersCount === "" ? "selected" : ""}>الكل</option>
         <option value="1" ${this.ordersCount === "1" ? "selected" : ""}>١</option>
@@ -3993,13 +4007,13 @@ VIEWS.customers = {
   },
 
   wire() {
-    $$("[data-tab]").forEach((b) => b.addEventListener("click", () => { this.tab = b.dataset.tab; this.load(); }));
+    $$("[data-cseg]").forEach((b) => b.addEventListener("click", () => { this.segment = b.dataset.cseg; this.load(); }));
     const search = $("#custSearch");
     if (search) {
       // Results while typing. Debounced rather than fired per keystroke:
-      // "hazem" is five queries, and on the store tab each one pages through
-      // the whole customer list. 300ms is about the gap between words.
-      // Enter still works, and skips the wait.
+      // "hazem" is five queries, and each one pages through the whole
+      // customer list. 300ms is about the gap between words. Enter still
+      // works, and skips the wait.
       const run = (value) => {
         const wanted = value.trim();
         if (wanted === this.search) return;
@@ -4042,39 +4056,39 @@ VIEWS.customers = {
   },
 
   render() {
-    const shopify = this.tab === "shopify";
     const rows = this.data.customers;
-    const rowsHTML = rows.map((c) => shopify ? `
+    /* "طلبات" and "أنفق" are the orders that still stand and what they came
+       to; "ملغي" and "قيمة الملغي" are the cancelled ones, kept as their own
+       pair rather than folded in. A cancelled sale counted as revenue is the
+       one mistake this screen must not make. */
+    const rowsHTML = rows.map((c) => `
       <tr data-clickable ${c.source === "bot" ? `data-cid="${esc(c.client_id)}"` : `data-gid="${esc(c.id)}"`}>
         <td><div class="cellmain">${esc(c.name || "—")}</div><div class="cellsub num">${esc(c.phone || c.email || "")}</div></td>
         <td>${esc(c.governorate || "—")}</td>
-        <td>${c.source === "bot" ? chipHTML(tr("البوت"), "lilac") : chipHTML(tr("المتجر"), "sky")}</td>
+        <td>${channelChips(c.channels)}</td>
         <td class="num">${num(c.order_count)}</td>
         <td class="num">${c.amount_spent === null ? "—" : esc(money(c.amount_spent))}</td>
-      </tr>` : `
-      <tr data-clickable data-cid="${esc(c.client_id)}">
-        <td><div class="cellmain">${esc(c.full_name)}</div><div class="cellsub num">${esc(c.phone)}</div></td>
-        <td>${esc(c.governorate || "—")}</td>
-        <td class="num">${num(c.order_count)}</td>
-        <td>${chipHTML(c.status === "active" ? tr("نشط") : c.status, c.status === "active" ? "teal" : "amber", "dot")}</td>
-        <td class="cellsub">${esc(shortDate(c.created_at))}</td>
+        <td class="num">${c.cancelled_count ? esc(num(c.cancelled_count)) : `<span class="cellsub">—</span>`}</td>
+        <td class="num">${c.cancelled_count ? esc(money(c.cancelled_amount)) : `<span class="cellsub">—</span>`}</td>
       </tr>`).join("");
 
-    const truncated = shopify && this.data.truncated
+    const truncated = this.data.truncated
       ? TR`<div class="banner">${icon("alert", 15)}
           <div>العملاء أكتر من اللي بنقراه في نداء واحد — القايمة دي حد أدنى، مش كل اللي مطابق.</div></div>`
       : "";
 
+    const label = (CUSTOMER_SEGMENTS.find((s) => s.id === this.segment) || CUSTOMER_SEGMENTS[0]).label;
     $("#customersBody").innerHTML = this.toolbar() + truncated + card(
-      shopify ? tr("كل المتجر") : tr("عملاء البوت"), `${rows.length}`,
+      label, `${rows.length}`,
       rows.length ? tableHTML(
-        shopify ? [tr("العميل"), tr("المحافظة"), tr("مصدره"), { label: tr("طلبات"), num: true }, { label: tr("أنفق"), num: true }]
-                : [tr("العميل"), tr("المحافظة"), { label: tr("طلبات"), num: true }, tr("الحالة"), tr("أول ظهور")],
-        rowsHTML, { minWidth: 560 }) : "", "", { flush: true });
+        [tr("العميل"), tr("المحافظة"), tr("القنوات"), { label: tr("طلبات"), num: true },
+         { label: tr("أنفق"), num: true }, { label: tr("ملغي"), num: true },
+         { label: tr("قيمة الملغي"), num: true }],
+        rowsHTML, { minWidth: 780 }) : "", "", { flush: true });
     this.wire();
     if (!rows.length) {
       $("#customersBody .card:last-child .card-body").append(
-        emptyState(tr("مفيش عملاء"), shopify ? tr("لسه محدش اشترى") : tr("أول طلب من البوت هيعمل عميل هنا"), "users"));
+        emptyState(tr("مفيش عملاء"), tr("لسه محدش اشترى"), "users"));
     }
     $$("#customersBody tr[data-gid]").forEach((tr) => tr.addEventListener("click", () => openShopifyCustomer(tr.dataset.gid)));
     $$("#customersBody tr[data-cid]").forEach((tr) => tr.addEventListener("click", () => openLocalCustomer(tr.dataset.cid)));
@@ -4082,28 +4096,61 @@ VIEWS.customers = {
   },
 };
 
+/* One drawer body for both kinds of customer. The bot side reads Postgres and
+   the store side reads Shopify, but both arrive shaped like
+   `admin_orders.order_summary`, so the same four KPIs and the same order
+   table are drawn from the same keys -- which is the whole point of the
+   ledger: two screens that cannot disagree about what a customer spent. */
+function customerDrawerHTML(customer, extraRows) {
+  const orders = (customer.orders || []).map((o) => `
+    <tr ${o.id ? `data-clickable data-ogid="${esc(o.id)}"` : ""}>
+      <td><div class="cellmain num">${esc(o.name || "—")}</div>
+          <div class="cellsub">${esc(shortDate(o.created_at))}</div></td>
+      <td>${statusChip(o.fulfillment_status, o.cancelled)}</td>
+      <td>${paymentChip(o.payment_method)}</td>
+      <td>${chipHTML(channelLabel(o.channel), o.channel === "web" ? "sky" : "teal")}</td>
+      <td>${esc(o.governorate || "—")}</td>
+      <td class="num">${esc(money(o.total))}</td>
+    </tr>`).join("");
+
+  return TR`
+    <div class="grid g-kpi" style="margin-bottom:var(--s-4)">
+      ${[[tr("طلبات قايمة"), num(customer.order_count), "teal"],
+         [tr("إجمالي الإنفاق"), money(customer.amount_spent || 0), "clay"],
+         [tr("طلبات ملغية"), num(customer.cancelled_count || 0), "rose"],
+         [tr("قيمة الملغي"), money(customer.cancelled_amount || 0), "amber"]]
+        .map(([l, v, t]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
+          <div class="kpi-label">${esc(l)}</div><div class="kpi-value">${esc(v)}</div></div>`).join("")}
+    </div>
+    ${card(tr("بيانات التواصل"), channelChips(customer.channels), TR`
+      <div class="kv"><span class="k">التليفون</span><span class="v num">${esc(customer.phone || "—")}</span></div>
+      <div class="kv"><span class="k">الإيميل</span><span class="v" dir="ltr">${esc(customer.email || "—")}</span></div>
+      <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(customer.governorate || "—")}</span></div>
+      ${extraRows || ""}`)}
+    <div style="height:var(--s-4)"></div>
+    ${card(tr("الطلبات"), `${(customer.orders || []).length}`,
+      orders ? tableHTML([tr("الطلب"), tr("الشحن"), tr("الدفع"), tr("القناة"), tr("المحافظة"),
+                          { label: tr("الإجمالي"), num: true }], orders, { minWidth: 620 })
+             : TR`<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
+}
+
+/* A row in the drawer opens the order itself. Only where there is a Shopify
+   order to open -- a local row from before `shopify_order_id` existed has
+   nothing to point at, and a click that silently does nothing is worse than a
+   row that is plainly not clickable. */
+function wireDrawerOrders(body) {
+  $$("tr[data-ogid]", body).forEach((row) =>
+    row.addEventListener("click", () => openOrder(row.dataset.ogid)));
+}
+
 async function openShopifyCustomer(gid) {
   const body = overlay.drawer(tr("جاري التحميل…"), '<div class="skel" style="height:220px"></div>');
   const customer = await api(`/dashboard/api/shopify/customers/${encodeURIComponent(gid)}`, { quiet: true });
   if (customer.__error) { body.innerHTML = errorBanner(customer.__error, tr("العميل")); return; }
   $("#drawerTitle").textContent = customer.name || tr("عميل");
-  const orders = (customer.orders || []).map((o) => `
-    <tr><td class="num">${esc(o.name)}</td><td>${esc(shortDate(o.created_at))}</td>
-    <td>${statusChip(o.fulfillment_status)}</td><td class="num">${esc(money(o.total))}</td></tr>`).join("");
-  body.innerHTML = TR`
-    <div class="grid g-kpi" style="margin-bottom:var(--s-4)">
-      <div class="card kpi" style="--accent:var(--teal)"><div class="kpi-label">عدد الطلبات</div>
-        <div class="kpi-value">${num(customer.order_count)}</div></div>
-      <div class="card kpi" style="--accent:var(--clay)"><div class="kpi-label">إجمالي الإنفاق</div>
-        <div class="kpi-value">${esc(money(customer.amount_spent))}</div></div>
-    </div>
-    ${card(tr("بيانات التواصل"), "", TR`
-      <div class="kv"><span class="k">التليفون</span><span class="v num">${esc(customer.phone || "—")}</span></div>
-      <div class="kv"><span class="k">الإيميل</span><span class="v" dir="ltr">${esc(customer.email || "—")}</span></div>
-      <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(customer.governorate || "—")}</span></div>`)}
-    <div style="height:var(--s-4)"></div>
-    ${card(tr("الطلبات"), "", orders ? tableHTML([tr("الطلب"), tr("التاريخ"), tr("الحالة"), { label: tr("الإجمالي"), num: true }], orders)
-      : TR`<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
+  body.innerHTML = customerDrawerHTML(customer,
+    TR`<div class="kv"><span class="k">العنوان</span><span class="v">${esc(customer.address || "—")}</span></div>`);
+  wireDrawerOrders(body);
 }
 
 async function openLocalCustomer(clientId) {
@@ -4111,20 +4158,10 @@ async function openLocalCustomer(clientId) {
   const customer = await api(`/dashboard/api/customers/${clientId}`, { quiet: true });
   if (customer.__error) { body.innerHTML = errorBanner(customer.__error, tr("العميل")); return; }
   $("#drawerTitle").textContent = customer.full_name;
-  const orders = (customer.orders || []).map((o) => `
-    <tr><td class="num">${esc(o.reference)}</td><td>${esc(shortDate(o.placed_at))}</td>
-    <td>${esc(o.status)}</td><td>${chipHTML(o.source_channel || "—", "sky")}</td>
-    <td class="num">${esc(money(o.total))}</td></tr>`).join("");
-  body.innerHTML = `
-    ${card(tr("بيانات العميل"), "", TR`
-      <div class="kv"><span class="k">التليفون</span><span class="v num" data-copy="${esc(customer.phone)}" data-copy-what="التليفون" style="cursor:pointer">${esc(customer.phone)}</span></div>
-      <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(customer.governorate || "—")}</span></div>
-      <div class="kv"><span class="k">العنوان</span><span class="v">${esc(customer.address || "—")}</span></div>
-      <div class="kv"><span class="k">أول ظهور</span><span class="v">${esc(dateTime(customer.created_at))}</span></div>`)}
-    <div style="height:var(--s-4)"></div>
-    ${card(tr("الطلبات"), `${(customer.orders || []).length}`,
-      orders ? tableHTML([tr("الطلب"), tr("التاريخ"), tr("الحالة"), tr("القناة"), { label: tr("الإجمالي"), num: true }], orders)
-             : TR`<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
+  body.innerHTML = customerDrawerHTML({ ...customer, name: customer.full_name },
+    TR`<div class="kv"><span class="k">العنوان</span><span class="v">${esc(customer.address || "—")}</span></div>
+       <div class="kv"><span class="k">أول ظهور</span><span class="v">${esc(dateTime(customer.created_at))}</span></div>`);
+  wireDrawerOrders(body);
 }
 
 /* ==========================================================================

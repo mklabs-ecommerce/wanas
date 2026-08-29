@@ -362,6 +362,10 @@ def place_order(
             address=address.strip(),
             governorate=resolved,
             shipping_fee=fee,
+            # So the admin's own Channel column can be read the way staff
+            # read it: "Chatbot Integration" plus this tag says which
+            # conversation the sale came out of.
+            channel=channel,
         )
     except shopify_orders.OrderRejected as exc:
         if exc.is_out_of_stock:

@@ -16,9 +16,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 
-from dashboard import customer_filters
+from dashboard import customer_filters, customer_ledger
 from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import Client, Order, Product, Variant
@@ -72,17 +72,23 @@ def _bad(detail: str) -> JSONResponse:
     return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
 
 
-def _order_channel(local: Order | None) -> str:
+def _order_channel(local: Order | None, order: dict | None = None) -> str:
     """Which channel an order came in on.
 
-    Read off the local `Order` row, never off the Shopify tags. The bot tags
-    every order it creates `whatsapp` regardless of the channel it was
-    actually placed on, and no tag at all can be added retroactively to the
-    orders already in the shop -- whereas `Order.source_channel` has recorded
-    the real channel since the column existed. No local row means nobody
-    talked to the bot about it, which is the website.
+    `Order.source_channel` first: it is what actually happened, recorded by
+    the process that handled the conversation, and it is right even for the
+    orders the bot mistagged `whatsapp` while selling on Instagram (see
+    `shopify_orders.CHANNEL_TAGS`).
+
+    Shopify's own answer is the fallback, for an order with no local row --
+    read the way the shop owner reads the admin: the Channel column says
+    Online Store or the chatbot app, and then the tags say which conversation.
+    That used to be a flat "web", which quietly relabelled every bot sale
+    whose local row predates `shopify_order_id` as a website sale.
     """
-    return local.source_channel if local is not None else "web"
+    if local is not None:
+        return local.source_channel
+    return (order or {}).get("channel_hint") or "web"
 
 
 @router.get("/orders")
@@ -128,7 +134,7 @@ def list_orders(
         for item in orders:
             local = local_by_id.get(item["id"])
             item["local"] = _local_ref(local)
-            item["channel"] = _order_channel(local)
+            item["channel"] = _order_channel(local, item)
 
     if payment != "all":
         orders = [o for o in orders if o["payment_method"] == payment]
@@ -166,7 +172,7 @@ def order_detail(order_gid: str, wanas_staff: str | None = Cookie(default=None))
             return JSONResponse({"error": "order_not_found"}, status_code=404)
         local = _local_order_for(db, order_gid)
         order["local"] = _local_ref(local)
-        order["channel"] = _order_channel(local)
+        order["channel"] = _order_channel(local, order)
     return JSONResponse(order)
 
 
@@ -388,88 +394,87 @@ def edit_quantity(
 
 
 # --------------------------------------------------------------------------
-# customers: the whole store -- read-only. See dashboard/customers_api.py for
-# the bot-only view.
+# customers: everyone who has ever bought -- read-only
 # --------------------------------------------------------------------------
 #
-# "The whole store" is Shopify's customers *plus* the bot customers Shopify
-# has never heard of. Those two used to be Shopify's list alone, which was
-# wrong by exactly the orders the bot placed before it attached a customer to
-# them: the buyer exists in wanas.db, has a name and a governorate, and simply
-# was not in the list that claimed to be everyone.
+# One list, three tabs. "All" is every person the shop knows; "bot" is the
+# ones who bought in a conversation; "web" is the ones who bought on the site.
+# They are filtered views of the same rows, drawn by the same renderer, which
+# is the point -- the two tabs used to come from two routes returning two
+# different shapes, so switching tab changed which columns existed.
 #
-# Merged on the phone number, which is the only identifier both sides reliably
-# carry -- normalised through the same `normalise_phone` the order path uses,
-# so `01067177128` and `+201067177128` are one person rather than two rows.
-# A local row that matches a Shopify customer is dropped, not summed: Shopify's
-# `numberOfOrders` is already that person's lifetime total across both
-# channels, and adding the bot's count to it would double every bot order.
+# The rows are Shopify's customers *plus* the bot customers Shopify has never
+# heard of, merged on the phone number: the only identifier both sides
+# reliably carry, normalised through `customer_ledger.phone_key` so
+# `01067177128` and `+201067177128` are one person. A local row that matches a
+# Shopify customer is dropped, not added -- every number below is computed
+# from the orders, and counting the same order twice is exactly what a merge
+# does if you let it.
+#
+# Those numbers come from `dashboard/customer_ledger.py`, folded out of the
+# order list, not from `numberOfOrders`/`amountSpent`. Those are one number
+# each where the owner asked for four (orders that stand, what they came to,
+# orders cancelled, what those came to), they say nothing about which channel
+# the person bought through, and they are blank on every customer the backfill
+# created -- which is why the same person had a governorate on the bot tab and
+# none on the store tab.
 
 
-def _phone_key(raw: str | None) -> str | None:
-    """One phone in one shape, for matching a `Client` to a Shopify customer.
+def _customer_ledger(db, q: str | None):
+    """Everyone's order totals, plus the governorate their orders imply.
 
-    Falls back to the digits when `normalise_phone` refuses -- it only accepts
-    Egyptian mobiles, and two rows carrying the same unrecognised number are
-    still the same person for the purpose of not listing them twice.
+    Reads every order once. That is one more Shopify walk than the customer
+    list alone, and it is what buys the four numbers and the channels -- the
+    customer records cannot answer any of them. Deliberately not narrowed by
+    `q`: a search for one person must still show that person's whole history,
+    not the orders whose text happens to match their name.
     """
-    if not raw:
-        return None
-    return shopify_orders.normalise_phone(raw) or "".join(c for c in raw if c.isdigit()) or None
+    orders, truncated = shopify_admin_orders.list_all_orders()
+    local_by_id = _local_orders_for(db, [o["id"] for o in orders])
+    for order in orders:
+        order["channel"] = _order_channel(local_by_id.get(order["id"]), order)
+    return customer_ledger.index(orders), truncated
 
 
-def _local_only_customers(db, known_phones: set[str], q: str | None) -> list[dict]:
-    """Bot customers with no Shopify customer record, shaped like Shopify's.
-
-    Same keys as `admin_customers._summary`, so one filter helper and one
-    table renderer handle both. `id` is the dashboard's own `c_<n>` public id
-    rather than a Shopify gid, which is what tells the UI to open the local
-    detail view -- there is no Shopify customer to open.
-    """
+def _local_clients(db, q: str | None) -> list[Client]:
     stmt = select(Client).order_by(Client.created_at.desc())
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(Client.full_name.ilike(like), Client.phone.ilike(like)))
+    return list(db.scalars(stmt).all())
 
-    counts = dict(
-        db.execute(
-            select(Order.client_id, func.count(Order.order_id)).group_by(Order.client_id)
-        ).all()
-    )
 
-    out = []
-    for client in db.scalars(stmt).all():
-        key = _phone_key(client.phone)
-        if key and key in known_phones:
-            continue
-        out.append(
-            {
-                "id": client.public_id,
-                "client_id": client.client_id,
-                "name": client.full_name,
-                "email": client.email,
-                "phone": client.phone,
-                "order_count": counts.get(client.client_id, 0),
-                # Never summed from wanas.db. The money on an order is
-                # Shopify's to report -- see `domain/services/dashboard_stats.py`
-                # on why every revenue figure here is read from there.
-                "amount_spent": None,
-                "governorate": client.governorate,
-                "source": "bot",
-            }
-        )
-    return out
+def _shaped(client: Client) -> dict:
+    """A bot customer in the same shape a Shopify one arrives in.
+
+    `id` is the dashboard's own `c_<n>` public id rather than a Shopify gid,
+    which is what tells the UI to open the local detail view -- there is no
+    Shopify customer record to open.
+    """
+    return {
+        "id": client.public_id,
+        "client_id": client.client_id,
+        "name": client.full_name,
+        "email": client.email,
+        "phone": client.phone,
+        "governorate": client.governorate,
+        "created_at": client.created_at.isoformat() if client.created_at else None,
+        "source": "bot",
+    }
 
 
 @router.get("/customers")
 def list_customers(
     q: str | None = Query(default=None),
-    orders_count: int | None = Query(default=None, ge=0, description="filter by lifetime order count"),
+    segment: str = Query(default="all", description="all | bot | web"),
+    orders_count: int | None = Query(default=None, ge=0, description="filter by orders that stand"),
     orders_op: str = Query(default="eq", description="eq | gte -- how to read orders_count"),
     governorate: str | None = Query(default=None),
     sort: str = Query(default="recent", description="recent | orders_desc | orders_asc"),
     wanas_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
+    if segment not in customer_ledger.SEGMENTS:
+        return _bad(f"segment must be one of {customer_ledger.SEGMENTS}")
     if orders_op not in customer_filters.ORDER_COUNT_OPS:
         return _bad("orders_op must be 'eq' or 'gte'")
     if sort not in customer_filters.CUSTOMER_SORTS:
@@ -481,23 +486,71 @@ def list_customers(
             return refused
         options = customer_filters.governorate_options(db)
         try:
-            # The whole list, always, because the bot customers merged in
-            # below are deduped against it by phone: matching them against
-            # page one alone would list anyone whose Shopify record happens to
-            # sit on page two twice, under both of their names. Filtering and
+            # The whole customer list, always: the bot customers merged in
+            # below are deduped against it by phone, and matching them against
+            # page one alone would list anyone whose Shopify record sits on
+            # page two twice, under both of their names. Filtering and
             # re-sorting need the whole list for their own reason -- page one
             # is the wrong denominator, see `list_all_customers`.
             customers, truncated = shopify_admin_customers.list_all_customers(query=q)
+            ledger, orders_truncated = _customer_ledger(db, q)
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             return _outage(exc)
 
+        clients = _local_clients(db, q)
+        by_phone: dict[str, Client] = {}
+        for client in clients:
+            key = customer_ledger.phone_key(client.phone)
+            if key:
+                by_phone.setdefault(key, client)
+
+        # One person can hold two Shopify customer records -- the shop has
+        # exactly this: a website checkout that made a fresh record with no
+        # phone, beside the record the backfill built for the same buyer from
+        # their bot orders. The ledger already resolves both to one set of
+        # totals (they share a phone on the shipping address), so listing both
+        # rows would show the same orders twice under two spellings of one
+        # name. The record carrying a phone is the one kept: it is what every
+        # merge here, and the backfill itself, keys on.
+        first_seen: dict[int, str] = {}
+        for customer in sorted(customers, key=lambda c: not c.get("phone")):
+            key = customer_ledger.phone_key(customer.get("phone"))
+            stats = ledger.get(customer["id"]) or (ledger.get(key) if key else None)
+            if stats is not None:
+                first_seen.setdefault(id(stats), customer["id"])
+
+        rows: list[dict] = []
+        matched: set[str] = set()
         for customer in customers:
             customer.setdefault("source", "shopify")
-        known = {key for key in (_phone_key(c.get("phone")) for c in customers) if key}
-        customers = customers + _local_only_customers(db, known, q)
+            key = customer_ledger.phone_key(customer.get("phone"))
+            local = by_phone.get(key) if key else None
+            # Always present, even as None: the three tabs are drawn by one
+            # renderer, and a key that appears only on some rows is a column
+            # that appears only on some tabs.
+            customer["client_id"] = local.client_id if local is not None else None
+            if key:
+                matched.add(key)
+            # A governorate the person only ever gave the bot. Shopify's
+            # record for the same buyer has no default address at all when the
+            # backfill created it, and a blank column on one tab beside a
+            # filled one on another is the bug that was reported.
+            if local is not None and not customer.get("governorate"):
+                customer["governorate"] = local.governorate
+            stats = ledger.get(customer["id"]) or (ledger.get(key) if key else None)
+            if stats is not None and first_seen[id(stats)] != customer["id"]:
+                continue
+            rows.append(customer_ledger.merge_into(customer, stats))
 
-    customers = customer_filters.apply_filters(
-        customers,
+        for client in clients:
+            key = customer_ledger.phone_key(client.phone)
+            if key and key in matched:
+                continue
+            rows.append(customer_ledger.merge_into(_shaped(client), ledger.get(key) if key else None))
+
+    rows = [c for c in rows if customer_ledger.in_segment(c, segment)]
+    rows = customer_filters.apply_filters(
+        rows,
         orders_count=orders_count,
         orders_op=orders_op,
         governorate=governorate,
@@ -506,13 +559,13 @@ def list_customers(
 
     return JSONResponse(
         {
-            "customers": customers,
-            # `has_next_page` is gone once anything was filtered -- the list
-            # below is the whole match, not a page of it. `truncated` is the
-            # honest replacement: True means the cap was hit and these numbers
-            # are a floor.
-            "truncated": truncated,
+            "customers": rows,
+            # `has_next_page` is meaningless here -- this is the whole match,
+            # not a page of it. `truncated` is the honest replacement: True
+            # means a page cap was hit somewhere, so these numbers are a floor.
+            "truncated": truncated or orders_truncated,
             "governorates": options,
+            "segment": segment,
             "filters": {
                 "orders_count": orders_count,
                 "orders_op": orders_op,
@@ -535,4 +588,31 @@ def customer_detail(customer_gid: str, wanas_staff: str | None = Cookie(default=
             return _outage(exc)
         if customer is None:
             return JSONResponse({"error": "customer_not_found"}, status_code=404)
+
+        # The orders come back in the Orders screen's own shape
+        # (`admin_orders.order_summary`), so the drawer draws the table the
+        # Orders tab draws and a row opens the same order.
+        orders = customer["orders"]
+        local_by_id = _local_orders_for(db, [o["id"] for o in orders])
+        for order in orders:
+            local = local_by_id.get(order["id"])
+            order["local"] = _local_ref(local)
+            order["channel"] = _order_channel(local, order)
+
+        # Summed from the orders on screen, so the four KPIs above the table
+        # are the table. `numberOfOrders` counts cancelled sales among the
+        # orders, which is the one thing this screen must not do.
+        customer_ledger.merge_into(customer, customer_ledger.summarise(orders))
+        if not customer.get("governorate"):
+            key = customer_ledger.phone_key(customer.get("phone"))
+            local_client = next(
+                (
+                    c
+                    for c in db.scalars(select(Client).where(Client.phone.isnot(None))).all()
+                    if customer_ledger.phone_key(c.phone) == key and c.governorate
+                ),
+                None,
+            ) if key else None
+            if local_client is not None:
+                customer["governorate"] = local_client.governorate
     return JSONResponse(customer)

@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased — One customer list, and what each customer is actually worth
+
+The Customers screen answered two questions (how many orders, how much spent)
+with two numbers Shopify keeps, and showed them on two tabs that did not have
+the same columns. It now answers four, on three tabs that do.
+
+- **Cancelled orders are their own two columns.** "طلبات" and "أنفق" are the
+  orders that still stand and what they came to; "ملغي" and "قيمة الملغي" are
+  the cancelled ones. `numberOfOrders` and `amountSpent` cannot be split that
+  way, so all four are folded out of the orders themselves
+  (`dashboard/customer_ledger.py`) — one walk of the order list, read from the
+  same `admin_orders.order_summary` dicts the Orders screen draws, so the two
+  screens cannot disagree about what a customer spent. A cancelled sale
+  counted as revenue is the one mistake this screen must not make.
+- **Every customer says which channels they bought through** — واتساب,
+  انستجرام, الموقع, or more than one where they bought more than one way.
+  Read from `Order.source_channel` where there is a local row, and otherwise
+  the way the shop owner reads the admin: the Channel column says Online Store
+  or "Chatbot Integration", and then the tags say which conversation
+  (`admin_orders._channel_hint`).
+- **The bot now tags an Instagram sale `instagram`.** It tagged every order it
+  placed `whatsapp`, Instagram sales included, so the admin quietly disagreed
+  with the dashboard about where half the sales came from — and said it in a
+  way nobody would question. Orders placed before this still carry the wrong
+  tag; `Order.source_channel` has always been right and is read first.
+- **The missing governorates are back.** A customer created by
+  `scripts/shopify_backfill_customers.py` has no default address at all, so
+  the store tab showed a dash for the very same people who had a governorate
+  on the bot tab. Filled from their `Client` row where there is one, and
+  otherwise from where they last had an order shipped.
+- **Three tabs, one shape.** كل العملاء / عملاء البوت / عملاء الموقع are one
+  list segmented server-side, not three routes returning three different
+  customer dicts — switching tab no longer changes which columns exist. A
+  person who bought once in a conversation and once on the site is on both
+  tabs, which is the honest answer; picking one channel per person means being
+  wrong about the other sale.
+- **The customer drawer shows their orders the way the Orders screen does** —
+  same columns, same cancelled chip, same channel, and a row opens the order
+  itself. Its four KPIs are summed from the orders below it, so a drawer
+  cannot disagree with its own table.
+
 ## Unreleased — Everyone who ever bought, in one list that filters
 
 Four things, all the same complaint from different angles: the Customers

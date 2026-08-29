@@ -41,29 +41,35 @@ log = logging.getLogger("wanas.shopify.admin_orders")
 #: with this comment next to it.
 PAGE_SIZE = 50
 
+#: Exactly the fields `_order_summary` reads, in one place so that anything
+#: else wanting an orders table -- `admin_customers.get_customer`, which shows
+#: a customer's orders the same way the Orders screen does -- asks for the
+#: same order and gets the same dict back. A second hand-written selection is
+#: how two screens end up disagreeing about whether an order was cancelled.
+ORDER_SUMMARY_FIELDS = """
+  id
+  name
+  createdAt
+  displayFinancialStatus
+  displayFulfillmentStatus
+  cancelledAt
+  tags
+  app { name }
+  paymentGatewayNames
+  customer { id displayName email phone numberOfOrders }
+  shippingAddress { name phone city province }
+  totalPriceSet { shopMoney { amount currencyCode } }
+  lineItems(first: 50) { nodes { title quantity sku } }
+"""
+
 ORDERS_QUERY = """
 query($cursor: String, $query: String) {
   orders(first: 50, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
     pageInfo { hasNextPage endCursor }
-    nodes {
-      id
-      name
-      createdAt
-      displayFinancialStatus
-      displayFulfillmentStatus
-      cancelledAt
-      tags
-      paymentGatewayNames
-      customer { id displayName email phone numberOfOrders }
-      shippingAddress { name phone city province }
-      totalPriceSet { shopMoney { amount currencyCode } }
-      lineItems(first: 50) {
-        nodes { title quantity sku }
-      }
-    }
+    nodes {%FIELDS%}
   }
 }
-"""
+""".replace("%FIELDS%", ORDER_SUMMARY_FIELDS)
 
 ORDER_DETAIL_QUERY = """
 query($id: ID!) {
@@ -76,6 +82,7 @@ query($id: ID!) {
     cancelledAt
     note
     tags
+    app { name }
     paymentGatewayNames
     customer { id displayName email phone numberOfOrders }
     shippingAddress { name address1 city province phone }
@@ -142,6 +149,46 @@ def _payment_method(node: dict) -> str:
     return PAYMENT_ONLINE
 
 
+#: The admin's Channel column, as a value this app uses. "Online Store" is
+#: the storefront; the bot's own orders arrive under the custom app's name
+#: ("Chatbot Integration"), which is the shop owner's own rule for reading
+#: that column: online store means the website, the app means the bot, and
+#: then the tags say *which* conversation.
+ONLINE_STORE_APPS = ("online store", "point of sale")
+
+#: Channel tags the bot writes (`shopify_orders.CHANNEL_TAGS`), read back.
+CHANNEL_BY_TAG = {"instagram": "instagram_dm", "whatsapp": "whatsapp"}
+
+
+def _channel_hint(node: dict) -> str:
+    """Which channel this order came in on, read from Shopify alone.
+
+    Only a *hint*: `Order.source_channel` in Postgres is the record of what
+    actually happened and the dashboard prefers it (see
+    `dashboard/shopify_api.py::_order_channel`). This is what is left for an
+    order with no local row -- a website sale, or a bot sale whose local row
+    was never written -- and it is how the shop owner reads the admin: the
+    Channel column first, then the tags.
+
+    Defaults to `web` rather than to a bot channel. An order this app cannot
+    recognise is more likely a sale nobody talked to the bot about than a
+    conversation that left no other trace.
+    """
+    app = ((node.get("app") or {}).get("name") or "").strip().lower()
+    tags = [str(t).strip().lower() for t in (node.get("tags") or [])]
+    if app and app not in ONLINE_STORE_APPS:
+        for tag in tags:
+            if tag in CHANNEL_BY_TAG:
+                return CHANNEL_BY_TAG[tag]
+        # The app placed it but no tag says where from -- still not the
+        # website. `whatsapp` is the bot's own default channel.
+        if "chatbot" in tags or app:
+            return "whatsapp"
+    if "chatbot" in tags:
+        return "whatsapp"
+    return "web"
+
+
 def _customer_orders(customer: dict) -> int | None:
     """The customer's *lifetime* order count, not their count inside whatever
     range is on screen -- Shopify's `numberOfOrders` is a shop-wide total, and
@@ -196,12 +243,18 @@ def _order_summary(node: dict) -> dict:
         "fulfillment_status": node.get("displayFulfillmentStatus"),
         "cancelled": bool(node.get("cancelledAt")),
         "tags": node.get("tags") or [],
+        #: The customer record this order is attached to, or None for the orders
+        #: placed before the bot attached one. `dashboard/customer_ledger.py`
+        #: keys on this *and* on the phone for exactly that reason.
+        "customer_gid": customer.get("id"),
         "customer_name": _customer_display(customer, address),
         "customer_phone": customer.get("phone") or address.get("phone"),
         "customer_order_count": _customer_orders(customer),
         "customer_kind": _customer_kind(customer),
         "payment_gateways": node.get("paymentGatewayNames") or [],
         "payment_method": _payment_method(node),
+        "channel_hint": _channel_hint(node),
+        "app": ((node.get("app") or {}).get("name") or None),
         "governorate": address.get("province") or address.get("city"),
         "total": _money(node.get("totalPriceSet")),
         "line_items": [
@@ -212,6 +265,13 @@ def _order_summary(node: dict) -> dict:
         #: row -- this module has no Postgres session and does not decide it.
         "source": "chatbot" if "chatbot" in (node.get("tags") or []) else "website",
     }
+
+
+#: `_order_summary` under a name another module may use. Same function --
+#: `admin_customers` maps a customer's own orders with it so that table and
+#: the Orders screen's table are the same table.
+def order_summary(node: dict) -> dict:
+    return _order_summary(node)
 
 
 def list_orders(*, query: str | None = None, cursor: str | None = None) -> dict:
@@ -301,6 +361,10 @@ def get_order(shopify_order_id: str) -> dict | None:
         "cancelled": bool(node.get("cancelledAt")),
         "note": node.get("note"),
         "tags": node.get("tags") or [],
+        #: The customer record this order is attached to, or None for the orders
+        #: placed before the bot attached one. `dashboard/customer_ledger.py`
+        #: keys on this *and* on the phone for exactly that reason.
+        "customer_gid": customer.get("id"),
         "customer_name": _customer_display(customer, address),
         "customer_email": customer.get("email"),
         "customer_phone": customer.get("phone") or address.get("phone"),
@@ -308,6 +372,8 @@ def get_order(shopify_order_id: str) -> dict | None:
         "customer_kind": _customer_kind(customer),
         "payment_gateways": node.get("paymentGatewayNames") or [],
         "payment_method": _payment_method(node),
+        "channel_hint": _channel_hint(node),
+        "app": ((node.get("app") or {}).get("name") or None),
         "address": address.get("address1"),
         "governorate": address.get("province") or address.get("city"),
         "subtotal": _money(node.get("subtotalPriceSet")),
@@ -384,6 +450,8 @@ __all__ = [
     "PAYMENT_UNKNOWN",
     "PAYMENT_METHODS",
     "MAX_PAGES",
+    "ORDER_SUMMARY_FIELDS",
+    "order_summary",
     "list_orders",
     "list_all_orders",
     "get_order",

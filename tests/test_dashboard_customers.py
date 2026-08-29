@@ -5,6 +5,7 @@ WhatsApp one -- kept separate on purpose, see both modules' docstrings.
 from __future__ import annotations
 
 import dataclasses
+from decimal import Decimal
 
 import pytest
 from fastapi import FastAPI
@@ -12,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from config.settings import settings
 from dashboard import customers_api, shopify_api, web as dashboard
+from domain.models import Order
 from domain.services import (
     auth,
     carts,
@@ -238,6 +240,26 @@ def test_a_bad_sort_or_operator_is_refused(logged_in):
     assert logged_in.get("/dashboard/api/shopify/customers?orders_op=lte").status_code == 400
 
 
+def _ledger_order(customer_id, phone, *, total="100", cancelled=False, channel_hint="web",
+                  governorate="Cairo", created_at="2026-08-01T00:00:00Z"):
+    """One order in the shape `customer_ledger.index` reads.
+
+    Only the keys the ledger folds -- the whole point of the module is that it
+    reads `admin_orders.order_summary` dicts, so a test that hand-builds one
+    builds only the fields that decide a total.
+    """
+    return {
+        "id": f"gid://shopify/Order/{customer_id}-{total}-{created_at}",
+        "customer_gid": f"gid://shopify/Customer/{customer_id}",
+        "customer_phone": phone,
+        "total": total,
+        "cancelled": cancelled,
+        "channel_hint": channel_hint,
+        "governorate": governorate,
+        "created_at": created_at,
+    }
+
+
 def test_filtering_walks_every_page_not_only_the_first(logged_in, monkeypatch):
     """The bug this guards: the top customer by orders may not be on page one
     at all, and a page-one-only filter looks like it works."""
@@ -264,6 +286,16 @@ def test_filtering_walks_every_page_not_only_the_first(logged_in, monkeypatch):
         return pages[0] if cursor is None else pages[1]
 
     monkeypatch.setattr(shopify_api.shopify_admin_customers, "list_customers", fake_list)
+    # The order counts are folded out of the orders now, not read off the
+    # customer record -- see `dashboard/customer_ledger.py`.
+    monkeypatch.setattr(
+        shopify_api.shopify_admin_orders, "list_all_orders",
+        lambda *, query=None, max_pages=20: (
+            [_ledger_order("1", "1", total="100")]
+            + [_ledger_order("2", "2", total="100") for _ in range(9)],
+            False,
+        ),
+    )
 
     body = logged_in.get("/dashboard/api/shopify/customers?sort=orders_desc").json()
     assert [c["name"] for c in body["customers"]] == ["Page Two", "Page One"]
@@ -351,6 +383,17 @@ def test_the_filter_now_matches_what_shopify_sends(logged_in, monkeypatch):
         }
 
     monkeypatch.setattr(admin_customers, "get_admin_client", lambda: fake_client)
+    monkeypatch.setattr(
+        shopify_api.shopify_admin_orders, "list_all_orders",
+        lambda *, query=None, max_pages=20: (
+            [
+                _ledger_order("1", "+201000000001"),
+                _ledger_order("2", "+201000000002"),
+                _ledger_order("2", "+201000000002", created_at="2026-08-02T00:00:00Z"),
+            ],
+            False,
+        ),
+    )
 
     body = logged_in.get("/dashboard/api/shopify/customers?orders_count=1").json()
 
@@ -365,6 +408,19 @@ def test_the_filter_now_matches_what_shopify_sends(logged_in, monkeypatch):
 # exactly the orders the bot placed before it attached a customer to them: the
 # buyer is in wanas.db with a name and a governorate, and simply was not in the
 # list that called itself everyone.
+
+
+@pytest.fixture()
+def website_order(shopify) -> str:
+    """An order placed on the storefront directly -- no local row at all."""
+    return shopify.seed_order(
+        items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 650}],
+        shipping_fee=60,
+        customer_name="Website Customer",
+        phone="01044455566",
+        address="2 Storefront St",
+        governorate="Giza",
+    )
 
 
 @pytest.fixture()
@@ -398,8 +454,12 @@ def test_the_store_list_includes_a_bot_customer_shopify_never_recorded(
     row = next(c for c in body["customers"] if c["name"] == "Off Shopify")
     assert row["source"] == "bot"
     assert row["governorate"] == "Cairo"
-    # No money is ever summed out of wanas.db -- Shopify reports revenue.
-    assert row["amount_spent"] is None
+    # Their order exists in Shopify even though their *customer record* does
+    # not, which is the whole shape of this case -- so the money is still
+    # Shopify's number, folded out of the order, never summed from wanas.db.
+    assert row["order_count"] == 1
+    assert Decimal(row["amount_spent"]) > 0
+    assert row["channels"] == ["whatsapp"]
 
 
 def test_a_customer_on_both_sides_is_listed_once(logged_in, bot_only_customer, monkeypatch):
@@ -418,10 +478,11 @@ def test_a_customer_on_both_sides_is_listed_once(logged_in, bot_only_customer, m
 
     matching = [c for c in body["customers"] if c["name"] == "Off Shopify"]
     assert len(matching) == 1
-    # Shopify's row wins: its `numberOfOrders` is already the lifetime total
-    # across both channels, so adding the bot's count would double-count.
+    # Shopify's row wins, and its count comes from the orders rather than from
+    # the `order_count` the customer record carried: one order placed once is
+    # one order, however many times the same person appears in two lists.
     assert matching[0]["source"] == "shopify"
-    assert matching[0]["order_count"] == 4
+    assert matching[0]["order_count"] == 1
 
 
 # --------------------------------------------------------------------------
@@ -455,3 +516,163 @@ def test_the_bot_list_offers_the_shops_governorates(logged_in, bot_order):
 
 def test_the_bot_list_refuses_a_sort_it_does_not_have(logged_in):
     assert logged_in.get("/dashboard/api/customers?sort=whatever").status_code == 400
+
+
+# --------------------------------------------------------------------------
+# one list, three tabs
+# --------------------------------------------------------------------------
+#
+# The bot tab and the store tab used to be two routes returning two different
+# customer dicts, so switching tab changed which columns existed. They are one
+# list filtered three ways now, which is what the owner asked for: "the chat
+# customers or web customers or the whole -- the same shape".
+
+
+def test_the_three_tabs_are_the_same_shape(logged_in, bot_order, website_order):
+    shapes = []
+    for segment in ("all", "bot", "web"):
+        body = logged_in.get(f"/dashboard/api/shopify/customers?segment={segment}").json()
+        assert body["customers"], segment
+        shapes.append(set(body["customers"][0]))
+
+    assert shapes[0] == shapes[1] == shapes[2]
+    assert {"order_count", "amount_spent", "cancelled_count", "cancelled_amount",
+            "channels", "governorate"} <= shapes[0]
+
+
+def test_the_bot_tab_holds_the_conversation_buyers_and_the_web_tab_the_rest(
+    logged_in, bot_order, website_order
+):
+    bot = logged_in.get("/dashboard/api/shopify/customers?segment=bot").json()["customers"]
+    web = logged_in.get("/dashboard/api/shopify/customers?segment=web").json()["customers"]
+
+    assert all("whatsapp" in c["channels"] or c["source"] == "bot" for c in bot)
+    assert all("web" in c["channels"] for c in web)
+    assert {c["name"] for c in bot} != {c["name"] for c in web}
+
+
+def test_an_unknown_segment_is_refused_rather_than_read_as_everyone(logged_in):
+    assert logged_in.get("/dashboard/api/shopify/customers?segment=vip").status_code == 400
+
+
+# --------------------------------------------------------------------------
+# the four numbers, and the channels
+# --------------------------------------------------------------------------
+
+
+def test_a_cancelled_order_leaves_the_orders_column_and_enters_the_cancelled_one(
+    logged_in, bot_order, seeded
+):
+    from domain.services import orders as orders_service
+
+    before = logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+    row = next(c for c in before if c["order_count"] == 1)
+
+    order = seeded.get(Order, bot_order["order_id"])
+    assert "error" not in orders_service.cancel(seeded, order, by="staff", notify_customer=False)
+    seeded.commit()
+
+    after = next(
+        c for c in logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+        if c["phone"] == row["phone"]
+    )
+    assert after["order_count"] == 0
+    assert after["amount_spent"] == "0.00"
+    assert after["cancelled_count"] == 1
+    assert Decimal(after["cancelled_amount"]) == Decimal(row["amount_spent"])
+
+
+def test_the_row_says_which_channels_the_customer_bought_through(logged_in, bot_order):
+    body = logged_in.get("/dashboard/api/shopify/customers").json()
+
+    row = next(c for c in body["customers"] if c["order_count"] == 1)
+    assert row["channels"] == ["whatsapp"]
+
+
+# --------------------------------------------------------------------------
+# the drawer
+# --------------------------------------------------------------------------
+
+
+def test_the_customer_drawer_shows_orders_the_way_the_orders_screen_does(
+    logged_in, bot_order, shopify
+):
+    listed = logged_in.get("/dashboard/api/shopify/orders").json()["orders"][0]
+    customers = logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+    gid = next(c["id"] for c in customers if str(c["id"]).startswith("gid://"))
+
+    body = logged_in.get(f"/dashboard/api/shopify/customers/{gid}").json()
+
+    assert body["orders"], body
+    order = body["orders"][0]
+    # Same keys, so one renderer draws both tables and they cannot disagree
+    # about whether an order was cancelled.
+    assert {"cancelled", "fulfillment_status", "payment_method", "channel", "total"} <= set(order)
+    assert set(order) >= set(listed) - {"local", "source"}
+
+
+def test_the_drawers_totals_are_the_drawers_own_orders(logged_in, bot_order, shopify):
+    customers = logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+    gid = next(c["id"] for c in customers if str(c["id"]).startswith("gid://"))
+
+    body = logged_in.get(f"/dashboard/api/shopify/customers/{gid}").json()
+
+    standing = [o for o in body["orders"] if not o["cancelled"]]
+    assert body["order_count"] == len(standing)
+    assert Decimal(body["amount_spent"]) == sum(Decimal(o["total"]) for o in standing)
+
+
+def test_the_bot_drawer_carries_the_same_numbers_and_the_same_order_shape(
+    logged_in, bot_order, seeded
+):
+    """The bot side reads Postgres and the store side reads Shopify, and both
+    drawers are drawn by one function -- so both have to arrive shaped alike."""
+    client_id = seeded.get(Order, bot_order["order_id"]).client_id
+    seeded.commit()  # let go of the write lock before the route opens its own
+
+    body = logged_in.get(f"/dashboard/api/customers/{client_id}").json()
+
+    assert {"order_count", "amount_spent", "cancelled_count", "cancelled_amount",
+            "channels"} <= set(body)
+    order = body["orders"][0]
+    assert {"cancelled", "fulfillment_status", "payment_method", "channel", "total"} <= set(order)
+    assert order["channel"] == "whatsapp"
+
+
+def test_one_person_holding_two_shopify_records_is_one_row(logged_in, monkeypatch):
+    """The live shop has exactly this: a website checkout made a fresh
+    customer with no phone, beside the record the backfill built for the same
+    buyer out of their bot orders. Both resolve to one set of totals through
+    the phone on the shipping address, so listing both would show the same
+    orders twice under two spellings of one name."""
+    monkeypatch.setattr(
+        shopify_api.shopify_admin_customers, "list_all_customers",
+        lambda *, query=None: ([
+            {"id": "gid://shopify/Customer/1", "name": "Mohamed Fathy",
+             "phone": "+201021233010", "email": None, "governorate": "Monufia"},
+            {"id": "gid://shopify/Customer/2", "name": "mohmed fathy",
+             "phone": None, "email": None, "governorate": None},
+        ], False),
+    )
+    monkeypatch.setattr(
+        shopify_api.shopify_admin_orders, "list_all_orders",
+        lambda *, query=None, max_pages=20: (
+            [
+                _ledger_order("1", "+201021233010", channel_hint="whatsapp"),
+                # The website order: a different customer record, the same
+                # phone on the address.
+                dict(_ledger_order("2", "+201021233010", channel_hint="web"),
+                     id="gid://shopify/Order/web"),
+            ],
+            False,
+        ),
+    )
+
+    rows = logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+
+    assert len(rows) == 1
+    # The record carrying the phone is the one kept -- it is what every merge
+    # here, and the backfill itself, keys on.
+    assert rows[0]["id"] == "gid://shopify/Customer/1"
+    assert rows[0]["order_count"] == 2
+    assert rows[0]["channels"] == ["whatsapp", "web"]
