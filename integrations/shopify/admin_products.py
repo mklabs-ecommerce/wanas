@@ -16,9 +16,10 @@ product resolves its Shopify product id fresh, from any one of its local
 variant SKUs, rather than adding a second, potentially-stale place that fact
 could live.
 
-Removing a variant from an existing Shopify product is deliberately not
-supported here -- it is destructive to order history on Shopify's side in a
-way this module has no story for yet. Do that in Shopify Admin directly.
+Removing a product or one of its variants *is* supported, and the story it
+used to lack is the delete/archive split near the bottom of this file: an
+order line points at a variant row, so anything that has ever been sold is
+archived rather than deleted. Read that section before changing either.
 """
 
 from __future__ import annotations
@@ -28,10 +29,11 @@ import re
 import time
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.settings import settings
-from domain.models import Product, Variant
+from domain.models import CartItem, OrderItem, Product, StockWaitlistEntry, Variant
 from integrations.shopify import (
     catalog as shopify_catalog,
     inventory as shopify_inventory,
@@ -143,6 +145,23 @@ PUBLICATIONS = """
 PUBLISH = """
 mutation($id: ID!, $input: [PublicationInput!]!) {
   publishablePublish(id: $id, input: $input) {
+    userErrors { field message }
+  }
+}
+"""
+
+PRODUCT_DELETE = """
+mutation($input: ProductDeleteInput!) {
+  productDelete(input: $input) {
+    deletedProductId
+    userErrors { field message }
+  }
+}
+"""
+
+VARIANTS_DELETE = """
+mutation($productId: ID!, $variantsIds: [ID!]!) {
+  productVariantsBulkDelete(productId: $productId, variantsIds: $variantsIds) {
     userErrors { field message }
   }
 }
@@ -987,6 +1006,161 @@ def _replace_variant_images(
         product.images = fresh + [u for u in (product.images or []) if u not in fresh]
 
 
+# --------------------------------------------------------------------------
+# delete / archive
+# --------------------------------------------------------------------------
+#
+# This module used to say removing a variant was deliberately left to Shopify
+# Admin. It is here now because staff asked for it, and the thing that made it
+# risky is handled explicitly rather than avoided: `order_items.variant_id` is
+# a foreign key, so a variant that has ever been sold cannot have its row
+# taken away without taking the order line with it. An order is the record
+# that money changed hands; it outranks tidying the catalog.
+#
+# So there are two verbs, and which one applies is a fact about the data, not
+# a choice:
+#
+#   delete   nothing was ever ordered from it -- it really goes, on both sides
+#   archive  it sold before -- Shopify's `status: ARCHIVED` and our own
+#            `Product.archived`, which together mean the bot will not offer
+#            it, the storefront will not show it, and the orders still read.
+
+
+class ProductInUse(RuntimeError):
+    """Something has been sold from this, so its rows have to stay."""
+
+
+def _sold_variant_ids(session: Session, variant_ids: list[str]) -> set[str]:
+    if not variant_ids:
+        return set()
+    rows = session.scalars(
+        select(OrderItem.variant_id).where(OrderItem.variant_id.in_(variant_ids))
+    ).all()
+    return set(rows)
+
+
+def _forget_variant(session: Session, variant_id: str) -> None:
+    """Drop the rows that only point at a variant, never at an order.
+
+    A cart line and a back-in-stock waitlist entry are both "somebody is
+    waiting for this"; with the variant gone there is nothing to wait for, and
+    leaving them would break the same foreign key from the other side.
+    """
+    for model in (CartItem, StockWaitlistEntry):
+        for row in session.scalars(select(model).where(model.variant_id == variant_id)).all():
+            session.delete(row)
+
+
+def shopify_delete_product(product_gid: str) -> None:
+    client = get_admin_client()
+    result = client(PRODUCT_DELETE, {"input": {"id": product_gid}})
+    _errors(result.get("productDelete"), "productDelete")
+
+
+def shopify_delete_variants(product_gid: str, variant_gids: list[str]) -> None:
+    client = get_admin_client()
+    result = client(VARIANTS_DELETE, {"productId": product_gid, "variantsIds": variant_gids})
+    _errors(result.get("productVariantsBulkDelete"), "productVariantsBulkDelete")
+
+
+def delete_product(session: Session, product_id: str) -> dict:
+    """Remove a product from Shopify and from wanas.db.
+
+    Raises `ProductInUse` when an order references any of its variants -- the
+    caller should offer `archive_product` instead, which is the same intent
+    without destroying the order lines.
+    """
+    product = session.get(Product, product_id)
+    if product is None:
+        return {"error": "product_not_found"}
+
+    variant_ids = [v.variant_id for v in product.variants]
+    sold = _sold_variant_ids(session, variant_ids)
+    if sold:
+        raise ProductInUse(
+            f"{len(sold)} of its sizes have been ordered before; archive it instead"
+        )
+
+    product_gid = product_gid_for_variant_id(variant_ids[0]) if variant_ids else None
+    if product_gid:
+        shopify_delete_product(product_gid)
+
+    for variant_id in variant_ids:
+        _forget_variant(session, variant_id)
+    session.delete(product)
+    session.flush()
+    return {"product_id": product_id, "shopify_id": product_gid, "deleted": True}
+
+
+def delete_variant(session: Session, variant_id: str) -> dict:
+    """Remove one size/colourway, from Shopify and from wanas.db.
+
+    Refused for the last variant of a product: Shopify has no such thing as a
+    product with no variants, and a local row with none is a product the bot
+    would offer and never be able to sell. Deleting the product is the honest
+    way to say that.
+    """
+    variant = session.get(Variant, variant_id)
+    if variant is None:
+        return {"error": "variant_not_found"}
+
+    product = session.get(Product, variant.product_id)
+    if product is not None and len(product.variants) <= 1:
+        raise ProductInUse("this is the product's only size; delete the product instead")
+    if _sold_variant_ids(session, [variant_id]):
+        raise ProductInUse("this size has been ordered before; archive the product instead")
+
+    product_gid = product_gid_for_variant_id(variant_id)
+    if product_gid:
+        live = shopify_catalog.fetch_skus([variant_id]).get(variant_id)
+        if live is not None:
+            shopify_delete_variants(product_gid, [live.shopify_id])
+
+    _forget_variant(session, variant_id)
+    session.delete(variant)
+    session.flush()
+
+    if product is not None:
+        # The flush removed the row; the loaded collection still holds it.
+        # Summarising without this re-read leaves the product advertising the
+        # size that just went.
+        session.expire(product, ["variants"])
+        _resummarise(product)
+    session.flush()
+    return {"variant_id": variant_id, "product_id": variant.product_id, "deleted": True}
+
+
+def _resummarise(product: Product) -> None:
+    """The product's own size/colour lists, after one of them went away."""
+    product.sizes = sorted({v.size for v in product.variants if v.size})
+    product.colors = sorted({v.color for v in product.variants if v.color})
+    product.lengths = sorted({v.length for v in product.variants if v.length})
+    product.color_images = {
+        c: g for c, g in (product.color_images or {}).items() if c in set(product.colors)
+    }
+
+
+def archive_product(session: Session, product_id: str) -> dict:
+    """Stop selling a product without destroying what it sold.
+
+    Both halves of the statement: Shopify's `status: ARCHIVED` takes it off
+    the storefront, `Product.archived` takes it out of the bot's search and
+    out of `get_variants`, and `order_items` still reads.
+    """
+    product = session.get(Product, product_id)
+    if product is None:
+        return {"error": "product_not_found"}
+
+    any_variant = next((v.variant_id for v in product.variants), None)
+    product_gid = product_gid_for_variant_id(any_variant) if any_variant else None
+    if product_gid:
+        shopify_update_product_fields(product_gid, {"status": "ARCHIVED"})
+
+    product.archived = True
+    session.flush()
+    return {"product_id": product_id, "shopify_id": product_gid, "archived": True}
+
+
 def update_product(
     session: Session,
     product_id: str,
@@ -1097,6 +1271,7 @@ def update_product(
 
 
 __all__ = [
+    "ProductInUse",
     "ProductRejected",
     "ShopifyConfigError",
     "ShopifyUnavailable",
@@ -1106,6 +1281,9 @@ __all__ = [
     "shopify_attach_images",
     "shopify_assign_variant_media",
     "update_product",
+    "delete_product",
+    "delete_variant",
+    "archive_product",
     "product_gid_for_variant_id",
     "product_types",
     "slugify",

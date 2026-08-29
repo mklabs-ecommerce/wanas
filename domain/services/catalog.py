@@ -235,7 +235,15 @@ def get_products(
     collection: str | None = None,
     query: str | None = None,
 ) -> dict:
-    stmt = select(Product).options(selectinload(Product.variants)).order_by(Product.name)
+    #: An archived product is one the shop no longer sells. Its rows stay --
+    #: `order_items` points at them -- but nothing that could lead to a sale
+    #: may see it, and search is the first of those.
+    stmt = (
+        select(Product)
+        .options(selectinload(Product.variants))
+        .where(Product.archived.is_(False))
+        .order_by(Product.name)
+    )
     if category:
         stmt = stmt.where(func.lower(Product.category) == category.lower())
     if department:
@@ -356,7 +364,9 @@ def _overlay_images(
 
 def get_variants(session: Session, product_id: str) -> dict | None:
     product = session.get(Product, product_id)
-    if product is None:
+    # Archived reads as gone here, not as a product with no stock: the bot
+    # must not describe, price or sell something the shop has withdrawn.
+    if product is None or product.archived:
         return None
 
     live_map = shopify_catalog.live_map()

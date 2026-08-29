@@ -12,8 +12,9 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 
-from domain.models import Product, Variant
+from domain.models import CartItem, Client, Order, OrderItem, Product, StockWaitlistEntry, Variant
 from integrations.shopify import admin_products as sap
 
 VARIANT = "wanas-hoodie-s-olive"  # a seeded variant, for product_gid resolution
@@ -561,3 +562,168 @@ def test_a_label_with_no_gid_stays_a_label(seeded, shopify):
 
     assert shopify.collection_members == {}
     assert seeded.get(Product, result["product_id"]).collection == "T-Shirts"
+
+# --------------------------------------------------------------------------
+# taking a product, or one of its sizes, back off the shelf
+# --------------------------------------------------------------------------
+
+
+def _fresh_product(session, title="Throwaway Tee", **kwargs):
+    return sap.create_product(
+        session,
+        title=title,
+        description="",
+        category="T-Shirts",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=kwargs.pop("variants", [
+            {"size": "S", "color": "Olive", "price": 300, "stock_qty": 1},
+            {"size": "M", "color": "Olive", "price": 300, "stock_qty": 1},
+        ]),
+        **kwargs,
+    )
+
+
+def _sold_product(session, shopify):
+    """A product with one order line against it -- the case that decides
+    everything below."""
+    result = _fresh_product(session, title="Sold Tee")
+    client = Client(full_name="Sara", phone="201000000001", address="somewhere")
+    session.add(client)
+    session.flush()
+    order = Order(
+        order_id="WNS-DEL-1", client_id=client.client_id, source_channel="whatsapp",
+        shipping_address="somewhere", contact_phone="201000000001", governorate="Cairo",
+        subtotal=Decimal("300"), shipping_fee=Decimal("60"), total=Decimal("360"),
+        status="Confirmed",
+    )
+    session.add(order)
+    session.add(OrderItem(
+        order_id="WNS-DEL-1", variant_id="sold-tee-s-olive", product_name="Sold Tee",
+        size="S", color="Olive", quantity=1,
+        unit_price=Decimal("300"), unit_original_price=Decimal("300"),
+    ))
+    session.flush()
+    return result
+
+
+def test_a_product_nobody_ordered_really_goes(seeded, shopify):
+    result = _fresh_product(seeded)
+
+    sap.delete_product(seeded, result["product_id"])
+
+    assert seeded.get(Product, result["product_id"]) is None
+    assert seeded.get(Variant, "throwaway-tee-s-olive") is None
+    assert result["shopify_id"] not in shopify.products
+    assert "throwaway-tee-s-olive" not in shopify.shelf
+
+
+def test_deleting_a_product_that_was_sold_is_refused(seeded, shopify):
+    """`order_items.variant_id` is a foreign key. An order is the record that
+    money changed hands; it outranks tidying the catalog."""
+    _sold_product(seeded, shopify)
+
+    with pytest.raises(sap.ProductInUse, match="archive"):
+        sap.delete_product(seeded, "sold-tee")
+
+
+def test_archiving_is_what_a_sold_product_gets_instead(seeded, shopify):
+    _sold_product(seeded, shopify)
+
+    result = sap.archive_product(seeded, "sold-tee")
+
+    assert result["archived"] is True
+    assert seeded.get(Product, "sold-tee").archived is True
+    assert shopify.products[result["shopify_id"]]["status"] == "ARCHIVED"
+
+
+def test_an_archived_product_is_gone_from_the_bots_search(seeded, shopify):
+    from domain.services.catalog import get_products, get_variants
+
+    _sold_product(seeded, shopify)
+    sap.archive_product(seeded, "sold-tee")
+    seeded.flush()
+
+    found = get_products(seeded)
+    assert "sold-tee" not in {p["product_id"] for p in found["products"]}
+    # And not sellable by name either -- archived reads as gone, not as
+    # out of stock.
+    assert get_variants(seeded, "sold-tee") is None
+
+
+def test_the_order_that_sold_it_still_reads_after_archiving(seeded, shopify):
+    _sold_product(seeded, shopify)
+    sap.archive_product(seeded, "sold-tee")
+    seeded.flush()
+
+    line = seeded.scalars(
+        select(OrderItem).where(OrderItem.variant_id == "sold-tee-s-olive")
+    ).first()
+    assert line is not None
+    assert line.product_name and line.size
+
+
+def test_one_size_can_go_on_its_own(seeded, shopify):
+    result = _fresh_product(seeded)
+
+    sap.delete_variant(seeded, "throwaway-tee-m-olive")
+
+    assert seeded.get(Variant, "throwaway-tee-m-olive") is None
+    assert seeded.get(Variant, "throwaway-tee-s-olive") is not None
+    assert seeded.get(Product, result["product_id"]) is not None
+    assert "throwaway-tee-m-olive" not in shopify.shelf
+
+
+def test_the_products_own_size_list_catches_up(seeded, shopify):
+    """`Product.sizes` is what the bot answers "what sizes do you have" with.
+    Left alone it would keep offering the one that just went."""
+    result = _fresh_product(seeded)
+    assert seeded.get(Product, result["product_id"]).sizes == ["M", "S"]
+
+    sap.delete_variant(seeded, "throwaway-tee-m-olive")
+
+    assert seeded.get(Product, result["product_id"]).sizes == ["S"]
+
+
+def test_the_last_size_cannot_be_deleted_on_its_own(seeded, shopify):
+    """Shopify has no such thing as a product with no variants, and a local
+    row with none is a product the bot offers and can never sell."""
+    _fresh_product(seeded, title="Only One", variants=[{"size": "S", "price": 300, "stock_qty": 1}])
+
+    with pytest.raises(sap.ProductInUse, match="only size"):
+        sap.delete_variant(seeded, "only-one-s")
+
+
+def test_a_size_that_was_sold_is_refused(seeded, shopify):
+    _sold_product(seeded, shopify)
+
+    with pytest.raises(sap.ProductInUse, match="ordered"):
+        sap.delete_variant(seeded, "sold-tee-s-olive")
+
+
+def test_a_cart_holding_the_deleted_size_lets_go_of_it(seeded, shopify):
+    """The other side of the same foreign key. Somebody waiting for a variant
+    that no longer exists is waiting for nothing."""
+    result = _fresh_product(seeded)
+    seeded.add(CartItem(channel="whatsapp", external_id="201000000000",
+                        variant_id="throwaway-tee-m-olive", quantity=1))
+    seeded.add(StockWaitlistEntry(channel="whatsapp", external_id="201000000000",
+                                  variant_id="throwaway-tee-m-olive", observed_stock=0))
+    seeded.flush()
+
+    sap.delete_variant(seeded, "throwaway-tee-m-olive")
+
+    assert seeded.scalars(
+        select(CartItem).where(CartItem.variant_id == "throwaway-tee-m-olive")
+    ).all() == []
+    assert seeded.scalars(
+        select(StockWaitlistEntry).where(StockWaitlistEntry.variant_id == "throwaway-tee-m-olive")
+    ).all() == []
+    assert result["product_id"]
+
+
+def test_deleting_something_that_is_not_there_says_so(seeded, shopify):
+    assert sap.delete_product(seeded, "no-such-product") == {"error": "product_not_found"}
+    assert sap.delete_variant(seeded, "no-such-variant") == {"error": "variant_not_found"}

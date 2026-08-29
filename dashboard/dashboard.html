@@ -1145,6 +1145,7 @@ const EN = {
   "اسم المنتج أو صيغة شوبيفاي": "Product name, or Shopify syntax",
   "اسم، SKU، لون…": "Name, SKU, colour…",
   "اضغط للنسخ": "Click to copy",
+  "اقفل المنتج": "Close the product",
   "اكتب الرقم": "Type the number",
   "اكتب رقم": "Type a number",
   "الآن": "just now",
@@ -1161,6 +1162,7 @@ const EN = {
   "الإجمالي": "Total",
   "الإضافة مانفذتش": "Could not add it",
   "الإعدادات": "Settings",
+  "الإقفال مانفذش": "Closing it did not go through",
   "الإلغاء مانفذش": "Could not cancel",
   "الإنشاء مانفذش": "Could not create it",
   "الإنشاء والتعديل بيروح لشوبيفاي الأول، وبعدين بيتسجل محليًا": "Create and edit go to Shopify first, then mirror locally",
@@ -1289,10 +1291,12 @@ const EN = {
   "المزايا": "the features",
   "المزايا وأرقام الاختبار وحالة النظام": "Features, test numbers and system status",
   "المسؤول": "Handled by",
+  "المسح مانفذش": "The delete did not go through",
   "المصدر": "Source",
   "المظهر": "Appearance",
   "المعرّف": "ID",
   "المقاس": "Size",
+  "المقاس اتمسح": "Size deleted",
   "المقاسات": "Sizes",
   "المقاسات والأسعار": "Sizes and prices",
   "المقاسات والصور": "Sizes and photos",
@@ -1302,6 +1306,9 @@ const EN = {
   "المنتج اتشال": "Product removed",
   "المنتج اتعمل": "Product created",
   "المنتج اتعمل، بس": "Product created, but",
+  "المنتج اتقفل": "Product closed",
+  "المنتج اتمسح": "Product deleted",
+  "المنتج ده اتباع قبل كده": "This product has been sold before",
   "المنتج ده مالوش نسخة محلية": "This product has no local copy",
   "المنتج مالوش نسخة محلية": "The product has no local copy",
   "المنتجات": "Products",
@@ -1317,6 +1324,11 @@ const EN = {
   "الوقت": "Time",
   "اليوم": "Today",
   "اليوم بس": "Today only",
+  "امسح": "Delete",
+  "امسح المقاس": "Delete this size",
+  "امسح المقاس ده؟": "Delete this size?",
+  "امسح المنتج": "Delete product",
+  "امسح المنتج ده؟": "Delete this product?",
   "امسح وابدأ من الأول": "Wipe and start over",
   "انت": "you",
   "انستجرام": "Instagram",
@@ -1357,6 +1369,7 @@ const EN = {
   "تعليقات انستجرام": "Instagram comments",
   "تعليقات كتير": "Comment flood",
   "تفعيل الحساب": "Activate account",
+  "تقفله بدل ما تمسحه؟ هيختفي من البوت ومن الموقع، والطلبات القديمة تفضل زي ما هي.": "Close it instead of deleting it? It disappears from the bot and the site, and the old orders stay exactly as they are.",
   "تلقائية": "automatic",
   "تمام، اتفهم": "Got it",
   "تنبيه": "Alert",
@@ -1509,6 +1522,7 @@ const EN = {
   "مانفعش نعمل الحساب": "Could not create the account",
   "مانفعش نغيّر الميزة": "Could not change the feature",
   "مانفعش نقفله": "Could not close it",
+  "مبقاش معروض للعملاء": "It is no longer shown to customers",
   "مبيعات آخر ٧ أيام": "Sales, last 7 days",
   "متاح": "Available",
   "متسجّل": "Set",
@@ -1551,6 +1565,7 @@ const EN = {
   "مش عدد الرسايل.\n        إجمالي الرسايل تحت رقم حقيقي — بس مش موزّع على الأيام.": "not the number of messages.\n        The message totals below are real — they are just not spread across days.",
   "مش معروف": "Unknown",
   "مش ممكن الحفظ من هنا": "Cannot be saved from here",
+  "مش ممكن المسح من هنا": "It cannot be deleted from here",
   "مش نسبة تحويل الموقع: شوبيفاي مابيديناش عدد زوار المتجر أصلاً.\n      دي طلبات البوت في الفترة دي مقسومة على المحادثات اللي البوت اشتغل فيها — رقم على رقم، والمحادثة\n      اللي ابتدت قبل الفترة أو الطلب اللي اتقفل بعدها مش متطابقين بالظبط. لو فلترت بطريقة الدفع\n      الرقم ده بيختفي، لأن المحادثة مالهاش طريقة دفع تتقسم عليها.": "is not the website's conversion rate: Shopify gives us no visitor count at all.\n      It is the bot's orders in this period divided by the conversations the bot worked — a count over a count, and a conversation\n      that started before the period, or an order closed after it, do not line up exactly. Filter by payment method and\n      this figure disappears, because a conversation has no payment method to divide by.",
   "مصدرها شوبيفاي مباشرة — طلبات البوت وطلبات الموقع مع بعض": "Straight from Shopify — bot orders and website orders together",
   "مظبوط": "Configured",
@@ -1623,6 +1638,7 @@ const EN = {
   "هيتسجل متسلّم على شوبيفاي.": " will be recorded as delivered on Shopify.",
   "هيتسجل متسلّم، وبما إنه دفع عند الاستلام هيتسجل مدفوع كمان.": " will be recorded as delivered, and since it is cash on delivery it will be recorded as paid too.",
   "هيتسجل مدفوع على شوبيفاي. مفيش رجوع في الخطوة دي.": " will be recorded as paid on Shopify. This step cannot be undone.",
+  "هيتشال من شوبيفاي ومن قاعدة البيانات. مش ممكن الرجوع فيها.": "will be removed from Shopify and from the database. This cannot be undone.",
   "هيتلغي": "will be cancelled",
   "و": "W",
   "واتساب": "WhatsApp",
@@ -1736,6 +1752,7 @@ const ICON_PATHS = {
   clock:     '<circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 2"/>',
   money:     '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/>',
   spark:     '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+  trash:     '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4h6v3"/>',
   download:  '<path d="M12 3v12"/><path d="m7.5 11 4.5 4 4.5-4"/><path d="M4 20h16"/>',
 };
 
@@ -3666,6 +3683,8 @@ async function openProduct(gid) {
       <td><input class="inp" type="file" style="width:150px"
             accept="image/png,image/jpeg,image/webp,image/gif"
             data-img="${esc(v.sku || "")}" aria-label="${tr("غيّر الصورة")}"></td>
+      <td><button class="btn icon ghost" type="button" data-del="${esc(v.sku || "")}"
+            aria-label="${tr("امسح المقاس")}">${icon("trash", 15)}</button></td>
     </tr>`).join("");
 
   body.innerHTML = `
@@ -3695,8 +3714,8 @@ async function openProduct(gid) {
 
     <div style="height:var(--s-4)"></div>
     ${card(tr("المقاسات والأسعار"), TR`${product.variants.length} مقاس`,
-      tableHTML(["", tr("المقاس"), tr("السعر"), tr("المخزون"), tr("الحالة"), tr("الصورة")],
-        variantRows, { minWidth: 700 })
+      tableHTML(["", tr("المقاس"), tr("السعر"), tr("المخزون"), tr("الحالة"), tr("الصورة"), ""],
+        variantRows, { minWidth: 760 })
       + TR`<div class="hint" style="padding:var(--s-3)">الصورة بتتحط على كل مقاسات اللون ده، مش السطر لوحده.</div>`,
       "", { flush: true })}`;
 
@@ -3751,8 +3770,59 @@ async function openProduct(gid) {
       VIEWS.products.load();
     },
   });
+  /* One size at a time, from its own row. Refused by the server for a size
+     that has been ordered and for a product's last one -- both are things the
+     drawer cannot know without asking, so it asks rather than hiding the
+     button and guessing wrong. */
+  $$("[data-del]", body).forEach((button) => button.addEventListener("click", async () => {
+    const sku = button.dataset.del;
+    const ok = await overlay.confirm(tr("امسح المقاس ده؟"),
+      TR`${sku} هيتشال من شوبيفاي ومن قاعدة البيانات. مش ممكن الرجوع فيها.`,
+      tr("امسح"), { danger: true });
+    if (!ok) return;
+    const result = await api(`/dashboard/api/shopify/variants/${encodeURIComponent(sku)}/delete`,
+      { method: "POST", quiet: true });
+    if (result.__error) return toastError(result.__error, tr("المسح مانفذش"));
+    toast(tr("المقاس اتمسح"), sku);
+    openProduct(gid);
+  }));
+
+  const remove = el("button", {
+    class: "btn danger", html: TR`${icon("trash", 15)} امسح المنتج`,
+    onclick: async () => {
+      if (!product.local_product_id) return toast(tr("مش ممكن المسح من هنا"), tr("المنتج مالوش نسخة محلية"), "warn");
+      const ok = await overlay.confirm(tr("امسح المنتج ده؟"),
+        TR`${product.title} هيتشال من شوبيفاي ومن قاعدة البيانات. مش ممكن الرجوع فيها.`,
+        tr("امسح"), { danger: true });
+      if (!ok) return;
+      const result = await api(`/dashboard/api/shopify/products/${encodeURIComponent(product.local_product_id)}/delete`,
+        { method: "POST", quiet: true });
+
+      /* A product that has been sold cannot lose its rows -- order lines
+         point at them. Archiving is the same intent without destroying the
+         orders, so it is offered here rather than left as a dead end. */
+      if (result.__error && result.__error.status === 409) {
+        const archive = await overlay.confirm(tr("المنتج ده اتباع قبل كده"),
+          TR`${result.__error.message || ""} تقفله بدل ما تمسحه؟ هيختفي من البوت ومن الموقع، والطلبات القديمة تفضل زي ما هي.`,
+          tr("اقفل المنتج"), { danger: true });
+        if (!archive) return;
+        const archived = await api(`/dashboard/api/shopify/products/${encodeURIComponent(product.local_product_id)}/archive`,
+          { method: "POST", quiet: true });
+        if (archived.__error) return toastError(archived.__error, tr("الإقفال مانفذش"));
+        toast(tr("المنتج اتقفل"), tr("مبقاش معروض للعملاء"));
+        overlay.close();
+        return VIEWS.products.load();
+      }
+      if (result.__error) return toastError(result.__error, tr("المسح مانفذش"));
+      toast(tr("المنتج اتمسح"), product.title);
+      overlay.close();
+      VIEWS.products.load();
+    },
+  });
+
   $("#drawerFoot").innerHTML = "";
-  $("#drawerFoot").append(save, el("button", { class: "btn", text: tr("إغلاق"), onclick: () => overlay.close() }));
+  $("#drawerFoot").append(save, remove,
+    el("button", { class: "btn", text: tr("إغلاق"), onclick: () => overlay.close() }));
   $("#drawerFoot").hidden = false;
 }
 

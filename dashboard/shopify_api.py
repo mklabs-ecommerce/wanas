@@ -417,6 +417,74 @@ def list_product_types(wanas_staff: str | None = Cookie(default=None)) -> JSONRe
     return JSONResponse({"product_types": types})
 
 
+@router.post("/products/{local_product_id}/delete")
+def delete_product(
+    local_product_id: str, wanas_staff: str | None = Cookie(default=None)
+) -> JSONResponse:
+    """Remove a product entirely -- Shopify and wanas.db.
+
+    Refused with `product_in_use` when an order references any of its sizes:
+    `order_items.variant_id` is a foreign key, and an order is the record that
+    money changed hands. The dashboard offers `archive` in its place.
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+        try:
+            result = shopify_admin_products.delete_product(db, local_product_id)
+        except shopify_admin_products.ProductInUse as exc:
+            return JSONResponse({"error": "product_in_use", "detail": str(exc)}, status_code=409)
+        except shopify_admin_products.ProductRejected as exc:
+            return JSONResponse({"error": "product_rejected", "detail": str(exc)}, status_code=409)
+        except (ShopifyUnavailable, ShopifyConfigError) as exc:
+            return _outage(exc)
+    if result.get("error") == "product_not_found":
+        return JSONResponse(result, status_code=404)
+    return JSONResponse(result)
+
+
+@router.post("/products/{local_product_id}/archive")
+def archive_product(
+    local_product_id: str, wanas_staff: str | None = Cookie(default=None)
+) -> JSONResponse:
+    """Stop selling it without destroying what it sold."""
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+        try:
+            result = shopify_admin_products.archive_product(db, local_product_id)
+        except shopify_admin_products.ProductRejected as exc:
+            return JSONResponse({"error": "product_rejected", "detail": str(exc)}, status_code=409)
+        except (ShopifyUnavailable, ShopifyConfigError) as exc:
+            return _outage(exc)
+    if result.get("error") == "product_not_found":
+        return JSONResponse(result, status_code=404)
+    return JSONResponse(result)
+
+
+@router.post("/variants/{variant_id}/delete")
+def delete_variant(variant_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """Remove one size/colourway. Refused for a sold one, and for the last."""
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+        try:
+            result = shopify_admin_products.delete_variant(db, variant_id)
+        except shopify_admin_products.ProductInUse as exc:
+            return JSONResponse({"error": "variant_in_use", "detail": str(exc)}, status_code=409)
+        except shopify_admin_products.ProductRejected as exc:
+            return JSONResponse({"error": "product_rejected", "detail": str(exc)}, status_code=409)
+        except (ShopifyUnavailable, ShopifyConfigError) as exc:
+            return _outage(exc)
+    if result.get("error") == "variant_not_found":
+        return JSONResponse(result, status_code=404)
+    return JSONResponse(result)
+
+
+
 # --------------------------------------------------------------------------
 # uploads
 # --------------------------------------------------------------------------

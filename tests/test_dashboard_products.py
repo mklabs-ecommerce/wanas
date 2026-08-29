@@ -330,3 +330,96 @@ def test_the_edit_route_carries_a_new_photo_through(logged_in, shopify):
 
     assert res.status_code == 200, res.text
     assert shopify.variant_images[VARIANT] == "https://x/olive.png"
+
+
+# --------------------------------------------------------------------------
+# delete / archive
+# --------------------------------------------------------------------------
+
+
+def test_deleting_a_product_requires_login(client):
+    assert client.post("/dashboard/api/shopify/products/wanas-hoodie/delete").status_code == 401
+
+
+def test_deleting_a_variant_requires_login(client):
+    assert client.post(f"/dashboard/api/shopify/variants/{VARIANT}/delete").status_code == 401
+
+
+def test_archiving_a_product_requires_login(client):
+    assert client.post("/dashboard/api/shopify/products/wanas-hoodie/archive").status_code == 401
+
+
+def test_deleting_a_product_that_is_not_there_is_a_404(logged_in, shopify):
+    res = logged_in.post("/dashboard/api/shopify/products/no-such-thing/delete")
+    assert res.status_code == 404
+
+
+def test_a_created_product_can_be_deleted_again(logged_in, shopify):
+    created = logged_in.post(
+        "/dashboard/api/shopify/products",
+        json={
+            "title": "Regret Tee", "category": "T-Shirts", "department": "unisex",
+            "variants": [
+                {"size": "S", "price": 300, "stock_qty": 1},
+                {"size": "M", "price": 300, "stock_qty": 1},
+            ],
+        },
+    ).json()
+
+    res = logged_in.post(f"/dashboard/api/shopify/products/{created['product_id']}/delete")
+
+    assert res.status_code == 200, res.text
+    assert res.json()["deleted"] is True
+    assert created["shopify_id"] not in shopify.products
+
+
+def test_one_size_of_a_created_product_can_go(logged_in, shopify):
+    logged_in.post(
+        "/dashboard/api/shopify/products",
+        json={
+            "title": "Trim Tee", "category": "T-Shirts", "department": "unisex",
+            "variants": [
+                {"size": "S", "price": 300, "stock_qty": 1},
+                {"size": "M", "price": 300, "stock_qty": 1},
+            ],
+        },
+    )
+
+    res = logged_in.post("/dashboard/api/shopify/variants/trim-tee-m/delete")
+
+    assert res.status_code == 200, res.text
+    assert "trim-tee-m" not in shopify.shelf
+    assert "trim-tee-s" in shopify.shelf
+
+
+def test_the_last_size_is_refused_with_a_reason_a_person_can_read(logged_in, shopify):
+    logged_in.post(
+        "/dashboard/api/shopify/products",
+        json={
+            "title": "Single Tee", "category": "T-Shirts", "department": "unisex",
+            "variants": [{"size": "S", "price": 300, "stock_qty": 1}],
+        },
+    )
+
+    res = logged_in.post("/dashboard/api/shopify/variants/single-tee-s/delete")
+
+    assert res.status_code == 409
+    assert res.json()["error"] == "variant_in_use"
+    assert "only size" in res.json()["detail"]
+
+
+def test_archiving_answers_the_dashboard(logged_in, shopify):
+    created = logged_in.post(
+        "/dashboard/api/shopify/products",
+        json={
+            "title": "Retire Tee", "category": "T-Shirts", "department": "unisex",
+            "variants": [{"size": "S", "price": 300, "stock_qty": 1}],
+        },
+    ).json()
+
+    res = logged_in.post(f"/dashboard/api/shopify/products/{created['product_id']}/archive")
+
+    assert res.status_code == 200, res.text
+    assert res.json()["archived"] is True
+    assert shopify.products[created["shopify_id"]]["status"] == "ARCHIVED"
+

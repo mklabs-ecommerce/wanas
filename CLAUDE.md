@@ -480,8 +480,13 @@ mirrors the wanas.db-only fields (`category`/`department`/`style`/
 `collection`/`size_chart`) after — see the module docstring on
 `integrations/shopify/admin_products.py` for exactly where that line
 is drawn (no refunds — this shop is cash-on-delivery with nothing to
-refund against — and removing a variant from an existing Shopify product
-is deliberately left to Shopify Admin). Creating a product **does** take
+refund against — and a product or one of its sizes can now be removed,
+which this module used to leave to Shopify Admin). Deleting is guarded by
+one fact rather than by caution: `order_items.variant_id` is a foreign key,
+so anything that has ever been sold is refused and offered
+`archive_product` instead — Shopify's `status: ARCHIVED` plus
+`Product.archived`, which together take it off the storefront and out of
+the bot's search while the order lines still read. Creating a product **does** take
 pictures off the staff member's device: one per variant row, uploaded
 through `POST /dashboard/api/shopify/uploads` and attached as that
 colourway's *variant* image, which is the field the bot reads when a

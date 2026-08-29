@@ -582,6 +582,27 @@ class FakeShopify:
                 sku = str(pair["id"]).rsplit("/", 1)[-1]
                 self.variant_images[sku] = self.media[pair["media_id"]]["url"]
 
+    def shopify_delete_product(self, product_gid):
+        self._guard()
+        with self._lock:
+            self.products.pop(product_gid, None)
+            self.published.discard(product_gid)
+            for sku in [s for s, gid in self.variant_to_product.items() if gid == product_gid]:
+                self.shelf.pop(sku, None)
+                self.variant_to_product.pop(sku, None)
+                self.variant_options.pop(sku, None)
+                self.variant_images.pop(sku, None)
+
+    def shopify_delete_variants(self, product_gid, variant_gids):
+        self._guard()
+        with self._lock:
+            for gid in variant_gids:
+                sku = str(gid).rsplit("/", 1)[-1]
+                self.shelf.pop(sku, None)
+                self.variant_to_product.pop(sku, None)
+                self.variant_options.pop(sku, None)
+                self.variant_images.pop(sku, None)
+
     def shopify_publish_to_online_store(self, product_gid):
         self._guard()
         if self.publish_problem:
@@ -619,6 +640,8 @@ class FakeShopify:
                 p["description_html"] = fields["descriptionHtml"]
             if "productType" in fields:
                 p["category"] = fields["productType"]
+            if "status" in fields:
+                p["status"] = fields["status"]
 
     def shopify_update_variants(self, product_gid, bulk_input):
         self._guard()
@@ -1128,6 +1151,10 @@ class FakeShopify:
         monkeypatch.setattr(shopify_admin_products, "shopify_create_variants", self.shopify_create_variants)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_media", self.shopify_attach_media)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_images", self.shopify_attach_images)
+        monkeypatch.setattr(shopify_admin_products, "shopify_delete_product", self.shopify_delete_product)
+        monkeypatch.setattr(
+            shopify_admin_products, "shopify_delete_variants", self.shopify_delete_variants
+        )
         monkeypatch.setattr(
             shopify_admin_products,
             "shopify_publish_to_online_store",

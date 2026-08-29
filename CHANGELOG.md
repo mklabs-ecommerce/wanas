@@ -2,6 +2,23 @@
 
 ## Unreleased — Adding a product, with the pictures on it
 
+- **A product, or one of its sizes, can be removed.** This module used to say
+  that was deliberately left to Shopify Admin; it is here now because staff
+  asked, and the thing that made it risky is handled rather than avoided.
+  `order_items.variant_id` is a foreign key, so:
+  - nothing ever ordered from it → it really goes, from Shopify and from
+    wanas.db, along with the cart lines and stock-waitlist entries that only
+    pointed at it;
+  - it sold before → refused, and **archive** is offered in its place:
+    Shopify's `status: ARCHIVED` and a new `Product.archived`, which together
+    take it off the storefront and out of the bot's search and out of
+    `get_variants`, while the orders still read. An order is the record that
+    money changed hands; it outranks tidying the catalog.
+  - a product's **last** size is refused too. Shopify has no such thing as a
+    product with no variants, and a local row with none is a product the bot
+    would offer and never be able to sell -- deleting the product is the
+    honest way to say that.
+
 - **A created product was invisible three different ways**, all of them
   Shopify defaults nobody had had to think about while products were made by
   hand in Admin:

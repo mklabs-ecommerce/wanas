@@ -166,6 +166,12 @@ class Product(Base):
     #: silently disappears. `size_chart` above stays the id of a *measured*
     #: chart in `data/size_charts.json`; a product may have either, or both.
     size_chart_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: Discontinued, but sold before -- so its rows cannot be deleted without
+    #: taking `order_items.variant_id` with them. Archived products are
+    #: invisible to the bot's search and to `get_product_detail`, which is
+    #: what "no longer sold" has to mean on this side; Shopify's own
+    #: `status: ARCHIVED` is the same statement on the other.
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
 
     # Display summaries derived from the variants. Never the basis of an
     # availability decision -- per-axis lists claim combinations that do not
