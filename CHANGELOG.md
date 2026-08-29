@@ -50,7 +50,14 @@ Alongside them, the repair for the orders already placed:
   naming who it would link. An order with no phone and no email is skipped —
   a name is not an identity, and linking two people who share one is worse
   than the "No customer" it replaces. Idempotent, and two orders from one
-  person converge on one record.
+  person converge on one record — which needed a fix the first real run
+  found: Shopify's customer search is an *index*, and the index lags the
+  write, so the second order from a person created moments earlier searched,
+  found nothing, and was refused for creating a duplicate. Six of nineteen
+  orders failed that way. What a run creates, it now remembers.
+
+  Run against the live shop: 24 of 28 orders now carry a customer, from 5
+  before. The four left have no phone and no email on the order at all.
 
 ## Unreleased — The order says who placed it
 

@@ -132,11 +132,20 @@ def run(*, apply: bool, tag: str | None, max_pages: int) -> int:
 
     scanned = linked = created = skipped = failed = 0
     #: Identifiers a *dry run* has already accounted for. Two orders from the
-    #: same person share one customer record -- when applying, the second
-    #: order's search finds what the first created, but a dry run writes
-    #: nothing and would otherwise report one new customer per order and
-    #: promise the operator far more records than it is about to make.
+    #: same person share one customer record -- a dry run writes nothing, so
+    #: without this it would report one new customer per order and promise the
+    #: operator far more records than it is about to make.
     planned: set[str] = set()
+
+    #: Customers created during *this* run, by identifier.
+    #:
+    #: Shopify's customer search is an index, and the index lags the write: a
+    #: customer created a second ago is not findable yet, so the next order
+    #: from that same person searched, found nothing, and tried to create a
+    #: duplicate -- which Shopify correctly refused with "Phone has already
+    #: been taken". Six of nineteen orders failed that way on the first real
+    #: run. What this run created, this run remembers.
+    created_here: dict[str, str] = {}
 
     for node in iter_orders(query, max_pages):
         scanned += 1
@@ -154,7 +163,11 @@ def run(*, apply: bool, tag: str | None, max_pages: int) -> int:
         identifier = plan["phone"] or plan["email"]
 
         try:
-            existing = admin_customers.find_customer(phone=plan["phone"], email=plan["email"])
+            existing = (
+                None
+                if identifier in created_here
+                else admin_customers.find_customer(phone=plan["phone"], email=plan["email"])
+            )
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             failed += 1
             print(f"  ! {label}  could not search: {exc}", file=sys.stderr)
@@ -163,6 +176,9 @@ def run(*, apply: bool, tag: str | None, max_pages: int) -> int:
         if existing:
             verb = "link to existing"
             customer_id = existing["id"]
+        elif identifier in created_here:
+            verb = "link to the one created a moment ago"
+            customer_id = created_here[identifier]
         else:
             verb = "create and link"
             customer_id = None
@@ -190,6 +206,7 @@ def run(*, apply: bool, tag: str | None, max_pages: int) -> int:
                     email=plan["email"],
                 )
                 customer_id = customer["id"]
+                created_here[identifier] = customer_id
                 created += 1
             admin_customers.set_order_customer(node["id"], customer_id)
         except (

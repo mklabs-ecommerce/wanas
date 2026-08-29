@@ -231,3 +231,34 @@ def test_one_order_failing_does_not_stop_the_rest(shop, capsys, monkeypatch):
     assert len(shop.links) == 1
     assert exit_code == 1, "a failure has to be visible in the exit code"
     assert "1 failed" in capsys.readouterr().out
+
+
+def test_a_second_order_does_not_wait_for_shopifys_search_index(shop, monkeypatch):
+    """Shopify's customer search is an index and the index lags the write: a
+    customer created a second ago is not findable yet. On the first real run
+    six of nineteen orders failed exactly this way -- the next order from the
+    same person searched, found nothing, tried to create a duplicate, and was
+    correctly refused with "Phone has already been taken". What this run
+    created, this run has to remember."""
+    from integrations.shopify.admin_customers import CustomerWriteRefused
+
+    monkeypatch.setattr(
+        backfill.admin_customers, "find_customer",
+        lambda *, phone=None, email=None: None,  # the index never catches up
+    )
+
+    real_create = shop.create_customer
+
+    def refuses_a_duplicate(*, first_name, last_name, phone, email):
+        if any(c.get("phone") == phone for c in shop.customers):
+            raise CustomerWriteRefused("customerCreate: Phone has already been taken")
+        return real_create(first_name=first_name, last_name=last_name, phone=phone, email=email)
+
+    monkeypatch.setattr(backfill.admin_customers, "create_customer", refuses_a_duplicate)
+    shop.orders = two_orders_from_one_person()
+
+    exit_code = backfill.run(apply=True, tag=None, max_pages=20)
+
+    assert exit_code == 0, "the second order must not fail"
+    assert len(shop.customers) == 1
+    assert len(shop.links) == 2
