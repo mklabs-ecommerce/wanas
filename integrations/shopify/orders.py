@@ -405,6 +405,66 @@ def cancel_order(shopify_order_id: str, *, reason: str = "CUSTOMER", restock: bo
         raise OrderRejected(message, errors)
 
 
+#: Settling a cash-on-delivery order. Shopify has no inverse -- there is no
+#: "mark as unpaid" mutation -- so this is a one-way door.
+ORDER_MARK_AS_PAID = """
+mutation($input: OrderMarkAsPaidInput!) {
+  orderMarkAsPaid(input: $input) {
+    order { id displayFinancialStatus }
+    userErrors { field message }
+  }
+}
+"""
+
+
+def mark_as_paid(shopify_order_id: str) -> dict:
+    """Record that a cash-on-delivery order was paid.
+
+    The money moves in the street, not through Shopify, so nothing else can
+    ever tell this shop an order settled -- which is why every order the bot
+    places sits at PENDING (`create_order` leaves it there on purpose) until
+    somebody says the courier handed the cash over.
+
+    Returns the new financial status, or a payload with "error" set when
+    Shopify refused -- an already-paid or cancelled order cannot be marked
+    paid, and that refusal is passed through as a reason rather than retried
+    or reinterpreted here. Raises ShopifyUnavailable / ShopifyConfigError, so
+    an outage stays tellable apart from a refusal.
+    """
+    data = get_client()(ORDER_MARK_AS_PAID, {"input": {"id": shopify_order_id}})
+    result = data.get("orderMarkAsPaid") or {}
+    errors = result.get("userErrors") or []
+    if errors:
+        message = "; ".join(e.get("message", "") for e in errors)
+        log.warning("Shopify refused to mark %s paid: %s", shopify_order_id, message)
+        return {"error": "payment_rejected", "detail": message}
+
+    order = result.get("order") or {}
+    return {"id": order.get("id"), "financial_status": order.get("displayFinancialStatus")}
+
+
+def try_mark_as_paid(shopify_order_id: str) -> bool:
+    """`mark_as_paid` that never raises, for the delivery path.
+
+    A local order reaching Delivered has already settled -- cash on delivery
+    means the courier collected it -- and that is recorded locally inside the
+    transaction. Telling Shopify is a separate, after-commit errand, and a
+    Shopify outage must not undo a delivery that happened. A failure is logged
+    and the order can still be marked paid by hand from the dashboard.
+    """
+    try:
+        result = mark_as_paid(shopify_order_id)
+    except (ShopifyUnavailable, ShopifyConfigError) as exc:
+        log.warning("Could not mark %s paid on Shopify: %s", shopify_order_id, exc)
+        return False
+    if "error" in result:
+        # Almost always "already paid", which is not worth an error line: the
+        # local row and Shopify agree, which is the point of the call.
+        log.info("Shopify would not mark %s paid: %s", shopify_order_id, result["detail"])
+        return False
+    return True
+
+
 # --------------------------------------------------------------------------
 # editing a placed order
 # --------------------------------------------------------------------------

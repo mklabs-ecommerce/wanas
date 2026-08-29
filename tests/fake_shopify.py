@@ -278,6 +278,9 @@ class FakeShopify:
                 # `integrations/shopify/orders.py`, which leaves it PENDING
                 # for exactly that reason.
                 "payment_gateways": ["Cash on Delivery (COD)"],
+                # Left unpaid on creation, exactly as `create_order` leaves
+                # it: the cash has not moved yet.
+                "financial_status": "PENDING",
                 "lines": {},
                 #: sku -> {title, unit_price}, so a swap/quantity edit can still
                 #: describe the line without a second lookup.
@@ -792,6 +795,13 @@ class FakeShopify:
             order["financial_status"] = "PAID"
             return {"id": shopify_order_id, "financial_status": "PAID"}
 
+    def try_mark_as_paid(self, shopify_order_id):
+        """The delivery path's form: never raises, never refuses out loud."""
+        try:
+            return "error" not in self.mark_as_paid(shopify_order_id)
+        except shopify_catalog.ShopifyUnavailable:
+            return False
+
     def fulfill(self, shopify_order_id, *, tracking_number=None, tracking_company=None, notify_customer=False):
         self._guard()
         if not self.fulfillment_access:
@@ -984,6 +994,8 @@ class FakeShopify:
         )
         monkeypatch.setattr(shopify_admin_orders, "fulfill", self.fulfill)
         monkeypatch.setattr(shopify_admin_orders, "mark_as_paid", self.mark_as_paid)
+        monkeypatch.setattr(shopify_orders, "mark_as_paid", self.mark_as_paid)
+        monkeypatch.setattr(shopify_orders, "try_mark_as_paid", self.try_mark_as_paid)
         monkeypatch.setattr(shopify_admin_products, "list_products", self.list_products)
         monkeypatch.setattr(shopify_admin_products, "get_product", self.get_product)
         monkeypatch.setattr(

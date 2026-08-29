@@ -8,7 +8,15 @@
   raw `PENDING`/`PAID` enum it used to print. These three are plain Shopify
   search syntax, unlike the payment *method* toggle next to them, which is
   classified server-side from the order's tags.
-- **A cash-on-delivery order can be marked paid.** Nothing else can ever tell
+- **Delivery settles the order on Shopify.** Reaching Delivered already set
+  the local `payment_status` — cash on delivery settles when the courier
+  hands it over — but nothing told Shopify, so every delivered order went on
+  reading PENDING in the admin. It is told now, after the commit and through
+  `try_mark_as_paid`, which never raises: the local row is the record that the
+  money was collected, and a Shopify outage must not roll back a delivery that
+  happened. Delivered itself comes from Shopify's own `fulfillments/update`
+  when the carrier reports the shipment delivered.
+- **A cash-on-delivery order can be marked paid by hand too.** Nothing else can ever tell
   this shop that one settled: the money moves in the street, so every bot
   order sits at PENDING until a person says the courier handed it over —
   which is exactly what left the whole chatbot history looking unpaid.

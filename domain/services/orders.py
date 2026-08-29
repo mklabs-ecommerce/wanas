@@ -963,6 +963,18 @@ def advance_status(session: Session, order: Order, new_status: str) -> dict:
         order.payment_status = "paid"
     session.flush()
 
+    if new_status == OrderStatus.DELIVERED.value and order.shopify_order_id:
+        # ...and Shopify has to be told, or every delivered order goes on
+        # reading PENDING in the admin -- which is exactly how the whole of
+        # this shop's chatbot history came to look unpaid. After the commit,
+        # like the status push below it: the local row is the record that the
+        # money was collected, and a Shopify outage must not roll back a
+        # delivery that happened. `try_mark_as_paid` never raises; a failure
+        # leaves the dashboard's own "علّم كمدفوع" button as the way to
+        # finish the job.
+        shopify_order_id = order.shopify_order_id
+        after_commit(session, lambda: shopify_orders.try_mark_as_paid(shopify_order_id))
+
     # The push (and the feedback request on Delivered) go out only once the
     # status change has committed. `new_status` is bound now, not read from the
     # order later: a Shopify fulfilment walks Confirmed -> Packed -> Shipped

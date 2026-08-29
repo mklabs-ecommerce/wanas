@@ -431,6 +431,48 @@ def test_status_pushes_and_feedback_request(cairo_rate):
     assert templates == ["status_packed", "status_shipped", "status_delivered", "feedback_request"]
 
 
+def test_delivery_settles_the_order_on_shopify_too(cairo_rate, shopify):
+    """Cash on delivery settles when the courier hands it over, and Shopify
+    has to be told -- left to the local row alone, every delivered order goes
+    on reading PENDING in the admin, which is how this shop's whole chatbot
+    history came to look unpaid."""
+    with session_scope() as session:
+        order_id = _place(session)["order_id"]
+        gid = session.get(Order, order_id).shopify_order_id
+
+    assert shopify.orders[gid]["financial_status"] == "PENDING"
+    for status in ("Packed", "Shipped", "Delivered"):
+        with session_scope() as session:
+            orders.advance_status(session, session.get(Order, order_id), status)
+
+    assert shopify.orders[gid]["financial_status"] == "PAID"
+    with session_scope() as session:
+        assert session.get(Order, order_id).payment_status == "paid"
+
+
+def test_a_shopify_refusal_does_not_undo_the_delivery(cairo_rate, shopify):
+    """The local row is the record that the money was collected. Telling
+    Shopify is a separate errand, after the commit, and its failure leaves the
+    dashboard's own mark-paid button as the way to finish the job."""
+    with session_scope() as session:
+        order_id = _place(session)["order_id"]
+
+    for status in ("Packed", "Shipped"):
+        with session_scope() as session:
+            orders.advance_status(session, session.get(Order, order_id), status)
+
+    shopify.down = True
+    try:
+        with session_scope() as session:
+            result = orders.advance_status(session, session.get(Order, order_id), "Delivered")
+    finally:
+        shopify.down = False
+
+    assert result["status"] == "Delivered"
+    with session_scope() as session:
+        assert session.get(Order, order_id).payment_status == "paid"
+
+
 def test_the_order_confirmation_and_status_pushes_reach_the_transcript(cairo_rate):
     """Every message the shop starts, in the dashboard's copy of the thread.
 
