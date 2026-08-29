@@ -16,11 +16,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
+from dashboard import customer_filters
 from dashboard.guard import require_permission
 from domain.db import session_scope
-from domain.models import Order, Product, ShippingRate, Variant
+from domain.models import Client, Order, Product, Variant
 from domain.services import orders as orders_service
 from integrations.shopify import (
     admin_customers as shopify_admin_customers,
@@ -387,37 +388,77 @@ def edit_quantity(
 
 
 # --------------------------------------------------------------------------
-# customers: Shopify's own, store-wide -- read-only. See
-# dashboard/customers_api.py for the separate WhatsApp-side view.
+# customers: the whole store -- read-only. See dashboard/customers_api.py for
+# the bot-only view.
 # --------------------------------------------------------------------------
+#
+# "The whole store" is Shopify's customers *plus* the bot customers Shopify
+# has never heard of. Those two used to be Shopify's list alone, which was
+# wrong by exactly the orders the bot placed before it attached a customer to
+# them: the buyer exists in wanas.db, has a name and a governorate, and simply
+# was not in the list that claimed to be everyone.
+#
+# Merged on the phone number, which is the only identifier both sides reliably
+# carry -- normalised through the same `normalise_phone` the order path uses,
+# so `01067177128` and `+201067177128` are one person rather than two rows.
+# A local row that matches a Shopify customer is dropped, not summed: Shopify's
+# `numberOfOrders` is already that person's lifetime total across both
+# channels, and adding the bot's count to it would double every bot order.
 
 
-#: How the Customers view may order the list.
-CUSTOMER_SORTS = ("recent", "orders_desc", "orders_asc")
+def _phone_key(raw: str | None) -> str | None:
+    """One phone in one shape, for matching a `Client` to a Shopify customer.
 
-#: What a customer with no address on file is bucketed as, so the governorate
-#: dropdown can offer it instead of quietly dropping those rows.
-UNKNOWN_GOVERNORATE = "__unknown__"
-
-
-def _governorate_options(db) -> list[dict]:
-    """The shop's own governorate list, not whatever happened to load.
-
-    Sourced from `ShippingRate` (seeded from `data/governorates.json`) so the
-    dropdown is the same twenty-seven every other part of this app knows
-    about. Building it from the customer rows on screen would make the filter
-    change shape every time the list did, and would never offer a governorate
-    the shop ships to but has not sold to yet.
+    Falls back to the digits when `normalise_phone` refuses -- it only accepts
+    Egyptian mobiles, and two rows carrying the same unrecognised number are
+    still the same person for the purpose of not listing them twice.
     """
-    rows = db.scalars(select(ShippingRate).order_by(ShippingRate.governorate)).all()
-    return [{"key": row.governorate, "label_ar": row.label_ar} for row in rows]
+    if not raw:
+        return None
+    return shopify_orders.normalise_phone(raw) or "".join(c for c in raw if c.isdigit()) or None
 
 
-def _matches_governorate(customer: dict, wanted: str) -> bool:
-    value = (customer.get("governorate") or "").strip()
-    if wanted == UNKNOWN_GOVERNORATE:
-        return not value
-    return value.casefold() == wanted.casefold()
+def _local_only_customers(db, known_phones: set[str], q: str | None) -> list[dict]:
+    """Bot customers with no Shopify customer record, shaped like Shopify's.
+
+    Same keys as `admin_customers._summary`, so one filter helper and one
+    table renderer handle both. `id` is the dashboard's own `c_<n>` public id
+    rather than a Shopify gid, which is what tells the UI to open the local
+    detail view -- there is no Shopify customer to open.
+    """
+    stmt = select(Client).order_by(Client.created_at.desc())
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Client.full_name.ilike(like), Client.phone.ilike(like)))
+
+    counts = dict(
+        db.execute(
+            select(Order.client_id, func.count(Order.order_id)).group_by(Order.client_id)
+        ).all()
+    )
+
+    out = []
+    for client in db.scalars(stmt).all():
+        key = _phone_key(client.phone)
+        if key and key in known_phones:
+            continue
+        out.append(
+            {
+                "id": client.public_id,
+                "client_id": client.client_id,
+                "name": client.full_name,
+                "email": client.email,
+                "phone": client.phone,
+                "order_count": counts.get(client.client_id, 0),
+                # Never summed from wanas.db. The money on an order is
+                # Shopify's to report -- see `domain/services/dashboard_stats.py`
+                # on why every revenue figure here is read from there.
+                "amount_spent": None,
+                "governorate": client.governorate,
+                "source": "bot",
+            }
+        )
+    return out
 
 
 @router.get("/customers")
@@ -429,42 +470,39 @@ def list_customers(
     sort: str = Query(default="recent", description="recent | orders_desc | orders_asc"),
     wanas_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
-    if orders_op not in ("eq", "gte"):
+    if orders_op not in customer_filters.ORDER_COUNT_OPS:
         return _bad("orders_op must be 'eq' or 'gte'")
-    if sort not in CUSTOMER_SORTS:
-        return _bad(f"sort must be one of {CUSTOMER_SORTS}")
+    if sort not in customer_filters.CUSTOMER_SORTS:
+        return _bad(f"sort must be one of {customer_filters.CUSTOMER_SORTS}")
 
     with session_scope() as db:
         _, refused = require_permission(db, wanas_staff, "customers")
         if refused is not None:
             return refused
-        options = _governorate_options(db)
+        options = customer_filters.governorate_options(db)
         try:
-            # One page is enough only when nothing is being filtered or
-            # re-sorted across the whole list; the moment it is, page one is
-            # the wrong denominator -- see `list_all_customers`.
-            filtering = orders_count is not None or governorate or sort != "recent"
-            if filtering:
-                customers, truncated = shopify_admin_customers.list_all_customers(query=q)
-            else:
-                page = shopify_admin_customers.list_customers(query=q)
-                customers, truncated = page["customers"], page["has_next_page"]
+            # The whole list, always, because the bot customers merged in
+            # below are deduped against it by phone: matching them against
+            # page one alone would list anyone whose Shopify record happens to
+            # sit on page two twice, under both of their names. Filtering and
+            # re-sorting need the whole list for their own reason -- page one
+            # is the wrong denominator, see `list_all_customers`.
+            customers, truncated = shopify_admin_customers.list_all_customers(query=q)
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
             return _outage(exc)
 
-    if orders_count is not None:
-        if orders_op == "gte":
-            customers = [c for c in customers if (c.get("order_count") or 0) >= orders_count]
-        else:
-            customers = [c for c in customers if (c.get("order_count") or 0) == orders_count]
-    if governorate:
-        customers = [c for c in customers if _matches_governorate(c, governorate)]
-    if sort != "recent":
-        customers = sorted(
-            customers,
-            key=lambda c: c.get("order_count") or 0,
-            reverse=(sort == "orders_desc"),
-        )
+        for customer in customers:
+            customer.setdefault("source", "shopify")
+        known = {key for key in (_phone_key(c.get("phone")) for c in customers) if key}
+        customers = customers + _local_only_customers(db, known, q)
+
+    customers = customer_filters.apply_filters(
+        customers,
+        orders_count=orders_count,
+        orders_op=orders_op,
+        governorate=governorate,
+        sort=sort,
+    )
 
     return JSONResponse(
         {

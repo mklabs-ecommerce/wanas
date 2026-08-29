@@ -1422,9 +1422,10 @@ const EN = {
   "على شوبيفاي": "on Shopify",
   "على وشك الخلاص": "Running low",
   "عملاء البوت": "Bot customers",
+  "طلبات البوت": "Bot orders",
+  "مصدره": "Source",
   "عملاء المتجر وعملاء البوت": "Store customers and bot customers",
   "عملاء جدد": "New customers",
-  "عملاء شوبيفاي": "Shopify customers",
   "عملاء شوبيفاي هم كل المتجر؛ عملاء البوت هم اللي اشتروا من المحادثة — الاتنين مش نفس القايمة عن قصد": "Shopify customers are the whole store; bot customers are the ones who bought in a conversation — two different lists, on purpose",
   "عملاء قدامى": "Returning customers",
   "عملاء مختلفين": "Distinct customers",
@@ -3891,7 +3892,7 @@ function collectionCreateForm() {
 const CUSTOMER_ORDER_PRESETS = ["", "1", "2", "3"];
 
 VIEWS.customers = {
-  tab: "shopify", search: "", data: null,
+  tab: "shopify", search: "", data: null, searchTimer: null, searchFocused: false,
   ordersCount: "", ordersOp: "eq", governorate: "", sort: "recent",
 
   async mount(force) {
@@ -3905,20 +3906,24 @@ VIEWS.customers = {
   async load() {
     $("#customersBody").innerHTML = this.toolbar() + skeletonTable(8);
     this.wire();
+    this.restoreSearchFocus();
     const params = new URLSearchParams();
     if (this.search) params.set("q", this.search);
-    if (this.tab === "shopify") {
-      // Order count, governorate and the sort are Shopify-side facts the bot
-      // customer list simply does not carry, so they ride only on this tab.
-      if (this.ordersCount !== "") params.set("orders_count", this.ordersCount);
-      if (this.ordersCount !== "") params.set("orders_op", this.ordersOp);
-      if (this.governorate) params.set("governorate", this.governorate);
-      if (this.sort !== "recent") params.set("sort", this.sort);
-    }
+    // The same four questions on both tabs. They mean slightly different
+    // things -- the store tab counts a customer's lifetime orders, the bot tab
+    // counts the ones placed in a conversation -- but both sides answer them,
+    // so the filter bar does not change shape when you switch tab.
+    if (this.ordersCount !== "") params.set("orders_count", this.ordersCount);
+    if (this.ordersCount !== "") params.set("orders_op", this.ordersOp);
+    if (this.governorate) params.set("governorate", this.governorate);
+    if (this.sort !== "recent") params.set("sort", this.sort);
     const qs = params.toString();
     const base = this.tab === "shopify" ? "/dashboard/api/shopify/customers" : "/dashboard/api/customers";
     const data = await api(`${base}${qs ? `?${qs}` : ""}`, { quiet: true });
-    if (data.__error) { $("#customersBody").innerHTML = this.toolbar() + errorBanner(data.__error, tr("العملاء")); this.wire(); return; }
+    if (data.__error) {
+      $("#customersBody").innerHTML = this.toolbar() + errorBanner(data.__error, tr("العملاء"));
+      this.wire(); this.restoreSearchFocus(); return;
+    }
     this.data = data;
     this.render();
   },
@@ -3935,7 +3940,7 @@ VIEWS.customers = {
         <div class="field" style="min-width:220px">${icon("search", 15)}
           <input id="custSearch" type="search" placeholder="اسم أو تليفون" value="${esc(this.search)}"></div>
       </div>
-      ${this.tab === "shopify" ? this.filtersHTML() : ""}
+      ${this.filtersHTML()}
     </div>`;
   },
 
@@ -3943,7 +3948,7 @@ VIEWS.customers = {
     const governorates = (this.data && this.data.governorates) || [];
     const custom = this.ordersCount !== "" && !CUSTOMER_ORDER_PRESETS.includes(this.ordersCount);
     return TR`<div class="row" style="width:100%;flex-wrap:wrap">
-      <label class="lbl" for="custOrders" style="margin:0">عدد الطلبات</label>
+      <label class="lbl" for="custOrders" style="margin:0">${this.tab === "shopify" ? tr("عدد الطلبات") : tr("طلبات البوت")}</label>
       <select class="inp" id="custOrders" style="max-width:150px">
         <option value="" ${this.ordersCount === "" ? "selected" : ""}>الكل</option>
         <option value="1" ${this.ordersCount === "1" ? "selected" : ""}>١</option>
@@ -3974,12 +3979,43 @@ VIEWS.customers = {
     </div>`;
   },
 
+  /* Every render rebuilds the toolbar, which destroys the search input the
+     person is typing into. Harmless when a button caused the render; fatal
+     for search-as-you-type, where it would eat focus on every result that
+     came back. So focus and caret are put back on the fresh input. */
+  restoreSearchFocus() {
+    if (!this.searchFocused) return;
+    const field = $("#custSearch");
+    if (!field) return;
+    field.focus();
+    const end = field.value.length;
+    try { field.setSelectionRange(end, end); } catch (_) { /* type=search in some browsers */ }
+  },
+
   wire() {
     $$("[data-tab]").forEach((b) => b.addEventListener("click", () => { this.tab = b.dataset.tab; this.load(); }));
     const search = $("#custSearch");
-    if (search) search.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") { this.search = search.value.trim(); this.load(); }
-    });
+    if (search) {
+      // Results while typing. Debounced rather than fired per keystroke:
+      // "hazem" is five queries, and on the store tab each one pages through
+      // the whole customer list. 300ms is about the gap between words.
+      // Enter still works, and skips the wait.
+      const run = (value) => {
+        const wanted = value.trim();
+        if (wanted === this.search) return;
+        this.search = wanted;
+        this.load();
+      };
+      search.addEventListener("focus", () => { this.searchFocused = true; });
+      search.addEventListener("blur", () => { this.searchFocused = false; });
+      search.addEventListener("input", () => {
+        clearTimeout(this.searchTimer);
+        this.searchTimer = setTimeout(() => run(search.value), 300);
+      });
+      search.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") { clearTimeout(this.searchTimer); run(search.value); }
+      });
+    }
 
     const orders = $("#custOrders");
     if (orders) orders.addEventListener("change", () => {
@@ -4009,15 +4045,17 @@ VIEWS.customers = {
     const shopify = this.tab === "shopify";
     const rows = this.data.customers;
     const rowsHTML = rows.map((c) => shopify ? `
-      <tr data-clickable data-gid="${esc(c.id)}">
+      <tr data-clickable ${c.source === "bot" ? `data-cid="${esc(c.client_id)}"` : `data-gid="${esc(c.id)}"`}>
         <td><div class="cellmain">${esc(c.name || "—")}</div><div class="cellsub num">${esc(c.phone || c.email || "")}</div></td>
         <td>${esc(c.governorate || "—")}</td>
+        <td>${c.source === "bot" ? chipHTML(tr("البوت"), "lilac") : chipHTML(tr("المتجر"), "sky")}</td>
         <td class="num">${num(c.order_count)}</td>
-        <td class="num">${esc(money(c.amount_spent))}</td>
+        <td class="num">${c.amount_spent === null ? "—" : esc(money(c.amount_spent))}</td>
       </tr>` : `
       <tr data-clickable data-cid="${esc(c.client_id)}">
         <td><div class="cellmain">${esc(c.full_name)}</div><div class="cellsub num">${esc(c.phone)}</div></td>
         <td>${esc(c.governorate || "—")}</td>
+        <td class="num">${num(c.order_count)}</td>
         <td>${chipHTML(c.status === "active" ? tr("نشط") : c.status, c.status === "active" ? "teal" : "amber", "dot")}</td>
         <td class="cellsub">${esc(shortDate(c.created_at))}</td>
       </tr>`).join("");
@@ -4028,10 +4066,10 @@ VIEWS.customers = {
       : "";
 
     $("#customersBody").innerHTML = this.toolbar() + truncated + card(
-      shopify ? tr("عملاء شوبيفاي") : tr("عملاء البوت"), `${rows.length}`,
+      shopify ? tr("كل المتجر") : tr("عملاء البوت"), `${rows.length}`,
       rows.length ? tableHTML(
-        shopify ? [tr("العميل"), tr("المحافظة"), { label: tr("طلبات"), num: true }, { label: tr("أنفق"), num: true }]
-                : [tr("العميل"), tr("المحافظة"), tr("الحالة"), tr("أول ظهور")],
+        shopify ? [tr("العميل"), tr("المحافظة"), tr("مصدره"), { label: tr("طلبات"), num: true }, { label: tr("أنفق"), num: true }]
+                : [tr("العميل"), tr("المحافظة"), { label: tr("طلبات"), num: true }, tr("الحالة"), tr("أول ظهور")],
         rowsHTML, { minWidth: 560 }) : "", "", { flush: true });
     this.wire();
     if (!rows.length) {
@@ -4040,6 +4078,7 @@ VIEWS.customers = {
     }
     $$("#customersBody tr[data-gid]").forEach((tr) => tr.addEventListener("click", () => openShopifyCustomer(tr.dataset.gid)));
     $$("#customersBody tr[data-cid]").forEach((tr) => tr.addEventListener("click", () => openLocalCustomer(tr.dataset.cid)));
+    this.restoreSearchFocus();
   },
 };
 

@@ -284,3 +284,174 @@ def test_hitting_the_page_cap_is_reported_rather_than_hidden(logged_in, monkeypa
     monkeypatch.setattr(shopify_api.shopify_admin_customers, "list_customers", endless)
     body = logged_in.get("/dashboard/api/shopify/customers?sort=orders_desc").json()
     assert body["truncated"] is True
+
+
+# --------------------------------------------------------------------------
+# the shape Shopify actually sends
+# --------------------------------------------------------------------------
+#
+# The fake shelf replaces `list_customers` wholesale, so `_summary` -- the
+# function that reads Shopify's raw node -- never runs in any test above. That
+# is exactly where the order-count filter broke in production: Shopify returns
+# `numberOfOrders` as a *string*, and every filter comparing it to an int
+# matched nothing. These tests go at the mapper directly, with the payload the
+# live shop returns.
+
+
+def test_the_order_count_is_read_as_a_number_not_the_string_shopify_sends():
+    """`"1" == 1` is False, which is why "customers with exactly one order"
+    returned none of the customers with exactly one order."""
+    from integrations.shopify.admin_customers import _summary
+
+    row = _summary(
+        {
+            "id": "gid://shopify/Customer/1",
+            "displayName": "Hazem",
+            "email": None,
+            "phone": "+201067177128",
+            "numberOfOrders": "3",
+            "amountSpent": {"amount": "1200.00"},
+            "defaultAddress": {"province": "Cairo"},
+        }
+    )
+
+    assert row["order_count"] == 3
+    assert isinstance(row["order_count"], int)
+
+
+def test_a_customer_shopify_gives_no_count_for_is_zero_not_a_crash():
+    from integrations.shopify.admin_customers import _summary
+
+    row = _summary({"id": "gid://shopify/Customer/2", "numberOfOrders": None})
+
+    assert row["order_count"] == 0
+
+
+@pytest.mark.no_shopify
+def test_the_filter_now_matches_what_shopify_sends(logged_in, monkeypatch):
+    """End to end over the real mapper, which means the real `list_customers`
+    -- hence `no_shopify`: the fake shelf replaces that function, and replacing
+    it is what hid this bug in the first place. Only the transport is stood in
+    for."""
+    from integrations.shopify import admin_customers
+
+    def fake_client(query, variables):
+        return {
+            "customers": {
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "nodes": [
+                    {"id": "gid://shopify/Customer/1", "displayName": "One",
+                     "phone": "+201000000001", "email": None, "numberOfOrders": "1",
+                     "amountSpent": {"amount": "100"}, "defaultAddress": {"province": "Cairo"}},
+                    {"id": "gid://shopify/Customer/2", "displayName": "Two",
+                     "phone": "+201000000002", "email": None, "numberOfOrders": "2",
+                     "amountSpent": {"amount": "200"}, "defaultAddress": {"province": "Giza"}},
+                ],
+            }
+        }
+
+    monkeypatch.setattr(admin_customers, "get_admin_client", lambda: fake_client)
+
+    body = logged_in.get("/dashboard/api/shopify/customers?orders_count=1").json()
+
+    assert [c["name"] for c in body["customers"]] == ["One"]
+
+
+# --------------------------------------------------------------------------
+# "the whole store" means both sides
+# --------------------------------------------------------------------------
+#
+# The store tab used to be Shopify's customer list alone, which was wrong by
+# exactly the orders the bot placed before it attached a customer to them: the
+# buyer is in wanas.db with a name and a governorate, and simply was not in the
+# list that called itself everyone.
+
+
+@pytest.fixture()
+def bot_only_customer(cairo_rate, seeded):
+    """A `Client` whose phone no Shopify customer carries."""
+    carts.add(seeded, "whatsapp", "201555000999", VARIANT, 1)
+    result = orders.place_order(
+        seeded,
+        channel="whatsapp",
+        external_id="201555000999",
+        customer_name="Off Shopify",
+        governorate="Cairo",
+        address="9 Nowhere Street",
+        contact_phone="01099988877",
+    )
+    assert "error" not in result, result
+    seeded.commit()
+    return result
+
+
+def test_the_store_list_includes_a_bot_customer_shopify_never_recorded(
+    logged_in, bot_only_customer, monkeypatch
+):
+    monkeypatch.setattr(
+        shopify_api.shopify_admin_customers, "list_all_customers",
+        lambda *, query=None: ([], False),
+    )
+
+    body = logged_in.get("/dashboard/api/shopify/customers").json()
+
+    row = next(c for c in body["customers"] if c["name"] == "Off Shopify")
+    assert row["source"] == "bot"
+    assert row["governorate"] == "Cairo"
+    # No money is ever summed out of wanas.db -- Shopify reports revenue.
+    assert row["amount_spent"] is None
+
+
+def test_a_customer_on_both_sides_is_listed_once(logged_in, bot_only_customer, monkeypatch):
+    """Matched on the phone, normalised the same way the order path does, so
+    `01099988877` and `+201099988877` are one person and not two rows."""
+    monkeypatch.setattr(
+        shopify_api.shopify_admin_customers, "list_all_customers",
+        lambda *, query=None: ([{
+            "id": "gid://shopify/Customer/7", "name": "Off Shopify",
+            "phone": "+201099988877", "email": None, "order_count": 4,
+            "amount_spent": "900.00", "governorate": "Cairo",
+        }], False),
+    )
+
+    body = logged_in.get("/dashboard/api/shopify/customers").json()
+
+    matching = [c for c in body["customers"] if c["name"] == "Off Shopify"]
+    assert len(matching) == 1
+    # Shopify's row wins: its `numberOfOrders` is already the lifetime total
+    # across both channels, so adding the bot's count would double-count.
+    assert matching[0]["source"] == "shopify"
+    assert matching[0]["order_count"] == 4
+
+
+# --------------------------------------------------------------------------
+# the bot tab answers the same questions
+# --------------------------------------------------------------------------
+
+
+def test_the_bot_list_carries_an_order_count(logged_in, bot_order):
+    body = logged_in.get("/dashboard/api/customers").json()
+
+    row = next(c for c in body["customers"] if c["full_name"] == "Hazem")
+    assert row["order_count"] == 1
+
+
+def test_the_bot_list_filters_by_order_count(logged_in, bot_order):
+    assert logged_in.get("/dashboard/api/customers?orders_count=1").json()["customers"]
+    assert logged_in.get("/dashboard/api/customers?orders_count=5").json()["customers"] == []
+
+
+def test_the_bot_list_filters_by_governorate(logged_in, bot_order):
+    hit = logged_in.get("/dashboard/api/customers?governorate=Cairo").json()
+    miss = logged_in.get("/dashboard/api/customers?governorate=Giza").json()
+    assert [c["full_name"] for c in hit["customers"]] == ["Hazem"]
+    assert miss["customers"] == []
+
+
+def test_the_bot_list_offers_the_shops_governorates(logged_in, bot_order):
+    body = logged_in.get("/dashboard/api/customers").json()
+    assert any(g["key"] == "Cairo" for g in body["governorates"])
+
+
+def test_the_bot_list_refuses_a_sort_it_does_not_have(logged_in):
+    assert logged_in.get("/dashboard/api/customers?sort=whatever").status_code == 400

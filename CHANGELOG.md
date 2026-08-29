@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased — Everyone who ever bought, in one list that filters
+
+Four things, all the same complaint from different angles: the Customers
+screen was not showing everyone, and the one filter that would have narrowed
+it was broken.
+
+- **The order-count filter returned nothing, always.** Shopify sends
+  `numberOfOrders` as a *string* — `"1"` — and `admin_customers._summary`
+  passed it straight through, so "customers with exactly one order" compared
+  `"1"` to `1` and matched none of the customers with exactly one order.
+  `admin_orders._customer_orders` had coerced it correctly since it was
+  written; this is the same reading in the place the customers list goes
+  through. The reason no test caught it: the fake shelf replaces
+  `list_customers` wholesale, so the mapper never ran in the suite. It does
+  now, over a real Shopify payload.
+- **"كل المتجر" now means the whole store.** It was Shopify's customer list
+  alone, which was short by exactly the buyers whose orders the bot placed
+  before it attached a customer to them — they exist in wanas.db with a name
+  and a governorate, and were missing from the list that called itself
+  everyone. Merged on the phone, normalised through the order path's own
+  `normalise_phone`, so `01067177128` and `+201067177128` are one person. A
+  local row that matches a Shopify customer is dropped rather than summed:
+  `numberOfOrders` is already that person's lifetime total across both
+  channels. Each row says which side it came from, and the store list now
+  always pages the whole customer list, because deduping against page one
+  would list anyone on page two twice.
+- **Both tabs offer the same four filters.** Order count, governorate and sort
+  were on the store tab only, on the reasoning that they were Shopify-side
+  facts — they are not: a bot customer's governorate is on their `Client` row
+  and their order count is in `orders`. `dashboard/customer_filters.py` holds
+  the one vocabulary both routers use, so the filter bar cannot change shape
+  when you switch tab. The counts still mean different things and the label
+  says so: lifetime orders on the store tab, bot orders on the bot tab.
+- **Search runs while you type**, debounced 300ms rather than per keystroke —
+  on the store tab each query pages the whole customer list. Enter still works
+  and skips the wait. The re-render that follows each result rebuilds the
+  toolbar, so focus and caret are put back on the fresh input; without that,
+  search-as-you-type would eat the field on every result that came back.
+
+Alongside them, the repair for the orders already placed:
+
+- **`scripts/shopify_backfill_customers.py`** attaches a customer to the
+  orders that have none. I said earlier this was impossible — that was wrong:
+  `orderCreate` is the only place a customer can be *upserted*, but
+  `orderCustomerSet` links an order to a customer that already exists, so the
+  repair is find-or-create then link. Dry run by default like every other
+  script in `scripts/`, and the dry run is the supervision: one line per order
+  naming who it would link. An order with no phone and no email is skipped —
+  a name is not an identity, and linking two people who share one is worse
+  than the "No customer" it replaces. Idempotent, and two orders from one
+  person converge on one record.
+
 ## Unreleased — The order says who placed it
 
 Every sale the bot made reached the Shopify admin with a shipping address and

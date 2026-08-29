@@ -198,6 +198,9 @@ data/                    products_seed.json, size_charts.json, governorates.json
                           metadata Shopify has no field for, NOT a duplicate
                           product database (price/stock come from Shopify)
 scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
+                          shopify_backfill_customers.py (attach a customer to
+                          orders placed before the bot did so -- orderCustomerSet,
+                          dry-run by default),
                           shopify_set_skus.py (link local variant_id -> Shopify
                           SKU), shopify_check_live.py (read-only smoke check),
                           migrate_schema.py (add every column the models
