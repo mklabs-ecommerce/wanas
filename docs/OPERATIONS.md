@@ -21,9 +21,14 @@ something looks wrong.
       section: `read_products`, `read_inventory`, `read_locations`,
       `read_orders` for the bot; `write_products`, `write_inventory`,
       `write_orders`, `write_fulfillments`, `read_customers` for the
-      dashboard's product/order management. A missing write scope shows up
-      as a `store_unavailable` (config) refusal from the dashboard action
-      that needed it, not a crash
+      dashboard's product/order management, plus
+      `read_merchant_managed_fulfillment_orders` and
+      `read_assigned_fulfillment_orders`, which `read_orders` does **not**
+      imply and which the Ship button cannot work without -- the order drawer
+      says so in place of the button, and `fulfill` refuses with
+      `fulfillment_scope_missing`, rather than either one failing as an
+      outage. A missing write scope shows up as a `store_unavailable`
+      (config) refusal from the dashboard action that needed it, not a crash
 - [ ] `SHOPIFY_WEBHOOK_SECRET` set — without it orders stay `Confirmed`
       forever and no tracking message ever goes out. The subscriptions
       themselves register automatically on boot once `SHOPIFY_STORE_DOMAIN`

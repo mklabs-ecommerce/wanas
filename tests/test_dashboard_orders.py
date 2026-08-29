@@ -321,9 +321,16 @@ def test_channel_filter_narrows_the_list(logged_in, bot_order, website_order):
     assert instagram == []
 
 
-def test_a_first_time_buyer_is_new_and_a_second_order_makes_them_returning(
+def test_a_second_order_is_returning_and_the_first_one_stays_new(
     logged_in, shopify, cairo_rate, seeded
 ):
+    """New/returning describes the *order*, not the customer as they are today.
+
+    Read off Shopify's lifetime `numberOfOrders` it described the customer, so
+    buying a second time retroactively relabelled the first order "returning"
+    too -- and the new-customer count shrank on a range whose orders had not
+    changed.
+    """
     first = shopify.seed_order(
         items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 500}],
         shipping_fee=60, customer_name="Repeat", phone="01011122233", governorate="Cairo",
@@ -332,16 +339,18 @@ def test_a_first_time_buyer_is_new_and_a_second_order_makes_them_returning(
     assert listed[first]["customer_kind"] == "new"
     assert listed[first]["customer_order_count"] == 1
 
-    shopify.seed_order(
+    second = shopify.seed_order(
         items=[{"variant_id": VARIANT, "quantity": 1, "unit_price": 500}],
         shipping_fee=60, customer_name="Repeat", phone="01011122233", governorate="Cairo",
     )
     listed = {o["id"]: o for o in logged_in.get("/dashboard/api/shopify/orders").json()["orders"]}
-    assert listed[first]["customer_kind"] == "returning"
+    assert listed[first]["customer_kind"] == "new"
+    assert listed[second]["customer_kind"] == "returning"
 
     returning = logged_in.get("/dashboard/api/shopify/orders?customer=returning").json()["orders"]
-    assert len(returning) == 2
-    assert logged_in.get("/dashboard/api/shopify/orders?customer=new").json()["orders"] == []
+    assert [o["id"] for o in returning] == [second]
+    new_only = logged_in.get("/dashboard/api/shopify/orders?customer=new").json()["orders"]
+    assert [o["id"] for o in new_only] == [first]
 
 
 def test_an_unknown_customer_filter_is_refused(logged_in):
@@ -534,3 +543,127 @@ def test_a_website_order_carrying_a_stray_whatsapp_tag_is_still_the_website():
     the admin for their own reasons, and a note about how they reached the
     customer must not relabel where the sale came from."""
     assert channel_of(app={"name": "Online Store"}, tags=["whatsapp"]) == "web"
+
+
+# --------------------------------------------------------------------------
+# payment method: the tag first, then the gateways
+#
+# Every order the bot creates goes in through `orderCreate` with nothing paid
+# on it, so Shopify returns `paymentGatewayNames: []` for all of them and the
+# gateway can never say how the customer is paying. The bot writes it as a tag
+# instead (`shopify_orders.ORDER_TAGS`), and reading the gateway first put the
+# shop's entire chatbot history in the "غير محدد" bucket.
+# --------------------------------------------------------------------------
+
+
+def payment_of(*, tags=(), gateways=()):
+    from integrations.shopify.admin_orders import _payment_method
+
+    return _payment_method({"tags": list(tags), "paymentGatewayNames": list(gateways)})
+
+
+def test_a_cash_on_delivery_tag_is_read_even_with_no_gateway():
+    """The whole of the bot's sales: tagged COD, no gateway at all. These were
+    landing in `unknown`."""
+    assert payment_of(tags=["chatbot", "cash-on-delivery", "whatsapp"]) == "cod"
+
+
+def test_an_online_payment_tag_is_read_the_same_way():
+    assert payment_of(tags=["chatbot", "online-payment"]) == "online"
+
+
+def test_the_tag_beats_a_manual_gateway_left_by_marking_it_paid():
+    """Collecting the cash and ticking "mark as paid" in the admin leaves the
+    gateway reading `manual`, which classified a pocketful of cash as an
+    online payment."""
+    assert payment_of(tags=["chatbot", "cash-on-delivery"], gateways=["manual"]) == "cod"
+
+
+def test_a_website_gateway_still_decides_when_there_is_no_tag():
+    assert payment_of(gateways=["Cash on Delivery (COD)"]) == "cod"
+    assert payment_of(gateways=["shopify_payments"]) == "online"
+
+
+def test_an_order_with_neither_a_tag_nor_a_gateway_is_unknown():
+    assert payment_of() == "unknown"
+
+
+# --------------------------------------------------------------------------
+# fulfillment orders are asked for separately
+# --------------------------------------------------------------------------
+
+
+def test_an_order_is_still_readable_without_the_fulfilment_scope(logged_in, bot_order, shopify):
+    """`fulfillmentOrders` needs a scope `read_orders` does not imply. While it
+    sat inside the order-detail query, a missing scope failed the whole
+    document and the drawer showed a raw GraphQL ACCESS_DENIED instead of the
+    customer, the address and the line items."""
+    shopify.fulfillment_access = False
+    res = logged_in.get(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["fulfillment_access"] is False
+    assert body["customer_name"]
+    assert body["line_items"]
+
+
+def test_shipping_without_the_scope_is_refused_by_name(logged_in, bot_order, shopify):
+    """Not an outage and not "already fulfilled" -- a permission that was never
+    granted, named so the dashboard can say which one to add."""
+    shopify.fulfillment_access = False
+    res = logged_in.post(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/fulfill")
+    assert res.json()["error"] == "fulfillment_scope_missing"
+
+
+def test_a_denied_fulfillment_read_does_not_hide_a_real_outage(monkeypatch):
+    """Only ACCESS_DENIED degrades. A Shopify outage still raises, because the
+    two are different problems and only one of them is fixed by waiting."""
+    from integrations.shopify import admin_orders
+    from integrations.shopify.client import ShopifyUnavailable
+
+    def denied(query, variables=None):
+        raise ShopifyUnavailable('[{"extensions": {"code": "ACCESS_DENIED"}}]')
+
+    def down(query, variables=None):
+        raise ShopifyUnavailable("HTTP 503")
+
+    assert admin_orders._fulfillment_orders(denied, "gid://shopify/Order/1") == ([], False)
+    with pytest.raises(ShopifyUnavailable):
+        admin_orders._fulfillment_orders(down, "gid://shopify/Order/1")
+
+
+# --------------------------------------------------------------------------
+# who counts as a new customer
+# --------------------------------------------------------------------------
+
+
+def test_an_order_with_nothing_identifying_the_buyer_stays_unknown():
+    """A real third bucket. Calling it "new" would inflate the one number the
+    answer exists to protect."""
+    from integrations.shopify import admin_orders
+
+    orders = [{"id": "gid://shopify/Order/9", "customer_gid": None, "customer_phone": None}]
+    admin_orders.annotate_customer_kind(orders, frozenset({"gid://shopify/Order/1"}))
+    assert orders[0]["customer_kind"] == "unknown"
+
+
+def test_one_person_under_two_phone_spellings_has_one_first_order():
+    """`01067177128` and `+201067177128` are one buyer, so only the earlier of
+    the two orders is anybody's first."""
+    from integrations.shopify import admin_orders
+
+    assert admin_orders.identity_key(
+        {"customer_gid": None, "customer_phone": "01067177128"}
+    ) == admin_orders.identity_key({"customer_gid": None, "customer_phone": "+201067177128"})
+
+
+def test_nothing_is_relabelled_when_shopify_would_not_answer():
+    """An empty index means the walk failed, not that nobody has ordered
+    before -- losing the label is a smaller failure than mislabelling every
+    order in the list as new."""
+    from integrations.shopify import admin_orders
+
+    orders = [{"id": "gid://shopify/Order/9", "customer_gid": "gid://shopify/Customer/1",
+               "customer_kind": "returning"}]
+    admin_orders.annotate_customer_kind(orders, frozenset())
+    assert orders[0]["customer_kind"] == "returning"

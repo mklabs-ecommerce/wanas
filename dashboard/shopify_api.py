@@ -135,6 +135,13 @@ def list_orders(
             local = local_by_id.get(item["id"])
             item["local"] = _local_ref(local)
             item["channel"] = _order_channel(local, item)
+        # New/returning is a fact about the *order*, not about the customer
+        # today: it says whether this was their first. Shopify's
+        # `numberOfOrders` cannot answer that -- see
+        # `admin_orders.first_order_ids`.
+        shopify_admin_orders.annotate_customer_kind(
+            orders, shopify_admin_orders.cached_first_order_ids()
+        )
 
     if payment != "all":
         orders = [o for o in orders if o["payment_method"] == payment]
@@ -173,6 +180,9 @@ def order_detail(order_gid: str, wanas_staff: str | None = Cookie(default=None))
         local = _local_order_for(db, order_gid)
         order["local"] = _local_ref(local)
         order["channel"] = _order_channel(local, order)
+        shopify_admin_orders.annotate_customer_kind(
+            [order], shopify_admin_orders.cached_first_order_ids()
+        )
     return JSONResponse(order)
 
 

@@ -303,6 +303,29 @@ def test_customer_kind_breakdown_keeps_unknown_separate_from_new():
     assert breakdown == {"new": 1, "returning": 1, "unknown": 1}
 
 
+def test_the_range_does_not_decide_who_is_a_new_customer(monkeypatch):
+    """Whether an order was its buyer's first is a fact about the shop, not
+    about the window on screen: inside a 30-day range every order looks like a
+    first one. `fetch_orders_in_range` relabels against the whole history."""
+    from integrations.shopify import admin_orders as shopify_admin_orders
+
+    first = {**_order(total=100, customer_phone="1"), "id": "gid://shopify/Order/A",
+             "customer_gid": "gid://shopify/Customer/1"}
+    second = {**_order(total=100, customer_phone="1"), "id": "gid://shopify/Order/B",
+              "customer_gid": "gid://shopify/Customer/1"}
+    monkeypatch.setattr(
+        shopify_admin_orders, "list_orders",
+        lambda **_: {"orders": [second], "has_next_page": False, "end_cursor": None},
+    )
+    monkeypatch.setattr(
+        shopify_admin_orders, "cached_first_order_ids", lambda: frozenset({first["id"]})
+    )
+    fetched, _truncated = dashboard_stats.fetch_orders_in_range(
+        dashboard_stats.range_for_days(30)
+    )
+    assert [o["customer_kind"] for o in fetched] == ["returning"]
+
+
 def test_stats_endpoint_rejects_an_unknown_payment_or_channel(logged_in):
     assert logged_in.get("/dashboard/api/stats?days=30&payment=bitcoin").status_code == 400
     assert logged_in.get("/dashboard/api/stats?days=30&channel=telegram").status_code == 400

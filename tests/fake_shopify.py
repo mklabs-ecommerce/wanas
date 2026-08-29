@@ -40,6 +40,10 @@ class FakeShopify:
         self.shelf: dict[str, dict] = {}
         #: Set to raise from every read and write, to test the outage path.
         self.down = False
+        #: Set False to model an access token without the fulfilment scopes:
+        #: orders stay readable, shipping refuses. See
+        #: `admin_orders._fulfillment_orders`.
+        self.fulfillment_access = True
         self._lock = threading.Lock()
         self.orders: dict[str, dict] = {}
         self._order_seq = 0
@@ -682,7 +686,10 @@ class FakeShopify:
             # dashboard and production disagree with the test all green.
             "payment_gateways": list(order.get("payment_gateways") or []),
             "payment_method": shopify_admin_orders._payment_method(
-                {"paymentGatewayNames": order.get("payment_gateways") or []}
+                {
+                    "tags": list(order["tags"]),
+                    "paymentGatewayNames": order.get("payment_gateways") or [],
+                }
             ),
             "customer_order_count": self._orders_for_customer(order),
             "customer_kind": (
@@ -702,6 +709,23 @@ class FakeShopify:
             ],
             "source": "chatbot" if "chatbot" in order["tags"] else "website",
         }
+
+    def first_order_ids(self, **_kwargs):
+        """Which orders were their buyer's first, from the whole shelf.
+
+        Same rule as `admin_orders.first_order_ids`: walk in creation order,
+        keep the first order seen per identity. Written here rather than
+        borrowed so the fake would notice if the real one started ranking
+        by something else.
+        """
+        seen, firsts = set(), set()
+        for order in sorted(self.orders.values(), key=lambda o: (o["created_at"], o["name"])):
+            key = shopify_admin_orders.identity_key(self._order_summary(order))
+            if key is None or key in seen:
+                continue
+            seen.add(key)
+            firsts.add(order["id"])
+        return frozenset(firsts)
 
     def list_orders(self, *, query=None, cursor=None):
         self._guard()
@@ -735,7 +759,8 @@ class FakeShopify:
                 {"id": f"gid://shopify/LineItem/{sku}", "title": order["line_meta"][sku]["title"], "quantity": qty, "sku": sku}
                 for sku, qty in order["lines"].items()
             ],
-            "fulfillment_orders": [
+            "fulfillment_access": self.fulfillment_access,
+            "fulfillment_orders": [] if not self.fulfillment_access else [
                 {
                     "id": f"gid://shopify/FulfillmentOrder/{order['name']}",
                     "status": fo_status,
@@ -754,6 +779,8 @@ class FakeShopify:
 
     def fulfill(self, shopify_order_id, *, tracking_number=None, tracking_company=None, notify_customer=False):
         self._guard()
+        if not self.fulfillment_access:
+            return {"error": "fulfillment_scope_missing"}
         with self._lock:
             order = self.orders.get(shopify_order_id)
             if order is None:
@@ -936,6 +963,10 @@ class FakeShopify:
         monkeypatch.setattr(shopify_admin_customers, "get_customer", self.get_customer)
         monkeypatch.setattr(shopify_admin_orders, "list_orders", self.list_orders)
         monkeypatch.setattr(shopify_admin_orders, "get_order", self.get_order)
+        monkeypatch.setattr(shopify_admin_orders, "first_order_ids", self.first_order_ids)
+        monkeypatch.setattr(
+            shopify_admin_orders, "cached_first_order_ids", self.first_order_ids
+        )
         monkeypatch.setattr(shopify_admin_orders, "fulfill", self.fulfill)
         monkeypatch.setattr(shopify_admin_products, "list_products", self.list_products)
         monkeypatch.setattr(shopify_admin_products, "get_product", self.get_product)

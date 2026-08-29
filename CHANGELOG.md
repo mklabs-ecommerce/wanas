@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased — Three things the Orders screen was getting wrong
+
+- **An order opens again.** `fulfillmentOrders` needs a scope `read_orders`
+  does not imply (`read_merchant_managed_fulfillment_orders` /
+  `read_assigned_fulfillment_orders`), and this app was never granted it.
+  While that field sat inside the order-detail query Shopify failed the whole
+  document with one ACCESS_DENIED, so clicking any order showed a raw GraphQL
+  error instead of the customer, the address and the line items — every one of
+  which the token may read perfectly well. Asked separately now, and allowed
+  to fail on its own: the drawer says the shipping button is locked and names
+  the missing permission, and `fulfill` refuses with
+  `fulfillment_scope_missing` rather than a Shopify error at the moment
+  somebody clicks. Every other failure still raises — an outage and a missing
+  scope are different problems, and only one of them is fixed by waiting.
+- **Cash on delivery is read off the tag.** An order the bot creates goes in
+  through `orderCreate` with nothing paid on it, so Shopify returns
+  `paymentGatewayNames: []` for all of them and the gateway can never say how
+  the customer is paying — which put the shop's entire chatbot history in
+  "غير محدد". The bot writes the method as a tag, and that is now read first.
+  It also settles the ones that were wrong rather than blank: collecting the
+  cash and ticking "mark as paid" in the admin leaves the gateway reading
+  `manual`, which classified a pocketful of cash as an online payment.
+- **New/returning describes the order, not the customer as they are today.**
+  It came off Shopify's lifetime `numberOfOrders`, so the moment somebody
+  bought a second time their *first* order was relabelled "returning" as well
+  — and the new-customer count shrank on ranges whose orders had not changed.
+  It is now whether that order was its buyer's first, decided against the
+  whole shop's history (`admin_orders.first_order_ids`, behind a one-minute
+  cache) and keyed on the customer id or, for the orders placed before the bot
+  attached customers, the normalised phone. `unknown` stays a real third
+  bucket, and a walk that fails changes no labels rather than calling
+  everything new.
+
 ## Unreleased — One customer list, and what each customer is actually worth
 
 The Customers screen answered two questions (how many orders, how much spent)

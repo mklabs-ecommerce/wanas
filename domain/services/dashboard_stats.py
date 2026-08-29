@@ -89,9 +89,23 @@ def fetch_orders_in_range(date_range: DateRange, *, max_pages: int = MAX_PAGES) 
         page = shopify_admin_orders.list_orders(query=query, cursor=cursor)
         orders.extend(page["orders"])
         if not page["has_next_page"]:
-            return orders, False
+            return _with_customer_kind(orders), False
         cursor = page["end_cursor"]
-    return orders, True
+    return _with_customer_kind(orders), True
+
+
+def _with_customer_kind(orders: list[dict]) -> list[dict]:
+    """Relabel new/returning against the whole shop, not this range.
+
+    Whether an order was its buyer's first is a fact about the shop's history,
+    so it cannot be read off a window: inside a 30-day range every order looks
+    like a first one, and Shopify's lifetime `numberOfOrders` has the opposite
+    fault -- it calls a customer's *first* order "returning" the moment they
+    buy again. See `admin_orders.first_order_ids`.
+    """
+    return shopify_admin_orders.annotate_customer_kind(
+        orders, shopify_admin_orders.cached_first_order_ids()
+    )
 
 
 def _is_test_order(order: dict, exclude_phones: set[str]) -> bool:
@@ -205,11 +219,10 @@ def summarize(
             order["total"]
         )
 
-    # How many of the orders in this window came from someone who had bought
-    # before. Lifetime, from Shopify's own `numberOfOrders` -- see
-    # `integrations/shopify/admin_orders._customer_orders`. `unknown` is a
-    # real third bucket (an order with no customer record) and is never folded
-    # into "new".
+    # How many of the orders in this window were somebody's first. Decided
+    # against the whole shop's history, not this window -- see
+    # `_with_customer_kind`. `unknown` is a real third bucket (an order with
+    # nothing on it that identifies a buyer) and is never folded into "new".
     customer_kind_breakdown: Counter[str] = Counter(
         o.get("customer_kind") or "unknown" for o in active
     )

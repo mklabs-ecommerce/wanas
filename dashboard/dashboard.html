@@ -1402,6 +1402,8 @@ const EN = {
   "طلب اتعدّل": "Order modified",
   "طلب اختبار من أرقام الفريق مستبعد من كل رقم في الصفحة دي.": "test order(s) from staff numbers are excluded from every figure on this page.",
   "طلب البوت": "Bot order",
+  "الشحن من هنا مقفول": "Shipping is locked here",
+  "صلاحية أوامر الشحن مش مدّية للتطبيق على شوبيفاي. الطلب بيتقرا عادي، لكن الشحن لازم يتعمل من لوحة شوبيفاي لحد ما الصلاحية تتضاف.": "The app has no fulfillment-order permission on Shopify. The order still reads fine, but shipping has to be done from Shopify Admin until the scope is added.",
   "طلب الموقع": "Website order",
   "طلب تبديل": "Swap request",
   "طلب من": "Order from",
@@ -3287,12 +3289,18 @@ async function openOrder(gid) {
         ${order.note ? TR`<div class="kv"><span class="k">ملاحظة</span><span class="v">${esc(order.note)}</span></div>` : ""}`)}
     </div>
 
-    ${card(tr("الأصناف"), "", tableHTML([tr("الصنف"), { label: tr("الكمية"), num: true }, ""], lines, { minWidth: 420 }), "", { flush: true })}`;
+    ${card(tr("الأصناف"), "", tableHTML([tr("الصنف"), { label: tr("الكمية"), num: true }, ""], lines, { minWidth: 420 }), "", { flush: true })}
+    ${order.fulfillment_access === false ? TR`<div class="banner" style="margin-top:var(--s-4)">
+      ${icon("alert", 16)}
+      <div><strong>الشحن من هنا مقفول</strong><br>صلاحية أوامر الشحن مش مدّية للتطبيق على شوبيفاي. الطلب بيتقرا عادي، لكن الشحن لازم يتعمل من لوحة شوبيفاي لحد ما الصلاحية تتضاف.</div>
+    </div>` : ""}`;
 
   const foot = [];
   if (!order.cancelled) {
-    foot.push(el("button", { class: "btn primary", type: "button", html: TR`${icon("truck", 15)} شحن الطلب`,
-      onclick: () => fulfillForm(order) }));
+    if (order.fulfillment_access !== false) {
+      foot.push(el("button", { class: "btn primary", type: "button", html: TR`${icon("truck", 15)} شحن الطلب`,
+        onclick: () => fulfillForm(order) }));
+    }
     foot.push(el("button", { class: "btn danger", type: "button", html: TR`${icon("x", 15)} إلغاء الطلب`,
       onclick: async () => {
         const ok = await overlay.confirm(tr("إلغاء الطلب؟"),

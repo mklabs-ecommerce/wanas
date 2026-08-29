@@ -24,13 +24,15 @@ share a throttle-pause state.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 
 from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
     get_admin_client,
 )
-from integrations.shopify.orders import OrderRejected
+from integrations.shopify.orders import OrderRejected, normalise_phone
 
 log = logging.getLogger("wanas.shopify.admin_orders")
 
@@ -92,6 +94,23 @@ query($id: ID!) {
     lineItems(first: 100) {
       nodes { id title quantity sku variant { id sku } }
     }
+  }
+}
+"""
+
+#: Asked *separately* from the order itself, and allowed to fail on its own.
+#:
+#: `fulfillmentOrders` needs `read_merchant_managed_fulfillment_orders` /
+#: `read_assigned_fulfillment_orders`, which are not implied by `read_orders`.
+#: While it sat inside ORDER_DETAIL_QUERY, an app without those scopes could
+#: not open an order *at all*: Shopify answers the whole document with one
+#: ACCESS_DENIED error, so the drawer showed a raw GraphQL dump instead of the
+#: customer, the address and the line items -- every one of which the token is
+#: perfectly entitled to read. Split out, a missing scope costs exactly the
+#: button it actually blocks.
+ORDER_FULFILLMENTS_QUERY = """
+query($id: ID!) {
+  order(id: $id) {
     fulfillmentOrders(first: 10) {
       nodes {
         id
@@ -131,16 +150,39 @@ PAYMENT_UNKNOWN = "unknown"
 PAYMENT_METHODS = (PAYMENT_COD, PAYMENT_ONLINE, PAYMENT_UNKNOWN)
 
 
+#: How the bot writes the payment method: as an order *tag*, because an order
+#: created through `orderCreate` has no payment on it at all -- cash on
+#: delivery means no gateway ran, and Shopify returns
+#: `paymentGatewayNames: []` for every one of them. Read before the gateways,
+#: not after, for two reasons: it is the only signal those orders carry (they
+#: were all landing in `unknown`, i.e. "غير محدد", which is the whole of the
+#: bot's sales), and where both exist the tag is the one that is right --
+#: marking a COD order paid by hand once it was collected leaves the gateway
+#: reading `manual`, which classified a pocketful of cash as an online payment.
+PAYMENT_TAGS = {
+    "cash-on-delivery": PAYMENT_COD,
+    "cash_on_delivery": PAYMENT_COD,
+    "cod": PAYMENT_COD,
+    "online-payment": PAYMENT_ONLINE,
+    "online_payment": PAYMENT_ONLINE,
+    "paid-online": PAYMENT_ONLINE,
+}
+
+
 def _payment_method(node: dict) -> str:
     """Which of the three buckets the payment toggle offers this order belongs
     in. Classified once, here, so the orders list and the statistics page can
     never disagree about what "COD" counted.
 
-    An order with no gateway at all is `unknown`, never `online`: a draft, a
-    manually created order, or one whose gateway Shopify did not return is not
-    evidence that somebody paid a card, and folding it into `online` would
-    quietly inflate exactly the number the toggle exists to separate.
+    The tag wins, then the gateway names. An order with neither is `unknown`,
+    never `online`: a draft, a manually created order, or one whose gateway
+    Shopify did not return is not evidence that somebody paid a card, and
+    folding it into `online` would quietly inflate exactly the number the
+    toggle exists to separate.
     """
+    for tag in (str(t).strip().lower() for t in (node.get("tags") or [])):
+        if tag in PAYMENT_TAGS:
+            return PAYMENT_TAGS[tag]
     gateways = [str(g).lower() for g in (node.get("paymentGatewayNames") or []) if g]
     if not gateways:
         return PAYMENT_UNKNOWN
@@ -324,18 +366,159 @@ def list_all_orders(*, query: str | None = None, max_pages: int = MAX_PAGES) -> 
     return orders, True
 
 
-def get_order(shopify_order_id: str) -> dict | None:
-    """One order in full, including its fulfillment orders. None if Shopify
-    has nothing at that id (deleted, or a bad id typed into the URL)."""
-    client = get_admin_client()
-    data = client(ORDER_DETAIL_QUERY, {"id": shopify_order_id})
-    node = data.get("order")
-    if node is None:
-        return None
+# --------------------------------------------------------------------------
+# new vs returning
+# --------------------------------------------------------------------------
 
-    customer = node.get("customer") or {}
-    address = node.get("shippingAddress") or {}
-    fulfillment_orders = [
+#: Just enough of every order in the shop to say which one came first for each
+#: person: the id, when it was placed, and the two things that identify a
+#: buyer. No line items, no money -- 250 orders a page instead of 50, and
+#: cheap enough to ask on a list request.
+ORDER_IDENTITY_QUERY = """
+query($cursor: String) {
+  orders(first: 250, after: $cursor, sortKey: CREATED_AT) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      id
+      createdAt
+      customer { id phone }
+      shippingAddress { phone }
+    }
+  }
+}
+"""
+
+#: 250 a page, so this is 25,000 orders before it gives up.
+IDENTITY_MAX_PAGES = 100
+
+#: How long a first-order index stays usable. It only decides a new/returning
+#: label, so a minute of staleness costs at worst one chip on one row, and it
+#: keeps the orders screen from re-walking the whole shop on every keystroke.
+IDENTITY_TTL = 60.0
+
+_identity_cache: tuple[float, frozenset[str]] | None = None
+_identity_lock = threading.Lock()
+
+
+def identity_key(order: dict) -> str | None:
+    """Who placed this order, as one string, or None when nothing on it says.
+
+    The Shopify customer id when there is one, otherwise the normalised phone
+    -- the same two keys `dashboard/customer_ledger.py` indexes on, and for
+    the same reason: every order the bot placed before it attached customers
+    has no customer record, only a phone on the shipping address.
+    """
+    gid = order.get("customer_gid") or ((order.get("customer") or {}).get("id"))
+    if gid:
+        return str(gid)
+    raw = (
+        order.get("customer_phone")
+        or (order.get("customer") or {}).get("phone")
+        or (order.get("shippingAddress") or {}).get("phone")
+    )
+    if not raw:
+        return None
+    return normalise_phone(raw) or "".join(c for c in str(raw) if c.isdigit()) or None
+
+
+def first_order_ids(*, max_pages: int = IDENTITY_MAX_PAGES) -> frozenset[str]:
+    """The id of every order that was its buyer's *first*.
+
+    Read from the whole shop in creation order, which is the only way to know
+    it. Shopify's `numberOfOrders` cannot: it is a lifetime total, so the
+    moment someone buys a second time it relabels their first order
+    "returning" as well -- which is why the new-customer count kept shrinking
+    on ranges that had not changed.
+    """
+    client = get_admin_client()
+    seen: set[str] = set()
+    firsts: set[str] = set()
+    cursor = None
+    for _ in range(max_pages):
+        data = client(ORDER_IDENTITY_QUERY, {"cursor": cursor})
+        block = data.get("orders") or {}
+        for node in block.get("nodes") or []:
+            key = identity_key(node)
+            if key is None or key in seen:
+                continue
+            seen.add(key)
+            firsts.add(node["id"])
+        page = block.get("pageInfo") or {}
+        if not page.get("hasNextPage"):
+            break
+        cursor = page.get("endCursor")
+    return frozenset(firsts)
+
+
+def cached_first_order_ids() -> frozenset[str]:
+    """`first_order_ids` behind a short TTL. Returns an empty set on a Shopify
+    failure rather than raising: the caller is already holding the orders it
+    wants to label, and losing the label is a smaller failure than losing the
+    list."""
+    global _identity_cache
+    now = time.monotonic()
+    with _identity_lock:
+        if _identity_cache is not None and now - _identity_cache[0] < IDENTITY_TTL:
+            return _identity_cache[1]
+    try:
+        firsts = first_order_ids()
+    except (ShopifyUnavailable, ShopifyConfigError) as exc:
+        log.warning("Could not index first orders, new/returning falls back: %s", exc)
+        return frozenset()
+    with _identity_lock:
+        _identity_cache = (now, firsts)
+    return firsts
+
+
+def annotate_customer_kind(orders: list[dict], firsts: frozenset[str]) -> list[dict]:
+    """Set `customer_kind` on each order from whether it was that buyer's
+    first, in place.
+
+    `unknown` stays a real third bucket -- an order with neither a customer
+    record nor a phone genuinely cannot be placed, and calling it "new" would
+    inflate the one number that answer exists to protect. With an empty
+    `firsts` (Shopify would not answer) nothing is touched, so the per-order
+    fallback from `_customer_kind` stands.
+    """
+    if not firsts:
+        return orders
+    for order in orders:
+        if identity_key(order) is None:
+            order["customer_kind"] = "unknown"
+        else:
+            order["customer_kind"] = "new" if order["id"] in firsts else "returning"
+    return orders
+
+
+#: What Shopify says when the access token has no fulfilment scope. Matched on
+#: the code rather than the sentence, which Shopify is free to reword.
+_ACCESS_DENIED = "ACCESS_DENIED"
+
+
+def _fulfillment_orders(client, shopify_order_id: str) -> tuple[list[dict], bool]:
+    """This order's fulfillment orders, and whether they could be read at all.
+
+    Returns `([], False)` when the token lacks the fulfilment scopes rather
+    than raising: not being allowed to *ship* from here is not a reason to
+    refuse to *show* the order. Every other failure still raises, because a
+    Shopify outage and a missing scope are different problems and only one of
+    them is fixed by waiting.
+    """
+    try:
+        data = client(ORDER_FULFILLMENTS_QUERY, {"id": shopify_order_id})
+    except ShopifyUnavailable as exc:
+        if _ACCESS_DENIED not in str(exc):
+            raise
+        log.warning(
+            "Shopify denied fulfillmentOrders -- the app is missing "
+            "read_merchant_managed_fulfillment_orders / "
+            "read_assigned_fulfillment_orders. Orders stay readable; "
+            "fulfilling from the dashboard will not work until the scope is added."
+        )
+        return [], False
+
+    node = data.get("order") or {}
+    return [
         {
             "id": fo["id"],
             "status": fo.get("status"),
@@ -350,7 +533,25 @@ def get_order(shopify_order_id: str) -> dict | None:
             ],
         }
         for fo in (node.get("fulfillmentOrders") or {}).get("nodes") or []
-    ]
+    ], True
+
+
+def get_order(shopify_order_id: str) -> dict | None:
+    """One order in full. None if Shopify has nothing at that id (deleted, or
+    a bad id typed into the URL).
+
+    `fulfillment_orders` is fetched separately and may come back empty with
+    `fulfillment_access` False -- see `_fulfillment_orders`.
+    """
+    client = get_admin_client()
+    data = client(ORDER_DETAIL_QUERY, {"id": shopify_order_id})
+    node = data.get("order")
+    if node is None:
+        return None
+
+    customer = node.get("customer") or {}
+    address = node.get("shippingAddress") or {}
+    fulfillment_orders, fulfillment_access = _fulfillment_orders(client, shopify_order_id)
 
     return {
         "id": node["id"],
@@ -384,6 +585,10 @@ def get_order(shopify_order_id: str) -> dict | None:
             for li in (node.get("lineItems") or {}).get("nodes") or []
         ],
         "fulfillment_orders": fulfillment_orders,
+        #: False means the token may read the order but not its fulfillment
+        #: orders, so the Ship button cannot work -- said once, here, rather
+        #: than discovered as a GraphQL error at the moment somebody clicks it.
+        "fulfillment_access": fulfillment_access,
     }
 
 
@@ -410,6 +615,10 @@ def fulfill(
     order = get_order(shopify_order_id)
     if order is None:
         return {"error": "order_not_found"}
+    if not order.get("fulfillment_access", True):
+        # Not "already fulfilled" and not an outage: the app was never granted
+        # the scope. Named so the dashboard can say which one to add.
+        return {"error": "fulfillment_scope_missing"}
 
     open_orders = [fo for fo in order["fulfillment_orders"] if fo["status"] == "OPEN"]
     if not open_orders:
@@ -454,6 +663,10 @@ __all__ = [
     "order_summary",
     "list_orders",
     "list_all_orders",
+    "identity_key",
+    "first_order_ids",
+    "cached_first_order_ids",
+    "annotate_customer_kind",
     "get_order",
     "fulfill",
 ]
