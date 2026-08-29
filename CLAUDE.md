@@ -110,6 +110,11 @@ integrations/            everything that talks to an external vendor over
   shopify/
     client.py               GraphQL transport for the live Shopify path
     catalog.py, inventory.py, orders.py   live read/write
+    files.py                the staged-upload dance (signed target -> bytes ->
+                            a mutation naming where they landed), in one place
+                            for both the dashboard's uploads and the size-chart
+                            script
+    size_charts.py          publish the charts to Shopify as metafields
     admin_customers.py, admin_orders.py, admin_products.py,
     admin_collections.py, admin_inventory.py                dashboard admin
     product_import.py       reconcile-on-boot for products created straight
@@ -474,6 +479,13 @@ for price/stock/orders; product create/edit pushes to Shopify first and
 mirrors the wanas.db-only fields (`category`/`department`/`style`/
 `collection`/`size_chart`) after — see the module docstring on
 `integrations/shopify/admin_products.py` for exactly where that line
-is drawn (no file-upload images yet, no refunds — this shop is
-cash-on-delivery with nothing to refund against, and removing a variant
-from an existing Shopify product is deliberately left to Shopify Admin).
+is drawn (no refunds — this shop is cash-on-delivery with nothing to
+refund against — and removing a variant from an existing Shopify product
+is deliberately left to Shopify Admin). Creating a product **does** take
+pictures off the staff member's device: one per variant row, uploaded
+through `POST /dashboard/api/shopify/uploads` and attached as that
+colourway's *variant* image, which is the field the bot reads when a
+customer names a colour. A size chart uploaded the same way sets
+`custom.size_chart` on Shopify and `Product.size_chart_image` locally —
+a chart picture with no published measurements behind it, which
+`get_size_chart` answers as `image_only`.

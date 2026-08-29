@@ -20,6 +20,10 @@ metafields:
 
 The snippet renders the measurements as a table and the diagram beneath it,
 in the `<details>` panel that already sits under the product description.
+Either half stands alone: `wns-boxy-tee` has measurements and no diagram, and
+a chart uploaded from the dashboard's new-product form is the other way round
+-- a picture with nothing published behind it. The panel shows whatever the
+product actually has.
 
 It **replaces** the theme's existing `snippets/size-chart.liquid`, which read
 one shop-wide page (`section.settings.size_chart`) for every product. That
@@ -50,6 +54,11 @@ so nothing that worked before stops working.
 
 A product with neither a chart nor a fallback page renders nothing at all, so
 that line is safe on every product.
+
+The dashboard sets `custom.size_chart` too, for a chart a staff member
+uploads while creating a product (`dashboard/api/shopify/uploads`). That is
+the same metafield, so nothing here needs to know which door a diagram came
+through -- and the script leaves it alone unless `--replace-images`.
 
 **Re-run the script** after adding a product, changing a chart, or editing
 `data/size_charts.json`. It is idempotent: diagrams already in Shopify Files

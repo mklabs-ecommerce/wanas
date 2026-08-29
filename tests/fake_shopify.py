@@ -56,6 +56,12 @@ class FakeShopify:
         self.variant_to_product: dict[str, str] = {}
         # variant_id (sku) -> {"size","color","length"}
         self.variant_options: dict[str, dict] = {}
+        # media gid -> {"product", "url"} -- pictures attached to a product
+        self.media: dict[str, dict] = {}
+        # variant_id (sku) -> the url of the picture that variant points at
+        self.variant_images: dict[str, str] = {}
+        # product gid -> the file gid its custom.size_chart metafield holds
+        self.chart_metafields: dict[str, str] = {}
         self._product_seq = 0
         # [{"id","topic","callbackUrl"}, ...]
         self.webhook_subscriptions: list[dict] = []
@@ -458,6 +464,7 @@ class FakeShopify:
                 "price": str(self.shelf[sku]["price"]),
                 "compare_at_price": str(self.shelf[sku]["compare"]) if self.shelf[sku]["compare"] else None,
                 "inventory_quantity": self.shelf[sku]["qty"],
+                "image_url": self.variant_images.get(sku),
                 **self.variant_options.get(sku, {"size": None, "color": None, "length": None}),
             }
             for sku in skus
@@ -507,13 +514,51 @@ class FakeShopify:
                     "color": opts.get("color"),
                     "length": opts.get("length"),
                 }
-                created.append({"sku": sku, "inventory_item_id": f"gid://shopify/InventoryItem/{sku}"})
+                created.append(
+                    {
+                        "id": f"gid://shopify/ProductVariant/{sku}",
+                        "sku": sku,
+                        "inventory_item_id": f"gid://shopify/InventoryItem/{sku}",
+                    }
+                )
             return created
 
     def shopify_attach_media(self, product_gid, image_url):
+        self.shopify_attach_images(product_gid, [{"source": image_url}])
+
+    def shopify_attach_images(self, product_gid, images):
+        """Every picture becomes product media; the first is the featured one.
+
+        The url comes straight back rather than after a wait: the real thing
+        processes an upload asynchronously and may answer None, which
+        `_media_by_color` already handles -- what a test needs from here is
+        that the right picture is attached to the right colour.
+        """
         self._guard()
-        if product_gid in self.products:
-            self.products[product_gid]["image_url"] = image_url
+        out = []
+        with self._lock:
+            product = self.products.get(product_gid)
+            for image in images:
+                media_id = f"gid://shopify/MediaImage/{len(self.media) + 1}"
+                self.media[media_id] = {"product": product_gid, "url": image["source"]}
+                if product is not None and not product.get("image_url"):
+                    product["image_url"] = image["source"]
+                out.append({"id": media_id, "url": image["source"]})
+        return out
+
+    def shopify_assign_variant_media(self, product_gid, pairs):
+        self._guard()
+        with self._lock:
+            for pair in pairs:
+                if not pair.get("media_id"):
+                    continue
+                sku = str(pair["id"]).rsplit("/", 1)[-1]
+                self.variant_images[sku] = self.media[pair["media_id"]]["url"]
+
+    def set_product_chart_image(self, product_gid, file_gid):
+        self._guard()
+        with self._lock:
+            self.chart_metafields[product_gid] = file_gid
 
     def shopify_set_inventory(self, quantities):
         self._guard()
@@ -1045,6 +1090,15 @@ class FakeShopify:
         )
         monkeypatch.setattr(shopify_admin_products, "shopify_create_variants", self.shopify_create_variants)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_media", self.shopify_attach_media)
+        monkeypatch.setattr(shopify_admin_products, "shopify_attach_images", self.shopify_attach_images)
+        monkeypatch.setattr(
+            shopify_admin_products, "shopify_assign_variant_media", self.shopify_assign_variant_media
+        )
+        monkeypatch.setattr(
+            shopify_admin_products.shopify_size_charts,
+            "set_product_chart_image",
+            self.set_product_chart_image,
+        )
         monkeypatch.setattr(shopify_admin_products, "shopify_set_inventory", self.shopify_set_inventory)
         monkeypatch.setattr(
             shopify_admin_products, "shopify_update_product_fields", self.shopify_update_product_fields

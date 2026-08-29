@@ -285,6 +285,26 @@ def test_size_chart_image_becomes_an_attachment(ctx):
     assert ctx.attachments == ["data/size-charts/wide-leg-sweatpants.png"]
 
 
+def test_an_uploaded_chart_picture_is_a_chart_with_nothing_to_quote(ctx):
+    """What the dashboard's "upload a size chart" produces: a picture and no
+    published measurements. It is still a chart -- the customer reads it the
+    same way they would on the storefront -- but `sizes` is empty, so there is
+    nothing here for the model to read a number off."""
+    Product = __import__("domain.models", fromlist=["Product"]).Product
+    product = ctx.session.get(Product, "wanas-hoodie")
+    product.size_chart = None
+    product.size_chart_image = "https://cdn.example/hoodie-chart.png"
+    ctx.session.flush()
+
+    chart = call(ctx, "get_size_chart", product_id="wanas-hoodie")
+
+    assert chart["has_chart"] is True
+    assert chart["image_only"] is True
+    assert chart["sizes"] == {} and chart["measurements"] == []
+    assert chart["measurement_note"]
+    assert ctx.attachments == ["https://cdn.example/hoodie-chart.png"]
+
+
 def test_no_chart_returns_that_and_nothing_else(ctx):
     """Returning a neighbouring product's chart is the failure this shape
     exists to prevent."""

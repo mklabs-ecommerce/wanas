@@ -176,3 +176,166 @@ def test_update_product_still_applies_local_fields_with_no_shopify_variants(seed
     result = sap.update_product(seeded, "orphan", department="women")
     assert "error" not in result
     assert seeded.get(ProductModel, "orphan").department == "women"
+
+
+# --------------------------------------------------------------------------
+# a photo per colourway
+# --------------------------------------------------------------------------
+
+
+def test_a_photo_belongs_to_its_colour_not_to_the_product(seeded, shopify):
+    """The reason the form asks for a picture per row rather than one per
+    product: `LiveVariant.image_url` is what decides which photo the bot sends
+    when a customer names a colour."""
+    sap.create_product(
+        seeded,
+        title="Colour Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[
+            {"size": "S", "color": "Olive", "price": 300, "stock_qty": 1},
+            {"size": "M", "color": "Olive", "price": 300, "stock_qty": 1},
+            {"size": "S", "color": "Navy", "price": 300, "stock_qty": 1},
+        ],
+        images=[
+            {"color": "Olive", "source": "https://x/olive.png"},
+            {"color": "Navy", "source": "https://x/navy.png"},
+        ],
+    )
+
+    assert shopify.variant_images["colour-tee-s-olive"] == "https://x/olive.png"
+    assert shopify.variant_images["colour-tee-m-olive"] == "https://x/olive.png"
+    assert shopify.variant_images["colour-tee-s-navy"] == "https://x/navy.png"
+
+
+def test_the_first_photo_for_a_colour_is_that_colours_photo(seeded, shopify):
+    """Three sizes in Navy means the colour arrives three times. The extra
+    pictures are still attached to the product; they just do not take the
+    colour over."""
+    sap.create_product(
+        seeded,
+        title="Repeat Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[
+            {"size": "S", "color": "Navy", "price": 300, "stock_qty": 1},
+            {"size": "M", "color": "Navy", "price": 300, "stock_qty": 1},
+        ],
+        images=[
+            {"color": "Navy", "source": "https://x/first.png"},
+            {"color": "Navy", "source": "https://x/second.png"},
+        ],
+    )
+
+    assert shopify.variant_images["repeat-tee-s-navy"] == "https://x/first.png"
+    assert shopify.variant_images["repeat-tee-m-navy"] == "https://x/first.png"
+    product = seeded.get(Product, "repeat-tee")
+    assert product.color_images == {"Navy": ["https://x/first.png"]}
+    assert len(shopify.media) == 2
+
+
+def test_a_colour_spelt_differently_is_still_the_same_colour(seeded, shopify):
+    sap.create_product(
+        seeded,
+        title="Case Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[{"size": "S", "color": "Camel Brown", "price": 300, "stock_qty": 1}],
+        images=[{"color": "camel  brown", "source": "https://x/camel.png"}],
+    )
+
+    assert shopify.variant_images["case-tee-s-camel-brown"] == "https://x/camel.png"
+
+
+def test_a_colour_with_no_photo_of_its_own_gets_none(seeded, shopify):
+    """Showing the Navy photo on the Olive variant is the confident wrong
+    answer the whole colour split exists to prevent."""
+    sap.create_product(
+        seeded,
+        title="Partial Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[
+            {"size": "S", "color": "Navy", "price": 300, "stock_qty": 1},
+            {"size": "S", "color": "Olive", "price": 300, "stock_qty": 1},
+        ],
+        images=[{"color": "Navy", "source": "https://x/navy.png"}],
+    )
+
+    assert shopify.variant_images["partial-tee-s-navy"] == "https://x/navy.png"
+    assert "partial-tee-s-olive" not in shopify.variant_images
+
+
+def test_one_unlabelled_photo_still_covers_every_variant(seeded, shopify):
+    """The older single-picture form, and a product nobody split by colour:
+    an unlabelled photo is fine, it is a mislabelled one that is not."""
+    sap.create_product(
+        seeded,
+        title="Plain Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[{"size": "S", "price": 300, "stock_qty": 1}, {"size": "M", "price": 300, "stock_qty": 1}],
+        image_url="https://x/plain.png",
+    )
+
+    assert shopify.variant_images["plain-tee-s"] == "https://x/plain.png"
+    assert shopify.variant_images["plain-tee-m"] == "https://x/plain.png"
+    assert seeded.get(Product, "plain-tee").images == ["https://x/plain.png"]
+
+
+def test_a_product_with_no_photos_at_all_asks_shopify_for_nothing(seeded, shopify):
+    sap.create_product(
+        seeded,
+        title="Bare Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[{"size": "S", "price": 300, "stock_qty": 1}],
+    )
+
+    assert shopify.media == {}
+    assert shopify.variant_images == {}
+
+
+def test_an_uploaded_chart_is_set_on_shopify_and_kept_locally(seeded, shopify):
+    """Two consumers, two copies: the metafield is what the storefront panel
+    renders, the local url is what the bot sends without asking Shopify."""
+    result = sap.create_product(
+        seeded,
+        title="Chart Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[{"size": "S", "price": 300, "stock_qty": 1}],
+        size_chart_file_gid="gid://shopify/MediaImage/chart",
+        size_chart_url="https://cdn/chart.png",
+    )
+
+    assert shopify.chart_metafields[result["shopify_id"]] == "gid://shopify/MediaImage/chart"
+    assert seeded.get(Product, "chart-tee").size_chart_image == "https://cdn/chart.png"

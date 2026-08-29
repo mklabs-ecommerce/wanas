@@ -8,6 +8,7 @@ orchestration and local mirroring; these tests are the thinner layer on top
 
 from __future__ import annotations
 
+import base64
 import dataclasses
 
 import pytest
@@ -16,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from config.settings import settings
 from dashboard import shopify_api, web as dashboard
+from domain.models import Product
 from domain.services import auth
 
 SECRET = "test-dashboard-secret"
@@ -169,3 +171,150 @@ def test_updating_variant_price_and_stock(logged_in, shopify):
     )
     assert res.status_code == 200, res.text
     assert shopify.qty(VARIANT) == 3
+
+
+# --------------------------------------------------------------------------
+# pictures and the size chart, off a staff member's laptop
+# --------------------------------------------------------------------------
+
+#: The smallest thing a browser will hand over that is really a PNG.
+PNG = base64.b64encode(
+    base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+).decode()
+
+
+@pytest.fixture()
+def uploads(monkeypatch):
+    """Shopify's staged-upload dance, recorded rather than performed.
+
+    The dance itself is three HTTP calls to two hosts; what these tests are
+    about is which door a purpose goes through -- a product photo staged and
+    left for the product to own, a size chart put in the Files library where a
+    `file_reference` metafield can point at it.
+    """
+    calls = {"staged": [], "files": []}
+
+    def stage(client, filename, data, mime, *, resource="FILE"):
+        calls["staged"].append({"filename": filename, "mime": mime, "resource": resource, "size": len(data)})
+        return f"https://staged.example/{filename}"
+
+    def upload_to_files(client, filename, data, mime, *, alt=""):
+        calls["files"].append({"filename": filename, "mime": mime, "alt": alt})
+        return {"id": f"gid://shopify/MediaImage/{filename}", "url": f"https://cdn.example/{filename}"}
+
+    monkeypatch.setattr(shopify_api.shopify_files, "stage", stage)
+    monkeypatch.setattr(shopify_api.shopify_files, "upload_to_files", upload_to_files)
+    monkeypatch.setattr(shopify_api, "get_admin_client", lambda: object())
+    return calls
+
+
+def test_uploading_a_picture_requires_login(client):
+    res = client.post("/dashboard/api/shopify/uploads", json={"filename": "a.png", "content_type": "image/png", "data": PNG})
+    assert res.status_code == 401
+
+
+def test_a_product_photo_is_staged_and_left_for_the_product_to_own(logged_in, uploads):
+    res = logged_in.post(
+        "/dashboard/api/shopify/uploads",
+        json={"filename": "olive hoodie.PNG", "content_type": "image/png", "data": PNG,
+              "purpose": "product_image"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["source"].startswith("https://staged.example/")
+    assert uploads["staged"][0]["resource"] == "IMAGE"
+    assert uploads["files"] == []
+
+
+def test_a_size_chart_goes_into_the_files_library_because_a_metafield_needs_a_gid(logged_in, uploads):
+    res = logged_in.post(
+        "/dashboard/api/shopify/uploads",
+        json={"filename": "chart.png", "content_type": "image/png", "data": PNG, "purpose": "size_chart"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["file_gid"].startswith("gid://shopify/MediaImage/")
+    assert uploads["staged"] == []
+    assert uploads["files"][0]["filename"] == "chart.png"
+
+
+def test_a_filename_reaches_shopify_rebuilt_not_filtered(logged_in, uploads):
+    """It arrives from a staff member's filesystem and ends up in a url."""
+    logged_in.post(
+        "/dashboard/api/shopify/uploads",
+        json={"filename": "../../etc/passwd; rm -rf.png", "content_type": "image/png", "data": PNG},
+    )
+    assert uploads["staged"][0]["filename"] == "etc-passwd-rm--rf.png"
+
+
+def test_an_svg_is_refused_because_files_serves_it_on_the_shops_own_origin(logged_in, uploads):
+    res = logged_in.post(
+        "/dashboard/api/shopify/uploads",
+        json={"filename": "x.svg", "content_type": "image/svg+xml", "data": PNG},
+    )
+    assert res.status_code == 400
+    assert uploads["staged"] == [] and uploads["files"] == []
+
+
+def test_something_that_is_not_base64_is_a_bad_request_not_a_crash(logged_in, uploads):
+    res = logged_in.post(
+        "/dashboard/api/shopify/uploads",
+        json={"filename": "x.png", "content_type": "image/png", "data": "not base64!!"},
+    )
+    assert res.status_code == 400
+
+
+def test_a_file_over_the_cap_is_refused_before_it_reaches_shopify(logged_in, uploads, monkeypatch):
+    monkeypatch.setattr(shopify_api, "MAX_UPLOAD_BYTES", 10)
+    res = logged_in.post(
+        "/dashboard/api/shopify/uploads",
+        json={"filename": "x.png", "content_type": "image/png", "data": base64.b64encode(b"x" * 40).decode()},
+    )
+    assert res.status_code == 413
+    assert uploads["staged"] == []
+
+
+def test_the_chart_picker_offers_only_charts_that_exist(logged_in):
+    """A free-text chart id was a way to type one the bot then answers "no
+    chart" to."""
+    res = logged_in.get("/dashboard/api/shopify/size-charts")
+    assert res.status_code == 200
+    charts = res.json()["charts"]
+    assert charts and all(c["id"] and c["title"] for c in charts)
+    assert "wide-leg-sweatpants" in {c["id"] for c in charts}
+
+
+def test_the_chart_picker_requires_login(client):
+    assert client.get("/dashboard/api/shopify/size-charts").status_code == 401
+
+
+def test_creating_a_product_carries_its_photos_and_its_chart(logged_in, seeded, shopify):
+    res = logged_in.post(
+        "/dashboard/api/shopify/products",
+        json={
+            "title": "Dashboard Tee",
+            "category": "Tops",
+            "department": "unisex",
+            "variants": [
+                {"size": "S", "color": "Olive", "price": 300, "stock_qty": 4},
+                {"size": "M", "color": "Navy", "price": 300, "stock_qty": 2},
+            ],
+            "images": [
+                {"color": "Olive", "source": "https://staged.example/olive.png"},
+                {"color": "Navy", "source": "https://staged.example/navy.png"},
+            ],
+            "size_chart_file_gid": "gid://shopify/MediaImage/chart.png",
+            "size_chart_url": "https://cdn.example/chart.png",
+        },
+    )
+    assert res.status_code == 201, res.text
+
+    product = seeded.get(Product, "dashboard-tee")
+    assert product.color_images == {
+        "Olive": ["https://staged.example/olive.png"],
+        "Navy": ["https://staged.example/navy.png"],
+    }
+    assert product.size_chart_image == "https://cdn.example/chart.png"
+    assert shopify.chart_metafields[res.json()["shopify_id"]] == "gid://shopify/MediaImage/chart.png"
+    assert shopify.variant_images["dashboard-tee-s-olive"] == "https://staged.example/olive.png"
+    assert shopify.variant_images["dashboard-tee-m-navy"] == "https://staged.example/navy.png"

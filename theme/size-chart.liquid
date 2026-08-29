@@ -20,6 +20,11 @@
   The closing line is not decoration. Without it customers read a 31 cm waist
   as a body measurement and conclude the trousers are made for a child.
 
+  A product may have the measurements, the diagram, or only one of them --
+  a chart uploaded from the dashboard is a picture with nothing published
+  behind it, and `wns-boxy-tee` is the other way round. Each part renders on
+  its own.
+
   `page:` is still honoured as a fallback, so a product with no chart of its
   own shows the shop-wide page if one is configured -- and a product with
   neither renders nothing at all.
@@ -29,7 +34,7 @@
 {%- assign diagram = product.metafields.custom.size_chart.value -%}
 {%- assign fallback = pages[page] -%}
 
-{%- if chart.sizes.size > 0 or fallback != blank -%}
+{%- if chart.sizes.size > 0 or diagram != blank or fallback != blank -%}
   <details class="wns-sizechart">
     <summary>دليل المقاسات · Size chart</summary>
     <div class="wns-sizechart__body">
@@ -69,25 +74,37 @@
             </tbody>
           </table>
         </div>
+      {%- endif -%}
 
-        {%- comment -%}
-          A file_reference resolves to an `image` for an image file and a
-          `generic_file` for anything else. Only the first understands
-          `image_url`; asking a generic_file for one yields an empty src and a
-          broken picture, so each is asked for what it can answer.
-        {%- endcomment -%}
-        {%- if diagram.width -%}
-          <img class="wns-sizechart__diagram"
-               src="{{ diagram | image_url: width: 900 }}"
-               alt="{{ chart.title }} — قياسات · measurements"
-               loading="lazy">
-        {%- elsif diagram.url -%}
-          <img class="wns-sizechart__diagram"
-               src="{{ diagram.url }}"
-               alt="{{ chart.title }} — قياسات · measurements"
-               loading="lazy">
-        {%- endif -%}
-      {%- else -%}
+      {%- comment -%}
+        Outside the table's branch: a product may carry a diagram with no
+        published measurements behind it, which is what the dashboard's
+        "upload a size chart" produces.
+
+        A file_reference resolves to an `image` for an image file and a
+        `generic_file` for anything else. Only the first understands
+        `image_url`; asking a generic_file for one yields an empty src and a
+        broken picture, so each is asked for what it can answer.
+      {%- endcomment -%}
+      {%- if diagram.width -%}
+        <img class="wns-sizechart__diagram"
+             src="{{ diagram | image_url: width: 900 }}"
+             alt="{{ chart.title | default: product.title }} — قياسات · measurements"
+             loading="lazy">
+      {%- elsif diagram.url -%}
+        <img class="wns-sizechart__diagram"
+             src="{{ diagram.url }}"
+             alt="{{ chart.title | default: product.title }} — قياسات · measurements"
+             loading="lazy">
+      {%- endif -%}
+
+      {%- comment -%}
+        The shop-wide page, only when this product brought neither a table nor
+        a diagram of its own -- a product with a chart picture and no published
+        measurements (what the dashboard's upload produces) is answered, not
+        fallen back from.
+      {%- endcomment -%}
+      {%- if chart.sizes.size == 0 and diagram == blank -%}
         {{ fallback.content }}
       {%- endif -%}
 

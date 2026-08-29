@@ -367,7 +367,7 @@ def get_variants(session: Session, product_id: str) -> dict | None:
         "product_id": product.product_id,
         "name": product.name,
         "description": product.description,
-        "has_size_chart": product.size_chart is not None,
+        "has_size_chart": product.size_chart is not None or product.size_chart_image is not None,
         # Sold-out variants are returned too, so the bot can say "XL only comes
         # in Black" rather than pretending the combination never existed.
         "variants": [variant_payload(v, live_map) for v in variants],

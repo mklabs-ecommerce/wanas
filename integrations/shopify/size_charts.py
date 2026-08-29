@@ -36,10 +36,10 @@ import logging
 import mimetypes
 from pathlib import Path
 
-import httpx
 from sqlalchemy.orm import Session
 
 from domain.models import Product, Variant
+from integrations.shopify import files as shopify_files
 from integrations.shopify.client import ShopifyUnavailable, get_admin_client
 
 log = logging.getLogger("wanas.shopify.size_charts")
@@ -83,24 +83,6 @@ query($query: String!) {
       id
       ... on MediaImage { image { url } }
     }
-  }
-}
-"""
-
-STAGED_UPLOADS = """
-mutation($input: [StagedUploadInput!]!) {
-  stagedUploadsCreate(input: $input) {
-    stagedTargets { url resourceUrl parameters { name value } }
-    userErrors { field message }
-  }
-}
-"""
-
-FILE_CREATE = """
-mutation($files: [FileCreateInput!]!) {
-  fileCreate(files: $files) {
-    files { id fileStatus }
-    userErrors { field message }
   }
 }
 """
@@ -271,59 +253,17 @@ def _existing_file(client, filename: str) -> str | None:
 def upload_image(client, path: Path) -> str:
     """Put one diagram in Shopify Files and return its gid.
 
-    Two round trips by Shopify's design: it hands out a signed target, the
-    bytes go straight there, and only then does the file exist to be named.
+    The staged-upload dance itself lives in `files.py`, shared with the
+    dashboard's product-photo upload -- there is one right way to hand
+    Shopify bytes and it should not be written twice.
     """
     mime = mimetypes.guess_type(path.name)[0] or "image/png"
-    staged = client(
-        STAGED_UPLOADS,
-        {
-            "input": [
-                {
-                    "resource": "FILE",
-                    "filename": path.name,
-                    "mimeType": mime,
-                    "httpMethod": "POST",
-                }
-            ]
-        },
-    )
-    block = staged.get("stagedUploadsCreate") or {}
-    errors = block.get("userErrors") or []
-    if errors:
-        raise SizeChartError("; ".join(e.get("message", "") for e in errors))
-    target = (block.get("stagedTargets") or [None])[0]
-    if not target:
-        raise SizeChartError(f"Shopify offered no upload target for {path.name}")
-
-    form = {p["name"]: p["value"] for p in target.get("parameters") or []}
-    with path.open("rb") as fh:
-        response = httpx.post(
-            target["url"], data=form, files={"file": (path.name, fh, mime)}, timeout=60.0
-        )
-    if response.status_code >= 400:
-        raise SizeChartError(f"upload of {path.name} failed: HTTP {response.status_code}")
-
-    created = client(
-        FILE_CREATE,
-        {
-            "files": [
-                {
-                    "alt": f"{path.stem} size chart",
-                    "contentType": "IMAGE",
-                    "originalSource": target["resourceUrl"],
-                }
-            ]
-        },
-    )
-    block = created.get("fileCreate") or {}
-    errors = block.get("userErrors") or []
-    if errors:
-        raise SizeChartError("; ".join(e.get("message", "") for e in errors))
-    files = block.get("files") or []
-    if not files:
-        raise SizeChartError(f"Shopify accepted {path.name} but returned no file")
-    return files[0]["id"]
+    try:
+        return shopify_files.upload_to_files(
+            client, path.name, path.read_bytes(), mime, alt=f"{path.stem} size chart"
+        )["id"]
+    except shopify_files.FileUploadError as exc:
+        raise SizeChartError(str(exc)) from exc
 
 
 def ensure_files(charts: dict[str, dict], *, apply: bool) -> dict[str, str]:
@@ -421,6 +361,35 @@ def build_plan(
                 }
             )
     return {"entries": entries, "unmatched": unmatched, "unknown_charts": unknown_charts}
+
+
+def set_product_chart_image(product_gid: str, file_gid: str) -> None:
+    """Point one product's `custom.size_chart` at an already-uploaded file.
+
+    The bulk path (`write_plan`) writes the table and the diagram together
+    from `size_charts.json`. This is the other door: a staff member creating a
+    product in the dashboard uploads a chart picture and nothing else, so the
+    diagram metafield is set on its own and the product simply has no table.
+    """
+    client = get_admin_client()
+    result = client(
+        METAFIELDS_SET,
+        {
+            "metafields": [
+                {
+                    "ownerId": product_gid,
+                    "namespace": NAMESPACE,
+                    "key": IMAGE_KEY,
+                    "type": "file_reference",
+                    "value": file_gid,
+                }
+            ]
+        },
+    )
+    block = result.get("metafieldsSet") or {}
+    errors = block.get("userErrors") or []
+    if errors:
+        raise SizeChartError("; ".join(e.get("message", "") for e in errors))
 
 
 def write_plan(entries: list[dict]) -> int:

@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased — Adding a product, with the pictures on it
+
+- **Photos come off the staff member's own laptop now.** The new-product form
+  had one field for an image *url*, which meant a picture had to already be
+  hosted somewhere before a product could show it. Each variant row now takes
+  a file, `dashboard/api/shopify/uploads` puts it on Shopify, and the create
+  call attaches it.
+- **A photo belongs to a colour, not to a product.** The picture on a row is
+  set as that colourway's variant image in Shopify, which is the field
+  `shopify_catalog.LiveVariant.image_url` reads -- so it is what the bot sends
+  when a customer asks about the olive one, and what
+  `catalog._overlay_images` splits the gallery by. The row's **Length** field
+  made way for it; length is still stored and still shown on products that
+  have it, it is just not something a new product is asked for.
+- A colour with no picture of its own gets none. An unlabelled picture stands
+  in only when no colour has one -- otherwise a product where Navy has a photo
+  and Olive does not would show the Navy photo on the Olive variant,
+  confidently and wrongly.
+- **Collection is a picker, not a text box.** It lists the shop's actual
+  Shopify collections; making a new one is a button that takes you to the
+  Collections screen. A typed collection name was a merchandising label that
+  matched nothing.
+- **The size chart is two fields, both of them real choices**: a dropdown of
+  the charts `data/size_charts.json` actually publishes, and an upload for a
+  chart picture that has no measurements behind it. The upload lands in
+  Shopify Files, sets the product's `custom.size_chart` metafield, and is
+  kept on `Product.size_chart_image` so the bot can send it --
+  `get_size_chart` answers `image_only` for it, with an empty `sizes`, so
+  there is nothing there for the model to quote a number from.
+  `theme/size-chart.liquid` now renders a diagram with no table beneath it.
+- The staged-upload dance -- signed target, bytes straight there, then a
+  mutation naming where they landed -- lives in one place,
+  `integrations/shopify/files.py`, shared by the dashboard and
+  `scripts/shopify_size_charts.py`.
+- Uploads are an allowlist of jpeg/png/webp/gif, capped at 20 MB, and the
+  filename is rebuilt from what is safe rather than filtered for what is not.
+  SVG is refused on purpose: Shopify Files serves it on the shop's own origin.
+
 ## Unreleased — The size charts, on the product page
 
 - **The storefront now shows the same charts the bot sends.**

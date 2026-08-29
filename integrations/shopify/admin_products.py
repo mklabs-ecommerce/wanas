@@ -25,12 +25,17 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from domain.models import Product, Variant
-from integrations.shopify import catalog as shopify_catalog, inventory as shopify_inventory
+from integrations.shopify import (
+    catalog as shopify_catalog,
+    inventory as shopify_inventory,
+    size_charts as shopify_size_charts,
+)
 from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
@@ -40,6 +45,11 @@ from integrations.shopify.client import (
 log = logging.getLogger("wanas.shopify.admin_products")
 
 PAGE_SIZE = 25
+
+#: How long to wait for Shopify to finish processing an uploaded picture
+#: before mirroring the product locally without its url.
+MEDIA_POLL_TRIES = 6
+MEDIA_POLL_DELAY = 0.6
 
 PRODUCTS_QUERY = """
 query($cursor: String, $query: String) {
@@ -112,8 +122,29 @@ mutation($input: ProductInput!) {
 MEDIA_CREATE = """
 mutation($productId: ID!, $media: [CreateMediaInput!]!) {
   productCreateMedia(productId: $productId, media: $media) {
-    media { id }
+    media {
+      id
+      status
+      ... on MediaImage { image { url } }
+    }
     mediaUserErrors { field message }
+  }
+}
+"""
+
+#: A picture Shopify has only just been handed has no url yet -- it answers
+#: `status: UPLOADED` and a null image. The gid is enough for Shopify itself
+#: (it is what a variant's `mediaId` points at), but the local mirror stores
+#: urls, so this reads them back once processing has caught up.
+PRODUCT_MEDIA = """
+query($id: ID!) {
+  product(id: $id) {
+    media(first: 50) {
+      nodes {
+        id
+        ... on MediaImage { image { url } }
+      }
+    }
   }
 }
 """
@@ -350,16 +381,86 @@ def shopify_create_variants(product_gid: str, bulk_input: list[dict]) -> list[di
     result = client(VARIANTS_CREATE, {"productId": product_gid, "variants": bulk_input})
     _errors(result.get("productVariantsBulkCreate"), "productVariantsBulkCreate")
     nodes = result["productVariantsBulkCreate"]["productVariants"]
-    return [{"sku": n["sku"], "inventory_item_id": n["inventoryItem"]["id"]} for n in nodes]
+    return [
+        {"id": n["id"], "sku": n["sku"], "inventory_item_id": n["inventoryItem"]["id"]}
+        for n in nodes
+    ]
 
 
 def shopify_attach_media(product_gid: str, image_url: str) -> None:
+    shopify_attach_images(product_gid, [{"source": image_url}])
+
+
+def shopify_attach_images(product_gid: str, images: list[dict]) -> list[dict]:
+    """Attach pictures to a product, in the order given.
+
+    `images` is `[{"source", "alt"?}]` -- `source` is any url Shopify can
+    fetch, which covers both a link somebody pasted and the resource url
+    `files.stage` hands back for bytes uploaded off a staff member's laptop.
+
+    Returns `[{"id", "url"}]` lined up with the input, so the caller can point
+    a variant at its own colourway's picture (`id`) and mirror the picture
+    locally (`url`). `url` is None while Shopify is still processing.
+    """
+    if not images:
+        return []
     client = get_admin_client()
     result = client(
         MEDIA_CREATE,
-        {"productId": product_gid, "media": [{"originalSource": image_url, "mediaContentType": "IMAGE"}]},
+        {
+            "productId": product_gid,
+            "media": [
+                {
+                    "originalSource": image["source"],
+                    "alt": image.get("alt") or "",
+                    "mediaContentType": "IMAGE",
+                }
+                for image in images
+            ],
+        },
     )
     _errors(result.get("productCreateMedia"), "productCreateMedia")
+    nodes = (result["productCreateMedia"] or {}).get("media") or []
+    out = [{"id": n.get("id"), "url": ((n.get("image") or {}).get("url")) or None} for n in nodes]
+
+    if any(entry["url"] is None for entry in out):
+        for entry, url in zip(out, _media_urls(client, product_gid, [e["id"] for e in out]), strict=True):
+            entry["url"] = entry["url"] or url
+    return out
+
+
+def _media_urls(client, product_gid: str, media_ids: list[str]) -> list[str | None]:
+    """The url of each of `media_ids`, waiting briefly for Shopify to process.
+
+    Same short, bounded wait as `files.poll_url` and for the same reason: a
+    staff member is watching a spinner, and a missing url costs the local
+    mirror one picture, not the product.
+    """
+    for attempt in range(MEDIA_POLL_TRIES):
+        if attempt:
+            time.sleep(MEDIA_POLL_DELAY)
+        data = client(PRODUCT_MEDIA, {"id": product_gid})
+        nodes = ((data.get("product") or {}).get("media") or {}).get("nodes") or []
+        by_id = {n.get("id"): ((n.get("image") or {}).get("url")) or None for n in nodes}
+        urls = [by_id.get(mid) for mid in media_ids]
+        if all(urls):
+            return urls
+    log.info("Shopify is still processing media for %s; mirroring what it gave us", product_gid)
+    return urls
+
+
+def shopify_assign_variant_media(product_gid: str, pairs: list[dict]) -> None:
+    """Give each variant its colourway's picture. `pairs` is `[{"id", "media_id"}]`.
+
+    This is the whole point of asking for an image per colour rather than one
+    per product: `shopify_catalog.LiveVariant.image_url` reads the variant's
+    own image, and that is what the bot sends when a customer asks about the
+    olive one.
+    """
+    bulk = [{"id": p["id"], "mediaId": p["media_id"]} for p in pairs if p.get("media_id")]
+    if not bulk:
+        return
+    shopify_update_variants(product_gid, bulk)
 
 
 def _available_now(client, item_ids: list[str]) -> dict[str, int]:
@@ -444,6 +545,44 @@ def shopify_update_variants(product_gid: str, bulk_input: list[dict]) -> None:
     _errors(result.get("productVariantsBulkUpdate"), "productVariantsBulkUpdate")
 
 
+def _colour_key(color: str | None) -> str:
+    """One spelling of a colour name, so "Camel Brown" and "camel brown" are
+    the same colourway. The same normalisation `assistant/tools/base.py` uses
+    when it picks which photo to send."""
+    return " ".join((color or "").split()).casefold()
+
+
+def _media_by_color(images: list[dict], attached: list[dict]) -> dict[str, dict]:
+    """`{colour key: media}`, first picture wins for a colour.
+
+    A staff member fills one image field per variant row, so a product with
+    three sizes in Navy arrives with the same colour three times. The first
+    one is the colour's picture; the rest are still attached to the product,
+    they just do not overwrite it.
+    """
+    out: dict[str, dict] = {}
+    for image, media in zip(images, attached, strict=False):
+        if media.get("id"):
+            out.setdefault(_colour_key(image.get("color")), media)
+    return out
+
+
+def _media_for_color(media_by_color: dict[str, dict], color: str | None) -> dict | None:
+    """The picture that belongs to one colourway.
+
+    An unlabelled picture stands in only when *no* colour has one of its own.
+    Otherwise a product where Navy has a photo and Olive does not would show
+    the Navy photo on the Olive variant -- confidently, and wrongly, which is
+    the failure `_candidate_images` exists to avoid on the other side.
+    """
+    key = _colour_key(color)
+    if key in media_by_color:
+        return media_by_color[key]
+    if len(media_by_color) == 1 and "" in media_by_color:
+        return media_by_color[""]
+    return None
+
+
 def create_product(
     session: Session,
     *,
@@ -456,6 +595,9 @@ def create_product(
     size_chart: str | None,
     variants: list[dict],
     image_url: str | None = None,
+    images: list[dict] | None = None,
+    size_chart_file_gid: str | None = None,
+    size_chart_url: str | None = None,
 ) -> dict:
     """Create on Shopify, then mirror into wanas.db.
 
@@ -463,6 +605,17 @@ def create_product(
     "stock_qty"}]`. Raises `ProductRejected` for a Shopify-side refusal (a bad
     field, a duplicate SKU) and `ShopifyUnavailable`/`ShopifyConfigError` for
     an outage -- the dashboard route tells those apart.
+
+    `images` is `[{"color"?, "source", "alt"?}]`, one picture per colourway
+    rather than one per product: each is attached as product media *and* set
+    as its colour's variants' own image, which is the field
+    `shopify_catalog.LiveVariant.image_url` reads and therefore what decides
+    which photo the bot sends when a customer names a colour. `image_url` is
+    the older single-picture form and is kept as an unlabelled entry.
+
+    `size_chart_file_gid` points `custom.size_chart` at a file already in
+    Shopify Files (`files.upload_to_files`); `size_chart_url` is that same
+    file's url, stored locally so the bot can send it without asking Shopify.
     """
     if not variants:
         raise ProductRejected("a product needs at least one variant")
@@ -488,10 +641,34 @@ def create_product(
     ]
     created_variants = shopify_create_variants(product_gid, bulk_input)
 
+    wanted_images = list(images or [])
     if image_url:
-        shopify_attach_media(product_gid, image_url)
+        wanted_images.append({"color": None, "source": image_url})
+    attached = shopify_attach_images(
+        product_gid,
+        [
+            {"source": i["source"], "alt": " ".join(filter(None, [title, i.get("color")]))}
+            for i in wanted_images
+        ],
+    )
 
     by_sku = {c["sku"]: c for c in created_variants}
+    media_by_color = _media_by_color(wanted_images, attached)
+    shopify_assign_variant_media(
+        product_gid,
+        [
+            {
+                "id": by_sku[sku]["id"],
+                "media_id": (_media_for_color(media_by_color, v.get("color")) or {}).get("id"),
+            }
+            for v in variants
+            if (sku := _variant_id(product_id, v["size"], v.get("color"), v.get("length"))) in by_sku
+        ],
+    )
+
+    if size_chart_file_gid:
+        shopify_size_charts.set_product_chart_image(product_gid, size_chart_file_gid)
+
     quantities = []
     for v in variants:
         sku = _variant_id(product_id, v["size"], v.get("color"), v.get("length"))
@@ -514,6 +691,9 @@ def create_product(
         size_chart=size_chart,
         variants=variants,
         image_url=image_url,
+        images=wanted_images,
+        media_by_color=media_by_color,
+        size_chart_url=size_chart_url,
     )
 
     return {"product_id": product_id, "shopify_id": product_gid}
@@ -532,6 +712,9 @@ def _mirror_local(
     size_chart: str | None,
     variants: list[dict],
     image_url: str | None,
+    images: list[dict] | None = None,
+    media_by_color: dict[str, dict] | None = None,
+    size_chart_url: str | None = None,
 ) -> Product:
     summary = _summarize(variants)
     product = session.get(Product, product_id)
@@ -551,8 +734,15 @@ def _mirror_local(
     product.price = summary["price"]
     product.original_price = summary["original_price"]
     product.on_sale = summary["on_sale"]
-    product.images = [image_url] if image_url else list(product.images or [])
-    product.color_images = product.color_images or {}
+    gallery = [i["url"] for i in (media_by_color or {}).values() if i.get("url")]
+    product.images = gallery or ([image_url] if image_url else list(product.images or []))
+    product.color_images = {
+        next(i["color"] for i in (images or []) if _colour_key(i.get("color")) == key): [media["url"]]
+        for key, media in (media_by_color or {}).items()
+        if key and media.get("url")
+    } or (product.color_images or {})
+    if size_chart_url is not None:
+        product.size_chart_image = size_chart_url
     product.description = description or ""
     product.source_products = product.source_products or []
 
@@ -686,6 +876,8 @@ __all__ = [
     "list_products",
     "get_product",
     "create_product",
+    "shopify_attach_images",
+    "shopify_assign_variant_media",
     "update_product",
     "product_gid_for_variant_id",
     "slugify",

@@ -118,7 +118,9 @@ def get_variants(
     "get_size_chart",
     "The published measurements for one product, plus the chart image, which the runtime attaches "
     "to your reply automatically. If it returns has_chart false there is no chart for that product: "
-    "say so. Never estimate a measurement and never quote another product's chart.",
+    "say so. If it returns image_only the picture is the whole chart -- send it and let the customer "
+    "read it; there are no measurements to quote. Never estimate a measurement and never quote "
+    "another product's chart.",
     properties={"product_id": {"type": "string"}},
     required=("product_id",),
 )
@@ -129,6 +131,26 @@ def get_size_chart(ctx: ToolContext, product_id: str) -> dict:
 
     chart = get_chart(product.size_chart)
     if chart is None:
+        # A picture with no measurements behind it: what the dashboard's
+        # "upload a size chart" produces. The runtime attaches it and the
+        # customer reads the numbers off the image, which is exactly what
+        # they would do on the storefront. `sizes` is empty rather than
+        # absent, so nothing downstream has to guess -- and there is still
+        # nothing here for the model to quote a number from.
+        if product.size_chart_image:
+            return {
+                "has_chart": True,
+                "chart_id": None,
+                "title": product.name,
+                "unit": "cm",
+                "measurement_note": MEASUREMENT_NOTE,
+                "length_specific": False,
+                "measurements": [],
+                "sizes": {},
+                "image": product.size_chart_image,
+                "image_only": True,
+            }
+
         # Nothing else. Returning a neighbouring product's chart is the failure
         # this shape exists to prevent -- a near-enough chart produces
         # confident, precise, wrong numbers, and sizing wrong causes a return.

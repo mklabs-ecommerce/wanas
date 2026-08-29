@@ -14,6 +14,10 @@ directly.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import re
+
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
@@ -22,14 +26,16 @@ from dashboard import customer_filters, customer_ledger
 from dashboard.guard import require_permission
 from domain.db import session_scope
 from domain.models import Client, Order, OrderStatus, Product, Variant
-from domain.services import orders as orders_service
+from domain.services import orders as orders_service, size_charts as size_charts_service
 from integrations.shopify import (
     admin_customers as shopify_admin_customers,
     admin_orders as shopify_admin_orders,
     admin_products as shopify_admin_products,
+    files as shopify_files,
     orders as shopify_orders,
 )
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
+from integrations.shopify.client import get_admin_client
 
 router = APIRouter(prefix="/dashboard/api/shopify", tags=["dashboard-shopify"])
 
@@ -369,6 +375,112 @@ def product_detail(product_gid: str, wanas_staff: str | None = Cookie(default=No
     return JSONResponse(product)
 
 
+@router.get("/size-charts")
+def list_size_charts(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """The measured charts a product can be pointed at.
+
+    Read from `data/size_charts.json`, which is where the bot reads them too
+    -- offering staff a free-text chart id was offering them a way to type one
+    that does not exist, which the bot then answers with "no chart".
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+    charts = size_charts_service.all_charts()
+    return JSONResponse(
+        {"charts": sorted(
+            ({"id": cid, "title": c.get("title") or cid} for cid, c in charts.items()),
+            key=lambda c: c["title"].casefold(),
+        )}
+    )
+
+
+# --------------------------------------------------------------------------
+# uploads
+# --------------------------------------------------------------------------
+
+#: The biggest picture this will take, decoded. Shopify's own limit is far
+#: higher; this one is about the dashboard, where a 20 MB upload over a phone
+#: connection is a staff member watching a spinner and giving up.
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+#: What a browser is allowed to hand us. An allowlist rather than a check for
+#: "image/", because the thing on the other end is Shopify's Files library and
+#: an SVG there is a script that runs on the storefront's own origin.
+ALLOWED_UPLOAD_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
+#: A staff member's filename ends up in a public url, so it is rebuilt from
+#: what is safe rather than filtered for what is not. The dot is not in the
+#: safe set either: the extension comes from the mime type, so every dot left
+#: in the stem is one somebody typed -- `..` included.
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _safe_filename(name: str, mime: str) -> str:
+    stem = _SAFE_NAME.sub("-", (name or "").rsplit(".", 1)[0]).strip("-")[:60]
+    return f"{stem or 'upload'}{ALLOWED_UPLOAD_TYPES[mime]}"
+
+
+@router.post("/uploads")
+def upload_image(payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """One picture, base64 in a JSON body, on its way to Shopify.
+
+    Base64 rather than multipart on purpose: `python-multipart` is not in the
+    pinned requirements, and adding a dependency to production so a form can
+    post a file is a bigger change than a third more bytes on an upload that
+    happens a handful of times a week.
+
+    `purpose` decides where it lands. A product photo is only *staged* -- the
+    create call hands the resource url to `productCreateMedia` and the picture
+    ends up owned by the product. A size chart goes into the Files library,
+    because a `file_reference` metafield stores a file gid and nothing else.
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+
+    mime = (payload.get("content_type") or "").split(";")[0].strip().lower()
+    if mime not in ALLOWED_UPLOAD_TYPES:
+        return JSONResponse(
+            {"error": "bad_arguments", "detail": f"unsupported image type: {mime or 'unknown'}"},
+            status_code=400,
+        )
+    try:
+        data = base64.b64decode(payload.get("data") or "", validate=True)
+    except (binascii.Error, ValueError):
+        return JSONResponse({"error": "bad_arguments", "detail": "data is not base64"}, status_code=400)
+    if not data:
+        return JSONResponse({"error": "bad_arguments", "detail": "the file is empty"}, status_code=400)
+    if len(data) > MAX_UPLOAD_BYTES:
+        return JSONResponse(
+            {"error": "bad_arguments", "detail": f"the file is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"},
+            status_code=413,
+        )
+
+    filename = _safe_filename(payload.get("filename") or "", mime)
+    purpose = payload.get("purpose") or "product_image"
+    try:
+        client = get_admin_client()
+        if purpose == "size_chart":
+            uploaded = shopify_files.upload_to_files(
+                client, filename, data, mime, alt=payload.get("alt") or filename
+            )
+            return JSONResponse({"file_gid": uploaded["id"], "url": uploaded["url"], "filename": filename})
+        source = shopify_files.stage(client, filename, data, mime, resource="IMAGE")
+    except shopify_files.FileUploadError as exc:
+        return JSONResponse({"error": "upload_rejected", "detail": str(exc)}, status_code=409)
+    except (ShopifyUnavailable, ShopifyConfigError) as exc:
+        return _outage(exc)
+    return JSONResponse({"source": source, "filename": filename})
+
+
 # --------------------------------------------------------------------------
 # products: create / edit
 # --------------------------------------------------------------------------
@@ -400,6 +512,9 @@ def create_product(payload: dict = Body(...), wanas_staff: str | None = Cookie(d
                 size_chart=payload.get("size_chart"),
                 variants=payload["variants"],
                 image_url=payload.get("image_url") or None,
+                images=payload.get("images") or None,
+                size_chart_file_gid=payload.get("size_chart_file_gid") or None,
+                size_chart_url=payload.get("size_chart_url") or None,
             )
         except shopify_admin_products.ProductRejected as exc:
             return JSONResponse({"error": "product_rejected", "detail": str(exc)}, status_code=409)

@@ -159,6 +159,13 @@ class Product(Base):
     style: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     collection: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
     size_chart: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    #: A chart picture with no published measurements behind it -- what a
+    #: staff member uploads off their laptop when creating a product. Held as
+    #: a url (Shopify's CDN), not a path: Railway's filesystem does not
+    #: survive a deploy, so a file written next to the code is a chart that
+    #: silently disappears. `size_chart` above stays the id of a *measured*
+    #: chart in `data/size_charts.json`; a product may have either, or both.
+    size_chart_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Display summaries derived from the variants. Never the basis of an
     # availability decision -- per-axis lists claim combinations that do not
