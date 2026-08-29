@@ -339,3 +339,44 @@ def test_an_uploaded_chart_is_set_on_shopify_and_kept_locally(seeded, shopify):
 
     assert shopify.chart_metafields[result["shopify_id"]] == "gid://shopify/MediaImage/chart"
     assert seeded.get(Product, "chart-tee").size_chart_image == "https://cdn/chart.png"
+
+
+# --------------------------------------------------------------------------
+# the shapes Shopify's own input types insist on
+# --------------------------------------------------------------------------
+
+
+def test_an_option_value_is_an_object_not_a_string():
+    """`OptionCreateInput.values` is `[OptionValueCreateInput!]`. A bare list
+    of strings fails the whole document with "Expected \"L\" to be a
+    key-value object" -- which is every product this ever tried to create."""
+    options = sap._build_options(
+        [
+            {"size": "M", "color": "black"},
+            {"size": "L", "color": "navy"},
+        ]
+    )
+
+    assert options[0] == {"name": "Size", "values": [{"name": "L"}, {"name": "M"}]}
+    assert options[1] == {"name": "Color", "values": [{"name": "black"}, {"name": "navy"}]}
+
+
+def test_the_sku_travels_under_the_inventory_item(seeded, shopify):
+    """`ProductVariantsBulkInput` has no `sku` field; it belongs to
+    `InventoryItemInput`. The fake asserts the same thing, so this is the
+    test that says why."""
+    sap.create_product(
+        seeded,
+        title="Shape Tee",
+        description="",
+        category="Tops",
+        department="unisex",
+        style=None,
+        collection=None,
+        size_chart=None,
+        variants=[{"size": "S", "price": 300, "stock_qty": 1}],
+    )
+
+    assert seeded.get(Variant, "shape-tee-s") is not None
+    assert shopify.qty("shape-tee-s") == 1
+

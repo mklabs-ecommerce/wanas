@@ -34,6 +34,14 @@
   mutation naming where they landed -- lives in one place,
   `integrations/shopify/files.py`, shared by the dashboard and
   `scripts/shopify_size_charts.py`.
+- **Creating a product on Shopify worked in the tests and in nothing else.**
+  Two input shapes had drifted and the fake shrugged at both: an option value
+  is an `OptionValueCreateInput`, not a string (`Expected "L" to be a
+  key-value object`), and the SKU belongs to `inventoryItem`, not to the
+  variant. Both verified against the live schema by introspection, and the
+  fake now asserts both shapes rather than accepting whatever it is handed.
+  `product_import.py` wrote the SKU to the same wrong place when it adopted a
+  product created in Shopify Admin, so that path is fixed with it.
 - Uploads are an allowlist of jpeg/png/webp/gif, capped at 20 MB, and the
   filename is rebuilt from what is safe rather than filtered for what is not.
   SVG is refused on purpose: Shopify Files serves it on the shop's own origin.

@@ -23,7 +23,7 @@ def _seed_manual_product(shopify, *, title="Loose Cargo Pants", category="Jogger
         gid,
         [
             {
-                "sku": sku,
+                "inventoryItem": {"sku": sku, "tracked": True},
                 "price": "450.00",
                 "optionValues": [{"optionName": "Size", "name": "One Size"}],
             }

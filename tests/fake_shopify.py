@@ -492,14 +492,32 @@ class FakeShopify:
             return gid
 
     def shopify_set_product_options(self, product_gid, options):
-        self._guard()  # nothing to model: implied by shopify_create_variants below
+        """Nothing to model -- the options are implied by the variants below.
+
+        What is checked is the *shape*, because it is the half a fake can
+        get wrong for free: an option value is an `OptionValueCreateInput`,
+        and Shopify rejects the whole document for a bare list of strings.
+        A fake that shrugged at that let every product created here fail
+        live while the suite stayed green.
+        """
+        self._guard()
+        for option in options:
+            assert option.get("name"), f"an option with no name: {option!r}"
+            for value in option["values"]:
+                assert isinstance(value, dict) and value.get("name"), (
+                    f"option value {value!r} must be a key-value object"
+                )
 
     def shopify_create_variants(self, product_gid, bulk_input):
         self._guard()
         with self._lock:
             created = []
             for entry in bulk_input:
-                sku = entry["sku"]
+                # `ProductVariantsBulkInput` has no `sku` of its own: it
+                # belongs to the inventory item, and sending it at the top
+                # level fails the document.
+                assert "sku" not in entry, "the SKU belongs under inventoryItem"
+                sku = entry["inventoryItem"]["sku"]
                 self.shelf[sku] = {
                     "qty": 0,
                     "price": Decimal(entry["price"]),
@@ -597,7 +615,8 @@ class FakeShopify:
                 # everything else keyed by sku) rather than only tracking
                 # price/stock, the way every other caller of this mutation
                 # has used it until now.
-                new_sku = entry.get("sku")
+                assert "sku" not in entry, "the SKU belongs under inventoryItem"
+                new_sku = (entry.get("inventoryItem") or {}).get("sku")
                 if new_sku is not None and new_sku != sku:
                     self.shelf[new_sku] = self.shelf.pop(sku)
                     self.variant_to_product[new_sku] = self.variant_to_product.pop(sku, product_gid)

@@ -137,7 +137,11 @@ def import_missing_products(session: Session, *, apply: bool = False) -> dict:
         bulk_input = [
             {
                 "id": v["shopify_variant_id"],
-                "sku": _variant_id(product_id, v["size"], v.get("color"), v.get("length")),
+                # Under `inventoryItem`, not at the top level:
+                # `ProductVariantsBulkInput` has no `sku` field of its own.
+                "inventoryItem": {
+                    "sku": _variant_id(product_id, v["size"], v.get("color"), v.get("length")),
+                },
             }
             for v in prepared
         ]

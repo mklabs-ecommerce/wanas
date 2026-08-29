@@ -319,13 +319,23 @@ def product_gid_for_variant_id(variant_id: str) -> str | None:
 
 
 def _build_options(variants: list[dict]) -> list[dict]:
-    options = [{"name": "Size", "values": sorted({v["size"] for v in variants})}]
-    colors = sorted({v["color"] for v in variants if v.get("color")})
+    """`productOptions` for `productUpdate`.
+
+    An option value is an `OptionValueCreateInput`, not a string: Shopify
+    refuses the whole document with "Expected \"L\" to be a key-value object"
+    for a bare list, which is what every product created here got.
+    """
+
+    def values(names: set[str]) -> list[dict]:
+        return [{"name": n} for n in sorted(names)]
+
+    options = [{"name": "Size", "values": values({v["size"] for v in variants})}]
+    colors = {v["color"] for v in variants if v.get("color")}
     if colors:
-        options.append({"name": "Color", "values": colors})
-    lengths = sorted({v["length"] for v in variants if v.get("length")})
+        options.append({"name": "Color", "values": values(colors)})
+    lengths = {v["length"] for v in variants if v.get("length")}
     if lengths:
-        options.append({"name": "Length", "values": lengths})
+        options.append({"name": "Length", "values": values(lengths)})
     return options
 
 
@@ -634,7 +644,13 @@ def create_product(
                 if v.get("original_price") and Decimal(str(v["original_price"])) > Decimal(str(v["price"]))
                 else None
             ),
-            "sku": _variant_id(product_id, v["size"], v.get("color"), v.get("length")),
+            # The SKU belongs to the inventory item, not the variant --
+            # `ProductVariantsBulkInput` has no `sku` field of its own, and
+            # sending one there fails the whole document.
+            "inventoryItem": {
+                "sku": _variant_id(product_id, v["size"], v.get("color"), v.get("length")),
+                "tracked": True,
+            },
             "inventoryPolicy": "DENY",
         }
         for v in variants
