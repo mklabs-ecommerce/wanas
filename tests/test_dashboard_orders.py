@@ -728,3 +728,89 @@ def test_a_shopify_outage_marking_paid_is_an_outage_not_a_refusal(logged_in, bot
     res = logged_in.post(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-paid")
     assert res.status_code == 503
     assert res.json()["error"] == "store_unavailable"
+
+
+# --------------------------------------------------------------------------
+# marking an order delivered
+#
+# Written to Shopify as a fulfillment *event* -- the same thing a courier's
+# own integration writes -- so the system has one field that means "delivered"
+# rather than two that can disagree. For a cash-on-delivery order that is also
+# the payment: Delivered is what settles it.
+# --------------------------------------------------------------------------
+
+
+def _ship(logged_in, gid):
+    res = logged_in.post(f"/dashboard/api/shopify/orders/{gid}/fulfill")
+    assert res.status_code == 200, res.text
+
+
+def test_an_order_that_never_shipped_cannot_be_delivered(logged_in, bot_order):
+    """Delivery is a fact about a parcel, and there is no parcel."""
+    res = logged_in.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-delivered"
+    )
+    assert res.status_code == 409
+    assert res.json()["error"] == "not_shipped"
+
+
+def test_a_shipped_order_reports_in_transit_until_it_arrives(logged_in, bot_order):
+    _ship(logged_in, bot_order.shopify_order_id)
+    detail = logged_in.get(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}").json()
+    assert detail["delivery_status"] == "IN_TRANSIT"
+
+
+def test_delivering_a_cod_order_settles_it(logged_in, bot_order, seeded):
+    """The whole point of the button: for cash on delivery, delivered *is*
+    paid. Staff should never have to click two things to record one event."""
+    _ship(logged_in, bot_order.shopify_order_id)
+    res = logged_in.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-delivered"
+    )
+    assert res.status_code == 200
+    assert res.json()["delivery_status"] == "DELIVERED"
+
+    detail = logged_in.get(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}").json()
+    assert detail["delivery_status"] == "DELIVERED"
+    assert detail["financial_status"] == "PAID"
+
+    seeded.expire_all()
+    local = seeded.get(Order, bot_order.order_id)
+    assert local.status == OrderStatus.DELIVERED.value
+    assert local.payment_status == "paid"
+
+
+def test_the_local_row_walks_the_stages_rather_than_jumping(logged_in, bot_order, seeded):
+    """`packed_at` must not be null on an order that obviously was packed, and
+    the customer's own status messages must arrive in order."""
+    _ship(logged_in, bot_order.shopify_order_id)
+    logged_in.post(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-delivered")
+
+    seeded.expire_all()
+    local = seeded.get(Order, bot_order.order_id)
+    assert local.packed_at is not None
+    assert local.shipped_at is not None
+    assert local.delivered_at is not None
+
+
+def test_delivering_a_website_order_needs_no_local_row(logged_in, website_order):
+    _ship(logged_in, website_order)
+    res = logged_in.post(f"/dashboard/api/shopify/orders/{website_order}/mark-delivered")
+    assert res.status_code == 200
+    assert "local" not in res.json()
+
+
+def test_delivering_twice_is_refused(logged_in, bot_order):
+    _ship(logged_in, bot_order.shopify_order_id)
+    logged_in.post(f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-delivered")
+    second = logged_in.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-delivered"
+    )
+    assert second.status_code == 409
+    assert second.json()["error"] == "already_delivered"
+
+
+def test_marking_delivered_requires_login(client, bot_order):
+    assert client.post(
+        f"/dashboard/api/shopify/orders/{bot_order.shopify_order_id}/mark-delivered"
+    ).status_code == 401

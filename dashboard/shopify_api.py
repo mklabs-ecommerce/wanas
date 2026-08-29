@@ -21,7 +21,7 @@ from sqlalchemy import or_, select
 from dashboard import customer_filters, customer_ledger
 from dashboard.guard import require_permission
 from domain.db import session_scope
-from domain.models import Client, Order, Product, Variant
+from domain.models import Client, Order, OrderStatus, Product, Variant
 from domain.services import orders as orders_service
 from integrations.shopify import (
     admin_customers as shopify_admin_customers,
@@ -212,6 +212,45 @@ def fulfill_order(
     if "error" in result:
         status = 404 if result["error"] == "order_not_found" else 409
         return JSONResponse(result, status_code=status)
+    return JSONResponse(result)
+
+
+@router.post("/orders/{order_gid:path}/mark-delivered")
+def mark_order_delivered(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """Record that the parcel arrived.
+
+    Shopify first, as a fulfillment event -- the same thing a courier's own
+    integration writes, so there is one field in the system that means
+    "delivered" rather than two that can disagree. Then the local row is
+    walked forward to Delivered here as well, rather than left to the
+    `fulfillments/update` webhook the event will also fire: the webhook is the
+    right mechanism but it is not a guarantee (it needs
+    `SHOPIFY_WEBHOOK_SECRET` and a reachable URL), and a staff member who
+    clicked "delivered" must not have to wonder. Both paths run through
+    `orders_service.advance_to`, which is idempotent -- whichever arrives
+    second finds nothing left to do.
+
+    A cash-on-delivery order settles as a *consequence*: Delivered is what
+    sets `payment_status` and tells Shopify (see
+    `orders_service.advance_status`). An order already paid online is simply
+    told again and Shopify declines, which costs a log line and nothing else.
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "orders")
+        if refused is not None:
+            return refused
+        try:
+            result = shopify_admin_orders.mark_delivered(order_gid)
+        except (ShopifyUnavailable, ShopifyConfigError) as exc:
+            return _outage(exc)
+        if "error" in result:
+            status = 404 if result["error"] == "order_not_found" else 409
+            return JSONResponse(result, status_code=status)
+
+        local = _local_order_for(db, order_gid)
+        if local is not None:
+            local_result = orders_service.advance_to(db, local, OrderStatus.DELIVERED.value)
+            result["local"] = local_result
     return JSONResponse(result)
 
 

@@ -65,6 +65,7 @@ ORDER_SUMMARY_FIELDS = """
   paymentGatewayNames
   customer { id displayName email phone numberOfOrders }
   shippingAddress { name phone city province }
+  fulfillments(first: 5) { id status displayStatus }
   totalPriceSet { shopMoney { amount currencyCode } }
   lineItems(first: 50) { nodes { title quantity sku } }
 """
@@ -93,6 +94,7 @@ query($id: ID!) {
     paymentGatewayNames
     customer { id displayName email phone numberOfOrders }
     shippingAddress { name address1 city province phone }
+    fulfillments(first: 5) { id status displayStatus }
     totalPriceSet { shopMoney { amount currencyCode } }
     subtotalPriceSet { shopMoney { amount currencyCode } }
     totalShippingPriceSet { shopMoney { amount currencyCode } }
@@ -279,15 +281,43 @@ def _customer_kind(customer: dict) -> str:
     return "returning" if count > 1 else "new"
 
 
+#: Shopify's fulfillment `displayStatus`, which is the carrier's own account
+#: of where the parcel is -- and the only field that says DELIVERED. The
+#: order-level `displayFulfillmentStatus` stops at FULFILLED: it answers "did
+#: this leave the shop", never "did it arrive". `fulfillments/update` is the
+#: webhook that reports it changing, and `integrations/shopify/webhooks.py`
+#: has always read the same value to move a local order to Delivered.
+DELIVERED_STATUS = "DELIVERED"
+
+
+def _delivery(node: dict) -> tuple[str | None, str | None]:
+    """This order's delivery status and the fulfillment it belongs to.
+
+    The most recent fulfillment wins: an order split across two parcels is
+    "delivered" only once the last one is, and Shopify returns them oldest
+    first. `(None, None)` for an order nothing has shipped yet, which is a
+    third state and not a slow delivery.
+    """
+    fulfillments = [f for f in (node.get("fulfillments") or []) if f]
+    if not fulfillments:
+        return None, None
+    latest = fulfillments[-1]
+    return (latest.get("displayStatus") or latest.get("status")), latest.get("id")
+
+
 def _order_summary(node: dict) -> dict:
     customer = node.get("customer") or {}
     address = node.get("shippingAddress") or {}
+    delivery_status, fulfillment_id = _delivery(node)
     return {
         "id": node["id"],
         "name": node.get("name") or "",
         "created_at": node.get("createdAt"),
         "financial_status": node.get("displayFinancialStatus"),
         "fulfillment_status": node.get("displayFulfillmentStatus"),
+        #: Where the parcel actually is. None until something ships.
+        "delivery_status": delivery_status,
+        "fulfillment_id": fulfillment_id,
         "cancelled": bool(node.get("cancelledAt")),
         "tags": node.get("tags") or [],
         #: The customer record this order is attached to, or None for the orders
@@ -556,6 +586,7 @@ def get_order(shopify_order_id: str) -> dict | None:
 
     customer = node.get("customer") or {}
     address = node.get("shippingAddress") or {}
+    delivery_status, fulfillment_id = _delivery(node)
     fulfillment_orders, fulfillment_access = _fulfillment_orders(client, shopify_order_id)
 
     return {
@@ -564,6 +595,8 @@ def get_order(shopify_order_id: str) -> dict | None:
         "created_at": node.get("createdAt"),
         "financial_status": node.get("displayFinancialStatus"),
         "fulfillment_status": node.get("displayFulfillmentStatus"),
+        "delivery_status": delivery_status,
+        "fulfillment_id": fulfillment_id,
         "cancelled": bool(node.get("cancelledAt")),
         "note": node.get("note"),
         "tags": node.get("tags") or [],
@@ -655,6 +688,55 @@ def fulfill(
     return {"fulfillment_id": created.get("id"), "status": created.get("status")}
 
 
+FULFILLMENT_EVENT_CREATE = """
+mutation($fulfillmentEvent: FulfillmentEventInput!) {
+  fulfillmentEventCreate(fulfillmentEvent: $fulfillmentEvent) {
+    fulfillmentEvent { id status }
+    userErrors { field message }
+  }
+}
+"""
+
+
+def mark_delivered(shopify_order_id: str) -> dict:
+    """Tell Shopify the parcel arrived.
+
+    Written as a fulfillment *event*, which is the same thing a carrier's own
+    integration writes -- so it lands in the one field that already means
+    "delivered" here (`fulfillments/update` -> `webhooks.advance_to`), rather
+    than inventing a second place where an order can be delivered. A shop
+    whose courier reports back gets this for free; a shop whose courier is a
+    man on a motorbike gets a button.
+
+    An order nothing has shipped yet cannot be delivered: that returns
+    `not_shipped` rather than guessing, because delivery is a fact about a
+    parcel and there is no parcel.
+    """
+    order = get_order(shopify_order_id)
+    if order is None:
+        return {"error": "order_not_found"}
+    if order["cancelled"]:
+        return {"error": "order_cancelled"}
+    if not order.get("fulfillment_id"):
+        return {"error": "not_shipped"}
+    if order.get("delivery_status") == DELIVERED_STATUS:
+        return {"error": "already_delivered"}
+
+    client = get_admin_client()
+    data = client(
+        FULFILLMENT_EVENT_CREATE,
+        {"fulfillmentEvent": {"fulfillmentId": order["fulfillment_id"], "status": "DELIVERED"}},
+    )
+    result = data.get("fulfillmentEventCreate") or {}
+    errors = result.get("userErrors") or []
+    if errors:
+        message = "; ".join(e.get("message", "") for e in errors)
+        log.warning("Shopify refused to mark %s delivered: %s", shopify_order_id, message)
+        return {"error": "delivery_rejected", "detail": message}
+
+    return {"id": shopify_order_id, "delivery_status": DELIVERED_STATUS}
+
+
 __all__ = [
     "OrderRejected",
     "ShopifyConfigError",
@@ -675,4 +757,6 @@ __all__ = [
     "get_order",
     "fulfill",
     "mark_as_paid",
+    "mark_delivered",
+    "DELIVERED_STATUS",
 ]

@@ -47,7 +47,7 @@ from sqlalchemy.orm import Session
 
 from config.settings import settings
 from domain.db import session_scope
-from domain.models import STATUS_SEQUENCE, Order, OrderStatus, WebhookEvent
+from domain.models import Order, OrderStatus, WebhookEvent
 from domain.services import orders as order_service
 
 log = logging.getLogger("wanas.webhooks.shopify")
@@ -177,27 +177,16 @@ def find_order(session: Session, payload: dict) -> Order | None:
 def advance_to(session: Session, order: Order, target: str) -> None:
     """Walk the order forward to `target`, one documented stage at a time.
 
-    Shopify has no concept of "packed", so a fulfilment jumps straight to
-    shipped. Stepping rather than assigning is what keeps the customer's
-    messages in a sensible order and keeps `packed_at` from being null on an
-    order that obviously was.
+    The walk itself is `order_service.advance_to` -- the dashboard's own
+    "delivered" button takes the same steps, and one copy of this loop is what
+    keeps the two agreeing about which pushes the customer gets. This wrapper
+    is the webhook's voice: a cancelled order is a normal thing to be told
+    about and worth a log line, not an error to hand back to Shopify.
     """
-    if target not in STATUS_SEQUENCE:
-        return
     if order.status == OrderStatus.CANCELLED.value:
         log.info("%s is cancelled; ignoring a move to %s", order.order_id, target)
         return
-
-    target_index = STATUS_SEQUENCE.index(target)
-    while True:
-        current = order.status
-        current_index = STATUS_SEQUENCE.index(current) if current in STATUS_SEQUENCE else -1
-        if current_index >= target_index:
-            return
-        result = order_service.advance_status(session, order, STATUS_SEQUENCE[current_index + 1])
-        if "error" in result:
-            log.warning("could not advance %s past %s: %s", order.order_id, current, result)
-            return
+    order_service.advance_to(session, order, target)
 
 
 def _handle_status(session: Session, payload: dict, target: str) -> None:

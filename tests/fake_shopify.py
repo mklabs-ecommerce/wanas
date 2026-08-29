@@ -281,6 +281,7 @@ class FakeShopify:
                 # Left unpaid on creation, exactly as `create_order` leaves
                 # it: the cash has not moved yet.
                 "financial_status": "PENDING",
+                "delivery_status": None,
                 "lines": {},
                 #: sku -> {title, unit_price}, so a swap/quantity edit can still
                 #: describe the line without a second lookup.
@@ -398,6 +399,7 @@ class FakeShopify:
                 # bucket) passes its own list.
                 "payment_gateways": list(payment_gateways),
                 "financial_status": financial_status,
+                "delivery_status": None,
                 "lines": {},
                 "line_meta": {},
             }
@@ -663,6 +665,10 @@ class FakeShopify:
             "created_at": order["created_at"],
             "financial_status": order.get("financial_status") or "PENDING",
             "fulfillment_status": "FULFILLED" if order["fulfilled"] else "UNFULFILLED",
+            "delivery_status": order.get("delivery_status"),
+            "fulfillment_id": (
+                f"gid://shopify/Fulfillment/{order['name']}" if order["fulfilled"] else None
+            ),
             "cancelled": order["cancelled"],
             "tags": list(order["tags"]),
             # Grouped by phone here the way `_customers_grouped` does, so the
@@ -795,6 +801,23 @@ class FakeShopify:
             order["financial_status"] = "PAID"
             return {"id": shopify_order_id, "financial_status": "PAID"}
 
+    def mark_delivered(self, shopify_order_id):
+        self._guard()
+        with self._lock:
+            order = self.orders.get(shopify_order_id)
+            if order is None:
+                return {"error": "order_not_found"}
+            if order["cancelled"]:
+                return {"error": "order_cancelled"}
+            # Delivery is a fact about a parcel, and an unfulfilled order has
+            # none -- the real one has no fulfillment id to write an event on.
+            if not order["fulfilled"]:
+                return {"error": "not_shipped"}
+            if order.get("delivery_status") == "DELIVERED":
+                return {"error": "already_delivered"}
+            order["delivery_status"] = "DELIVERED"
+            return {"id": shopify_order_id, "delivery_status": "DELIVERED"}
+
     def try_mark_as_paid(self, shopify_order_id):
         """The delivery path's form: never raises, never refuses out loud."""
         try:
@@ -813,6 +836,10 @@ class FakeShopify:
             if order["fulfilled"]:
                 return {"error": "already_fulfilled"}
             order["fulfilled"] = True
+            # Shipped, not arrived. `IN_TRANSIT` is what Shopify reports for a
+            # parcel that has left, and the difference between it and
+            # DELIVERED is the whole point of the delivery column.
+            order["delivery_status"] = "IN_TRANSIT"
             order["tracking_number"] = tracking_number
             order["tracking_company"] = tracking_company
             return {"fulfillment_id": f"gid://shopify/Fulfillment/{order['name']}", "status": "SUCCESS"}
@@ -994,6 +1021,7 @@ class FakeShopify:
         )
         monkeypatch.setattr(shopify_admin_orders, "fulfill", self.fulfill)
         monkeypatch.setattr(shopify_admin_orders, "mark_as_paid", self.mark_as_paid)
+        monkeypatch.setattr(shopify_admin_orders, "mark_delivered", self.mark_delivered)
         monkeypatch.setattr(shopify_orders, "mark_as_paid", self.mark_as_paid)
         monkeypatch.setattr(shopify_orders, "try_mark_as_paid", self.try_mark_as_paid)
         monkeypatch.setattr(shopify_admin_products, "list_products", self.list_products)

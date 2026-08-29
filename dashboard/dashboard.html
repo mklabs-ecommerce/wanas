@@ -1402,6 +1402,24 @@ const EN = {
   "طلب اتعدّل": "Order modified",
   "طلب اختبار من أرقام الفريق مستبعد من كل رقم في الصفحة دي.": "test order(s) from staff numbers are excluded from every figure on this page.",
   "طلب البوت": "Bot order",
+  "التوصيل": "Delivery",
+  "اتسلّم": "Delivered",
+  "في الطريق": "In transit",
+  "خرج للتسليم": "Out for delivery",
+  "محاولة تسليم": "Delivery attempted",
+  "جاهز للاستلام": "Ready for pickup",
+  "اتستلم من الفرع": "Picked up",
+  "مأكد": "Confirmed",
+  "بوليصة متطبوعة": "Label printed",
+  "فشل التسليم": "Delivery failed",
+  "اتشحن": "Shipped",
+  "علّم كمتسلّم": "Mark as delivered",
+  "العميل استلم الطلب؟": "Did the customer receive the order?",
+  "هيتسجل متسلّم، وبما إنه دفع عند الاستلام هيتسجل مدفوع كمان.": " will be recorded as delivered, and since it is cash on delivery it will be recorded as paid too.",
+  "هيتسجل متسلّم على شوبيفاي.": " will be recorded as delivered on Shopify.",
+  "أيوة، استلمه": "Yes, they received it",
+  "الطلب اتسجل متسلّم": "Order recorded as delivered",
+  "واتسجل مدفوع": "and recorded as paid",
   "حالة الدفع": "Payment status",
   "مدفوعة": "Paid",
   "مستنية دفع": "Awaiting payment",
@@ -1784,6 +1802,32 @@ const FINANCIAL_STATUS = {
 };
 const financialChip = (raw) => {
   const s = FINANCIAL_STATUS[raw] || { label: raw || "—", tone: "sky" };
+  return chipHTML(s.label, s.tone, "dot");
+};
+
+/* Where the parcel is, in the carrier's own words. Shopify's order-level
+   fulfillment status stops at "fulfilled" -- it says the parcel left, never
+   that it arrived -- so this reads the fulfillment's own displayStatus, the
+   same field the `fulfillments/update` webhook has always moved orders to
+   Delivered on. */
+const DELIVERY_STATUS = {
+  DELIVERED: { label: tr("اتسلّم"), tone: "teal" },
+  IN_TRANSIT: { label: tr("في الطريق"), tone: "sky" },
+  OUT_FOR_DELIVERY: { label: tr("خرج للتسليم"), tone: "amber" },
+  ATTEMPTED_DELIVERY: { label: tr("محاولة تسليم"), tone: "amber" },
+  READY_FOR_PICKUP: { label: tr("جاهز للاستلام"), tone: "sky" },
+  PICKED_UP: { label: tr("اتستلم من الفرع"), tone: "teal" },
+  CONFIRMED: { label: tr("مأكد"), tone: "sky" },
+  LABEL_PRINTED: { label: tr("بوليصة متطبوعة"), tone: "sky" },
+  FAILURE: { label: tr("فشل التسليم"), tone: "rose" },
+  // Shopify's answer for a parcel it has no carrier detail for: fulfilled,
+  // and nothing more said. One order in this shop already reads it.
+  FULFILLED: { label: tr("اتشحن"), tone: "sky" },
+  SUCCESS: { label: tr("اتشحن"), tone: "sky" },
+};
+const deliveryChip = (raw) => {
+  if (!raw) return `<span class="cellsub">—</span>`;
+  const s = DELIVERY_STATUS[raw] || { label: raw, tone: "sky" };
   return chipHTML(s.label, s.tone, "dot");
 };
 
@@ -3276,6 +3320,7 @@ VIEWS.orders = {
         <td>${esc(o.governorate || "—")}</td>
         <td>${(o.line_items || []).length ? esc(TR`${o.line_items.length} صنف`) : "—"}</td>
         <td>${statusChip(o.fulfillment_status, o.cancelled)}</td>
+        <td>${o.cancelled ? `<span class="cellsub">—</span>` : deliveryChip(o.delivery_status)}</td>
         <td>${financialChip(o.financial_status)}</td>
         <td>${paymentChip(o.payment_method)}</td>
         <td>${customerKindChip(o.customer_kind, o.customer_order_count)}</td>
@@ -3300,9 +3345,9 @@ VIEWS.orders = {
       </div>` +
       (this.rows.length
         ? card(tr("قائمة الطلبات"), TR`${this.rows.length} طلب`, tableHTML(
-            [tr("الطلب"), tr("العميل"), tr("المحافظة"), tr("الأصناف"), tr("الشحن"), tr("حالة الدفع"), tr("الدفع"), tr("العميل ده"), tr("المصدر"),
+            [tr("الطلب"), tr("العميل"), tr("المحافظة"), tr("الأصناف"), tr("الشحن"), tr("التوصيل"), tr("حالة الدفع"), tr("الدفع"), tr("العميل ده"), tr("المصدر"),
              { label: tr("الإجمالي"), num: true }],
-            rowsHTML, { minWidth: 1040 }), "", { flush: true })
+            rowsHTML, { minWidth: 1160 }), "", { flush: true })
         : `<div class="card"><div class="card-body"></div></div>`);
 
     this.wire();
@@ -3318,10 +3363,11 @@ VIEWS.orders = {
     if (!this.rows.length) return toast(tr("مفيش بيانات للتصدير"), "", "warn");
     exportCSV("orders.csv",
       [tr("رقم الطلب"), tr("التاريخ"), tr("العميل"), tr("التليفون"), tr("المحافظة"), tr("الحالة"),
-       tr("حالة الدفع"), tr("الدفع"),
+       tr("التوصيل"), tr("حالة الدفع"), tr("الدفع"),
        tr("عميل قديم/جديد"), tr("عدد طلباته"), tr("القناة"), tr("المصدر"), tr("الإجمالي")],
       this.rows.map((o) => [o.name, o.created_at, o.customer_name, o.customer_phone,
         o.governorate, o.cancelled ? tr("ملغي") : (o.fulfillment_status || ""),
+        (DELIVERY_STATUS[o.delivery_status] || {}).label || o.delivery_status || "",
         (FINANCIAL_STATUS[o.financial_status] || {}).label || o.financial_status,
         PAYMENT_LABELS[o.payment_method] || o.payment_method,
         CUSTOMER_KIND_LABELS[o.customer_kind] || o.customer_kind, o.customer_order_count,
@@ -3345,6 +3391,7 @@ async function openOrder(gid) {
   body.innerHTML = `
     <div class="row" style="margin-bottom:var(--s-4)">
       ${statusChip(order.fulfillment_status, order.cancelled)}
+      ${order.cancelled ? "" : deliveryChip(order.delivery_status)}
       ${financialChip(order.financial_status)}
       ${chipHTML(order.local ? tr("طلب البوت") : tr("طلب الموقع"), order.local ? "teal" : "lilac")}
       <span class="spacer"></span>
@@ -3378,9 +3425,33 @@ async function openOrder(gid) {
       foot.push(el("button", { class: "btn primary", type: "button", html: TR`${icon("truck", 15)} شحن الطلب`,
         onclick: () => fulfillForm(order) }));
     }
-    // Cash on delivery: the money moves in the street, so nothing but a
-    // person can tell this shop the order settled. One way only -- Shopify
-    // has no "mark as unpaid" to offer back.
+    // Delivery, before payment on purpose: for a cash-on-delivery order this
+    // *is* the payment button. Marking it delivered settles it -- locally and
+    // on Shopify -- so staff should reach for this one and only fall back to
+    // "علّم كمدفوع" for an order that settled some other way.
+    if (order.fulfillment_status !== "UNFULFILLED" && order.delivery_status !== "DELIVERED") {
+      foot.push(el("button", { class: "btn", type: "button", html: TR`${icon("check", 15)} علّم كمتسلّم`,
+        onclick: async () => {
+          const cod = order.payment_method === "cod";
+          const ok = await overlay.confirm(tr("العميل استلم الطلب؟"),
+            cod
+              ? TR`طلب ${order.name} هيتسجل متسلّم، وبما إنه دفع عند الاستلام هيتسجل مدفوع كمان.`
+              : TR`طلب ${order.name} هيتسجل متسلّم على شوبيفاي.`,
+            tr("أيوة، استلمه"));
+          if (!ok) return;
+          const result = await api(`/dashboard/api/shopify/orders/${encodeURIComponent(gid)}/mark-delivered`,
+            { method: "POST", quiet: true });
+          if (result.__error) return toastError(result.__error, tr("التسجيل مانفذش"));
+          toast(tr("الطلب اتسجل متسلّم"), cod ? tr("واتسجل مدفوع") : "");
+          openOrder(gid);
+          VIEWS.orders.load();
+        } }));
+    }
+    // The money moves in the street, so nothing but a person can tell this
+    // shop the order settled. One way only -- Shopify has no "mark as unpaid"
+    // to offer back. Marking it delivered above does this by itself for a
+    // cash-on-delivery order; this is for the ones that settled some other
+    // way, and it is hidden once the order is paid.
     if (order.financial_status !== "PAID") {
       foot.push(el("button", { class: "btn", type: "button", html: TR`${icon("money", 15)} علّم كمدفوع`,
         onclick: async () => {

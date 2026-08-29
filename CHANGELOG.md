@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — Delivery status, and the button that settles a COD order
+
+- **Where the parcel is, as its own column.** Shopify's order-level
+  fulfillment status stops at "fulfilled" — it says the parcel *left*, never
+  that it arrived. The delivery column reads the fulfillment's own
+  `displayStatus` instead (اتسلّم / في الطريق / خرج للتسليم / فشل التسليم …),
+  which is the same field `fulfillments/update` has always moved a local order
+  to Delivered on. It is in the table, the drawer and the CSV export.
+- **"علّم كمتسلّم", beside Ship.** Written to Shopify as a fulfillment
+  *event*, the same thing a courier's own integration writes, so the system
+  keeps one field meaning "delivered" rather than two that can disagree. The
+  local row is walked forward here too rather than left to the webhook the
+  event also fires: the webhook is the right mechanism but not a guarantee
+  (it needs `SHOPIFY_WEBHOOK_SECRET` and a reachable URL), and both paths go
+  through `orders_service.advance_to`, so whichever arrives second finds
+  nothing to do.
+- **For a cash-on-delivery order, delivered is paid.** Marking it delivered
+  settles it — locally and on Shopify — because Delivered is what
+  `advance_status` has always keyed the payment off. Staff record one event,
+  not two. An order already paid online is only moved along the delivery
+  side; Shopify declines the redundant payment call and it costs a log line.
+  "علّم كمدفوع" stays for an order that settled some other way, and hides
+  once the order is paid.
+- The stage-walk moved from `integrations/shopify/webhooks.py` into
+  `domain/services/orders.py::advance_to`. The dashboard button takes exactly
+  the same steps as a courier's webhook, and a second copy of that loop is how
+  two paths end up disagreeing about which messages a customer gets.
+
 ## Unreleased — Payment status, and a way to change it
 
 - **Payment status is a column and three filters.** "مدفوعة", "مستنية دفع"

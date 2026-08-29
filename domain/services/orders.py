@@ -986,6 +986,39 @@ def advance_status(session: Session, order: Order, new_status: str) -> dict:
     return {"order_id": order.order_id, "status": order.status}
 
 
+def advance_to(session: Session, order: Order, target: str) -> dict:
+    """Walk an order forward to `target`, one documented stage at a time.
+
+    Shopify has no concept of "packed", and a courier reporting a delivery
+    says nothing about the stages before it, so both callers arrive here
+    wanting to jump. Stepping rather than assigning is what keeps the
+    customer's messages in a sensible order and keeps `packed_at` from being
+    null on an order that obviously was.
+
+    Lives here rather than in `integrations/shopify/webhooks.py`, where it
+    started: the dashboard's own "delivered" button walks exactly the same
+    stages, and a second copy of this loop is how two paths end up disagreeing
+    about which pushes a customer gets.
+    """
+    if target not in STATUS_SEQUENCE:
+        return {"error": "bad_status", "status": target}
+    if order.status == OrderStatus.CANCELLED.value:
+        return {"error": "not_modifiable", "status": order.status}
+
+    target_index = STATUS_SEQUENCE.index(target)
+    last: dict = {"order_id": order.order_id, "status": order.status}
+    while True:
+        current = order.status
+        current_index = STATUS_SEQUENCE.index(current) if current in STATUS_SEQUENCE else -1
+        if current_index >= target_index:
+            return last
+        result = advance_status(session, order, STATUS_SEQUENCE[current_index + 1])
+        if "error" in result:
+            log.warning("could not advance %s past %s: %s", order.order_id, current, result)
+            return result
+        last = result
+
+
 def submit_feedback(session: Session, order: Order, rating: int, text: str | None) -> dict:
     if order.status != OrderStatus.DELIVERED.value:
         return {"error": "not_delivered", "status": order.status}
