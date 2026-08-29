@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — The size charts, on the product page
+
+- **The storefront now shows the same charts the bot sends.**
+  `scripts/shopify_size_charts.py` publishes `data/size_charts.json` and
+  `data/size-charts/*.png` to Shopify as two product metafields --
+  `custom.size_chart` (the diagram) and `custom.size_chart_data` (the
+  measurements, as JSON) -- and `theme/size-chart.liquid` renders them in a
+  modal behind a "دليل المقاسات · Size guide" button. Both languages show at
+  once: `size_charts.json` has carried `label_ar` and `label_en` all along,
+  which is the whole reason this crosses over as data rather than as a picture
+  with text baked into it.
+- Which product gets which chart comes from `Product.size_chart`, so nobody
+  sets 18 products by hand; matching to Shopify is by variant SKU, the way
+  every other reconciliation in here works. Dry run by default, idempotent,
+  and a diagram somebody uploaded by hand in Shopify Admin is left alone
+  unless `--replace-images` says otherwise -- theirs was a decision, ours is
+  a default.
+- Sizes cross over as an ordered array rather than a JSON object. Liquid
+  iterates an object in whatever order it arrives in and cannot sort it back,
+  so a chart listing XL before S would be unfixable in the theme.
+- Needs the `write_files` scope, and says so plainly if it is missing.
+
 ## Unreleased — Stock writes, on the Shopify inventory API as it is now
 
 - **Saving a quantity works again.** Every stock write carried

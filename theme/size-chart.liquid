@@ -1,0 +1,186 @@
+{%- comment -%}
+  Size guide, bilingual, from the metafields scripts/shopify_size_charts.py
+  writes:
+
+    custom.size_chart       the diagram (a file reference)
+    custom.size_chart_data  the measurements (JSON)
+
+  Both languages are shown at once rather than switched between. The shop's
+  customers read Arabic and English interchangeably, often in the same
+  sentence, and a chart is a glanceable thing -- a customer looking for
+  "chest" should not have to change the storefront's language to find it. If
+  you later run Translate & Adapt with two locales, this is the one file to
+  revisit.
+
+  Install: put this file in `snippets/` and add one line to the product
+  template (Sections > main-product.liquid, next to the variant picker):
+
+    {% render 'size-chart', product: product %}
+
+  It renders nothing at all for a product with no chart, so it is safe to add
+  once for every product.
+{%- endcomment -%}
+
+{%- assign chart = product.metafields.custom.size_chart_data.value -%}
+{%- assign diagram = product.metafields.custom.size_chart.value -%}
+
+{%- if chart and chart.sizes.size > 0 -%}
+  {%- assign dialog_id = 'wns-size-chart-' | append: product.id -%}
+
+  <button
+    type="button"
+    class="wns-size-chart__open"
+    data-wns-size-chart="{{ dialog_id }}"
+  >
+    <span>دليل المقاسات</span>
+    <span class="wns-size-chart__sep" aria-hidden="true">·</span>
+    <span>Size guide</span>
+  </button>
+
+  <dialog id="{{ dialog_id }}" class="wns-size-chart" aria-label="Size guide">
+    <form method="dialog" class="wns-size-chart__close-form">
+      <button class="wns-size-chart__close" aria-label="إغلاق · Close">&times;</button>
+    </form>
+
+    <h2 class="wns-size-chart__title">
+      {{ chart.title }}
+    </h2>
+    <p class="wns-size-chart__unit">
+      كل المقاسات بال{{ chart.unit }} · All measurements in {{ chart.unit }}
+    </p>
+
+    <div class="wns-size-chart__scroll">
+      <table class="wns-size-chart__table">
+        <thead>
+          <tr>
+            <th scope="col">
+              <span dir="rtl">المقاس</span>
+              <span class="wns-size-chart__en">Size</span>
+            </th>
+            {%- for measurement in chart.measurements -%}
+              <th scope="col">
+                <span dir="rtl">
+                  {{ measurement.label_ar }}
+                  {%- if measurement.marker %} ({{ measurement.marker }}){% endif -%}
+                </span>
+                <span class="wns-size-chart__en">
+                  {{ measurement.label_en }}
+                  {%- if measurement.marker %} ({{ measurement.marker }}){% endif -%}
+                </span>
+              </th>
+            {%- endfor -%}
+          </tr>
+        </thead>
+        <tbody>
+          {%- for size in chart.sizes -%}
+            <tr>
+              <th scope="row">{{ size.name }}</th>
+              {%- for measurement in chart.measurements -%}
+                {%- assign value = size.values[measurement.key] -%}
+                <td>{% if value %}{{ value }}{% else %}&mdash;{% endif %}</td>
+              {%- endfor -%}
+            </tr>
+          {%- endfor -%}
+        </tbody>
+      </table>
+    </div>
+
+    {%- if diagram -%}
+      <img
+        class="wns-size-chart__diagram"
+        src="{{ diagram | image_url: width: 900 }}"
+        alt="{{ chart.title }} — قياسات · measurements"
+        loading="lazy"
+      >
+    {%- endif -%}
+
+    <p class="wns-size-chart__note">
+      القياسات تقريبية وممكن تختلف ١–٢ سم.
+      <span class="wns-size-chart__en">
+        Measurements are approximate and may vary by 1–2 cm.
+      </span>
+    </p>
+  </dialog>
+
+  {%- comment -%}
+    Styles and script are scoped to this snippet and rendered once per
+    product page. `.wns-` prefixed throughout so nothing here can collide
+    with the theme's own classes.
+  {%- endcomment -%}
+  <style>
+    .wns-size-chart__open {
+      display: inline-flex;
+      gap: 0.4em;
+      align-items: center;
+      background: none;
+      border: 0;
+      padding: 0.4em 0;
+      font: inherit;
+      font-size: 0.95em;
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 0.25em;
+      cursor: pointer;
+    }
+    .wns-size-chart__sep { opacity: 0.5; }
+    .wns-size-chart {
+      width: min(46rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 4rem);
+      overflow: auto;
+      border: 0;
+      border-radius: 0.6rem;
+      padding: 1.6rem;
+      color: inherit;
+      background: Canvas;
+    }
+    .wns-size-chart::backdrop { background: rgba(0, 0, 0, 0.55); }
+    .wns-size-chart__close-form { float: inline-end; margin: -0.6rem -0.4rem 0 0; }
+    .wns-size-chart__close {
+      background: none;
+      border: 0;
+      font-size: 1.6rem;
+      line-height: 1;
+      cursor: pointer;
+      color: inherit;
+    }
+    .wns-size-chart__title { margin: 0 0 0.2em; font-size: 1.15rem; }
+    .wns-size-chart__unit { margin: 0 0 1em; opacity: 0.7; font-size: 0.9rem; }
+    .wns-size-chart__scroll { overflow-x: auto; }
+    .wns-size-chart__table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    .wns-size-chart__table th,
+    .wns-size-chart__table td {
+      border: 1px solid rgba(128, 128, 128, 0.35);
+      padding: 0.5em 0.7em;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .wns-size-chart__table thead th { font-weight: 600; }
+    .wns-size-chart__table th span { display: block; }
+    .wns-size-chart__en { font-size: 0.82em; opacity: 0.65; font-weight: 400; }
+    .wns-size-chart__diagram { display: block; width: 100%; height: auto; margin: 1.2rem 0 0; }
+    .wns-size-chart__note { margin: 1rem 0 0; font-size: 0.85rem; opacity: 0.7; }
+  </style>
+
+  <script>
+    (function () {
+      var button = document.querySelector('[data-wns-size-chart="{{ dialog_id }}"]');
+      var dialog = document.getElementById('{{ dialog_id }}');
+      if (!button || !dialog) return;
+      button.addEventListener('click', function () {
+        // showModal is what gives the backdrop and the escape key. Older
+        // browsers without <dialog> fall back to an inline open panel rather
+        // than a button that does nothing.
+        if (typeof dialog.showModal === 'function') {
+          dialog.showModal();
+        } else {
+          dialog.setAttribute('open', 'open');
+        }
+      });
+      dialog.addEventListener('click', function (event) {
+        // A click on the backdrop lands on the dialog itself, never on its
+        // children, which is the cheapest click-outside-to-close there is.
+        if (event.target === dialog) dialog.close();
+      });
+    })();
+  </script>
+{%- endif -%}

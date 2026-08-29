@@ -31,7 +31,10 @@ something looks wrong.
       says so in place of the button, and `fulfill` refuses with
       `fulfillment_scope_missing`, rather than either one failing as an
       outage. A missing write scope shows up as a `store_unavailable`
-      (config) refusal from the dashboard action that needed it, not a crash
+      (config) refusal from the dashboard action that needed it, not a crash.
+      `write_files` is needed only by `scripts/shopify_size_charts.py`, which
+      uploads the size-chart diagrams; nothing the bot or the dashboard does
+      at runtime touches Files
 - [ ] `SHOPIFY_WEBHOOK_SECRET` set — without it orders stay `Confirmed`
       forever and no tracking message ever goes out. The subscriptions
       themselves register automatically on boot once `SHOPIFY_STORE_DOMAIN`

@@ -214,11 +214,18 @@ scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
                           dry-run by default),
                           shopify_set_skus.py (link local variant_id -> Shopify
                           SKU), shopify_check_live.py (read-only smoke check),
+                          shopify_size_charts.py (publish the size charts to
+                          Shopify as product metafields, for the storefront),
                           migrate_schema.py (add every column the models
                           declare and the database lacks — the general form),
                           migrate_add_shopify_order_columns.py (the earlier
                           one-time, SQLite-only version) — all dry-run by
                           default, idempotent, need --apply
+theme/                   Liquid the Shopify theme uses, kept in the repo but
+                          pasted in by hand: size-chart.liquid renders the
+                          bilingual size guide from the metafields
+                          scripts/shopify_size_charts.py writes. Nothing here
+                          is loaded by the app -- see theme/README.md
 tests/                   pytest suite (flat, one test_<module>.py per
                           subject rather than mirroring the source tree —
                           see README.md)
