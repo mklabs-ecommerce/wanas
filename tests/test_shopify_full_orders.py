@@ -328,3 +328,159 @@ def test_an_order_with_no_shopify_id_still_cancels_the_old_way(priced, shopify):
 
     assert priced.get(Variant, VARIANT).stock_qty == before + 2
     assert next(iter(shopify.orders.values()))["cancelled"] is False
+
+
+# --------------------------------------------------------------------------
+# the order says who placed it
+# --------------------------------------------------------------------------
+#
+# Without a customer on the order, the admin's Orders list reads "No customer"
+# for every sale the bot ever made, and `numberOfOrders` stays empty -- so
+# nothing downstream can tell a returning buyer from a first-time one. Shopify
+# matches `toUpsert` on the phone, so a returning customer links to the record
+# they already have instead of gaining a second one.
+#
+# These reach for the real `create_order` rather than the fake shelf, which
+# replaces the whole function: what is under test is the payload it builds, so
+# the transport is what has to be stood in for. Hence `no_shopify`.
+
+
+class Recorder:
+    """Stands in for the GraphQL transport. `replies` are returned in order;
+    a callable is invoked with the variables so a test can refuse the first
+    call and accept the second."""
+
+    def __init__(self, *replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def __call__(self, query, variables):
+        self.calls.append(variables)
+        reply = self.replies.pop(0) if self.replies else self.replies
+        return reply(variables) if callable(reply) else reply
+
+
+CREATED = {"orderCreate": {"order": {"id": "gid://shopify/Order/1", "name": "#1029"}}}
+
+
+def refusal(*errors):
+    return {"orderCreate": {"order": None, "userErrors": list(errors)}}
+
+
+def sell(monkeypatch, recorder, **overrides):
+    monkeypatch.setattr(shopify_orders, "get_client", lambda: recorder)
+    args = {
+        "reference": "WNS-1",
+        "items": [{"shopify_variant_id": "gid://shopify/ProductVariant/1",
+                   "quantity": 1, "unit_price": 800}],
+        "customer_name": "Hazem Abdelhamid",
+        "phone": "01067177128",
+        "email": None,
+        "address": "12 El Sebki Street",
+        "governorate": "Cairo",
+        "shipping_fee": 60,
+    }
+    args.update(overrides)
+    return shopify_orders.create_order(**args)
+
+
+@pytest.mark.no_shopify
+def test_the_order_carries_the_customer_who_placed_it(monkeypatch):
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder)
+
+    customer = recorder.calls[0]["order"]["customer"]["toUpsert"]
+    assert customer["phone"] == "+201067177128"
+    assert customer["firstName"] == "Hazem"
+    assert customer["lastName"] == "Abdelhamid"
+
+
+@pytest.mark.no_shopify
+def test_the_customer_and_the_packing_slip_split_the_name_the_same_way(monkeypatch):
+    """One helper does the split for both, so the Customers list and the
+    address on the parcel can never disagree about the same person."""
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder, customer_name="حازم عبد الحميد")
+
+    order = recorder.calls[0]["order"]
+    customer = order["customer"]["toUpsert"]
+    assert (customer["firstName"], customer["lastName"]) == (
+        order["shippingAddress"]["firstName"],
+        order["shippingAddress"]["lastName"],
+    )
+
+
+@pytest.mark.no_shopify
+def test_a_customer_with_nothing_to_match_on_is_left_off(monkeypatch):
+    """Shopify cannot look a name up and will not create a customer from one.
+    Sending the block anyway risks the whole order, and a rejected order loses
+    the sale -- the same trade `_address` makes with an unreadable phone."""
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder, phone="not a number", email=None)
+
+    assert "customer" not in recorder.calls[0]["order"]
+
+
+@pytest.mark.no_shopify
+def test_an_email_alone_is_enough_to_attach_them(monkeypatch):
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder, phone="", email="hazem@example.com")
+
+    assert recorder.calls[0]["order"]["customer"]["toUpsert"]["email"] == "hazem@example.com"
+
+
+@pytest.mark.no_shopify
+def test_a_refused_customer_costs_the_link_not_the_sale(monkeypatch):
+    """Their phone sitting on somebody else's record is a reason to file the
+    order without a customer, not a reason to lose the order."""
+    recorder = Recorder(
+        refusal({"field": ["order", "customer", "toUpsert", "phone"],
+                 "message": "Phone has already been taken"}),
+        CREATED,
+    )
+
+    result = sell(monkeypatch, recorder)
+
+    assert result["name"] == "#1029"
+    assert len(recorder.calls) == 2
+    assert "customer" not in recorder.calls[1]["order"]
+    # The retry is the same sale, not a re-quoted one.
+    assert recorder.calls[1]["order"]["lineItems"] == recorder.calls[0]["order"]["lineItems"]
+
+
+@pytest.mark.no_shopify
+def test_an_empty_shelf_is_not_retried(monkeypatch):
+    """The second call is refused for the same reason, and the customer is owed
+    the alternatives this refusal raises for."""
+    recorder = Recorder(
+        refusal({"field": ["order", "lineItems"],
+                 "message": "Insufficient inventory for the requested quantity"}),
+        CREATED,
+    )
+
+    with pytest.raises(shopify_orders.OrderRejected) as caught:
+        sell(monkeypatch, recorder)
+
+    assert caught.value.is_out_of_stock
+    assert len(recorder.calls) == 1
+
+
+@pytest.mark.no_shopify
+def test_a_refusal_that_is_not_about_the_customer_still_propagates(monkeypatch):
+    """The link is dropped on any refusal but an empty shelf, because which
+    `field` path Shopify reports a phone conflict in is not something to bet a
+    sale on. A refusal that was about something else is refused again the same
+    way -- and that is what the caller sees. No order is quietly created."""
+    price = {"field": ["order", "shippingLines"], "message": "Price is invalid"}
+    recorder = Recorder(refusal(price), refusal(price))
+
+    with pytest.raises(shopify_orders.OrderRejected) as caught:
+        sell(monkeypatch, recorder)
+
+    assert "Price is invalid" in str(caught.value)
+    assert len(recorder.calls) == 2
+    assert "customer" not in recorder.calls[1]["order"]

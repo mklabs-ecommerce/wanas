@@ -414,3 +414,71 @@ def test_hitting_the_page_cap_while_filtering_is_reported(logged_in, monkeypatch
     body = logged_in.get("/dashboard/api/shopify/orders?payment=cod").json()
     assert body["truncated"] is True
     assert body["has_next_page"] is False
+
+
+# --------------------------------------------------------------------------
+# orders Shopify has no customer record for
+# --------------------------------------------------------------------------
+#
+# Every order the bot placed before it started attaching a customer
+# (`shopify_orders._customer`) has a shipping address and nothing else, and no
+# call can give it one afterwards -- `orderUpdate` has no customer field. The
+# list has to read the name off the address for those, without inventing the
+# rest of a customer record around it.
+
+
+def _node_without_customer(**overrides):
+    node = {
+        "id": "gid://shopify/Order/9001",
+        "name": "#1028",
+        "createdAt": "2026-08-26T10:00:00Z",
+        "displayFinancialStatus": "PENDING",
+        "displayFulfillmentStatus": "UNFULFILLED",
+        "tags": ["chatbot", "whatsapp", "cash-on-delivery"],
+        "paymentGatewayNames": ["Cash on Delivery (COD)"],
+        "customer": None,
+        "shippingAddress": {
+            "name": "حازم عبد الحميد",
+            "phone": "+201067177128",
+            "city": "Cairo",
+            "province": "Cairo",
+        },
+        "totalPriceSet": {"shopMoney": {"amount": "860.00", "currencyCode": "EGP"}},
+        "lineItems": {"nodes": []},
+    }
+    node.update(overrides)
+    return node
+
+
+def test_an_order_with_no_customer_record_shows_the_name_off_the_address():
+    row = shopify_api.shopify_admin_orders._order_summary(_node_without_customer())
+
+    assert row["customer_name"] == "حازم عبد الحميد"
+    assert row["customer_phone"] == "+201067177128"
+
+
+def test_a_name_read_off_the_address_is_not_evidence_of_a_first_order():
+    """The name is display; the count is a claim. An address cannot say
+    whether this person has bought here before, so the row stays `unknown`
+    rather than being folded in with genuine first-time buyers."""
+    row = shopify_api.shopify_admin_orders._order_summary(_node_without_customer())
+
+    assert row["customer_order_count"] is None
+    assert row["customer_kind"] == "unknown"
+
+
+def test_a_real_customer_record_still_wins_over_the_address():
+    node = _node_without_customer(
+        customer={
+            "id": "gid://shopify/Customer/5",
+            "displayName": "Hazem A.",
+            "phone": "+201000000001",
+            "numberOfOrders": "3",
+        }
+    )
+
+    row = shopify_api.shopify_admin_orders._order_summary(node)
+
+    assert row["customer_name"] == "Hazem A."
+    assert row["customer_phone"] == "+201000000001"
+    assert row["customer_kind"] == "returning"

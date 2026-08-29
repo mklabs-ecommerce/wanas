@@ -141,15 +141,76 @@ def _line(item: dict) -> dict:
     }
 
 
-def _address(*, name: str, phone: str, address: str, governorate: str) -> dict:
-    # Shopify wants a first/last split. Egyptian names routinely run to four
-    # words and splitting on the first space would file "حازم عبد الحميد" under
-    # a surname of "عبد الحميد عبدالحميد". Everything after the first word goes
-    # in `lastName` -- imperfect, but it keeps the full name intact on the
-    # packing slip, which is what it is for.
+def _split_name(name: str) -> tuple[str, str]:
+    """The first/last split Shopify wants, done once for both places it is
+    needed -- the address and the customer record -- so the packing slip and
+    the Customers list can never disagree about the same person.
+
+    Egyptian names routinely run to four words and splitting on the first
+    space would file "حازم عبد الحميد" under a surname of "عبد الحميد
+    عبدالحميد". Everything after the first word goes in `lastName` --
+    imperfect, but it keeps the full name intact.
+    """
     parts = (name or "").strip().split(maxsplit=1)
     first = parts[0] if parts else name
     last = parts[1] if len(parts) > 1 else ""
+    return first, last
+
+
+def _customer(*, name: str, phone: str | None, email: str | None) -> dict | None:
+    """The customer to attach to the order, or None when there is nothing to
+    attach them by.
+
+    Without this the order reaches the admin with a shipping address and no
+    customer, which is what the Orders list renders as "No customer" -- and
+    what leaves `numberOfOrders` empty, so nothing downstream can tell a
+    returning buyer from a first-time one.
+
+    `toUpsert` is match-or-create in the same call: Shopify looks the phone
+    (or email) up and links the existing record instead of making a second
+    one. A name alone is not something it can match on and not something it
+    will create a customer from, so with neither identifier the block is
+    omitted entirely rather than sent in a form that could cost the sale.
+
+    The name given for *this* order overwrites the name on a matched record.
+    That is the intended reading -- it is the name the customer typed most
+    recently -- and the per-order name is on the shipping address either way.
+    """
+    if not phone and not email:
+        return None
+
+    first, last = _split_name(name)
+    attributes: dict[str, str] = {}
+    if first:
+        attributes["firstName"] = first
+    if last:
+        attributes["lastName"] = last
+    if phone:
+        attributes["phone"] = phone
+    if email:
+        attributes["email"] = email
+    return {"toUpsert": attributes}
+
+
+def _is_customer_error(errors: list[dict] | None) -> bool:
+    """Whether Shopify's refusal named the customer block -- for the log line
+    only, deliberately not for deciding whether to retry.
+
+    A phone that already belongs to a different record is a refusal the order
+    survives without its customer, but which `field` path Shopify reports that
+    in is not documented and not something to bet a sale on. `create_order`
+    drops the block on any refusal that is not an empty shelf; this only says
+    whether the message explained itself.
+    """
+    for error in errors or []:
+        field = error.get("field") or []
+        if any("customer" in str(part).lower() for part in field):
+            return True
+    return False
+
+
+def _address(*, name: str, phone: str, address: str, governorate: str) -> dict:
+    first, last = _split_name(name)
     out = {
         "firstName": first,
         "lastName": last,
@@ -225,6 +286,10 @@ def create_order(
     if email:
         order["email"] = email
 
+    customer = _customer(name=customer_name, phone=intl, email=email)
+    if customer:
+        order["customer"] = customer
+
     options = {
         # The bot already sent a confirmation on WhatsApp. A second one from
         # Shopify would arrive branded "My Store" and read like a different
@@ -240,13 +305,38 @@ def create_order(
         "inventoryBehaviour": "DECREMENT_OBEYING_POLICY",
     }
 
-    data = get_client()(ORDER_CREATE, {"order": order, "options": options})
-    result = data.get("orderCreate") or {}
-    errors = result.get("userErrors") or []
-    if errors:
-        message = "; ".join(e.get("message", "") for e in errors)
-        log.warning("Shopify refused to create order %s: %s", reference, message)
-        raise OrderRejected(message, errors)
+    def send(payload: dict) -> dict:
+        data = get_client()(ORDER_CREATE, {"order": payload, "options": options})
+        result = data.get("orderCreate") or {}
+        errors = result.get("userErrors") or []
+        if errors:
+            message = "; ".join(e.get("message", "") for e in errors)
+            log.warning("Shopify refused to create order %s: %s", reference, message)
+            raise OrderRejected(message, errors)
+        return result
+
+    try:
+        result = send(order)
+    except OrderRejected as exc:
+        # An empty shelf is never retried: the second call is refused for the
+        # same reason, and the customer is owed the alternatives this raises
+        # for. Every *other* refusal is retried without the customer block,
+        # rather than only the ones whose `field` path names it -- which shape
+        # Shopify reports a phone conflict in is not something this code
+        # should be betting a sale on. If the refusal was about something
+        # else the second call is refused identically and that is what
+        # propagates; if it was about the customer in a shape nobody
+        # predicted, the sale survives without the link.
+        if exc.is_out_of_stock or not customer:
+            raise
+        log.warning(
+            "Shopify refused order %s (%s); retrying without the customer%s",
+            reference,
+            exc,
+            "" if _is_customer_error(exc.errors) else " -- the refusal did not name one",
+        )
+        order.pop("customer", None)
+        result = send(order)
 
     created = result.get("order") or {}
     if not created.get("id"):

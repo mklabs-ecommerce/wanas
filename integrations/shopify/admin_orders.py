@@ -55,7 +55,7 @@ query($cursor: String, $query: String) {
       tags
       paymentGatewayNames
       customer { id displayName email phone numberOfOrders }
-      shippingAddress { city province }
+      shippingAddress { name phone city province }
       totalPriceSet { shopMoney { amount currencyCode } }
       lineItems(first: 50) {
         nodes { title quantity sku }
@@ -78,7 +78,7 @@ query($id: ID!) {
     tags
     paymentGatewayNames
     customer { id displayName email phone numberOfOrders }
-    shippingAddress { address1 city province phone }
+    shippingAddress { name address1 city province phone }
     totalPriceSet { shopMoney { amount currencyCode } }
     subtotalPriceSet { shopMoney { amount currencyCode } }
     totalShippingPriceSet { shopMoney { amount currencyCode } }
@@ -162,6 +162,22 @@ def _customer_orders(customer: dict) -> int | None:
         return None
 
 
+def _customer_display(customer: dict, address: dict) -> str | None:
+    """Who to put in the Customer column.
+
+    Every order the bot ever created before customers were attached to them
+    (`shopify_orders._customer`) has no customer record at all, and no later
+    call can give it one -- `orderUpdate` has no field for it. The name is not
+    lost, though: it is on the shipping address, which is where the packing
+    slip reads it from too.
+
+    Deliberately name-only. The lifetime order count stays None for those
+    orders, because an address cannot say whether this person has bought
+    before, and "new" is not a thing to guess at -- see `_customer_orders`.
+    """
+    return customer.get("displayName") or address.get("name") or None
+
+
 def _customer_kind(customer: dict) -> str:
     count = _customer_orders(customer)
     if count is None:
@@ -180,8 +196,8 @@ def _order_summary(node: dict) -> dict:
         "fulfillment_status": node.get("displayFulfillmentStatus"),
         "cancelled": bool(node.get("cancelledAt")),
         "tags": node.get("tags") or [],
-        "customer_name": customer.get("displayName"),
-        "customer_phone": customer.get("phone"),
+        "customer_name": _customer_display(customer, address),
+        "customer_phone": customer.get("phone") or address.get("phone"),
         "customer_order_count": _customer_orders(customer),
         "customer_kind": _customer_kind(customer),
         "payment_gateways": node.get("paymentGatewayNames") or [],
@@ -285,7 +301,7 @@ def get_order(shopify_order_id: str) -> dict | None:
         "cancelled": bool(node.get("cancelledAt")),
         "note": node.get("note"),
         "tags": node.get("tags") or [],
-        "customer_name": customer.get("displayName"),
+        "customer_name": _customer_display(customer, address),
         "customer_email": customer.get("email"),
         "customer_phone": customer.get("phone") or address.get("phone"),
         "customer_order_count": _customer_orders(customer),

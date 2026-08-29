@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — The order says who placed it
+
+Every sale the bot made reached the Shopify admin with a shipping address and
+no customer, which the Orders list renders as **No customer** — 23 of the last
+28 orders in the shop. The name was never missing; it was only on the address,
+where nothing but the packing slip reads it.
+
+- **`orderCreate` now attaches the customer** (`shopify_orders._customer`),
+  using `toUpsert`: Shopify matches on the phone and links the record the
+  customer already has instead of making a second one. With neither a usable
+  phone nor an email there is nothing to match on and nothing Shopify would
+  create a customer from, so the block is omitted rather than sent in a form
+  that could cost the sale.
+- **A refusal about the customer costs the link, not the sale.** Their phone
+  sitting on somebody else's record retries once without the block and logs
+  why. An out-of-stock refusal is never retried — the second call is refused
+  for the same reason, and the customer is owed the alternatives it raises for.
+- **The name is split once**, by `_split_name`, for both the customer record
+  and the address, so the Customers list and the parcel cannot disagree about
+  the same person.
+- **The dashboard reads the name off the address when there is no customer
+  record**, which is what the existing orders get: `orderUpdate` has no
+  customer field, so nothing can attach one to an order already placed —
+  verified against the 2025-01 schema, not assumed. The fallback is the name
+  only. `customer_order_count` stays `None` and the returning/new chip stays
+  **unknown**, because an address cannot say whether this person has bought
+  here before, and "new" is not a thing to guess at.
+
 ## Unreleased — Who sees the dashboard, and what the numbers are actually of
 
 The dashboard has had one role since it existed: everyone who could log in
