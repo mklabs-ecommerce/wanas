@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from contextlib import contextmanager
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -355,10 +356,32 @@ def get_product(shopify_gid: str) -> dict | None:
             "size": _opt(v, "Size"),
             "color": _opt(v, "Color"),
             "length": _opt(v, "Length"),
+            # The option values verbatim, so a caller can tell a real
+            # single-variant product from Shopify's untouched placeholder --
+            # see `is_placeholder_only`.
+            "options": {
+                o.get("name"): o.get("value") for o in (v.get("selectedOptions") or [])
+            },
         }
         for v in (node.get("variants") or {}).get("nodes") or []
     ]
     return out
+
+
+#: Shopify creates every product with one variant on an option literally
+#: called Title, whose one value is "Default Title". A product still carrying
+#: only that has no real variants -- it is either half-made or a draft nobody
+#: finished, and mirroring it locally produces a phantom "One Size" product at
+#: 0.00 that the bot offers and can never sell.
+def is_placeholder_only(detail: dict) -> bool:
+    """True when this product's variants are just Shopify's own placeholder."""
+    variants = detail.get("variants") or []
+    if len(variants) != 1:
+        return False
+    options = variants[0].get("options") or {}
+    return {k.lower(): (v or "").lower() for k, v in options.items()} == {
+        "title": "default title"
+    }
 
 
 def product_types() -> list[str]:
@@ -777,6 +800,76 @@ def create_product(
         vendor=settings.shopify_vendor,
     )
 
+    #: From here on the product exists on Shopify, so every remaining step is
+    #: under `_or_unmake_it`: a failure now deletes the half-made product
+    #: before re-raising, rather than leaving a shell behind. Three such
+    #: shells -- a product with nothing but Shopify's own placeholder variant
+    #: at 0.00 -- are exactly what `product_import` later mirrored into
+    #: wanas.db as phantom "One Size" products the bot offered and could
+    #: never sell. Failing cleanly is worth one extra call.
+    with _or_unmake_it(product_gid):
+        return _finish_create(
+            session,
+            product_id=product_id,
+            product_gid=product_gid,
+            title=title,
+            description=description,
+            category=category,
+            department=department,
+            style=style,
+            collection=collection,
+            size_chart=size_chart,
+            variants=variants,
+            image_url=image_url,
+            images=images,
+            size_chart_file_gid=size_chart_file_gid,
+            size_chart_url=size_chart_url,
+            collection_gid=collection_gid,
+        )
+
+
+@contextmanager
+def _or_unmake_it(product_gid: str):
+    """Delete `product_gid` if the block raises, then re-raise.
+
+    Best-effort on the delete: if that call fails too there is nothing else
+    to try, and the original failure is the one worth reporting.
+    """
+    try:
+        yield
+    except Exception:
+        try:
+            shopify_delete_product(product_gid)
+            log.warning("rolled back the half-made Shopify product %s", product_gid)
+        except Exception:  # pragma: no cover - the outer failure is the story
+            log.exception("could not roll back the half-made Shopify product %s", product_gid)
+        raise
+
+
+def _finish_create(
+    session: Session,
+    *,
+    product_id: str,
+    product_gid: str,
+    title: str,
+    description: str,
+    category: str,
+    department: str,
+    style: list[str] | None,
+    collection: str | None,
+    size_chart: str | None,
+    variants: list[dict],
+    image_url: str | None,
+    images: list[dict] | None,
+    size_chart_file_gid: str | None,
+    size_chart_url: str | None,
+    collection_gid: str | None,
+) -> dict:
+    """Everything `create_product` does once the Shopify product exists.
+
+    Split out only so the rollback above has a single block to guard; read it
+    as the back half of `create_product`.
+    """
     bulk_input = [
         {
             "optionValues": _option_values(v),

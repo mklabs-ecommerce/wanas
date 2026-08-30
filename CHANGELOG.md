@@ -2,6 +2,26 @@
 
 ## Unreleased — Adding a product, with the pictures on it
 
+- **A create that fails no longer leaves wreckage on both sides.**
+  `productCreate` runs first, so every step after it -- variants, photos,
+  inventory -- was happening against a product that already existed. When one
+  of those failed (which is what the option-shape and SKU-shape bugs
+  below did, repeatedly), Shopify kept a shell wearing nothing but its own
+  "Default Title" placeholder variant at 0.00. `product_import` then did its
+  job on that shell and mirrored it into wanas.db as a phantom `One Size`
+  product; later the shell was deleted in Admin and the local row stayed,
+  because import is additive and nothing there ever deletes. Three of those --
+  `oversized-plain-t-shirt`, `-2`, `-3` -- were sitting in production, offered
+  by the bot at 0 EGP. Two locks on the door now:
+  - `create_product` wraps everything past `productCreate` in `_or_unmake_it`,
+    which deletes the half-made product and re-raises the *original* error
+    (the dashboard tells a refusal from an outage by its type, so the rollback
+    must not replace it). A cleanup that fails too is logged, never raised.
+  - `product_import` skips a product that is still only the placeholder --
+    `admin_products.is_placeholder_only`, read off the variant's own option
+    values rather than guessed from its price. It is imported the moment real
+    variants land.
+
 - **A product, or one of its sizes, can be removed.** This module used to say
   that was deliberately left to Shopify Admin; it is here now because staff
   asked, and the thing that made it risky is handled rather than avoided.

@@ -66,6 +66,8 @@ class FakeShopify:
         self.product_options: dict[str, list] = {}
         # product gids published to the Online Store sales channel
         self.published: set[str] = set()
+        #: products still wearing Shopify's own "Default Title" variant
+        self.placeholder_only: set[str] = set()
         # collection gid -> the product gids manually added to it
         self.collection_members: dict[str, list[str]] = {}
         #: What `shopify_publish_to_online_store` should answer, so a test can
@@ -475,10 +477,35 @@ class FakeShopify:
                 "inventory_quantity": self.shelf[sku]["qty"],
                 "image_url": self.variant_images.get(sku),
                 **self.variant_options.get(sku, {"size": None, "color": None, "length": None}),
+                "options": {
+                    k.capitalize(): v
+                    for k, v in (self.variant_options.get(sku) or {}).items()
+                    if v
+                },
             }
             for sku in skus
             if sku in self.shelf
         ]
+        #: Shopify hands every new product one variant on an option called
+        #: Title, valued "Default Title", and takes it away when the real ones
+        #: land (`strategy: REMOVE_STANDALONE_VARIANT`). Modelled rather than
+        #: skipped: a product still wearing it is exactly the half-made shell
+        #: `is_placeholder_only` exists to refuse.
+        if not out["variants"] and shopify_gid in self.placeholder_only:
+            out["variants"] = [
+                {
+                    "id": f"{shopify_gid}/placeholder",
+                    "sku": None,
+                    "price": "0.00",
+                    "compare_at_price": None,
+                    "inventory_quantity": 0,
+                    "image_url": None,
+                    "size": None,
+                    "color": None,
+                    "length": None,
+                    "options": {"Title": "Default Title"},
+                }
+            ]
         return out
 
     def product_gid_for_variant_id(self, variant_id):
@@ -515,11 +542,13 @@ class FakeShopify:
                 "vendor": vendor,
             }
             self.product_options[gid] = list(options or [])
+            self.placeholder_only.add(gid)
             return gid
 
     def shopify_create_variants(self, product_gid, bulk_input):
         self._guard()
         with self._lock:
+            self.placeholder_only.discard(product_gid)
             created = []
             for entry in bulk_input:
                 # `ProductVariantsBulkInput` has no `sku` of its own: it
@@ -587,6 +616,7 @@ class FakeShopify:
         with self._lock:
             self.products.pop(product_gid, None)
             self.published.discard(product_gid)
+            self.placeholder_only.discard(product_gid)
             for sku in [s for s, gid in self.variant_to_product.items() if gid == product_gid]:
                 self.shelf.pop(sku, None)
                 self.variant_to_product.pop(sku, None)

@@ -118,7 +118,11 @@ integrations/            everything that talks to an external vendor over
     admin_customers.py, admin_orders.py, admin_products.py,
     admin_collections.py, admin_inventory.py                dashboard admin
     product_import.py       reconcile-on-boot for products created straight
-                            in Shopify Admin
+                            in Shopify Admin; skips one still wearing only
+                            Shopify's own "Default Title" placeholder --
+                            that is a half-made product, and mirroring it
+                            writes a phantom "One Size" row at 0.00 that
+                            outlives the Shopify product it came from
     webhook_registration.py subscribe Shopify to push order-status changes
     webhooks.py              inbound from Shopify: fulfilments and
                             cancellations -> order status -> the customer's
@@ -477,7 +481,10 @@ an **owner**, never as "scoped to nothing": the opposite locks everyone out of
 the one screen that hands permissions out. Shopify is still the source of truth
 for price/stock/orders; product create/edit pushes to Shopify first and
 mirrors the wanas.db-only fields (`category`/`department`/`style`/
-`collection`/`size_chart`) after — see the module docstring on
+`collection`/`size_chart`) after — and because `productCreate` runs before
+everything else, every later step is wrapped so a failure **deletes the
+half-made Shopify product** rather than leaving a shell for
+`product_import` to mirror as a phantom "One Size" row — see the module docstring on
 `integrations/shopify/admin_products.py` for exactly where that line
 is drawn (no refunds — this shop is cash-on-delivery with nothing to
 refund against — and a product or one of its sizes can now be removed,

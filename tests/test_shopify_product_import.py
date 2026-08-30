@@ -120,3 +120,48 @@ def test_a_draft_product_is_not_imported(seeded, shopify):
     assert report["imported"] == []
     assert report["problems"] == []
     assert seeded.query(Product).filter(Product.name == "Unfinished Prototype").count() == 0
+
+
+def test_a_half_made_product_is_not_imported(seeded, shopify):
+    """A `productCreate` that succeeded and whose variants then failed leaves a
+    product wearing nothing but Shopify's own "Default Title" placeholder.
+    Mirroring one writes a phantom "One Size" row at 0.00 that the bot offers
+    and can never sell -- and it outlives the Shopify product, because import
+    is additive and nothing here ever deletes. Three of those had to be
+    removed from production by hand."""
+    shopify.shopify_create_product(
+        title="Half Made Tee", description="", category="T-Shirts",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+    )
+
+    report = import_missing_products(seeded, apply=True)
+    seeded.commit()
+
+    assert report["imported"] == []
+    assert report["problems"] == []
+    assert seeded.get(Product, "half-made-tee") is None
+
+
+def test_it_is_imported_once_its_real_variants_land(seeded, shopify):
+    """The skip is about the placeholder, not about the product. A staff
+    member who finishes it in Shopify Admin gets it on the next run."""
+    gid = shopify.shopify_create_product(
+        title="Finished Tee", description="", category="T-Shirts",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+    )
+    assert import_missing_products(seeded, apply=True)["imported"] == []
+
+    shopify.shopify_create_variants(
+        gid,
+        [{
+            "inventoryItem": {"sku": "", "tracked": True},
+            "price": "300.00",
+            "optionValues": [{"optionName": "Size", "name": "S"}],
+        }],
+    )
+
+    report = import_missing_products(seeded, apply=True)
+    seeded.commit()
+
+    assert [i["product_id"] for i in report["imported"]] == ["finished-tee"]
+    assert seeded.get(Product, "finished-tee") is not None

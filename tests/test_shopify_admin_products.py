@@ -727,3 +727,105 @@ def test_a_cart_holding_the_deleted_size_lets_go_of_it(seeded, shopify):
 def test_deleting_something_that_is_not_there_says_so(seeded, shopify):
     assert sap.delete_product(seeded, "no-such-product") == {"error": "product_not_found"}
     assert sap.delete_variant(seeded, "no-such-variant") == {"error": "variant_not_found"}
+
+
+# --------------------------------------------------------------------------
+# a create that fails leaves nothing behind
+# --------------------------------------------------------------------------
+
+
+def _failing_create(seeded, shopify, monkeypatch, where, boom=RuntimeError("shopify said no")):
+    """Run `create_product` with one step past `productCreate` blowing up."""
+    monkeypatch.setattr(sap, where, lambda *a, **k: (_ for _ in ()).throw(boom))
+    with pytest.raises(type(boom)):
+        sap.create_product(
+            seeded,
+            title="Doomed Tee",
+            description="",
+            category="T-Shirts",
+            department="unisex",
+            style=None,
+            collection=None,
+            size_chart=None,
+            variants=[{"size": "S", "color": "Olive", "price": 300, "stock_qty": 1}],
+        )
+
+
+@pytest.mark.parametrize(
+    "step",
+    ["shopify_create_variants", "shopify_attach_images", "shopify_set_inventory"],
+)
+def test_a_create_that_fails_takes_its_half_made_product_with_it(
+    seeded, shopify, monkeypatch, step
+):
+    """`productCreate` succeeds first, so any later failure used to leave a
+    product on Shopify wearing nothing but the placeholder variant. Three of
+    those had to be deleted from production by hand -- the importer mirrored
+    them as phantom "One Size" rows at 0.00 that outlived the Shopify products
+    they came from."""
+    before = set(shopify.products)
+
+    _failing_create(seeded, shopify, monkeypatch, step)
+
+    assert set(shopify.products) == before, "a half-made product was left on Shopify"
+    assert shopify.placeholder_only == set()
+
+
+def test_the_original_failure_is_what_the_caller_sees(seeded, shopify, monkeypatch):
+    """The rollback must not swallow, replace, or delay the real error -- the
+    dashboard tells a refusal from an outage by its type."""
+    monkeypatch.setattr(
+        sap, "shopify_create_variants",
+        lambda *a, **k: (_ for _ in ()).throw(sap.ProductRejected("duplicate SKU")),
+    )
+    with pytest.raises(sap.ProductRejected, match="duplicate SKU"):
+        sap.create_product(
+            seeded, title="Doomed Tee", description="", category="T-Shirts",
+            department="unisex", style=None, collection=None, size_chart=None,
+            variants=[{"size": "S", "price": 300, "stock_qty": 1}],
+        )
+
+
+def test_a_rollback_that_also_fails_still_reports_the_real_problem(
+    seeded, shopify, monkeypatch
+):
+    """Best-effort means best-effort: if the cleanup call fails too there is
+    nothing left to try, and the original failure is the one worth raising."""
+    monkeypatch.setattr(
+        sap, "shopify_create_variants",
+        lambda *a, **k: (_ for _ in ()).throw(sap.ProductRejected("duplicate SKU")),
+    )
+    monkeypatch.setattr(
+        sap, "shopify_delete_product",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("delete failed too")),
+    )
+    with pytest.raises(sap.ProductRejected, match="duplicate SKU"):
+        sap.create_product(
+            seeded, title="Doomed Tee", description="", category="T-Shirts",
+            department="unisex", style=None, collection=None, size_chart=None,
+            variants=[{"size": "S", "price": 300, "stock_qty": 1}],
+        )
+
+
+def test_nothing_local_survives_a_failed_create(seeded, shopify, monkeypatch):
+    """The mirror is written last, so there should be no row -- and no slug
+    consumed that a retry would have to skip past."""
+    _failing_create(seeded, shopify, monkeypatch, "shopify_create_variants")
+    seeded.flush()
+
+    assert seeded.get(Product, "doomed-tee") is None
+
+
+def test_a_product_still_wearing_the_placeholder_is_recognised(seeded, shopify):
+    gid = sap.shopify_create_product(
+        title="Half Made", description="", category="T-Shirts",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+    )
+
+    assert sap.is_placeholder_only(sap.get_product(gid)) is True
+
+
+def test_a_product_with_real_variants_is_not(seeded, shopify):
+    detail = sap.get_product(shopify.variant_to_product[VARIANT])
+
+    assert sap.is_placeholder_only(detail) is False

@@ -103,6 +103,17 @@ def import_missing_products(session: Session, *, apply: bool = False) -> dict:
         if detail is None:
             continue
 
+        # Shopify's own untouched placeholder is not a product. Mirroring one
+        # writes a phantom "One Size" row at 0.00 that the bot offers and can
+        # never sell, and it outlives the Shopify product it came from --
+        # three of those had to be deleted from production by hand. A
+        # half-made product now cleans itself up (`_or_unmake_it` in
+        # `admin_products.create_product`); this is the second lock on the
+        # same door, for a shell made any other way.
+        if admin.is_placeholder_only(detail):
+            log.info("skipping %r: still only Shopify's placeholder variant", summary["title"])
+            continue
+
         prepared = _prepare_variants(detail)
         if not prepared:
             continue
