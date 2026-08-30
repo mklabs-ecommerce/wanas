@@ -251,13 +251,42 @@ def test_an_order_with_no_payment_method_lands_in_unknown():
     assert result["payment_breakdown"] == {"unknown": 1}
 
 
-def test_channel_comes_from_the_map_and_defaults_to_web():
+def test_channel_comes_from_the_map_first():
     a, b = _order(total=100, customer_phone="1"), _order(total=200, customer_phone="2")
     result = dashboard_stats.summarize(
         [a, b], channel_by_order_id={a["id"]: "instagram_dm"}
     )
     assert result["channel_breakdown"] == {"instagram_dm": 1, "web": 1}
     assert result["bot_order_count"] == 1
+
+
+def test_an_order_with_no_local_row_is_read_off_shopify_not_called_web():
+    """The Analytics bug. Only bot orders reach Postgres, and only since
+    `shopify_order_id` existed -- defaulting the rest to "web" reported the
+    bot's whole earlier history as website sales on the one page that exists
+    to say where sales came from."""
+    order = {**_order(total=100), "channel_hint": "instagram_dm"}
+
+    result = dashboard_stats.summarize([order])
+
+    assert result["channel_breakdown"] == {"instagram_dm": 1}
+    assert result["bot_order_count"] == 1
+
+
+def test_an_order_shopify_calls_the_website_is_still_the_website():
+    result = dashboard_stats.summarize([{**_order(total=100), "channel_hint": "web"}])
+
+    assert result["channel_breakdown"] == {"web": 1}
+
+
+def test_the_channel_filter_finds_an_order_with_no_local_row():
+    a = {**_order(total=100, customer_phone="1"), "channel_hint": "instagram_dm"}
+    b = {**_order(total=200, customer_phone="2"), "channel_hint": "whatsapp"}
+
+    result = dashboard_stats.summarize([a, b], channel="instagram_dm")
+
+    assert result["order_count"] == 1
+    assert result["revenue"] == "100"
 
 
 def test_channel_filter_narrows_the_totals():

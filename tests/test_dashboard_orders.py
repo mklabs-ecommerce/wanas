@@ -532,6 +532,13 @@ def test_a_chatbot_order_with_no_channel_tag_is_still_not_a_website_order():
     assert channel_of(app={"name": "Chatbot Integration"}, tags=["chatbot"]) == "whatsapp"
 
 
+def test_the_tag_says_which_conversation_even_when_the_app_column_does_not():
+    """The `chatbot` tag answers "was this a conversation", never "which one".
+    Reading it as WhatsApp outright reported Instagram sales as WhatsApp ones
+    for every order Shopify returned no app for."""
+    assert channel_of(app=None, tags=["chatbot", "instagram"]) == "instagram_dm"
+
+
 def test_an_order_shopify_says_nothing_about_is_a_website_order():
     """An order this app cannot recognise is more likely a sale nobody talked
     to the bot about than a conversation that left no other trace."""

@@ -225,15 +225,21 @@ def _channel_hint(node: dict) -> str:
     """
     app = ((node.get("app") or {}).get("name") or "").strip().lower()
     tags = [str(t).strip().lower() for t in (node.get("tags") or [])]
-    if app and app not in ONLINE_STORE_APPS:
+
+    # Two questions, in this order, and never merged into one. First: was this
+    # a conversation at all? The app column answers it -- anything but the
+    # storefront is the chatbot integration -- and the `chatbot` tag answers it
+    # too, for an order whose app Shopify did not return.
+    if (app and app not in ONLINE_STORE_APPS) or "chatbot" in tags:
+        # Then, and only then: which conversation. That is the tags' job, and
+        # it is asked on both routes in -- an order the `chatbot` tag
+        # identified used to skip this and be called WhatsApp outright, which
+        # is an Instagram sale reported as a WhatsApp one.
         for tag in tags:
             if tag in CHANNEL_BY_TAG:
                 return CHANNEL_BY_TAG[tag]
-        # The app placed it but no tag says where from -- still not the
-        # website. `whatsapp` is the bot's own default channel.
-        if "chatbot" in tags or app:
-            return "whatsapp"
-    if "chatbot" in tags:
+        # No tag says. Still not the website; `whatsapp` is the bot's own
+        # default channel and the only one it sold on before Instagram shipped.
         return "whatsapp"
     return "web"
 

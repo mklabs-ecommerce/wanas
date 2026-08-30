@@ -115,6 +115,24 @@ def _is_test_order(order: dict, exclude_phones: set[str]) -> bool:
     return bool(digits) and digits in exclude_phones
 
 
+def _channel_of(order: dict) -> str:
+    """Shopify's own answer for an order with no local row.
+
+    The same rule the Orders screen reads by
+    (`dashboard/shopify_api.py::_order_channel`, over
+    `admin_orders._channel_hint`): the admin's Channel column says Online
+    Store or the chatbot app, and then the *tags* say which conversation --
+    `instagram` or `whatsapp`.
+
+    Defaulting to "web" here instead is what made this page wrong. Only bot
+    orders ever reach Postgres, and only since `shopify_order_id` existed, so
+    every earlier bot sale -- and every Instagram one whose local row went
+    missing -- was counted as a website sale on a page whose whole purpose is
+    to say where the sales came from.
+    """
+    return order.get("channel_hint") or "web"
+
+
 #: What the Analytics page's toggles may ask for. `all` is not a value the
 #: filters below ever see -- the caller drops the argument instead.
 PAYMENT_FILTERS = ("all", "cod", "online", "unknown")
@@ -144,8 +162,9 @@ def summarize(
     already is excluded from all of them.
 
     `channel_by_order_id` maps a Shopify order id to the channel the *bot*
-    recorded for it (`Order.source_channel`); anything absent from the map is
-    the website. Attribution comes from Postgres, the money never does -- the
+    recorded for it (`Order.source_channel`); anything absent from the map
+    falls back to Shopify's own answer (`_channel_of`), never straight to
+    "web". Attribution comes from Postgres, the money never does -- the
     totals are still summed from the Shopify orders passed in, so this does
     not reintroduce the under-counting a Postgres-sourced revenue number would
     (see this module's docstring).
@@ -165,7 +184,7 @@ def summarize(
 
     for order in orders:
         order.setdefault("payment_method", "unknown")
-        order["channel"] = channel_by_order_id.get(order.get("id"), "web")
+        order["channel"] = channel_by_order_id.get(order.get("id")) or _channel_of(order)
 
     if payment != "all":
         orders = [o for o in orders if o["payment_method"] == payment]
