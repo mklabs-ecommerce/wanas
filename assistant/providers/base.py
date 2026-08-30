@@ -14,6 +14,7 @@ whether reasoning has to be switched off.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -65,6 +66,108 @@ class ImageReading:
     is_garment: bool = True
 
 
+@dataclass
+class SizeChartReading:
+    """The numbers a vision pass read off a size-chart picture.
+
+    Read, not decided. A wrong measurement here is a customer ordering the
+    wrong size and sending it back, so nothing produced by this ever reaches a
+    customer un-reviewed: the dashboard shows it as a filled-in form for a
+    staff member to correct and confirm. `confidence` and `notes` exist to
+    help them judge, not to gate anything automatically.
+    """
+
+    #: [{"key", "label_en", "label_ar"}] -- the columns, in the order read.
+    measurements: list[dict] = field(default_factory=list)
+    #: {"S": {"width": 54, ...}, ...} -- only sizes the picture actually shows.
+    sizes: dict[str, dict] = field(default_factory=dict)
+    #: "cm" or "in"; "cm" when the picture does not say.
+    unit: str = "cm"
+    #: 0.0-1.0, the model's own view of how legible the chart was.
+    confidence: float = 0.0
+    #: Anything the reader could not resolve, phrased for a staff member.
+    notes: str = ""
+
+
+_KEY_SAFE = re.compile(r"[^a-z0-9]+")
+
+
+def _measurement_key(raw: str, fallback: str) -> str:
+    key = _KEY_SAFE.sub("_", str(raw or "").strip().lower()).strip("_")
+    return key or fallback
+
+
+def normalise_chart_reading(parsed: dict, *, sizes: list[str]) -> SizeChartReading:
+    """Turn a provider's raw JSON into a `SizeChartReading` that is safe to show.
+
+    Shared by every provider so the guarantees are the same wherever the
+    reading came from, and enforced here rather than trusted from the model:
+
+    - a size the product does not sell is dropped (case-insensitively matched
+      back to the product's own spelling, so "s" becomes "S");
+    - a value that is not a number is dropped, never coerced -- a measurement
+      the model could not read must arrive as blank, not as 0;
+    - a column no surviving size has a value for is dropped with it.
+
+    Anything dropped is a cell the staff member fills in, which is the whole
+    point of the reading being a form rather than an answer.
+    """
+    wanted = {str(s).strip().lower(): str(s).strip() for s in sizes if str(s).strip()}
+
+    measurements = []
+    seen: set[str] = set()
+    for index, row in enumerate(parsed.get("measurements") or []):
+        if not isinstance(row, dict):
+            continue
+        key = _measurement_key(row.get("key") or row.get("label_en"), f"measurement_{index + 1}")
+        if key in seen:
+            continue
+        seen.add(key)
+        measurements.append(
+            {
+                "key": key,
+                "label_en": str(row.get("label_en") or key.replace("_", " ").title()).strip(),
+                "label_ar": str(row.get("label_ar") or "").strip(),
+            }
+        )
+
+    out_sizes: dict[str, dict] = {}
+    for name, values in (parsed.get("sizes") or {}).items():
+        label = wanted.get(str(name).strip().lower()) if wanted else str(name).strip()
+        if not label or not isinstance(values, dict):
+            continue
+        row = {}
+        for key, value in values.items():
+            key = _measurement_key(key, "")
+            if key not in seen:
+                continue
+            try:
+                row[key] = float(value)
+            except (TypeError, ValueError):
+                continue  # unreadable stays blank; never 0
+            if row[key].is_integer():
+                row[key] = int(row[key])
+        if row:
+            out_sizes[label] = row
+
+    used = {key for row in out_sizes.values() for key in row}
+    measurements = [m for m in measurements if m["key"] in used]
+
+    try:
+        confidence = float(parsed.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    unit = str(parsed.get("unit") or "cm").strip().lower()
+    return SizeChartReading(
+        measurements=measurements,
+        sizes=out_sizes,
+        unit=unit if unit in {"cm", "in"} else "cm",
+        confidence=max(0.0, min(1.0, confidence)),
+        notes=str(parsed.get("notes") or "").strip(),
+    )
+
+
 #: The four buckets a public Instagram comment sorts into. Deliberately this
 #: narrow -- an "important" comment gets a DM handoff, "positive" gets a like,
 #: "negative" gets a silent internal alert, "neither" (spam, a bare @mention
@@ -111,6 +214,17 @@ class LLMProvider:
         built by the caller from the actual catalog. Matching is only ever
         against that list; there is no path by which the model can answer with
         a product the shop does not have.
+        """
+        raise ProviderError(f"{self.name} cannot read images", kind="unsupported")
+
+    def read_size_chart(self, image: bytes, mime_type: str, *, sizes: list[str]) -> SizeChartReading:
+        """The measurements printed on a size-chart picture, as data.
+
+        `sizes` is what the product actually has, so a chart listing sizes the
+        product does not sell contributes nothing. Providers that cannot do
+        this raise `ProviderError(kind="unsupported")` and the caller falls
+        back to the staff member typing the table -- which is what happened to
+        every uploaded chart before this existed.
         """
         raise ProviderError(f"{self.name} cannot read images", kind="unsupported")
 

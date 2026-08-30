@@ -2,6 +2,30 @@
 
 ## Unreleased — Adding a product, with the pictures on it
 
+- **A size chart uploaded from the dashboard now has numbers behind it.** It
+  used to be a picture and nothing else: the storefront showed the image, the
+  bot could send it, and neither could answer "what is the chest on a large".
+  Putting measurements there meant editing `data/size_charts.json` and running
+  a script, which is not a thing anyone does at 11pm.
+  - `POST /dashboard/api/shopify/size-charts/read` hands the picture to the
+    vision model (`LLMProvider.read_size_chart`) and fills the grid in.
+  - The reading is **never saved on its own.** It arrives as a form a staff
+    member checks and corrects, because a misread measurement is a customer
+    ordering the wrong size and posting it back -- the same rule
+    `docs/MEDIA.md` states for customer photos: a vision reading is a hint,
+    never a fact. `normalise_chart_reading` enforces the rest on this side: a
+    size the product does not sell is dropped, and a cell the model could not
+    read stays **blank rather than 0**, because the bot quotes these numbers.
+  - `POST .../size-charts` saves the confirmed chart into the new
+    `size_charts` table, points the product at it, and sets *both* Shopify
+    metafields so the theme renders a real bilingual table.
+  - The table **overlays** `data/size_charts.json` on a shared `chart_id`, the
+    same shape as `catalog._overlay`: the twelve shipped charts still ship in
+    the file and still win nothing they did not before. A file on Railway does
+    not survive a deploy, which is why a dashboard chart is a row.
+  - The edit drawer's free-text chart box is now the same picker plus upload
+    the create form has.
+
 - **A product deleted in Shopify Admin can now be cleaned out of wanas.db.**
   `product_import` is additive by contract, so nothing closed the other
   direction: a local product whose SKUs Shopify no longer knows gets no live

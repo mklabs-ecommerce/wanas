@@ -114,7 +114,10 @@ integrations/            everything that talks to an external vendor over
                             a mutation naming where they landed), in one place
                             for both the dashboard's uploads and the size-chart
                             script
-    size_charts.py          publish the charts to Shopify as metafields
+    size_charts.py          publish the charts to Shopify as metafields --
+                            `write_plan` in bulk from the JSON file,
+                            `set_product_chart` for one product from the
+                            dashboard
     admin_customers.py, admin_orders.py, admin_products.py,
     admin_collections.py, admin_inventory.py                dashboard admin
     product_reconcile.py    the other direction, and the only one that
@@ -219,7 +222,11 @@ dashboard/                 staff dashboard, its own top-level package:
                             everything else; assistant/ never imports back
                             from dashboard/.
 docs/                    ARCHITECTURE.md, OPERATIONS.md, MEDIA.md
-data/                    products_seed.json, size_charts.json, governorates.json,
+data/                    products_seed.json, size_charts.json (the twelve
+                          shipped charts; a chart made in the dashboard is a
+                          `size_charts` row that overlays this file on a
+                          shared chart_id — read both through
+                          domain/services/size_charts.py), governorates.json,
                           merge_catalog.py, images/, size-charts/ — catalog
                           metadata Shopify has no field for, NOT a duplicate
                           product database (price/stock come from Shopify)
@@ -507,7 +514,12 @@ the bot's search while the order lines still read. Creating a product **does** t
 pictures off the staff member's device: one per variant row, uploaded
 through `POST /dashboard/api/shopify/uploads` and attached as that
 colourway's *variant* image, which is the field the bot reads when a
-customer names a colour. A size chart uploaded the same way sets
-`custom.size_chart` on Shopify and `Product.size_chart_image` locally —
-a chart picture with no published measurements behind it, which
-`get_size_chart` answers as `image_only`.
+customer names a colour. A size chart uploaded the same way is **read**: the
+vision model fills a measurements grid the staff member checks and saves,
+which writes a `size_charts` row, sets both Shopify metafields, and gives the
+bot numbers it can quote. The reading is never saved unreviewed — a misread
+measurement is a wrong-size order, so `normalise_chart_reading` drops a size
+the product does not sell and leaves an unreadable cell **blank rather than
+0**. A chart nobody filled in is still only a picture: `custom.size_chart`
+plus `Product.size_chart_image`, which `get_size_chart` answers as
+`image_only`.

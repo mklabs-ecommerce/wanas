@@ -53,6 +53,8 @@ from assistant.providers.base import (
     LLMProvider,
     ModelReply,
     ProviderError,
+    SizeChartReading,
+    normalise_chart_reading,
 )
 from assistant.providers.gemini import mask_key
 from config.settings import settings
@@ -461,6 +463,74 @@ class OpenRouterProvider(LLMProvider):
             description=str(parsed.get("description") or "").strip(),
             is_garment=bool(parsed.get("is_garment", True)),
         )
+
+    # -- media: a size-chart picture, read as data --------------------------
+
+    #: English, unlike the customer-facing prompts above, because what comes
+    #: back is a schema a staff member edits -- not a sentence anyone is sent.
+    _CHART_INSTRUCTION_TEMPLATE = (
+        "This is a garment size chart. Read the numbers off it into JSON.\n\n"
+        "The product is sold in these sizes: {sizes}\n\n"
+        "Rules:\n"
+        "- Only report a size that appears in the picture AND in that list. "
+        "Omit any other row entirely; do not invent or interpolate one.\n"
+        "- Every measurement value must be a number you can actually read. "
+        "If a cell is blank or unreadable, leave that key out of that size.\n"
+        "- measurements: one entry per column, in the order they appear, each "
+        '{{"key": "snake_case_ascii", "label_en": "...", "label_ar": "..."}}. '
+        "Translate the label to Arabic yourself if the chart is English-only, "
+        "and to English if it is Arabic-only.\n"
+        '- unit: "cm" or "in". Use "cm" if the chart does not say.\n'
+        "- confidence: 0 to 1, how legible the chart was.\n"
+        "- notes: one short sentence naming anything you could not resolve, "
+        "or an empty string.\n\n"
+        "Reply with JSON only, exactly this shape:\n"
+        '{{"measurements": [{{"key": "width", "label_en": "Width", "label_ar": "العرض"}}], '
+        '"sizes": {{"S": {{"width": 54}}}}, "unit": "cm", "confidence": 0.0, "notes": ""}}'
+    )
+
+    def read_size_chart(self, image: bytes, mime_type: str, *, sizes: list[str]) -> SizeChartReading:
+        instruction = self._CHART_INSTRUCTION_TEMPLATE.format(
+            sizes=", ".join(sizes) or "(unknown -- report whatever the chart shows)"
+        )
+        data_uri = f"data:{mime_type or 'image/png'};base64,{base64.b64encode(image).decode('ascii')}"
+        payload = {
+            "model": self.model,
+            "temperature": 0.0,
+            "max_tokens": 1500,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": instruction},
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                    ],
+                }
+            ],
+        }
+
+        response = self._post(payload)
+        if response.status_code == 429:
+            raise ProviderError(
+                f"rate limited on vision model {self.model!r}: {response.text[:300]}",
+                kind="rate_limit",
+            )
+        if response.status_code >= 400:
+            raise ProviderError(
+                f"openrouter size-chart error {response.status_code} on model "
+                f"{self.model!r}: {response.text[:500]}"
+            )
+
+        body = response.json()
+        choices = body.get("choices") or []
+        raw = str(((choices[0].get("message") or {}).get("content") if choices else "") or "").strip()
+        try:
+            parsed = json.loads(raw or "{}")
+        except json.JSONDecodeError as exc:
+            raise ProviderError(f"size-chart reply was not JSON: {raw[:200]}") from exc
+
+        return normalise_chart_reading(parsed, sizes=sizes)
 
     # -- comments: classification (cheap, no tools, no history) -----------
 

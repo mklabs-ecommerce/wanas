@@ -29,6 +29,7 @@ from integrations.shopify import (
     catalog as shopify_catalog,
     inventory as shopify_inventory,
     orders as shopify_orders,
+    size_charts as shopify_size_charts,
     webhook_registration as shopify_webhooks,
 )
 from integrations.shopify.catalog import LiveVariant
@@ -62,6 +63,9 @@ class FakeShopify:
         self.variant_images: dict[str, str] = {}
         # product gid -> the file gid its custom.size_chart metafield holds
         self.chart_metafields: dict[str, str] = {}
+        #: product gid -> the `custom.size_chart_data` table, already reshaped
+        #: by `storefront_payload` (sizes as an ordered array, not an object).
+        self.chart_data: dict[str, dict] = {}
         # product gid -> the option set it was created with
         self.product_options: dict[str, list] = {}
         # product gids published to the Online Store sales channel
@@ -656,6 +660,18 @@ class FakeShopify:
         with self._lock:
             self.chart_metafields[product_gid] = file_gid
 
+    def set_product_chart(self, product_gid, chart, file_gid=None):
+        """Both metafields at once, the dashboard's door. The payload is put
+        through the real `storefront_payload` rather than stored raw -- the
+        ordering it imposes is the whole reason that function exists."""
+        self._guard()
+        from integrations.shopify.size_charts import storefront_payload
+
+        with self._lock:
+            self.chart_data[product_gid] = storefront_payload(chart)
+            if file_gid:
+                self.chart_metafields[product_gid] = file_gid
+
     def shopify_set_inventory(self, quantities):
         self._guard()
         with self._lock:
@@ -1207,6 +1223,9 @@ class FakeShopify:
             shopify_admin_products.shopify_size_charts,
             "set_product_chart_image",
             self.set_product_chart_image,
+        )
+        monkeypatch.setattr(
+            shopify_size_charts, "set_product_chart", self.set_product_chart
         )
         monkeypatch.setattr(shopify_admin_products, "shopify_set_inventory", self.shopify_set_inventory)
         monkeypatch.setattr(

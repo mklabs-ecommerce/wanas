@@ -1081,6 +1081,8 @@ const EN = {
   "أرقام المبيعات": "the sales figures",
   "أرقام المحادثات": "the conversation figures",
   "أسباب التحويل والتنبيه": "Handoff and alert reasons",
+  "أضف المقاسات الأول عشان تقدر تكتب أرقام الجدول.": "Add the sizes first, then you can fill in the chart.",
+  "أضف قياس": "Add measurement",
   "أضف مقاس": "Add a size",
   "أعضاؤها بيتحددوا بقواعد شوبيفاي، فمش بنضيف أو نشيل منها من هنا —\n      أي تعديل يدوي شوبيفاي هيلغيه أول ما يعيد تطبيق القواعد.": "Its members are decided by Shopify's own rules, so nothing is added or removed from here —\n      Shopify undoes any manual change the next time it reapplies them.",
   "أقسام اللوحة": "Dashboard sections",
@@ -1146,6 +1148,7 @@ const EN = {
   "اسم، SKU، لون…": "Name, SKU, colour…",
   "اضغط للنسخ": "Click to copy",
   "اقفل المنتج": "Close the product",
+  "اكتب اسم كل قياس بالإنجليزي والعربي، والأرقام تحته لكل مقاس. سيبه فاضي لو مش موجود.": "Name each measurement in English and Arabic, then the numbers below it for every size. Leave a cell blank if the chart does not give it.",
   "اكتب الرقم": "Type the number",
   "اكتب رقم": "Type a number",
   "الآن": "just now",
@@ -1200,6 +1203,7 @@ const EN = {
   "التفاصيل": "Details",
   "التليفون": "Phone",
   "التوصيل": "Delivery",
+  "الجدول ماتحفظش — كمّله من صفحة المنتج": "The chart was not saved — finish it from the product page",
   "الحالة": "Status",
   "الحذف مانفذش": "Could not delete it",
   "الحساب": "Account",
@@ -1224,6 +1228,7 @@ const EN = {
   "الصنف": "Item",
   "الصورة": "Photo",
   "الصورة بتتحط على كل مقاسات اللون ده، مش السطر لوحده.": "The photo goes on every size in this colour, not on the row alone.",
+  "الصورة مافيهاش أرقام أقدر أقراها — اكتبها بنفسك.": "There are no numbers I can read in that picture — type them in.",
   "الطلب": "Order",
   "الطلب اتسجل متسلّم": "Order recorded as delivered",
   "الطلب اتسجل مدفوع": "Order recorded as paid",
@@ -1233,6 +1238,7 @@ const EN = {
   "الطلبات المطابقة أكتر من اللي بنقراه في نداء واحد — الأرقام دي حد أدنى، مش كل الفترة.": "More orders match than one call can read — these figures are a floor, not the whole period.",
   "الطلبات حسب الحالة": "Orders by status",
   "الطلبات حسب المحافظة": "Orders by governorate",
+  "العرض": "Width",
   "العملاء": "Customers",
   "العملاء أكتر من اللي بنقراه في نداء واحد — القايمة دي حد أدنى، مش كل اللي مطابق.": "More customers than one call can read — this list is a floor, not every match.",
   "العميل": "Customer",
@@ -1320,6 +1326,7 @@ const EN = {
   "النص": "Text",
   "الوارد": "Inbox",
   "الوارد الموحّد": "Unified inbox",
+  "الوحدة": "Unit",
   "الوصف": "Description",
   "الوقت": "Time",
   "اليوم": "Today",
@@ -1337,6 +1344,8 @@ const EN = {
   "بدون خاصة": "No private reply",
   "بدون رد عام": "No public reply",
   "بس": "only",
+  "بس الجدول ماتحفظش": "but the chart was not saved",
+  "بقرأ الجدول من الصورة…": "Reading the chart from the picture…",
   "بند مراجعة": "Review item",
   "بند مفتوح دلوقتي": "open item right now",
   "بنفتح لوحة التحكم…": "Opening the dashboard…",
@@ -1378,7 +1387,6 @@ const EN = {
   "جاري التحميل…": "Loading…",
   "جاري الفحص": "Checking…",
   "جاهز للاستلام": "Ready for pickup",
-  "جدول المقاسات": "Size chart",
   "جدول مقاسات منشور": "Published size chart",
   "جرّب فلتر تاني أو امسح البحث": "Try another filter or clear the search",
   "جزئي": "Partial",
@@ -1489,6 +1497,7 @@ const EN = {
   "قائمة المراجعة": "Review queue",
   "قدامى وجدد": "Returning and new",
   "قراءة فقط": "read only",
+  "قريت الجدول من الصورة — راجع الأرقام قبل ما تحفظ.": "Read from the picture — check the numbers before saving.",
   "قطعة": "unit",
   "قيمة المخزون بالبيع": "Stock value at retail",
   "قيمة الملغي": "Cancelled value",
@@ -1600,6 +1609,7 @@ const EN = {
   "مقاس *": "Size *",
   "مقاس — الأقل أولاً": "Size — lowest first",
   "مقاسات خلصت": "sizes out of stock",
+  "مقدرتش أقرا الجدول من الصورة — اكتب الأرقام بنفسك.": "I could not read the chart from that picture — type the numbers in.",
   "مقدرناش ننسخ": "Could not copy",
   "ملاحظة": "Note",
   "ملغي": "Cancelled",
@@ -3708,9 +3718,15 @@ async function openProduct(gid) {
           </select></div>
         <div><label class="lbl" for="pStyle">الستايل (مفصول بفاصلة)</label>
           <input class="inp" id="pStyle" value="${esc(local && local.style ? local.style.join(tr("، ")) : "")}" ${local ? "" : "disabled"}></div>
-        <div><label class="lbl" for="pChart">جدول المقاسات</label>
-          <input class="inp" id="pChart" value="${esc(local ? local.size_chart || "" : "")}" ${local ? "" : "disabled"}></div>
-      </div>`)}
+        <div><label class="lbl" for="pChart">جدول مقاسات منشور</label>
+          <select class="inp" id="pChart" ${local ? "" : "disabled"}>
+            <option value="${esc(local ? local.size_chart || "" : "")}">${esc(local && local.size_chart ? local.size_chart : tr("من غير جدول"))}</option>
+          </select></div>
+        <div><label class="lbl" for="pChartFile">أو ارفع صورة جدول من جهازك</label>
+          <input class="inp" id="pChartFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" ${local ? "" : "disabled"}>
+          <div class="hint" id="pChartStatus" style="margin-top:var(--s-1)" hidden></div></div>
+      </div>
+      <div id="pChartEditor" style="margin-top:var(--s-3)"></div>`)}
 
     <div style="height:var(--s-4)"></div>
     ${card(tr("المقاسات والأسعار"), TR`${product.variants.length} مقاس`,
@@ -3726,6 +3742,21 @@ async function openProduct(gid) {
      nobody touched. */
   if (local) fillCollectionPicker($("#pColl", body), local.collection || "");
   fillProductTypes("pCatList");
+  if (local) fillChartPicker($("#pChart", body), local.size_chart || "");
+
+  /* Same as the create form: the picture is read the moment it is chosen, and
+     the grid it fills is what actually gets saved. The sizes come from the
+     product itself here rather than from typed rows. */
+  const productSizes = [...new Set(product.variants.map((v) => v.size).filter(Boolean))];
+  if (local) {
+    $("#pChartFile", body).onchange = (event) => {
+      const file = (event.target.files || [])[0];
+      const host = $("#pChartEditor", body);
+      const status = $("#pChartStatus", body);
+      if (!file) { host.innerHTML = ""; status.hidden = true; return; }
+      readChartInto(host, file, productSizes, status);
+    };
+  }
 
   const save = el("button", {
     class: "btn primary", html: TR`${icon("check", 15)} احفظ التغييرات`,
@@ -3750,6 +3781,16 @@ async function openProduct(gid) {
         variantImages.push({ variant_id: input.dataset.img, source: uploaded.source });
       }
 
+      /* The chart picture goes up with the product photos, before anything
+         is written: an upload that fails here costs nothing. */
+      let chartImage = null;
+      const chartFile = ($("#pChartFile").files || [])[0];
+      if (chartFile) {
+        const uploaded = await uploadImage(chartFile, "size_chart");
+        if (uploaded.__error) { save.disabled = false; return toastError(uploaded.__error, tr("رفع جدول المقاسات مانفعش")); }
+        chartImage = { file_gid: uploaded.file_gid, url: uploaded.url };
+      }
+
       const payload = {
         title: $("#pTitle").value.trim(),
         category: $("#pCat").value.trim(),
@@ -3763,9 +3804,20 @@ async function openProduct(gid) {
       };
       const result = await api(`/dashboard/api/shopify/products/${encodeURIComponent(product.local_product_id)}/update`,
         { method: "POST", quiet: true, body: payload });
+      if (result.__error) { save.disabled = false; return toastError(result.__error, tr("الحفظ مانفذش")); }
+
+      /* A chart typed or read here is saved after the product update, for the
+         same reason as on create: it points at a product, so the product's
+         own fields settle first. */
+      let chartNote = "";
+      if (chartHasNumbers($("#pChartEditor", body))) {
+        const saved = await saveChart($("#pChartEditor", body), product.local_product_id,
+          $("#pTitle").value.trim(), chartImage);
+        if (saved && saved.__error) chartNote = tr("بس الجدول ماتحفظش");
+        else if (saved && (saved.warnings || []).length) chartNote = saved.warnings.join(" · ");
+      }
       save.disabled = false;
-      if (result.__error) return toastError(result.__error, tr("الحفظ مانفذش"));
-      toast(tr("المنتج اتحدّث"), tr("التغيير راح لشوبيفاي"));
+      toast(tr("المنتج اتحدّث"), chartNote || tr("التغيير راح لشوبيفاي"), chartNote ? "warn" : undefined);
       overlay.close();
       VIEWS.products.load();
     },
@@ -3876,11 +3928,207 @@ async function fillProductTypes(listId) {
   list.innerHTML = data.product_types.map((t) => `<option value="${esc(t)}"></option>`).join("");
 }
 
+/* The published-chart picker, shared by both forms. Same reason as the
+   collection picker: a typed chart id that `size_charts.json` and the
+   `size_charts` table both lack is a field that looks saved and answers
+   nothing when a customer asks for the measurements. */
+async function fillChartPicker(select, current = "") {
+  if (!select) return;
+  const data = await api("/dashboard/api/shopify/size-charts", { quiet: true }).catch(() => ({ __error: 1 }));
+  const none = `<option value="">${esc(tr("من غير جدول"))}</option>`;
+  if (data.__error || !data.charts) {
+    select.innerHTML = none;
+    if (current) select.insertAdjacentHTML("beforeend", `<option value="${esc(current)}" selected>${esc(current)}</option>`);
+    return;
+  }
+  const rows = data.charts.slice();
+  if (current && !rows.some((c) => c.id === current)) rows.unshift({ id: current, title: current });
+  select.innerHTML = none + rows.map((c) =>
+    `<option value="${esc(c.id)}"${c.id === current ? " selected" : ""}>${esc(c.title)}</option>`).join("");
+  select.value = current || "";
+}
+
 async function uploadImage(file, purpose) {
   const data = await readAsBase64(file);
   return api("/dashboard/api/shopify/uploads", { method: "POST", quiet: true, body: {
     filename: file.name, content_type: file.type, data, purpose,
   } });
+}
+
+/* ==========================================================================
+   جدول المقاسات / the size-chart editor
+
+   An uploaded chart used to be a picture and nothing else: the storefront
+   showed the image and the bot could send it, but neither could answer "what
+   is the chest on a large" -- there were no numbers behind it, and putting
+   some there meant editing `data/size_charts.json` and running a script.
+
+   So the picture is read for you. `/size-charts/read` hands it to the vision
+   model and fills the grid below in; the staff member checks it and saves.
+   The reading is never saved on its own -- a misread measurement is a
+   customer ordering the wrong size and posting it back, so a person always
+   sees the numbers first. Same rule as `docs/MEDIA.md` states for customer
+   photos: a vision reading is a hint, never a fact.
+   ========================================================================== */
+
+const CHART_STATE = new WeakMap();
+
+/* The sizes a chart may have rows for: whatever the form's variant rows say,
+   deduplicated, in the order they were typed. A chart row for a size the
+   product does not sell is a row nobody can order. */
+function chartSizesFrom(sizes) {
+  const seen = new Set();
+  return (sizes || []).map((s) => String(s || "").trim()).filter((s) => {
+    if (!s || seen.has(s.toLowerCase())) return false;
+    seen.add(s.toLowerCase());
+    return true;
+  });
+}
+
+function renderChartEditor(host, sizes, chart) {
+  if (!host) return;
+  const state = {
+    sizes: chartSizesFrom(sizes),
+    measurements: (chart && chart.measurements || []).map((m) => ({ ...m })),
+    values: (chart && chart.sizes) || {},
+    unit: (chart && chart.unit) || "cm",
+    fromImage: !!(chart && chart.fromImage),
+  };
+  CHART_STATE.set(host, state);
+
+  if (!state.sizes.length) {
+    host.innerHTML = TR`<div class="hint">أضف المقاسات الأول عشان تقدر تكتب أرقام الجدول.</div>`;
+    return;
+  }
+  if (!state.measurements.length) state.measurements = [{ key: "", label_en: "", label_ar: "" }];
+
+  const head = state.measurements.map((m, i) => TR`<th style="min-width:120px">
+      <input class="inp sm chart-en" data-i="${i}" placeholder="Width" value="${esc(m.label_en || "")}">
+      <input class="inp sm chart-ar" data-i="${i}" placeholder="العرض" value="${esc(m.label_ar || "")}">
+      <input type="hidden" class="chart-key" data-i="${i}" value="${esc(m.key || "")}">
+    </th>`).join("");
+
+  const rows = state.sizes.map((size) => {
+    const row = state.values[size] || {};
+    const cells = state.measurements.map((m, i) => {
+      const v = m.key && row[m.key] != null ? row[m.key] : "";
+      return `<td><input class="inp sm chart-val" data-size="${esc(size)}" data-i="${i}" type="number" step="0.5" value="${esc(String(v))}"></td>`;
+    }).join("");
+    return `<tr><th style="text-align:start">${esc(size)}</th>${cells}</tr>`;
+  }).join("");
+
+  host.innerHTML = TR`
+    <div class="row" style="margin-bottom:var(--s-2);gap:var(--s-2);align-items:center">
+      <div class="hint" style="flex:1">اكتب اسم كل قياس بالإنجليزي والعربي، والأرقام تحته لكل مقاس. سيبه فاضي لو مش موجود.</div>
+      <label class="lbl" style="margin:0">الوحدة</label>
+      <select class="inp sm chart-unit" style="width:auto">
+        <option value="cm">cm</option>
+        <option value="in">in</option>
+      </select>
+      <button class="btn sm ghost chart-add" type="button">أضف قياس</button>
+    </div>
+    <div style="overflow-x:auto"><table class="tbl chart-grid"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  const unit = host.querySelector(".chart-unit");
+  if (unit) {
+    unit.value = state.unit;
+    unit.onchange = () => { state.unit = unit.value; };
+  }
+  host.querySelector(".chart-add").onclick = () => {
+    const current = collectChart(host);
+    current.measurements.push({ key: "", label_en: "", label_ar: "" });
+    renderChartEditor(host, state.sizes, { ...current, unit: state.unit, fromImage: state.fromImage });
+  };
+}
+
+/* What the grid currently says, in the shape `POST /size-charts` takes.
+   Blank cells stay absent rather than becoming 0: the bot quotes these
+   numbers to customers, and "0 cm" is a worse answer than "not on the
+   chart". */
+function collectChart(host) {
+  const state = CHART_STATE.get(host);
+  if (!host || !state) return { measurements: [], sizes: {}, unit: "cm", fromImage: false };
+
+  const measurements = [];
+  host.querySelectorAll(".chart-en").forEach((input) => {
+    const i = Number(input.dataset.i);
+    const en = input.value.trim();
+    const ar = (host.querySelector(`.chart-ar[data-i="${i}"]`) || {}).value || "";
+    const key = ((host.querySelector(`.chart-key[data-i="${i}"]`) || {}).value || "").trim();
+    measurements[i] = { key: key || en, label_en: en, label_ar: ar.trim() };
+  });
+
+  const sizes = {};
+  host.querySelectorAll(".chart-val").forEach((input) => {
+    const i = Number(input.dataset.i);
+    const m = measurements[i];
+    const raw = input.value.trim();
+    if (!m || !m.label_en || raw === "") return;
+    const number = Number(raw);
+    if (!Number.isFinite(number)) return;
+    (sizes[input.dataset.size] = sizes[input.dataset.size] || {})[m.key || m.label_en] = number;
+  });
+
+  return {
+    measurements: measurements.filter((m) => m && m.label_en),
+    sizes,
+    unit: state.unit,
+    fromImage: state.fromImage,
+  };
+}
+
+function chartHasNumbers(host) {
+  const chart = collectChart(host);
+  return chart.measurements.length > 0 && Object.keys(chart.sizes).length > 0;
+}
+
+/* Read the picture, then show what it said. A failure here is never fatal --
+   the grid is still there to type into, which beats refusing the chart. */
+async function readChartInto(host, file, sizes, statusEl) {
+  const list = chartSizesFrom(sizes);
+  if (!list.length) {
+    renderChartEditor(host, list, null);
+    return;
+  }
+  if (statusEl) { statusEl.hidden = false; statusEl.textContent = tr("بقرأ الجدول من الصورة…"); }
+  const data = await readAsBase64(file);
+  const reading = await api("/dashboard/api/shopify/size-charts/read", {
+    method: "POST", quiet: true,
+    body: { filename: file.name, content_type: file.type, data, sizes: list },
+  }).catch(() => ({ __error: 1 }));
+
+  if (reading.__error) {
+    renderChartEditor(host, list, null);
+    if (statusEl) statusEl.textContent = tr("مقدرتش أقرا الجدول من الصورة — اكتب الأرقام بنفسك.");
+    return;
+  }
+  renderChartEditor(host, list, {
+    measurements: reading.measurements, sizes: reading.sizes,
+    unit: reading.unit, fromImage: true,
+  });
+  if (statusEl) {
+    const read = Object.keys(reading.sizes || {}).length;
+    statusEl.textContent = read
+      ? tr("قريت الجدول من الصورة — راجع الأرقام قبل ما تحفظ.") + (reading.notes ? " " + reading.notes : "")
+      : tr("الصورة مافيهاش أرقام أقدر أقراها — اكتبها بنفسك.");
+  }
+}
+
+/* Save the chart the staff member confirmed. Separate from creating the
+   product because it needs a product that already exists to point at. */
+async function saveChart(host, productId, title, image) {
+  const chart = collectChart(host);
+  if (!chart.measurements.length || !Object.keys(chart.sizes).length) return null;
+  return api("/dashboard/api/shopify/size-charts", {
+    method: "POST", quiet: true,
+    body: {
+      product_id: productId, title,
+      unit: chart.unit, measurements: chart.measurements, sizes: chart.sizes,
+      read_from_image: chart.fromImage,
+      image_url: (image && image.url) || undefined,
+      image_file_gid: (image && image.file_gid) || undefined,
+    },
+  });
 }
 
 function productCreateForm() {
@@ -3905,8 +4153,10 @@ function productCreateForm() {
       <div>
         <label class="lbl" for="nChartFile">أو ارفع صورة جدول من جهازك</label>
         <input class="inp" id="nChartFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+        <div class="hint" id="nChartStatus" style="margin-top:var(--s-1)" hidden></div>
       </div>
     </div>
+    <div id="nChartEditor" style="margin-top:var(--s-3)"></div>
     <div style="height:var(--s-3)"></div>
     <label class="lbl" for="nDesc">الوصف</label>
     <textarea class="inp" id="nDesc" rows="3" placeholder="وصف قصير يظهر في شوبيفاي"></textarea>
@@ -3925,14 +4175,18 @@ function productCreateForm() {
   fillCollectionPicker($("#nColl", body));
   fillProductTypes("nCatList");
 
-  (async () => {
-    const charts = await api("/dashboard/api/shopify/size-charts", { quiet: true }).catch(() => ({ __error: 1 }));
-    const select = $("#nChart", body);
-    if (!select) return;
-    const options = charts.__error ? [] : charts.charts;
-    select.innerHTML = TR`<option value="">من غير جدول</option>` +
-      options.map((c) => `<option value="${esc(c.id)}">${esc(c.title)}</option>`).join("");
-  })();
+  /* The picture is read the moment it is chosen, not at save time: the staff
+     member is looking at the form right then, which is the only moment
+     checking the numbers costs them nothing. */
+  $("#nChartFile", body).onchange = (event) => {
+    const file = (event.target.files || [])[0];
+    const host = $("#nChartEditor", body);
+    const status = $("#nChartStatus", body);
+    if (!file) { host.innerHTML = ""; status.hidden = true; return; }
+    readChartInto(host, file, variantRowSizes(), status);
+  };
+
+  fillChartPicker($("#nChart", body));
 
   $("#nCollNew", body).addEventListener("click", () => {
     overlay.close();
@@ -3954,6 +4208,18 @@ function productCreateForm() {
   };
   $("#addVariant", body).addEventListener("click", () => addRow());
   addRow();
+
+  /* The chart may only have rows for sizes this product actually sells. */
+  const variantRowSizes = () =>
+    $$("#variantRows > div", body).map((row) => ($("[data-v=size]", row) || {}).value || "");
+
+  /* Sizes typed after the picture was read still get a row: re-render the
+     grid on the way out rather than making the order of two fields matter. */
+  $("#variantRows", body).addEventListener("change", (event) => {
+    if (!event.target.matches("[data-v=size]")) return;
+    const host = $("#nChartEditor", body);
+    if (CHART_STATE.has(host)) renderChartEditor(host, variantRowSizes(), collectChart(host));
+  });
 
   const create = el("button", { class: "btn primary", html: TR`${icon("check", 15)} أنشئ المنتج`, onclick: async () => {
     const rows = $$("#variantRows > div", body).map((row) => {
@@ -3994,17 +4260,29 @@ function productCreateForm() {
       }
       if (images.length) payload.images = images;
 
+      let chartImage = null;
       const chartFile = ($("#nChartFile").files || [])[0];
       if (chartFile) {
         const uploaded = await uploadImage(chartFile, "size_chart");
         if (uploaded.__error) { toastError(uploaded.__error, tr("رفع جدول المقاسات مانفعش")); return; }
         payload.size_chart_file_gid = uploaded.file_gid;
         payload.size_chart_url = uploaded.url || undefined;
+        chartImage = { file_gid: uploaded.file_gid, url: uploaded.url };
       }
 
       const result = await api("/dashboard/api/shopify/products", { method: "POST", quiet: true, body: payload });
       if (result.__error) return toastError(result.__error, tr("الإنشاء مانفذش"));
-      if ((result.warnings || []).length) toast(tr("المنتج اتعمل، بس"), result.warnings.join(" · "), "warn");
+
+      /* The chart is saved after the product because it has to point at one.
+         A chart that fails to save leaves the product and its picture intact
+         -- staff finish it from the edit drawer. */
+      const warnings = (result.warnings || []).slice();
+      if (chartHasNumbers($("#nChartEditor", body))) {
+        const saved = await saveChart($("#nChartEditor", body), result.product_id, payload.title, chartImage);
+        if (saved && saved.__error) warnings.push(tr("الجدول ماتحفظش — كمّله من صفحة المنتج"));
+        else if (saved) warnings.push(...(saved.warnings || []));
+      }
+      if (warnings.length) toast(tr("المنتج اتعمل، بس"), warnings.join(" · "), "warn");
       else toast(tr("المنتج اتعمل"), result.product_id || "");
       overlay.close();
       go("products", { force: true });

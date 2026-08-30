@@ -392,6 +392,44 @@ def set_product_chart_image(product_gid: str, file_gid: str) -> None:
         raise SizeChartError("; ".join(e.get("message", "") for e in errors))
 
 
+def set_product_chart(product_gid: str, chart: dict, file_gid: str | None = None) -> None:
+    """Both metafields for one product, from one chart.
+
+    `write_plan` does this in bulk for every product on every chart in
+    `size_charts.json`. This is the single-product door the dashboard uses
+    when a staff member makes a chart there: the same two keys, the same
+    reshaping through `storefront_payload`, so a chart built in the dashboard
+    renders on the storefront identically to one that shipped in the file.
+
+    `file_gid` is optional -- a chart whose picture is already on the product
+    (or which has no picture) writes only the table.
+    """
+    metafields = [
+        {
+            "ownerId": product_gid,
+            "namespace": NAMESPACE,
+            "key": DATA_KEY,
+            "type": "json",
+            "value": json.dumps(storefront_payload(chart), ensure_ascii=False),
+        }
+    ]
+    if file_gid:
+        metafields.append(
+            {
+                "ownerId": product_gid,
+                "namespace": NAMESPACE,
+                "key": IMAGE_KEY,
+                "type": "file_reference",
+                "value": file_gid,
+            }
+        )
+    client = get_admin_client()
+    result = client(METAFIELDS_SET, {"metafields": metafields})
+    errors = (result.get("metafieldsSet") or {}).get("userErrors") or []
+    if errors:
+        raise SizeChartError("; ".join(e.get("message", "") for e in errors))
+
+
 def write_plan(entries: list[dict]) -> int:
     """Set both metafields on every product in the plan."""
     if not entries:

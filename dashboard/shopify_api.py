@@ -22,10 +22,12 @@ from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select
 
+from assistant.providers import get_provider
+from assistant.providers.base import ProviderError
 from dashboard import customer_filters, customer_ledger
 from dashboard.guard import require_permission
 from domain.db import session_scope
-from domain.models import Client, Order, OrderStatus, Product, Variant
+from domain.models import Client, Order, OrderStatus, Product, SizeChart, Variant
 from domain.services import orders as orders_service, size_charts as size_charts_service
 from integrations.shopify import (
     admin_customers as shopify_admin_customers,
@@ -33,6 +35,7 @@ from integrations.shopify import (
     admin_products as shopify_admin_products,
     files as shopify_files,
     orders as shopify_orders,
+    size_charts as shopify_size_charts,
 )
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
 from integrations.shopify.client import get_admin_client
@@ -898,3 +901,231 @@ def customer_detail(customer_gid: str, wanas_staff: str | None = Cookie(default=
             if local_client is not None:
                 customer["governorate"] = local_client.governorate
     return JSONResponse(customer)
+
+
+# --------------------------------------------------------------------------
+# making a size chart from the dashboard
+#
+# Before this, an uploaded chart was a picture and nothing else: the
+# storefront showed the image, and the bot could send it but could not answer
+# "what is the chest on a large?" -- there were no numbers behind it. Adding a
+# measured chart meant editing `data/size_charts.json` and running a script,
+# which is not a thing anyone does at 11pm.
+#
+# The two routes below close that. `/size-charts/read` hands the picture to
+# the vision model and gets the table back as data; `/size-charts` saves what
+# the staff member confirmed. The reading is deliberately *not* saved on its
+# own: a measurement the model misread is a customer ordering the wrong size
+# and sending it back, so a person always sees the numbers first. That is the
+# same rule `docs/MEDIA.md` states for customer photos -- a vision reading is
+# a hint, never a fact.
+# --------------------------------------------------------------------------
+
+
+def _chart_id_for(title: str, product_id: str | None) -> str:
+    base = shopify_admin_products.slugify(title or product_id or "chart")
+    return base[:60] or "chart"
+
+
+@router.post("/size-charts/read")
+def read_size_chart(
+    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+) -> JSONResponse:
+    """Read the measurements off a size-chart picture.
+
+    Returns the table as data for the staff member to check and correct. It
+    writes nothing -- saving is `POST /size-charts`, after a person has looked
+    at it.
+
+    `sizes` is the product's own size list, so a chart printing sizes this
+    product does not sell contributes nothing; a size the model reports that
+    is not in that list is dropped rather than offered.
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+
+    mime = (payload.get("content_type") or "").split(";")[0].strip().lower()
+    if mime not in ALLOWED_UPLOAD_TYPES:
+        return JSONResponse(
+            {"error": "bad_arguments", "detail": f"unsupported image type: {mime or 'unknown'}"},
+            status_code=400,
+        )
+    try:
+        data = base64.b64decode(payload.get("data") or "", validate=True)
+    except (binascii.Error, ValueError):
+        return JSONResponse({"error": "bad_arguments", "detail": "data is not base64"}, status_code=400)
+    if not data:
+        return JSONResponse({"error": "bad_arguments", "detail": "the file is empty"}, status_code=400)
+    if len(data) > MAX_UPLOAD_BYTES:
+        return JSONResponse(
+            {"error": "bad_arguments", "detail": f"the file is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB"},
+            status_code=413,
+        )
+
+    sizes = [str(s).strip() for s in (payload.get("sizes") or []) if str(s).strip()]
+
+    provider = get_provider()
+    if not provider.supports_vision:
+        return JSONResponse(
+            {"error": "reading_unavailable",
+             "detail": "this deployment has no vision model; type the measurements in"},
+            status_code=503,
+        )
+    try:
+        reading = provider.read_size_chart(data, mime, sizes=sizes)
+    except ProviderError as exc:
+        # Never fatal: the form is still there to be filled in by hand, which
+        # is strictly better than refusing the chart.
+        return JSONResponse(
+            {"error": "reading_unavailable", "detail": str(exc)}, status_code=503
+        )
+
+    return JSONResponse(
+        {
+            "measurements": reading.measurements,
+            "sizes": reading.sizes,
+            "unit": reading.unit,
+            "confidence": reading.confidence,
+            "notes": reading.notes,
+        }
+    )
+
+
+@router.post("/size-charts")
+def save_size_chart(
+    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+) -> JSONResponse:
+    """Save a chart a staff member confirmed, and put it on the storefront.
+
+    Writes the `size_charts` row (which overlays `data/size_charts.json` --
+    see `domain/services/size_charts.py`), points the product at it, and sets
+    both Shopify metafields so the theme renders a real bilingual table
+    instead of just the picture.
+
+    Shopify is best-effort here and the local write is not: a chart the bot
+    can quote but the storefront has not caught up on is a good outcome; a
+    storefront table with nothing behind it for the bot is not.
+    """
+    with session_scope() as db:
+        _, refused = require_permission(db, wanas_staff, "products")
+        if refused is not None:
+            return refused
+
+        product_id = (payload.get("product_id") or "").strip() or None
+        product = db.get(Product, product_id) if product_id else None
+        if product_id and product is None:
+            return JSONResponse({"error": "product_not_found"}, status_code=404)
+
+        measurements = _clean_measurements(payload.get("measurements") or [])
+        if not measurements:
+            return JSONResponse(
+                {"error": "bad_arguments", "detail": "a chart needs at least one measurement"},
+                status_code=400,
+            )
+        sizes = _clean_sizes(payload.get("sizes") or {}, measurements)
+        if not sizes:
+            return JSONResponse(
+                {"error": "bad_arguments", "detail": "a chart needs at least one size with a number in it"},
+                status_code=400,
+            )
+
+        title = (payload.get("title") or (product.name if product else "") or "").strip()
+        chart_id = (payload.get("chart_id") or "").strip() or _chart_id_for(title, product_id)
+        unit = (payload.get("unit") or "cm").strip().lower()
+
+        row = db.get(SizeChart, chart_id)
+        if row is None:
+            row = SizeChart(chart_id=chart_id)
+            db.add(row)
+        row.title = title or chart_id
+        row.unit = unit if unit in {"cm", "in"} else "cm"
+        row.measurements = measurements
+        row.sizes = sizes
+        row.source = "vision" if payload.get("read_from_image") else "manual"
+        if payload.get("image_url"):
+            row.image_url = str(payload["image_url"])[:500]
+        if payload.get("image_file_gid"):
+            row.image_file_gid = str(payload["image_file_gid"])[:120]
+
+        chart = size_charts_service.as_chart(row)
+        warnings: list[str] = []
+
+        if product is not None:
+            product.size_chart = chart_id
+            if row.image_url:
+                product.size_chart_image = row.image_url
+            db.flush()
+            skus = [v.variant_id for v in product.variants]
+            try:
+                gid = (
+                    shopify_admin_products.product_gid_for_variant_id(skus[0]) if skus else None
+                )
+                if gid:
+                    shopify_size_charts.set_product_chart(gid, chart, row.image_file_gid)
+                else:
+                    warnings.append("saved, but this product has no Shopify match to publish it to")
+            except (ShopifyUnavailable, ShopifyConfigError, shopify_size_charts.SizeChartError) as exc:
+                warnings.append(f"saved, but the storefront table was not updated: {exc}")
+
+        return JSONResponse(
+            {"chart_id": chart_id, "title": row.title, "sizes": list(sizes),
+             "source": row.source, "warnings": warnings}
+        )
+
+
+def _clean_measurements(raw: list) -> list[dict]:
+    """One entry per column, keyed the way `size_charts.json` keys them.
+
+    A row with no key and no English label is dropped rather than given a
+    generated name: an unlabelled column in a size chart is not something to
+    guess at.
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        key = shopify_admin_products.slugify(
+            str(item.get("key") or item.get("label_en") or "")
+        ).replace("-", "_")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "key": key,
+                "label_en": str(item.get("label_en") or key.replace("_", " ").title()).strip(),
+                "label_ar": str(item.get("label_ar") or "").strip(),
+            }
+        )
+    return out
+
+
+def _clean_sizes(raw: dict, measurements: list[dict]) -> dict[str, dict]:
+    """Only numbers, only for columns the chart declares.
+
+    A blank cell stays absent rather than becoming 0 -- the bot quotes these
+    to customers, and "0 cm" is a worse answer than "that row is not on the
+    chart".
+    """
+    keys = {m["key"] for m in measurements}
+    out: dict[str, dict] = {}
+    for name, values in (raw or {}).items():
+        label = str(name).strip()
+        if not label or not isinstance(values, dict):
+            continue
+        row: dict[str, float] = {}
+        for key, value in values.items():
+            key = shopify_admin_products.slugify(str(key)).replace("-", "_")
+            if key not in keys or value in (None, ""):
+                continue
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                continue
+            row[key] = int(number) if number.is_integer() else number
+        if row:
+            out[label] = row
+    return out

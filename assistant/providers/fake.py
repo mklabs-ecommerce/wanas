@@ -23,7 +23,14 @@ from __future__ import annotations
 import re
 
 from assistant.messages import TOOL_RESULTS, USER
-from assistant.providers.base import CommentClassification, ImageReading, LLMProvider, ModelReply
+from assistant.providers.base import (
+    CommentClassification,
+    ImageReading,
+    LLMProvider,
+    ModelReply,
+    ProviderError,
+    SizeChartReading,
+)
 
 
 class ScriptedProvider(LLMProvider):
@@ -39,10 +46,12 @@ class ScriptedProvider(LLMProvider):
         self.calls: list[tuple[str, list[dict], list]] = []
         self.transcripts: list[str] = []
         self.readings: list[ImageReading] = []
+        self.chart_readings: list[SizeChartReading] = []
         self.classifications: list[CommentClassification] = []
         #: What was actually handed to the media calls, for assertions.
         self.audio_calls: list[tuple[bytes, str]] = []
         self.image_calls: list[tuple[bytes, str, list[dict]]] = []
+        self.chart_calls: list[tuple[bytes, str, list[str]]] = []
         self.comment_calls: list[str] = []
 
     def push(self, reply: ModelReply) -> None:
@@ -53,6 +62,9 @@ class ScriptedProvider(LLMProvider):
 
     def push_reading(self, reading: ImageReading) -> None:
         self.readings.append(reading)
+
+    def push_chart_reading(self, reading: SizeChartReading) -> None:
+        self.chart_readings.append(reading)
 
     def push_classification(self, category: str) -> None:
         self.classifications.append(CommentClassification(category=category))
@@ -70,6 +82,13 @@ class ScriptedProvider(LLMProvider):
     def inspect_image(self, image: bytes, mime_type: str, *, catalog: list[dict]) -> ImageReading:
         self.image_calls.append((image, mime_type, list(catalog)))
         return self.readings.pop(0) if self.readings else ImageReading()
+
+    def read_size_chart(self, image: bytes, mime_type: str, *, sizes: list[str]) -> SizeChartReading:
+        self.chart_calls.append((image, mime_type, list(sizes)))
+        if not self.chart_readings:
+            raise ProviderError("scripted provider has no size-chart reading queued",
+                                kind="unsupported")
+        return self.chart_readings.pop(0)
 
     def classify_comment(self, text: str) -> CommentClassification:
         self.comment_calls.append(text)

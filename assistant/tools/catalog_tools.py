@@ -129,7 +129,7 @@ def get_size_chart(ctx: ToolContext, product_id: str) -> dict:
     if product is None:
         return {"error": "product_not_found", "product_id": product_id}
 
-    chart = get_chart(product.size_chart)
+    chart = get_chart(product.size_chart, ctx.session)
     if chart is None:
         # A picture with no measurements behind it: what the dashboard's
         # "upload a size chart" produces. The runtime attaches it and the

@@ -540,6 +540,52 @@ class RuntimeSetting(Base):
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("staff.staff_id"), nullable=True)
 
 
+class SizeChart(Base):
+    """A size chart a staff member made from the dashboard.
+
+    `data/size_charts.json` is still the source for the twelve charts this
+    shop shipped with -- they are versioned with the code and change rarely,
+    which is exactly what a file is good at. It is a poor place for a chart
+    created at 11pm from a phone: a file written on Railway does not survive
+    the next deploy, and a chart nobody can add without a pull request is a
+    chart nobody adds.
+
+    So the two live side by side under the same overlay this codebase uses
+    everywhere else (`catalog._overlay`, `RuntimeSetting`): the file is the
+    default, a row here wins on the same `chart_id`. Everything reads both
+    through `domain/services/size_charts.py`, so the bot's tool, the
+    dashboard, and the Shopify publisher all see one merged view.
+
+    `measurements` and `sizes` carry the same shapes the JSON file uses, so a
+    chart from either side is interchangeable:
+    `[{"key", "label_en", "label_ar", "marker"?}]` and
+    `{"S": {"width": 54, ...}, ...}`.
+    """
+
+    __tablename__ = "size_charts"
+
+    chart_id: Mapped[str] = mapped_column(String(60), primary_key=True)
+    title: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    unit: Mapped[str] = mapped_column(String(8), nullable=False, default="cm")
+    measurements: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    sizes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    #: The diagram, as a url on Shopify's CDN -- see `Product.size_chart_image`
+    #: for why this is never a local path.
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: The Shopify file gid behind `image_url`, so the `custom.size_chart`
+    #: metafield can be set without uploading the picture a second time.
+    image_file_gid: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: "vision" when the numbers were read off the picture and confirmed by a
+    #: staff member, "manual" when they were typed. Kept because "a person
+    #: checked this" and "a model read this" are different claims, and the one
+    #: that goes wrong goes wrong as a returned parcel.
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class WebhookEvent(Base):
     __tablename__ = "webhook_events"
 
@@ -699,6 +745,7 @@ __all__ = [
     "StaffQueueItem",
     "Staff",
     "RuntimeSetting",
+    "SizeChart",
     "TestPhoneNumber",
     "WebhookEvent",
     "Counter",
