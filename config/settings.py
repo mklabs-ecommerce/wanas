@@ -164,6 +164,13 @@ class Settings:
     #: old shape until the first write that needs the new column fails.
     auto_migrate_schema: bool
 
+    #: Report, at boot, which wanas.db products Shopify no longer has -- a log
+    #: line, never a write. The deleting half stays
+    #: `scripts/shopify_reconcile_products.py`, run by hand: this runs
+    #: unattended on every deploy, and a reconcile that deletes unattended is
+    #: one bad Shopify read away from an empty catalog.
+    reconcile_report_on_boot: bool
+
     #: The staff dashboard: view conversations, reply to a paused one, resolve
     #: the handoff. On by default -- unlike the harness it requires a staff
     #: login -- but with no secret set it refuses every login rather than
@@ -297,6 +304,7 @@ def load_settings() -> Settings:
         # app.py. Set it to 0 to have startup report the drift and change
         # nothing, leaving `scripts/migrate_schema.py` to do it by hand.
         auto_migrate_schema=_bool("AUTO_MIGRATE_SCHEMA", True),
+        reconcile_report_on_boot=_bool("RECONCILE_REPORT_ON_BOOT", True),
         # Off unless asked for. It is an unauthenticated surface that can
         # converse as any customer identity, so the default that costs
         # something when you forget it has to be the closed one.

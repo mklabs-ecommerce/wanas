@@ -122,10 +122,12 @@ integrations/            everything that talks to an external vendor over
     admin_collections.py, admin_inventory.py                dashboard admin
     product_reconcile.py    the other direction, and the only one that
                             deletes: wanas.db products whose SKUs Shopify no
-                            longer knows. Never on boot -- a script, dry-run
-                            by default, refusing an empty or mostly-empty
-                            live read, and archiving rather than deleting
-                            anything ever ordered
+                            longer knows. Boot runs it in *report* mode only
+                            (RECONCILE_REPORT_ON_BOOT) -- the deleting half is
+                            scripts/shopify_reconcile_products.py, by hand,
+                            dry-run by default, refusing an empty or
+                            mostly-empty live read, and archiving rather than
+                            deleting anything ever ordered
     product_import.py       reconcile-on-boot for products created straight
                             in Shopify Admin; skips one still wearing only
                             Shopify's own "Default Title" placeholder --
@@ -510,7 +512,13 @@ one fact rather than by caution: `order_items.variant_id` is a foreign key,
 so anything that has ever been sold is refused and offered
 `archive_product` instead — Shopify's `status: ARCHIVED` plus
 `Product.archived`, which together take it off the storefront and out of
-the bot's search while the order lines still read. Creating a product **does** take
+the bot's search while the order lines still read. Either way
+`release_variants` lets go of everything else that was waiting on those
+SKUs — cart lines, stock-waitlist entries, and the dead replacement on any
+open `item_swap` — and **archiving needs it more than deleting does**: the
+variant still exists, so nothing errors and the customer simply waits
+forever. A dashboard-made `SizeChart` row goes with the last product using
+it; a chart from `data/size_charts.json` never does. Creating a product **does** take
 pictures off the staff member's device: one per variant row, uploaded
 through `POST /dashboard/api/shopify/uploads` and attached as that
 colourway's *variant* image, which is the field the bot reads when a

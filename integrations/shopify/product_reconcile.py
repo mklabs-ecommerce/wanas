@@ -110,6 +110,10 @@ def reconcile_vanished_products(
                 skipped.append({**row, "why": "sold and already archived"})
                 continue
             product.archived = True
+            # The same release a dashboard archive does: a cart line or a
+            # back-in-stock entry for a product Shopify no longer has is
+            # somebody waiting for nothing.
+            admin.release_variants(session, skus, gone=False)
             session.flush()
             log.info("archived %s: sold before, but gone from Shopify", product.product_id)
             archived.append(row)

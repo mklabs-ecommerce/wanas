@@ -184,6 +184,66 @@ def _import_missing_shopify_products() -> None:
         log.warning("Shopify product import: %s", problem)
 
 
+def _report_vanished_products() -> None:
+    """Say, in the log, which wanas.db products Shopify no longer has.
+
+    Reports only -- `apply=False`, nothing is written. The deleting half is
+    `scripts/shopify_reconcile_products.py`, run by hand, and it stays that
+    way: this runs unattended on every deploy, and a reconcile that deletes
+    unattended is one bad Shopify read away from an empty catalog.
+
+    What it buys is the thing that actually went wrong: three phantom
+    products sat in production for weeks because nothing ever looked. A line
+    in the boot log the day it happens turns that into a five-minute fix.
+
+    Refusals (an empty live read, most of the catalog missing) are logged as
+    warnings and swallowed, like every other optional piece of startup here.
+    """
+    from integrations.shopify.product_reconcile import (
+        ReconcileRefused,
+        reconcile_vanished_products,
+    )
+
+    try:
+        with session_scope() as db:
+            report = reconcile_vanished_products(db, apply=False)
+    except ReconcileRefused as exc:
+        log.warning("catalog reconcile could not run: %s", exc)
+        return
+    except Exception:
+        log.exception("catalog reconcile report failed")
+        return
+
+    stale = report["deleted"] + report["archived"]
+    if not stale:
+        log.info(
+            "catalog reconcile: %d local product(s) all still on Shopify",
+            report["checked"],
+        )
+        return
+    log.warning(
+        "catalog reconcile: %d local product(s) are no longer on Shopify and the bot "
+        "is still offering them: %s. Run "
+        "`python scripts/shopify_reconcile_products.py` to see the detail, "
+        "then --apply to clear them.",
+        len(stale),
+        ", ".join(item["product_id"] for item in stale),
+    )
+
+
+def _shopify_boot_reconcile() -> None:
+    """Both directions, one thread, off the request path.
+
+    In order on purpose: import first, so a product added in Shopify Admin
+    has its wanas.db row before anything looks for local rows Shopify has
+    lost. Chained rather than run in parallel so boot makes one pass at
+    Shopify, not two at once.
+    """
+    _import_missing_shopify_products()
+    if settings.reconcile_report_on_boot:
+        _report_vanished_products()
+
+
 def _register_shopify_webhooks() -> None:
     """Subscribe Shopify to push order-status changes to this app -- see
     `integrations/shopify/webhook_registration.py`. This closes the "nothing is even
@@ -287,8 +347,8 @@ async def lifespan(_app: FastAPI):
     )
     if settings.shopify_configured:
         threading.Thread(
-            target=_import_missing_shopify_products,
-            name="shopify-product-import",
+            target=_shopify_boot_reconcile,
+            name="shopify-product-reconcile",
             daemon=True,
         ).start()
         threading.Thread(

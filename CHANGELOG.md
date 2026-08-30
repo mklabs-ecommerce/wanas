@@ -2,6 +2,35 @@
 
 ## Unreleased — Adding a product, with the pictures on it
 
+- **Boot now says which products have drifted.** `RECONCILE_REPORT_ON_BOOT`
+  (default on) runs the reconcile in **report mode** on every deploy and logs
+  any wanas.db product Shopify no longer has. It writes nothing: deleting
+  stays `scripts/shopify_reconcile_products.py --apply`, run by hand, because
+  this runs unattended and a reconcile that deletes unattended is one bad
+  Shopify read from an empty catalog. Three phantom products sat in production
+  for weeks because nothing ever looked.
+
+- **Taking a product off the shelf now releases everything that was waiting
+  on it.** Deleting used to remove the rows and the Shopify product and stop
+  there; three other places held something that only made sense while the
+  variant existed, and each failed quietly:
+  - a **cart** holding it failed at checkout, the most expensive place to fail;
+  - a **stock-waitlist** entry meant somebody waiting forever for a
+    back-in-stock message that could never come;
+  - an open **`item_swap`** naming it as the replacement meant a staff member
+    approving a swap into a size that is not there. The request stays open and
+    the dead target is cleared off it with a note — the customer still wants a
+    different size, and which one is a person's call.
+
+  `release_variants(..., gone=)` is one path for both callers, and
+  **archiving now uses it too**. That was the worse half: an archived variant
+  still exists, so nothing errors — the customer simply waits forever.
+
+- **A dashboard-made size chart goes with the last product using it.** Only a
+  `size_charts` row, never one from `data/size_charts.json`, and only when no
+  other product still points at it: charts are deliberately shared, so "its
+  product went" and "it is unused" are different statements.
+
 - **A size chart uploaded from the dashboard now has numbers behind it.** It
   used to be a picture and nothing else: the storefront showed the image, the
   bot could send it, and neither could answer "what is the chest on a large".

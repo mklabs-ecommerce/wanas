@@ -34,7 +34,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.settings import settings
-from domain.models import CartItem, OrderItem, Product, StockWaitlistEntry, Variant
+from domain.models import (
+    CartItem,
+    OrderItem,
+    Product,
+    QueueKind,
+    QueueStatus,
+    SizeChart,
+    StaffQueueItem,
+    StockWaitlistEntry,
+    Variant,
+)
 from integrations.shopify import (
     catalog as shopify_catalog,
     inventory as shopify_inventory,
@@ -1171,16 +1181,109 @@ def sold_variant_ids(session: Session, variant_ids: list[str]) -> set[str]:
     return set(rows)
 
 
-def _forget_variant(session: Session, variant_id: str) -> None:
-    """Drop the rows that only point at a variant, never at an order.
+def release_variants(session: Session, variant_ids: list[str], *, gone: bool) -> dict:
+    """Everything else in wanas.db that was still pointing at these variants.
 
-    A cart line and a back-in-stock waitlist entry are both "somebody is
-    waiting for this"; with the variant gone there is nothing to wait for, and
-    leaving them would break the same foreign key from the other side.
+    Deleting a product used to mean deleting its rows and its Shopify product,
+    and stopping there. That is not the whole system: three other places hold
+    something that only makes sense while the variant exists, and each of them
+    goes wrong quietly rather than loudly.
+
+    - **Cart lines.** A cart holding a variant nobody can buy is a checkout
+      that fails at the last step, which is the most expensive place to fail.
+    - **Stock-waitlist entries.** Somebody waiting for a back-in-stock message
+      that can never come. Worse for an archived product than a deleted one:
+      the variant still exists, so nothing errors -- the customer just waits
+      forever.
+    - **Open `item_swap` requests naming it as the replacement.** A staff
+      member would approve a swap into a size that is not there. The request
+      is a customer asking for something and is not deleted; the dead target
+      is cleared off it and the summary says so, so the queue shows a choice
+      still to be made rather than one already made wrongly.
+
+    `gone` distinguishes the two callers. Deleting removes the rows, because
+    the foreign key requires it. Archiving keeps them -- an archived variant
+    still exists, and `order_items` still reads -- but the waiting has to stop
+    either way, so cart lines and waitlist entries go in both cases.
+
+    Returns a count per kind, for the caller to report.
     """
-    for model in (CartItem, StockWaitlistEntry):
-        for row in session.scalars(select(model).where(model.variant_id == variant_id)).all():
+    if not variant_ids:
+        return {"carts": 0, "waitlists": 0, "swaps": 0}
+
+    counts = {"carts": 0, "waitlists": 0, "swaps": 0}
+    for model, key in ((CartItem, "carts"), (StockWaitlistEntry, "waitlists")):
+        rows = session.scalars(select(model).where(model.variant_id.in_(variant_ids))).all()
+        for row in rows:
             session.delete(row)
+        counts[key] = len(rows)
+
+    counts["swaps"] = _clear_dead_swap_targets(session, set(variant_ids), gone=gone)
+    session.flush()
+    return counts
+
+
+def _clear_dead_swap_targets(session: Session, variant_ids: set[str], *, gone: bool) -> int:
+    """Take a no-longer-sellable replacement off the open swap requests.
+
+    The request itself stays open on purpose. The customer asked for a
+    different size and still wants one; what changed is that the size they or
+    the bot named is not available, which is a thing for a person to answer,
+    not for this to decide.
+    """
+    items = session.scalars(
+        select(StaffQueueItem).where(
+            StaffQueueItem.kind == QueueKind.ITEM_SWAP.value,
+            StaffQueueItem.status == QueueStatus.OPEN.value,
+        )
+    ).all()
+
+    touched = 0
+    for item in items:
+        payload = dict(item.payload or {})
+        target = payload.get("to_variant_id")
+        if not target or target not in variant_ids:
+            continue
+        payload["to_variant_id"] = None
+        payload["unavailable_target"] = target
+        item.payload = payload
+        note = "no longer sold" if gone else "archived"
+        item.summary = f"{item.summary} — replacement {target} is {note}; pick another"
+        touched += 1
+    return touched
+
+
+def _forget_orphan_chart(session: Session, product: Product) -> str | None:
+    """Delete a dashboard-made size chart the last product using it just lost.
+
+    Narrow on purpose, in both directions:
+
+    - only a `size_charts` **row**, never a chart from
+      `data/size_charts.json`. Those ship with the code, are shared by several
+      products, and are not this function's to remove;
+    - only when no *other* product still points at it. A chart is deliberately
+      shareable -- every boxy tee uses one -- so "its product went" and "it is
+      unused" are different statements.
+
+    Returns the chart_id it removed, or None.
+    """
+    chart_id = product.size_chart
+    if not chart_id:
+        return None
+    row = session.get(SizeChart, chart_id)
+    if row is None:
+        return None  # a file chart: not ours to delete
+
+    others = session.scalars(
+        select(Product.product_id).where(
+            Product.size_chart == chart_id, Product.product_id != product.product_id
+        )
+    ).all()
+    if others:
+        return None
+
+    session.delete(row)
+    return chart_id
 
 
 def shopify_delete_product(product_gid: str) -> None:
@@ -1217,11 +1320,17 @@ def delete_product(session: Session, product_id: str) -> dict:
     if product_gid:
         shopify_delete_product(product_gid)
 
-    for variant_id in variant_ids:
-        _forget_variant(session, variant_id)
+    released = release_variants(session, variant_ids, gone=True)
+    chart = _forget_orphan_chart(session, product)
     session.delete(product)
     session.flush()
-    return {"product_id": product_id, "shopify_id": product_gid, "deleted": True}
+    return {
+        "product_id": product_id,
+        "shopify_id": product_gid,
+        "deleted": True,
+        "released": released,
+        "chart_deleted": chart,
+    }
 
 
 def delete_variant(session: Session, variant_id: str) -> dict:
@@ -1248,7 +1357,7 @@ def delete_variant(session: Session, variant_id: str) -> dict:
         if live is not None:
             shopify_delete_variants(product_gid, [live.shopify_id])
 
-    _forget_variant(session, variant_id)
+    released = release_variants(session, [variant_id], gone=True)
     session.delete(variant)
     session.flush()
 
@@ -1259,7 +1368,12 @@ def delete_variant(session: Session, variant_id: str) -> dict:
         session.expire(product, ["variants"])
         _resummarise(product)
     session.flush()
-    return {"variant_id": variant_id, "product_id": variant.product_id, "deleted": True}
+    return {
+        "variant_id": variant_id,
+        "product_id": variant.product_id,
+        "deleted": True,
+        "released": released,
+    }
 
 
 def _resummarise(product: Product) -> None:
@@ -1289,8 +1403,19 @@ def archive_product(session: Session, product_id: str) -> dict:
         shopify_update_product_fields(product_gid, {"status": "ARCHIVED"})
 
     product.archived = True
+    #: The same release as a delete, minus the rows the foreign key needs
+    #: kept. An archived variant still exists, so nothing errors -- which is
+    #: exactly why this is easy to forget: the customer waiting for it to come
+    #: back in stock simply waits forever, and the cart holding it fails only
+    #: at checkout.
+    released = release_variants(session, [v.variant_id for v in product.variants], gone=False)
     session.flush()
-    return {"product_id": product_id, "shopify_id": product_gid, "archived": True}
+    return {
+        "product_id": product_id,
+        "shopify_id": product_gid,
+        "archived": True,
+        "released": released,
+    }
 
 
 def update_product(
