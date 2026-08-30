@@ -117,6 +117,12 @@ integrations/            everything that talks to an external vendor over
     size_charts.py          publish the charts to Shopify as metafields
     admin_customers.py, admin_orders.py, admin_products.py,
     admin_collections.py, admin_inventory.py                dashboard admin
+    product_reconcile.py    the other direction, and the only one that
+                            deletes: wanas.db products whose SKUs Shopify no
+                            longer knows. Never on boot -- a script, dry-run
+                            by default, refusing an empty or mostly-empty
+                            live read, and archiving rather than deleting
+                            anything ever ordered
     product_import.py       reconcile-on-boot for products created straight
                             in Shopify Admin; skips one still wearing only
                             Shopify's own "Default Title" placeholder --
@@ -225,6 +231,10 @@ scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
                           SKU), shopify_check_live.py (read-only smoke check),
                           shopify_size_charts.py (publish the size charts to
                           Shopify as product metafields, for the storefront),
+                          shopify_reconcile_products.py (delete the wanas.db
+                          products Shopify no longer has -- archiving any
+                          that ever sold; refuses an empty or mostly-empty
+                          live read),
                           migrate_schema.py (add every column the models
                           declare and the database lacks — the general form),
                           migrate_add_shopify_order_columns.py (the earlier

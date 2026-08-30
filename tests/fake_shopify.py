@@ -512,6 +512,12 @@ class FakeShopify:
         self._guard()
         return self.variant_to_product.get(variant_id)
 
+    def all_variant_skus(self):
+        """Every SKU on the shelf, whatever its product's status -- the real
+        query reads `productVariants` for exactly that reason."""
+        self._guard()
+        return {sku for sku in self.shelf if sku}
+
     def shopify_create_product(self, *, title, description, category, options=None, vendor=None):
         """The options arrive here, with the product.
 
@@ -1182,6 +1188,7 @@ class FakeShopify:
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_media", self.shopify_attach_media)
         monkeypatch.setattr(shopify_admin_products, "shopify_attach_images", self.shopify_attach_images)
         monkeypatch.setattr(shopify_admin_products, "shopify_delete_product", self.shopify_delete_product)
+        monkeypatch.setattr(shopify_admin_products, "all_variant_skus", self.all_variant_skus)
         monkeypatch.setattr(
             shopify_admin_products, "shopify_delete_variants", self.shopify_delete_variants
         )

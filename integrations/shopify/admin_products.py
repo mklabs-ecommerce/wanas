@@ -86,6 +86,20 @@ PRODUCT_TYPES = """
 { shop { productTypes(first: 100) { edges { node } } } }
 """
 
+#: Every SKU on the store, flat and status-agnostic. `PRODUCTS_QUERY` would
+#: do it too, but it drags a full product body per page and defaults to
+#: filtering by status; what the reconcile needs is the smallest honest answer
+#: to "does Shopify still know this SKU", including on archived and draft
+#: products -- those still exist, and only a *deleted* one should count.
+ALL_VARIANT_SKUS = """
+query($cursor: String) {
+  productVariants(first: 250, after: $cursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes { sku }
+  }
+}
+"""
+
 PRODUCT_DETAIL_BY_SKU = """
 query($query: String!) {
   productVariants(first: 1, query: $query) {
@@ -322,6 +336,31 @@ def list_products(*, query: str | None = None, cursor: str | None = None) -> dic
         "has_next_page": bool(page.get("hasNextPage")),
         "end_cursor": page.get("endCursor"),
     }
+
+
+def all_variant_skus() -> set[str]:
+    """Every non-blank SKU the store currently holds, across every status.
+
+    Raises rather than returning a short list if a page fails -- a partial
+    answer here reads as "these products are gone", which is the one mistake
+    the reconcile must never make.
+    """
+    client = get_admin_client()
+    skus: set[str] = set()
+    cursor = None
+    while True:
+        data = client(ALL_VARIANT_SKUS, {"cursor": cursor})
+        block = data.get("productVariants") or {}
+        for node in block.get("nodes") or []:
+            sku = (node.get("sku") or "").strip()
+            if sku:
+                skus.add(sku)
+        page = block.get("pageInfo") or {}
+        if not page.get("hasNextPage"):
+            return skus
+        cursor = page.get("endCursor")
+        if cursor is None:
+            return skus
 
 
 def _opt(variant: dict, name: str) -> str | None:
@@ -1123,7 +1162,7 @@ class ProductInUse(RuntimeError):
     """Something has been sold from this, so its rows have to stay."""
 
 
-def _sold_variant_ids(session: Session, variant_ids: list[str]) -> set[str]:
+def sold_variant_ids(session: Session, variant_ids: list[str]) -> set[str]:
     if not variant_ids:
         return set()
     rows = session.scalars(
@@ -1168,7 +1207,7 @@ def delete_product(session: Session, product_id: str) -> dict:
         return {"error": "product_not_found"}
 
     variant_ids = [v.variant_id for v in product.variants]
-    sold = _sold_variant_ids(session, variant_ids)
+    sold = sold_variant_ids(session, variant_ids)
     if sold:
         raise ProductInUse(
             f"{len(sold)} of its sizes have been ordered before; archive it instead"
@@ -1200,7 +1239,7 @@ def delete_variant(session: Session, variant_id: str) -> dict:
     product = session.get(Product, variant.product_id)
     if product is not None and len(product.variants) <= 1:
         raise ProductInUse("this is the product's only size; delete the product instead")
-    if _sold_variant_ids(session, [variant_id]):
+    if sold_variant_ids(session, [variant_id]):
         raise ProductInUse("this size has been ordered before; archive the product instead")
 
     product_gid = product_gid_for_variant_id(variant_id)

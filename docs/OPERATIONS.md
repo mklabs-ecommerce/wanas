@@ -378,7 +378,17 @@ All of them are dry-run by default, idempotent, and need `--apply`:
 python scripts/shopify_check_live.py    # read-only: do the two sides agree?
 python scripts/shopify_set_skus.py      # link local variant_id -> Shopify SKU
 python scripts/shopify_sync.py          # reconcile the catalog
+python scripts/shopify_reconcile_products.py   # drop wanas.db products Shopify no longer has
 ```
+
+`shopify_reconcile_products.py` is the one that deletes, so read its dry-run
+report before `--apply`. A product that has ever been ordered is **archived**
+rather than deleted -- the order lines are the record that money changed
+hands, and they still read. It refuses to run at all if Shopify returns no
+SKUs (an outage, or a token pointed at the wrong store), and refuses if more
+than half the catalog looks gone; `--force` lifts only the second of those,
+and you should check `SHOPIFY_STORE_DOMAIN` and the token before reaching for
+it.
 
 ## Product photos
 

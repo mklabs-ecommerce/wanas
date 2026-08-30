@@ -2,6 +2,28 @@
 
 ## Unreleased — Adding a product, with the pictures on it
 
+- **A product deleted in Shopify Admin can now be cleaned out of wanas.db.**
+  `product_import` is additive by contract, so nothing closed the other
+  direction: a local product whose SKUs Shopify no longer knows gets no live
+  price or stock, falls back to the seeded columns, and is still offered to
+  customers. New `integrations/shopify/product_reconcile.py` +
+  `scripts/shopify_reconcile_products.py`, dry-run by default. Because it is
+  the one reconcile that can destroy the catalog, every judgement is made the
+  cautious way:
+  - `all_variant_skus()` reads `productVariants` across *every* status --
+    archived and draft products still exist, and only a deleted one counts --
+    and raises on a failed page rather than returning what it managed.
+  - an empty live read is refused outright, and `--force` does not lift that;
+  - more than half the catalog looking gone is refused too, and *that* is what
+    `--force` is for. A shop does not lose most of its products between two
+    runs; a token pointed at the wrong store looks exactly like one that did.
+  - one surviving SKU keeps the whole product (partial variant drift is
+    `shopify_set_skus.py`'s problem);
+  - anything ever ordered is **archived, never deleted** -- the order lines
+    still read;
+  - it is a script, not a boot step. `product_import` runs on boot because
+    the worst it can do is add a row.
+
 - **A create that fails no longer leaves wreckage on both sides.**
   `productCreate` runs first, so every step after it -- variants, photos,
   inventory -- was happening against a product that already existed. When one
