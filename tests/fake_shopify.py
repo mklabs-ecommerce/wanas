@@ -471,6 +471,7 @@ class FakeShopify:
             return None
         out = self._product_summary_fake(p)
         out["description_html"] = p["description_html"]
+        out["collections"] = self.product_collections(shopify_gid)
         skus = [sku for sku, gid in self.variant_to_product.items() if gid == shopify_gid]
         out["variants"] = [
             {
@@ -653,7 +654,21 @@ class FakeShopify:
     def shopify_add_to_collection(self, collection_gid, product_gid):
         self._guard()
         self.collection_members.setdefault(collection_gid, []).append(product_gid)
+        # A seeded collection is the same collection this writes into: two
+        # stores for one fact is how a fake drifts from the shop it stands in
+        # for.
+        collection = self.collections.get(collection_gid)
+        if collection is not None and product_gid not in collection["product_ids"]:
+            collection["product_ids"].append(product_gid)
         return None
+
+    def product_collections(self, product_gid):
+        self._guard()
+        return [
+            {"id": gid, "title": c["title"], "smart": c["smart"]}
+            for gid, c in self.collections.items()
+            if product_gid in c["product_ids"]
+        ]
 
     def set_product_chart_image(self, product_gid, file_gid):
         self._guard()
@@ -1215,6 +1230,9 @@ class FakeShopify:
         )
         monkeypatch.setattr(
             shopify_admin_products, "shopify_add_to_collection", self.shopify_add_to_collection
+        )
+        monkeypatch.setattr(
+            shopify_admin_products, "product_collections", self.product_collections
         )
         monkeypatch.setattr(
             shopify_admin_products, "shopify_assign_variant_media", self.shopify_assign_variant_media

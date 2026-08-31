@@ -403,11 +403,12 @@ def list_size_charts(wanas_staff: str | None = Cookie(default=None)) -> JSONResp
 def list_product_types(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """The `productType` values the shop already uses.
 
-    Not cosmetic: every one of this shop's category collections is a *smart*
-    collection whose only rule is `TYPE EQUALS "<something>"`. A product typed
-    "Tshirt" instead of "T-Shirts" lands in no collection at all and is
-    invisible everywhere the site groups by category -- so the field offers
-    what exists and lets a genuinely new type be typed anyway.
+    Offered as a list rather than a free-text box because a type is a
+    grouping, and one product typed "Tshirt" among seventeen "T-Shirts" is a
+    group of one. It also still matters to any collection left as a *smart*
+    one, whose rule on this shop is `TYPE EQUALS "<something>"` -- a
+    mistyped product lands in no such collection at all. A genuinely new type
+    can still be typed.
     """
     with session_scope() as db:
         _, refused = require_permission(db, wanas_staff, "products")
@@ -607,7 +608,7 @@ def create_product(payload: dict = Body(...), wanas_staff: str | None = Cookie(d
                 images=payload.get("images") or None,
                 size_chart_file_gid=payload.get("size_chart_file_gid") or None,
                 size_chart_url=payload.get("size_chart_url") or None,
-                collection_gid=payload.get("collection_gid") or None,
+                collection_gids=payload.get("collection_gids"),
             )
         except shopify_admin_products.ProductRejected as exc:
             return JSONResponse({"error": "product_rejected", "detail": str(exc)}, status_code=409)
@@ -634,7 +635,7 @@ def update_product(
                 department=payload.get("department"),
                 style=payload.get("style"),
                 collection=payload.get("collection"),
-                collection_gid=payload.get("collection_gid") or None,
+                collection_gids=payload.get("collection_gids"),
                 size_chart=payload.get("size_chart"),
                 variant_updates=payload.get("variant_updates"),
                 variant_images=payload.get("variant_images"),

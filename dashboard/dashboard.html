@@ -1194,7 +1194,9 @@ const EN = {
   "التشغيل اليومي": "Day to day",
   "التصنيف": "Category",
   "التصنيف *": "Category *",
-  "التصنيف هو اللي بيحط المنتج في مجموعته على الموقع، فاختاره من القايمة.": "The category is what puts the product in its collection on the site, so pick one from the list.",
+  "اختار كل المجموعات اللي المنتج هيظهر فيها على الموقع.": "Tick every collection the product should appear in on the site.",
+  "اللي متعلّم هنا هو بالظبط اللي المنتج هيبقى فيه على الموقع.": "What is ticked here is exactly what the product will be in on the site.",
+  "التصنيف للبوت، والمجموعات فوق هي اللي بتحط المنتج على الموقع.": "The category is what puts the product in its collection on the site, so pick one from the list.",
   "التعديل مانفذش": "The edit did not go through",
   "التعليق": "Comment",
   "التعليقات": "Comments",
@@ -1272,7 +1274,6 @@ const EN = {
   "المتجر كله": "Whole store",
   "المتصفح رافض الوصول للحافظة": "The browser refused clipboard access",
   "المجموعات": "Collections",
-  "المجموعات بتتعمل من شاشة المجموعات.": "Collections are created on the Collections screen.",
   "المجموعات بتخلي عرض المنتجات أسهل على العميل": "Collections make products easier to browse",
   "المجموعات مش متاحة دلوقتي": "Collections are unavailable right now",
   "المجموعة": "Collection",
@@ -1626,7 +1627,6 @@ const EN = {
   "من الموقع": "From the website",
   "من شوبيفاي، البوت والموقع مع بعض": "From Shopify — bot and website together",
   "من غير جدول": "No chart",
-  "من غير مجموعة": "No collection",
   "من غير محافظة": "No governorate",
   "من مقاس": "From size",
   "منتج": "product",
@@ -3712,10 +3712,9 @@ async function openProduct(gid) {
           <datalist id="pCatList"></datalist></div>
         <div><label class="lbl" for="pDept">القسم</label>
           <input class="inp" id="pDept" value="${esc(local ? local.department || "" : "")}" ${local ? "" : "disabled"}></div>
-        <div><label class="lbl" for="pColl">المجموعة</label>
-          <select class="inp" id="pColl" ${local ? "" : "disabled"}>
-            <option value="${esc(local ? local.collection || "" : "")}">${esc(local && local.collection ? local.collection : tr("من غير مجموعة"))}</option>
-          </select></div>
+        <div><label class="lbl">المجموعات</label>
+          <div class="inp" id="pColl" style="max-height:132px;overflow:auto">جاري التحميل</div>
+          <div class="hint" style="margin-top:var(--s-1)">اللي متعلّم هنا هو بالظبط اللي المنتج هيبقى فيه على الموقع.</div></div>
         <div><label class="lbl" for="pStyle">الستايل (مفصول بفاصلة)</label>
           <input class="inp" id="pStyle" value="${esc(local && local.style ? local.style.join(tr("، ")) : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pChart">جدول مقاسات منشور</label>
@@ -3735,12 +3734,11 @@ async function openProduct(gid) {
       + TR`<div class="hint" style="padding:var(--s-3)">الصورة بتتحط على كل مقاسات اللون ده، مش السطر لوحده.</div>`,
       "", { flush: true })}`;
 
-  /* The same picker the create form offers, and for the same reason: a typed
-     collection name is a merchandising label that matches nothing. The
-     product's current value leads the list even if Shopify no longer has a
-     collection by that name -- an edit should not silently drop a field
-     nobody touched. */
-  if (local) fillCollectionPicker($("#pColl", body), local.collection || "");
+  /* Pre-ticked from Shopify, not from the local label: Shopify is where a
+     product's collections actually live, and the label is one name of what
+     can be several. */
+  if (local) fillCollectionPicker($("#pColl", body), (product.collections || []).map((c) => c.id));
+  else $("#pColl", body).innerHTML = "";
   fillProductTypes("pCatList");
   if (local) fillChartPicker($("#pChart", body), local.size_chart || "");
 
@@ -3791,15 +3789,17 @@ async function openProduct(gid) {
         chartImage = { file_gid: uploaded.file_gid, url: uploaded.url };
       }
 
+      const picked = pickedCollections($("#pColl"));
       const payload = {
         title: $("#pTitle").value.trim(),
         category: $("#pCat").value.trim(),
         department: $("#pDept").value.trim() || undefined,
-        collection: $("#pColl").value || undefined,
-        /* The label alone only moves the product for the bot; the gid is what
-           moves it on the website. Same rule as the create form -- undefined
-           for a smart collection, whose members are its rules' business. */
-        collection_gid: joinableCollection($("#pColl")),
+        /* The label is what the bot browses by, the gids are what the
+           website browses by, and both follow the ticks -- nothing else
+           decides a product's collections any more. "" clears the label
+           rather than leaving yesterday's. */
+        collection: local ? picked.title : undefined,
+        collection_gids: local ? picked.gids : undefined,
         variant_images: variantImages.length ? variantImages : undefined,
         size_chart: $("#pChart").value.trim() || undefined,
         style: $("#pStyle").value.trim()
@@ -3899,32 +3899,41 @@ function readAsBase64(file) {
   });
 }
 
-/* The collection picker, shared by the create form and the edit drawer.
-   `current` leads the list and stays selected even when Shopify no longer
-   has a collection by that name: an edit must not silently drop a field
-   nobody touched. */
-async function fillCollectionPicker(select, current = "") {
-  if (!select) return;
+/* The collections picker, shared by the create form and the edit drawer.
+
+   Checkboxes rather than a dropdown, and the only thing that decides where a
+   product sits on the website: what is ticked here is exactly what Shopify
+   has afterwards. A product belongs in as many collections as the shop puts
+   it in -- a t-shirt is in T-Shirts *and* in Summer 2026 -- so one name was
+   never enough.
+
+   A collection whose members are decided by a rule is shown ticked-or-not and
+   disabled: Shopify owns that answer and refuses a hand-added member, so
+   offering the tick would be offering a click that does nothing. */
+async function fillCollectionPicker(host, current = []) {
+  if (!host) return;
   const data = await api("/dashboard/api/shopify/collections", { quiet: true }).catch(() => ({ __error: 1 }));
   if (data.__error || !data.collections) {
-    select.innerHTML = TR`<option value="">المجموعات مش متاحة دلوقتي</option>`;
-    if (current) select.insertAdjacentHTML("afterbegin", `<option value="${esc(current)}" selected>${esc(current)}</option>`);
+    host.innerHTML = TR`<div class="hint">المجموعات مش متاحة دلوقتي</div>`;
     return;
   }
-  const rows = data.collections.map((c) => ({ title: c.title, gid: c.id, smart: !!c.smart }));
-  if (current && !rows.some((r) => r.title === current)) rows.unshift({ title: current, gid: "", smart: false });
-  select.innerHTML = TR`<option value="">من غير مجموعة</option>` +
-    rows.map((r) => `<option value="${esc(r.title)}" data-gid="${esc(r.gid)}" data-smart="${r.smart ? "1" : ""}"${
-      r.title === current ? " selected" : ""}>${esc(r.title)}${r.smart ? " (" + esc(tr("تلقائية")) + ")" : ""}</option>`).join("");
+  const ticked = new Set(current);
+  const rows = data.collections.slice().sort((a, b) => a.title.localeCompare(b.title, "ar"));
+  host.innerHTML = rows.map((c) => `
+      <label class="row" style="gap:var(--s-2);padding:3px 0;cursor:${c.smart ? "not-allowed" : "pointer"}">
+        <input type="checkbox" value="${esc(c.id)}" data-title="${esc(c.title)}"${
+          ticked.has(c.id) ? " checked" : ""}${c.smart ? " disabled" : ""}>
+        <span${c.smart ? ' style="opacity:.6"' : ""}>${esc(c.title)}${
+          c.smart ? " (" + esc(tr("تلقائية")) + ")" : ""}</span>
+      </label>`).join("") || TR`<div class="hint">مفيش مجموعات</div>`;
 }
 
-/* The gid to actually put the product in, or "" for a smart collection --
-   whose membership is its rules' business, and whose rule on this shop is the
-   product's category. Sending one anyway just earns a refusal from Shopify. */
-function joinableCollection(select) {
-  const option = select && select.selectedOptions[0];
-  if (!option || option.dataset.smart) return undefined;
-  return option.dataset.gid || undefined;
+/* What the picker says, in the two shapes a save needs: every ticked gid --
+   which Shopify is made to match exactly -- and the first ticked title, which
+   is the single label wanas.db keeps and the bot browses by. */
+function pickedCollections(host) {
+  const boxes = host ? [...host.querySelectorAll("input[type=checkbox]")].filter((b) => b.checked) : [];
+  return { gids: boxes.map((b) => b.value), title: boxes.length ? boxes[0].dataset.title : "" };
 }
 
 /* Every category collection on this shop is a smart collection whose only
@@ -4148,12 +4157,12 @@ function productCreateForm() {
       <div><label class="lbl" for="nCat">التصنيف *</label>
         <input class="inp" id="nCat" list="nCatList" placeholder="T-Shirts">
         <datalist id="nCatList"></datalist>
-        <div class="hint" style="margin-top:var(--s-1)">التصنيف هو اللي بيحط المنتج في مجموعته على الموقع، فاختاره من القايمة.</div></div>
+        <div class="hint" style="margin-top:var(--s-1)">التصنيف للبوت، والمجموعات فوق هي اللي بتحط المنتج على الموقع.</div></div>
       <div><label class="lbl" for="nDept">القسم *</label><input class="inp" id="nDept" placeholder="رجالي"></div>
       <div>
-        <label class="lbl" for="nColl">المجموعة</label>
-        <select class="inp" id="nColl"><option value="">جاري التحميل</option></select>
-        <div class="hint" style="margin-top:var(--s-1)">المجموعات بتتعمل من شاشة المجموعات.
+        <label class="lbl">المجموعات</label>
+        <div class="inp" id="nColl" style="max-height:132px;overflow:auto">جاري التحميل</div>
+        <div class="hint" style="margin-top:var(--s-1)">اختار كل المجموعات اللي المنتج هيظهر فيها على الموقع.
           <button class="btn sm ghost" type="button" id="nCollNew">مجموعة جديدة</button></div>
       </div>
       <div>
@@ -4182,7 +4191,7 @@ function productCreateForm() {
   /* Both pickers are filled from what exists rather than typed: a collection
      Shopify does not have and a chart id `size_charts.json` does not have are
      the same bug -- a value that looks saved and answers nothing. */
-  fillCollectionPicker($("#nColl", body));
+  fillCollectionPicker($("#nColl", body), []);
   fillProductTypes("nCatList");
 
   /* The picture is read the moment it is chosen, not at save time: the staff
@@ -4244,11 +4253,12 @@ function productCreateForm() {
       price: Number(v.price), stock_qty: Number(v.stock_qty || 0),
     }));
 
+    const newPicked = pickedCollections($("#nColl"));
     const payload = {
       title: $("#nTitle").value.trim(), category: $("#nCat").value.trim(),
       department: $("#nDept").value.trim(), description: $("#nDesc").value.trim(),
-      collection: $("#nColl").value || undefined,
-      collection_gid: joinableCollection($("#nColl")),
+      collection: newPicked.title || undefined,
+      collection_gids: newPicked.gids,
       size_chart: $("#nChart").value || undefined,
       variants,
     };

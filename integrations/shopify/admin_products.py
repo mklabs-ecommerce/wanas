@@ -201,6 +201,19 @@ mutation($id: ID!, $productIds: [ID!]!) {
 }
 """
 
+#: Which collections Shopify currently has a product in. Asked per product
+#: rather than folded into `PRODUCTS_QUERY`, which the list view runs 25
+#: products at a time and does not need this at all.
+PRODUCT_COLLECTIONS = """
+query($id: ID!) {
+  product(id: $id) {
+    collections(first: 50) {
+      nodes { id title ruleSet { appliedDisjunctively } }
+    }
+  }
+}
+"""
+
 PRODUCT_UPDATE = """
 mutation($input: ProductInput!) {
   productUpdate(input: $input) { userErrors { field message } }
@@ -393,6 +406,9 @@ def get_product(shopify_gid: str) -> dict | None:
 
     out = _product_summary(node)
     out["description_html"] = node.get("descriptionHtml")
+    #: What the collection picker pre-ticks. Shopify is the only record of
+    #: this -- wanas.db keeps one label, and a product can be in several.
+    out["collections"] = product_collections(shopify_gid)
     out["variants"] = [
         {
             "id": v["id"],
@@ -755,51 +771,60 @@ def shopify_add_to_collection(collection_gid: str, product_gid: str) -> str | No
     return "; ".join(e.get("message", "") for e in errors) or None
 
 
-def _manual_collection_gid(title: str) -> str | None:
-    """The gid of the manual collection called `title`, or None.
+def product_collections(product_gid: str) -> list[dict]:
+    """The collections Shopify currently has this product in.
 
-    Resolved by title because that is all wanas.db keeps: `Product.collection`
-    is a merchandising label, not a foreign key (see this module's docstring
-    and `admin_collections.py`'s). A smart collection answers None on purpose
-    -- its membership is its rules' business, and asking Shopify to take a
-    product out of one by hand earns a refusal.
+    `smart` marks the ones whose membership is a rule's answer rather than a
+    decision anyone made: those are read here so they can be *left alone*, not
+    so they can be edited.
     """
-    wanted = " ".join(title.split()).casefold()
-    if not wanted:
-        return None
-    listing = admin_collections.list_collections(query=title)
-    for row in listing.get("collections") or []:
-        if " ".join((row.get("title") or "").split()).casefold() == wanted and not row.get("smart"):
-            return row.get("id")
-    return None
+    client = get_admin_client()
+    node = (client(PRODUCT_COLLECTIONS, {"id": product_gid}) or {}).get("product") or {}
+    return [
+        {"id": c["id"], "title": c.get("title") or "", "smart": bool(c.get("ruleSet"))}
+        for c in ((node.get("collections") or {}).get("nodes") or [])
+    ]
 
 
-def shopify_move_collection(
-    product_gid: str, *, previous_title: str | None, collection_gid: str | None
-) -> list[str]:
-    """Make Shopify's membership follow the label the dashboard just changed.
-    Returns warnings, never raises -- same rule as the create path: a product
-    whose fields are right but whose collection did not move is a much better
-    outcome than a refused edit.
+def shopify_set_collections(product_gid: str, wanted_gids: list[str]) -> list[str]:
+    """Make Shopify's membership exactly `wanted_gids`. Returns warnings and
+    never raises -- same rule as the create path: a product whose fields are
+    right but whose collections did not move is a far better outcome than a
+    refused edit.
 
-    Editing used to write the local label and stop there, so a staff member
-    who moved a product to a new collection saw nothing happen: the storefront
-    still had it in the old one, or in none at all. The label alone is only
-    half the change -- it is what the *bot* browses by, and the collection
-    object is what the *website* browses by.
+    The picker is the only thing that decides where a product sits, so this
+    closes the difference in *both* directions: a collection ticked is joined,
+    one un-ticked is left. It reads the current membership rather than
+    inferring it from the old local label, because the label is one name and a
+    product can be in several collections.
+
+    A smart collection is never removed from: its membership is its rules'
+    business and Shopify would re-apply it anyway. Ticking one is refused by
+    Shopify and comes back as a warning -- the picker disables them for
+    exactly that reason.
     """
-    warnings: list[str] = []
     failures = (ShopifyUnavailable, ShopifyConfigError, admin_collections.CollectionRejected)
-    if previous_title:
+    try:
+        current = product_collections(product_gid)
+    except (ShopifyUnavailable, ShopifyConfigError) as exc:
+        return [f"could not read the product's collections: {exc}"]
+
+    warnings: list[str] = []
+    wanted = set(wanted_gids)
+    for row in current:
+        if row["id"] in wanted or row["smart"]:
+            continue
         try:
-            previous_gid = _manual_collection_gid(previous_title)
-            if previous_gid and previous_gid != collection_gid:
-                admin_collections.remove_products(previous_gid, [product_gid])
+            admin_collections.remove_products(row["id"], [product_gid])
         except failures as exc:
-            warnings.append(f"could not take it out of {previous_title!r}: {exc}")
-    if collection_gid:
+            warnings.append(f"could not take it out of {row['title'] or row['id']!r}: {exc}")
+
+    held = {row["id"] for row in current}
+    for gid in wanted_gids:
+        if gid in held:
+            continue
         try:
-            admin_collections.add_products(collection_gid, [product_gid])
+            admin_collections.add_products(gid, [product_gid])
         except failures as exc:
             warnings.append(f"could not add it to the collection: {exc}")
     return warnings
@@ -858,7 +883,7 @@ def create_product(
     images: list[dict] | None = None,
     size_chart_file_gid: str | None = None,
     size_chart_url: str | None = None,
-    collection_gid: str | None = None,
+    collection_gids: list[str] | None = None,
 ) -> dict:
     """Create on Shopify, then mirror into wanas.db.
 
@@ -879,9 +904,10 @@ def create_product(
     file's url, stored locally so the bot can send it without asking Shopify.
 
     `collection` is the merchandising label the bot's search reads;
-    `collection_gid` additionally puts the product *in* that Shopify
-    collection, and should only be passed for a manual one -- a smart
-    collection's membership follows from `category`, which is its rule.
+    `collection_gids` additionally puts the product *in* those Shopify
+    collections, which is what the website browses by. Manual collections
+    only -- a smart one's membership follows its own rule, and Shopify
+    refuses a hand-added member.
 
     The returned dict carries `warnings`: things that did not work and did
     not justify failing the product, each already phrased for a staff member
@@ -924,7 +950,7 @@ def create_product(
             images=images,
             size_chart_file_gid=size_chart_file_gid,
             size_chart_url=size_chart_url,
-            collection_gid=collection_gid,
+            collection_gids=collection_gids,
         )
 
 
@@ -963,7 +989,7 @@ def _finish_create(
     images: list[dict] | None,
     size_chart_file_gid: str | None,
     size_chart_url: str | None,
-    collection_gid: str | None,
+    collection_gids: list[str] | None,
 ) -> dict:
     """Everything `create_product` does once the Shopify product exists.
 
@@ -1026,8 +1052,8 @@ def _finish_create(
     problem = shopify_publish_to_online_store(product_gid)
     if problem:
         warnings.append(problem)
-    if collection_gid:
-        problem = shopify_add_to_collection(collection_gid, product_gid)
+    for gid in collection_gids or []:
+        problem = shopify_add_to_collection(gid, product_gid)
         if problem:
             warnings.append(f"could not add it to the collection: {problem}")
 
@@ -1479,7 +1505,7 @@ def update_product(
     department: str | None = None,
     style: list[str] | None = None,
     collection: str | None = None,
-    collection_gid: str | None = None,
+    collection_gids: list[str] | None = None,
     size_chart: str | None = None,
     variant_updates: list[dict] | None = None,
     variant_images: list[dict] | None = None,
@@ -1490,11 +1516,10 @@ def update_product(
     why adding or removing one is out of scope here.
 
     `collection` is the merchandising label the bot browses by;
-    `collection_gid` additionally *moves the product* between Shopify
-    collections, which is what the website browses by -- out of the one the
-    label used to name and into this one. Pass it only for a manual
-    collection, for the same reason `create_product` does: a smart
-    collection's membership follows its rules, not a call from here.
+    `collection_gids` is the whole truth about where the product sits on the
+    website -- exactly those collections afterwards, the un-ticked ones let
+    go of. Passing `None` leaves membership alone; passing `[]` empties it.
+    Manual collections only, for the same reason `create_product` says.
 
     `variant_images` is `[{"variant_id", "source"}]`, a new picture for the
     row a staff member picked it on. It lands on **every variant of that
@@ -1509,9 +1534,6 @@ def update_product(
 
     any_variant_id = next((v.variant_id for v in product.variants), None)
     product_gid = product_gid_for_variant_id(any_variant_id) if any_variant_id else None
-    #: Read before the wanas.db block below overwrites it: the old label is
-    #: the only handle we have on the collection the product is leaving.
-    previous_collection = product.collection
     warnings: list[str] = []
 
     if product_gid and (title is not None or description is not None or category is not None):
@@ -1557,12 +1579,11 @@ def update_product(
         _replace_variant_images(session, product, product_gid, variant_images)
 
     #: Last of the Shopify writes, and never fatal -- see
-    #: `shopify_move_collection`. Only when the label actually changed: a save
-    #: that touched the price should not shuffle collections.
-    if product_gid and collection is not None and collection != (previous_collection or ""):
-        warnings += shopify_move_collection(
-            product_gid, previous_title=previous_collection, collection_gid=collection_gid
-        )
+    #: `shopify_set_collections`. `None` means the caller said nothing about
+    #: collections, which is not the same as saying "none": a save that only
+    #: touched the price must not empty them.
+    if product_gid and collection_gids is not None:
+        warnings += shopify_set_collections(product_gid, collection_gids)
 
     # wanas.db side: always applied, whether or not Shopify was reachable for
     # the fields above -- `category`/`department`/`style`/`collection`/

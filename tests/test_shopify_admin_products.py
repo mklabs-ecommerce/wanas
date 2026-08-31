@@ -546,11 +546,15 @@ def test_the_brand_is_the_shops_not_shopifys_default(seeded, shopify):
     assert shopify.products[result["shopify_id"]]["vendor"] == settings.shopify_vendor
 
 
-def test_a_manual_collection_is_joined_when_one_is_chosen(seeded, shopify):
+def test_every_collection_ticked_is_joined(seeded, shopify):
+    """The picker decides where a new product sits, and a product sits in as
+    many collections as the shop puts it in -- one label was never enough."""
     result = _create(seeded, title="Joined Tee", collection="Winter Collection",
-                     collection_gid="gid://shopify/Collection/1")
+                     collection_gids=["gid://shopify/Collection/1",
+                                      "gid://shopify/Collection/2"])
 
     assert shopify.collection_members["gid://shopify/Collection/1"] == [result["shopify_id"]]
+    assert shopify.collection_members["gid://shopify/Collection/2"] == [result["shopify_id"]]
     assert seeded.get(Product, result["product_id"]).collection == "Winter Collection"
 
 
