@@ -1194,9 +1194,9 @@ const EN = {
   "التشغيل اليومي": "Day to day",
   "التصنيف": "Category",
   "التصنيف *": "Category *",
-  "اختار كل المجموعات اللي المنتج هيظهر فيها على الموقع.": "Tick every collection the product should appear in on the site.",
-  "اللي متعلّم هنا هو بالظبط اللي المنتج هيبقى فيه على الموقع.": "What is ticked here is exactly what the product will be in on the site.",
-  "التصنيف للبوت، والمجموعات فوق هي اللي بتحط المنتج على الموقع.": "The category is what puts the product in its collection on the site, so pick one from the list.",
+  "اختار كل المجموعات اللي المنتج هيظهر فيها على الموقع، والمجموعة التلقائية واحدة بس في المرة.": "Tick every collection the product should appear in on the site; only one automatic collection at a time.",
+  "اللي متعلّم هنا هو بالظبط اللي المنتج هيبقى فيه على الموقع، والمجموعة التلقائية واحدة بس في المرة.": "What is ticked here is exactly what the product will be in on the site, and only one automatic collection at a time.",
+  "المجموعات التلقائية بتتحدد بالتصنيف ده، علّم عليها فوق وهو هيتملي لوحده.": "The automatic collections are decided by this category; tick one above and it fills itself in.",
   "التعديل مانفذش": "The edit did not go through",
   "التعليق": "Comment",
   "التعليقات": "Comments",
@@ -3714,7 +3714,7 @@ async function openProduct(gid) {
           <input class="inp" id="pDept" value="${esc(local ? local.department || "" : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl">المجموعات</label>
           <div class="inp" id="pColl" style="max-height:132px;overflow:auto">جاري التحميل</div>
-          <div class="hint" style="margin-top:var(--s-1)">اللي متعلّم هنا هو بالظبط اللي المنتج هيبقى فيه على الموقع.</div></div>
+          <div class="hint" style="margin-top:var(--s-1)">اللي متعلّم هنا هو بالظبط اللي المنتج هيبقى فيه على الموقع، والمجموعة التلقائية واحدة بس في المرة.</div></div>
         <div><label class="lbl" for="pStyle">الستايل (مفصول بفاصلة)</label>
           <input class="inp" id="pStyle" value="${esc(local && local.style ? local.style.join(tr("، ")) : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pChart">جدول مقاسات منشور</label>
@@ -3737,7 +3737,7 @@ async function openProduct(gid) {
   /* Pre-ticked from Shopify, not from the local label: Shopify is where a
      product's collections actually live, and the label is one name of what
      can be several. */
-  if (local) fillCollectionPicker($("#pColl", body), (product.collections || []).map((c) => c.id));
+  if (local) fillCollectionPicker($("#pColl", body), (product.collections || []).map((c) => c.id), $("#pCat", body));
   else $("#pColl", body).innerHTML = "";
   fillProductTypes("pCatList");
   if (local) fillChartPicker($("#pChart", body), local.size_chart || "");
@@ -3792,7 +3792,9 @@ async function openProduct(gid) {
       const picked = pickedCollections($("#pColl"));
       const payload = {
         title: $("#pTitle").value.trim(),
-        category: $("#pCat").value.trim(),
+        /* A ticked automatic collection *is* the category -- that rule is how
+           the product gets into it. */
+        category: picked.category || $("#pCat").value.trim(),
         department: $("#pDept").value.trim() || undefined,
         /* The label is what the bot browses by, the gids are what the
            website browses by, and both follow the ticks -- nothing else
@@ -3899,18 +3901,33 @@ function readAsBase64(file) {
   });
 }
 
-/* The collections picker, shared by the create form and the edit drawer.
+/* The collections picker, shared by the create form and the edit drawer, and
+   the only thing that decides where a product sits on the website.
 
-   Checkboxes rather than a dropdown, and the only thing that decides where a
-   product sits on the website: what is ticked here is exactly what Shopify
-   has afterwards. A product belongs in as many collections as the shop puts
-   it in -- a t-shirt is in T-Shirts *and* in Summer 2026 -- so one name was
-   never enough.
+   Two kinds of collection sit in this one list, because the staff member
+   should not have to know which is which:
 
-   A collection whose members are decided by a rule is shown ticked-or-not and
-   disabled: Shopify owns that answer and refuses a hand-added member, so
-   offering the tick would be offering a click that does nothing. */
-async function fillCollectionPicker(host, current = []) {
+   - a manual one is a list of products, so a tick joins it and an untick
+     leaves it;
+   - a rule-driven one ("automatic") cannot be joined by hand at all --
+     Shopify refuses the member and re-applies its rule regardless. Every one
+     of this shop's category collections is that kind, with a single rule:
+     TYPE EQUALS "<the collection's own name>". So a tick there writes the
+     *product's type*, and Shopify files it within seconds. Same tick, same
+     result, one mechanism further down.
+
+   That second kind is therefore single-choice: a product has one type, so
+   ticking T-Shirts unticks Hoodies. A rule-driven collection this cannot
+   express -- more than one rule, or a rule on anything but TYPE -- stays
+   disabled rather than pretending. */
+function ruleType(collection) {
+  const rules = collection.rules || [];
+  if (!collection.smart || rules.length !== 1) return "";
+  const rule = rules[0];
+  return rule.column === "TYPE" && rule.relation === "EQUALS" ? (rule.condition || "") : "";
+}
+
+async function fillCollectionPicker(host, current = [], categoryInput = null) {
   if (!host) return;
   const data = await api("/dashboard/api/shopify/collections", { quiet: true }).catch(() => ({ __error: 1 }));
   if (data.__error || !data.collections) {
@@ -3919,21 +3936,64 @@ async function fillCollectionPicker(host, current = []) {
   }
   const ticked = new Set(current);
   const rows = data.collections.slice().sort((a, b) => a.title.localeCompare(b.title, "ar"));
-  host.innerHTML = rows.map((c) => `
-      <label class="row" style="gap:var(--s-2);padding:3px 0;cursor:${c.smart ? "not-allowed" : "pointer"}">
+  host.innerHTML = rows.map((c) => {
+    const type = ruleType(c);
+    const locked = c.smart && !type;
+    return `
+      <label class="row" style="gap:var(--s-2);padding:3px 0;cursor:${locked ? "not-allowed" : "pointer"}">
         <input type="checkbox" value="${esc(c.id)}" data-title="${esc(c.title)}"${
-          ticked.has(c.id) ? " checked" : ""}${c.smart ? " disabled" : ""}>
-        <span${c.smart ? ' style="opacity:.6"' : ""}>${esc(c.title)}${
+          type ? ` data-type="${esc(type)}"` : ""}${ticked.has(c.id) ? " checked" : ""}${
+          locked ? " disabled" : ""}>
+        <span${locked ? ' style="opacity:.6"' : ""}>${esc(c.title)}${
           c.smart ? " (" + esc(tr("تلقائية")) + ")" : ""}</span>
-      </label>`).join("") || TR`<div class="hint">مفيش مجموعات</div>`;
+      </label>`;
+  }).join("") || TR`<div class="hint">مفيش مجموعات</div>`;
+
+  /* The category is the rule those collections run on, so the picker owns it
+     while one of them is ticked -- two controls for one fact is how a product
+     ends up typed "T-shirt" and in no collection at all, which is exactly
+     what happened. */
+  const sync = () => {
+    const chosen = [...host.querySelectorAll("input[data-type]")].find((b) => b.checked);
+    if (!categoryInput) return;
+    if (chosen) {
+      categoryInput.value = chosen.dataset.type;
+      categoryInput.readOnly = true;
+      categoryInput.style.opacity = ".7";
+    } else {
+      categoryInput.readOnly = false;
+      categoryInput.style.opacity = "";
+    }
+  };
+  host.addEventListener("change", (event) => {
+    const box = event.target;
+    if (box.checked && box.dataset.type) {
+      host.querySelectorAll("input[data-type]").forEach((other) => {
+        if (other !== box) other.checked = false;
+      });
+    }
+    sync();
+  });
+  sync();
 }
 
-/* What the picker says, in the two shapes a save needs: every ticked gid --
-   which Shopify is made to match exactly -- and the first ticked title, which
-   is the single label wanas.db keeps and the bot browses by. */
+/* What the picker says, in the three shapes a save needs: the manual gids --
+   which Shopify's membership is made to match exactly -- the first manual
+   title, which is the single label wanas.db keeps and the bot browses by, and
+   the category, which is how a rule-driven collection is joined at all.
+
+   A rule-driven collection's gid is deliberately *not* in `gids`: sending it
+   would ask Shopify to hand-add a member it always refuses, and earn a
+   warning for a tick that in fact worked. */
 function pickedCollections(host) {
   const boxes = host ? [...host.querySelectorAll("input[type=checkbox]")].filter((b) => b.checked) : [];
-  return { gids: boxes.map((b) => b.value), title: boxes.length ? boxes[0].dataset.title : "" };
+  const manual = boxes.filter((b) => !b.dataset.type);
+  const typed = boxes.find((b) => b.dataset.type);
+  return {
+    gids: manual.map((b) => b.value),
+    title: manual.length ? manual[0].dataset.title : "",
+    category: typed ? typed.dataset.type : "",
+  };
 }
 
 /* Every category collection on this shop is a smart collection whose only
@@ -4157,12 +4217,12 @@ function productCreateForm() {
       <div><label class="lbl" for="nCat">التصنيف *</label>
         <input class="inp" id="nCat" list="nCatList" placeholder="T-Shirts">
         <datalist id="nCatList"></datalist>
-        <div class="hint" style="margin-top:var(--s-1)">التصنيف للبوت، والمجموعات فوق هي اللي بتحط المنتج على الموقع.</div></div>
+        <div class="hint" style="margin-top:var(--s-1)">المجموعات التلقائية بتتحدد بالتصنيف ده، علّم عليها فوق وهو هيتملي لوحده.</div></div>
       <div><label class="lbl" for="nDept">القسم *</label><input class="inp" id="nDept" placeholder="رجالي"></div>
       <div>
         <label class="lbl">المجموعات</label>
         <div class="inp" id="nColl" style="max-height:132px;overflow:auto">جاري التحميل</div>
-        <div class="hint" style="margin-top:var(--s-1)">اختار كل المجموعات اللي المنتج هيظهر فيها على الموقع.
+        <div class="hint" style="margin-top:var(--s-1)">اختار كل المجموعات اللي المنتج هيظهر فيها على الموقع، والمجموعة التلقائية واحدة بس في المرة.
           <button class="btn sm ghost" type="button" id="nCollNew">مجموعة جديدة</button></div>
       </div>
       <div>
@@ -4191,7 +4251,7 @@ function productCreateForm() {
   /* Both pickers are filled from what exists rather than typed: a collection
      Shopify does not have and a chart id `size_charts.json` does not have are
      the same bug -- a value that looks saved and answers nothing. */
-  fillCollectionPicker($("#nColl", body), []);
+  fillCollectionPicker($("#nColl", body), [], $("#nCat", body));
   fillProductTypes("nCatList");
 
   /* The picture is read the moment it is chosen, not at save time: the staff
@@ -4255,7 +4315,8 @@ function productCreateForm() {
 
     const newPicked = pickedCollections($("#nColl"));
     const payload = {
-      title: $("#nTitle").value.trim(), category: $("#nCat").value.trim(),
+      title: $("#nTitle").value.trim(),
+      category: newPicked.category || $("#nCat").value.trim(),
       department: $("#nDept").value.trim(), description: $("#nDesc").value.trim(),
       collection: newPicked.title || undefined,
       collection_gids: newPicked.gids,
