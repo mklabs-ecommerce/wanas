@@ -3796,6 +3796,10 @@ async function openProduct(gid) {
         category: $("#pCat").value.trim(),
         department: $("#pDept").value.trim() || undefined,
         collection: $("#pColl").value || undefined,
+        /* The label alone only moves the product for the bot; the gid is what
+           moves it on the website. Same rule as the create form -- undefined
+           for a smart collection, whose members are its rules' business. */
+        collection_gid: joinableCollection($("#pColl")),
         variant_images: variantImages.length ? variantImages : undefined,
         size_chart: $("#pChart").value.trim() || undefined,
         style: $("#pStyle").value.trim()
@@ -3815,6 +3819,12 @@ async function openProduct(gid) {
           $("#pTitle").value.trim(), chartImage);
         if (saved && saved.__error) chartNote = tr("بس الجدول ماتحفظش");
         else if (saved && (saved.warnings || []).length) chartNote = saved.warnings.join(" · ");
+      }
+      /* A collection move that Shopify refused is reported, not swallowed:
+         the fields saved, but the product is not where the staff member just
+         put it. */
+      if ((result.warnings || []).length) {
+        chartNote = [chartNote, ...result.warnings].filter(Boolean).join(" · ");
       }
       save.disabled = false;
       toast(tr("المنتج اتحدّث"), chartNote || tr("التغيير راح لشوبيفاي"), chartNote ? "warn" : undefined);

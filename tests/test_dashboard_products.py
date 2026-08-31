@@ -159,6 +159,68 @@ def test_updating_a_product_changes_local_and_shopify_fields(logged_in, shopify)
     assert detail.json()["local"]["collection"] == "WINTER COLLECTION"
 
 
+def test_changing_the_collection_moves_the_product_on_shopify_too(logged_in, shopify):
+    """The label is what the bot browses by; the collection object is what the
+    website browses by. Writing only the label is why an edit that changed a
+    product's collection looked like it did nothing at all."""
+    old_gid = shopify.seed_collection("SUMMER")
+    new_gid = shopify.seed_collection("WINTER")
+    product_gid = shopify.variant_to_product[VARIANT]
+    shopify.collections[old_gid]["product_ids"].append(product_gid)
+
+    logged_in.post(
+        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        json={"collection": "SUMMER", "collection_gid": old_gid},
+    )
+    res = logged_in.post(
+        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        json={"collection": "WINTER", "collection_gid": new_gid},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["warnings"] == []
+
+    assert product_gid in shopify.collections[new_gid]["product_ids"]
+    assert product_gid not in shopify.collections[old_gid]["product_ids"]
+
+
+def test_a_smart_collection_is_left_to_its_rules(logged_in, shopify):
+    """The picker sends no gid for a smart collection, and the product's old
+    smart collection must not be edited by hand either -- Shopify would undo
+    it on the next rule evaluation."""
+    smart_gid = shopify.seed_collection("TEES", smart=True)
+    product_gid = shopify.variant_to_product[VARIANT]
+    shopify.collections[smart_gid]["product_ids"].append(product_gid)
+
+    res = logged_in.post(
+        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        json={"collection": "TEES"},
+    )
+    assert res.status_code == 200
+    res = logged_in.post(
+        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        json={"collection": "WINTER COLLECTION"},
+    )
+    assert res.status_code == 200
+    assert product_gid in shopify.collections[smart_gid]["product_ids"]
+
+
+def test_an_edit_that_leaves_the_collection_alone_moves_nothing(logged_in, shopify):
+    gid = shopify.seed_collection("SUMMER")
+    product_gid = shopify.variant_to_product[VARIANT]
+    shopify.collections[gid]["product_ids"].append(product_gid)
+    logged_in.post(
+        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        json={"collection": "SUMMER", "collection_gid": gid},
+    )
+
+    res = logged_in.post(
+        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        json={"title": "WANAS Hoodie 3.0"},
+    )
+    assert res.status_code == 200
+    assert shopify.collections[gid]["product_ids"] == [product_gid]
+
+
 def test_updating_an_unknown_product_404s(logged_in):
     res = logged_in.post("/dashboard/api/shopify/products/not-a-product/update", json={})
     assert res.status_code == 404

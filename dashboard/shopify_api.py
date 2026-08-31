@@ -634,6 +634,7 @@ def update_product(
                 department=payload.get("department"),
                 style=payload.get("style"),
                 collection=payload.get("collection"),
+                collection_gid=payload.get("collection_gid") or None,
                 size_chart=payload.get("size_chart"),
                 variant_updates=payload.get("variant_updates"),
                 variant_images=payload.get("variant_images"),

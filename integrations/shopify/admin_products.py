@@ -46,6 +46,7 @@ from domain.models import (
     Variant,
 )
 from integrations.shopify import (
+    admin_collections,
     catalog as shopify_catalog,
     inventory as shopify_inventory,
     size_charts as shopify_size_charts,
@@ -754,6 +755,56 @@ def shopify_add_to_collection(collection_gid: str, product_gid: str) -> str | No
     return "; ".join(e.get("message", "") for e in errors) or None
 
 
+def _manual_collection_gid(title: str) -> str | None:
+    """The gid of the manual collection called `title`, or None.
+
+    Resolved by title because that is all wanas.db keeps: `Product.collection`
+    is a merchandising label, not a foreign key (see this module's docstring
+    and `admin_collections.py`'s). A smart collection answers None on purpose
+    -- its membership is its rules' business, and asking Shopify to take a
+    product out of one by hand earns a refusal.
+    """
+    wanted = " ".join(title.split()).casefold()
+    if not wanted:
+        return None
+    listing = admin_collections.list_collections(query=title)
+    for row in listing.get("collections") or []:
+        if " ".join((row.get("title") or "").split()).casefold() == wanted and not row.get("smart"):
+            return row.get("id")
+    return None
+
+
+def shopify_move_collection(
+    product_gid: str, *, previous_title: str | None, collection_gid: str | None
+) -> list[str]:
+    """Make Shopify's membership follow the label the dashboard just changed.
+    Returns warnings, never raises -- same rule as the create path: a product
+    whose fields are right but whose collection did not move is a much better
+    outcome than a refused edit.
+
+    Editing used to write the local label and stop there, so a staff member
+    who moved a product to a new collection saw nothing happen: the storefront
+    still had it in the old one, or in none at all. The label alone is only
+    half the change -- it is what the *bot* browses by, and the collection
+    object is what the *website* browses by.
+    """
+    warnings: list[str] = []
+    failures = (ShopifyUnavailable, ShopifyConfigError, admin_collections.CollectionRejected)
+    if previous_title:
+        try:
+            previous_gid = _manual_collection_gid(previous_title)
+            if previous_gid and previous_gid != collection_gid:
+                admin_collections.remove_products(previous_gid, [product_gid])
+        except failures as exc:
+            warnings.append(f"could not take it out of {previous_title!r}: {exc}")
+    if collection_gid:
+        try:
+            admin_collections.add_products(collection_gid, [product_gid])
+        except failures as exc:
+            warnings.append(f"could not add it to the collection: {exc}")
+    return warnings
+
+
 def _colour_key(color: str | None) -> str:
     """One spelling of a colour name, so "Camel Brown" and "camel brown" are
     the same colourway. The same normalisation `assistant/tools/base.py` uses
@@ -1428,6 +1479,7 @@ def update_product(
     department: str | None = None,
     style: list[str] | None = None,
     collection: str | None = None,
+    collection_gid: str | None = None,
     size_chart: str | None = None,
     variant_updates: list[dict] | None = None,
     variant_images: list[dict] | None = None,
@@ -1436,6 +1488,13 @@ def update_product(
     fields. `variant_updates` is `[{"variant_id", "price"?, "original_price"?,
     "stock_qty"?}]` -- existing variants only; see the module docstring for
     why adding or removing one is out of scope here.
+
+    `collection` is the merchandising label the bot browses by;
+    `collection_gid` additionally *moves the product* between Shopify
+    collections, which is what the website browses by -- out of the one the
+    label used to name and into this one. Pass it only for a manual
+    collection, for the same reason `create_product` does: a smart
+    collection's membership follows its rules, not a call from here.
 
     `variant_images` is `[{"variant_id", "source"}]`, a new picture for the
     row a staff member picked it on. It lands on **every variant of that
@@ -1450,6 +1509,10 @@ def update_product(
 
     any_variant_id = next((v.variant_id for v in product.variants), None)
     product_gid = product_gid_for_variant_id(any_variant_id) if any_variant_id else None
+    #: Read before the wanas.db block below overwrites it: the old label is
+    #: the only handle we have on the collection the product is leaving.
+    previous_collection = product.collection
+    warnings: list[str] = []
 
     if product_gid and (title is not None or description is not None or category is not None):
         fields = {}
@@ -1493,6 +1556,14 @@ def update_product(
     if product_gid and variant_images:
         _replace_variant_images(session, product, product_gid, variant_images)
 
+    #: Last of the Shopify writes, and never fatal -- see
+    #: `shopify_move_collection`. Only when the label actually changed: a save
+    #: that touched the price should not shuffle collections.
+    if product_gid and collection is not None and collection != (previous_collection or ""):
+        warnings += shopify_move_collection(
+            product_gid, previous_title=previous_collection, collection_gid=collection_gid
+        )
+
     # wanas.db side: always applied, whether or not Shopify was reachable for
     # the fields above -- `category`/`department`/`style`/`collection`/
     # `size_chart` have no Shopify home to fail on.
@@ -1524,7 +1595,7 @@ def update_product(
             variant.stock_qty = int(vu["stock_qty"])
 
     session.flush()
-    return {"product_id": product_id, "shopify_id": product_gid}
+    return {"product_id": product_id, "shopify_id": product_gid, "warnings": warnings}
 
 
 __all__ = [
