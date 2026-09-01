@@ -366,7 +366,26 @@ def _collect_message(
 PUBLIC_ACKS = (
     "بعتلك رسالة في الدايركت 🖤",
     "جوابك في الدايركت ✨",
-    "شوف الدايركت، بعتلك كل التفاصيل 🖤",
+    "كلمني في الدايركت وأقولك كل التفاصيل 🖤",
+)
+
+#: What a `positive` comment gets said back to it. Praise used to get a *like*
+#: and nothing else, which on this integration meant nothing at all: liking a
+#: comment needs `instagram_manage_engagement` and an account connected
+#: through Facebook Business Login, and this shop authenticates with
+#: standalone Instagram Login, where the endpoint does not exist. Every like
+#: 400ed, so the whole "positive" branch was silent -- someone said something
+#: nice under a live post and the shop ignored them.
+#:
+#: So the real answer is a public one, in the same shape as every other public
+#: line here: fixed, short, rotated deterministically, never a model call. The
+#: like is still attempted underneath, because it costs one request and starts
+#: working by itself the day the account moves to Business Login.
+POSITIVE_ACKS = (
+    "منور 🖤",
+    "تسلم يا وحش 🔥",
+    "نورتنا 🖤",
+    "ده ذوقك 🔥",
 )
 
 #: Emoji ranges, variation selectors and zero-width joiners -- what gets
@@ -581,11 +600,17 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     faq_key = comment_faq.match(text) if settings.instagram_public_reply_enabled else None
 
     # 8. Per-commenter cap inside a rolling hour. One person spamming a post
-    #    must cost staff's attention once, not forty model-free sends. The two
-    #    budgets are counted apart: an FAQ answer sends no DM and costs no
-    #    model call, so it must not spend the cap that exists to stop a flood
-    #    of DMs -- but it is still visible under a post, so it has its own.
-    limit = settings.instagram_faq_rate_limit if faq_key else settings.instagram_comment_rate_limit
+    #    must cost staff's attention once, not forty model-free sends.
+    #
+    #    This is the *flood guard*, and it is deliberately not the DM budget.
+    #    It used to be: every non-FAQ comment was counted against
+    #    INSTAGRAM_COMMENT_RATE_LIMIT (3/hour) here, before anything knew
+    #    whether a DM would be sent -- so three compliments in an hour spent
+    #    the whole DM budget, and the real question that followed them was
+    #    dropped without a reply. A comment that only ever gets a public line
+    #    must not spend the cap that exists to stop a flood of *DMs*; the DM
+    #    budget is checked where the DM is actually sent, at step 11.
+    limit = settings.instagram_faq_rate_limit
     with session_scope() as db:
         # Counted in Python with normalised datetimes rather than compared in
         # SQL: SQLite stores these columns naive and PostgreSQL aware, and a
@@ -602,6 +627,15 @@ def _accept_comment(value: dict, entry_time=None) -> None:
             if row.created_at is not None
             and as_aware(row.created_at) >= cutoff
             and bool(row.faq_key) == bool(faq_key)
+        )
+        # How many DMs this person has actually been sent in the same hour --
+        # the budget step 11 spends, counted here while the rows are loaded.
+        recent_dms = sum(
+            1
+            for row in rows
+            if row.created_at is not None
+            and as_aware(row.created_at) >= cutoff
+            and row.private_replied
         )
         if recent >= limit:
             if faq_key:
@@ -676,8 +710,22 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     category = _classify(text, comment_id=comment_id, media_id=media_id, commenter=commenter)
 
     if category == "positive":
-        if client.like_comment(comment_id):
+        # A short public thank-you, and nothing else -- no DM, no model call.
+        # There is no like: Instagram cannot like a comment (see the note where
+        # `like_comment` used to live in `integrations/instagram/client.py`),
+        # so a like was silence dressed as an action. Silence was the honest
+        # version of that, but it was still silence: someone said something
+        # nice under a live post and the shop ignored them. A fixed line from
+        # POSITIVE_ACKS is the visible answer the like was always meant to be.
+        if not settings.instagram_public_reply_enabled:
+            log.info("comment %s is positive: public replies off, nothing sent", comment_id)
+            return
+        thanks = POSITIVE_ACKS[zlib.crc32(comment_id.encode("utf-8")) % len(POSITIVE_ACKS)]
+        result = client.reply_to_comment(comment_id, thanks)
+        if result.delivered:
             _mark_comment(comment_id, public_replied=True)
+        else:
+            log.error("public thank-you to comment %s failed: %s", comment_id, result.error)
         return
 
     if category == "negative":
@@ -706,6 +754,32 @@ def _accept_comment(value: dict, entry_time=None) -> None:
         )
         return
 
+    # 11. The DM budget, spent only where a DM is actually sent. Separate from
+    #     the flood guard at step 8 on purpose: a compliment or an FAQ answer
+    #     costs nobody an inbox, so neither may use up the three DMs an hour
+    #     that exist to stop one person filling a person's inbox.
+    def _dm_budget_available() -> bool:
+        if recent_dms < settings.instagram_comment_rate_limit:
+            return True
+        log.warning(
+            "not DMing comment %s: %s is over the DM rate limit (%d/hour)",
+            comment_id,
+            commenter,
+            settings.instagram_comment_rate_limit,
+        )
+        with session_scope() as db:
+            queues.enqueue(
+                db,
+                kind=QueueKind.ALERT.value,
+                reason="comment_flood",
+                summary=f"Comment flood from {commenter} on media {media_id}; "
+                "DMs are being withheld",
+                channel=CHANNEL,
+                external_id=commenter,
+                payload={"comment_id": comment_id, "media_id": media_id},
+            )
+        return False
+
     if category == "complaint":
         # A paying customer with a real problem, said in public. A hater
         # ignored is fine; this one ignored is the worst outcome available on
@@ -720,7 +794,15 @@ def _accept_comment(value: dict, entry_time=None) -> None:
             text=text,
             priority="high",
         )
-        _dm_handoff(client, comment_id, text, media_id, public_reply=COMPLAINT_ACK)
+        # A complaint still gets its public line even when the DM budget is
+        # gone -- the alert above is already raised, and staff answer it by
+        # hand. Silence on a public complaint is the worst outcome here.
+        if _dm_budget_available():
+            _dm_handoff(client, comment_id, text, media_id, public_reply=COMPLAINT_ACK)
+        elif settings.instagram_public_reply_enabled:
+            result = client.reply_to_comment(comment_id, COMPLAINT_ACK)
+            if result.delivered:
+                _mark_comment(comment_id, public_replied=True)
         return
 
     if category != "important":
@@ -730,6 +812,11 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     # The public ack -- deterministic per comment id (crc32; Python's hash()
     # is salted per process and would pick differently on a retry).
     ack = PUBLIC_ACKS[zlib.crc32(comment_id.encode("utf-8")) % len(PUBLIC_ACKS)]
+    if not _dm_budget_available():
+        # No public "check your DMs" either: the whole point of that line is
+        # the DM that follows it, and promising one that is not coming is the
+        # broken promise this channel must never make.
+        return
     _dm_handoff(client, comment_id, text, media_id, public_reply=ack)
 
 

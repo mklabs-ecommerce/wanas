@@ -480,16 +480,15 @@ class InstagramClient:
         )
         return OutboundMessage(to=f"comment:{comment_id}", text=text, delivered=ok, error=error)
 
-    def like_comment(self, comment_id: str) -> bool:
-        """Like a comment -- the whole public action a "positive" comment
-        gets. No messaging-window implications, safe to call any time."""
-        ok, error, _body = self._post_json(
-            f"{GRAPH}/{self.api_version}/{comment_id}/likes",
-            {},
-        )
-        if not ok:
-            log.warning("could not like comment %s: %s", comment_id, error)
-        return ok
+    # There is deliberately no `like_comment` here. Liking a comment is not
+    # something the Instagram Graph API can do: `POST /{ig-comment-id}/likes`
+    # is answered 400 IGApiException "does not support this operation" for
+    # every comment, including ones the same token loads fine over GET (which
+    # is how the operation was told apart from a missing object or a missing
+    # scope). `like_count` is readable and not writable. The method used to
+    # exist and was called for every `positive` comment, so the one action
+    # that category was supposed to get failed every single time -- silently
+    # to the customer, and as a recurring ERROR in the logs.
 
     def hide_comment(self, comment_id: str) -> bool:
         """Hide a comment from the post's public view.

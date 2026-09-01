@@ -415,11 +415,71 @@ def test_a_comment_older_than_the_max_age_is_dropped(client, comments_on, fake_g
     assert private_replies(fake_graph) == []
 
 
+def test_compliments_do_not_spend_the_dm_budget(client, comments_on, fake_graph, monkeypatch):
+    """The bug that made a real question go unanswered after three compliments.
+
+    The DM cap used to be charged at ingest, before anything knew whether a DM
+    would be sent -- so comments that only ever get a public line (a
+    compliment, an FAQ answer) burned it. Someone who wrote three nice things
+    under a post and then asked what it cost got silence for the one message
+    that was actually a question.
+    """
+    with session_scope() as session:
+        for index in range(comments_on.instagram_comment_rate_limit):
+            session.add(
+                InstagramCommentReply(
+                    comment_id=f"praise-{index}",
+                    commenter_igsid=COMMENTER,
+                    created_at=utcnow() - timedelta(minutes=index + 5),
+                    public_replied=True,   # a public thank-you went out
+                    private_replied=False,  # ...and no DM did
+                )
+            )
+
+    _push_classification(monkeypatch, "important")
+    assert post_comment(
+        client, comment_body("الهودي ده بكام؟", comment_id="the-real-question")
+    ).status_code == 200
+
+    assert len(private_replies(fake_graph)) == 1
+
+
+def test_the_dm_cap_still_holds_and_withholds_the_public_promise(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """Three DMs in an hour is still the cap -- and when it is spent the
+    public "check your DMs" line is withheld too. Promising a DM that is not
+    coming is worse than saying nothing."""
+    with session_scope() as session:
+        for index in range(comments_on.instagram_comment_rate_limit):
+            session.add(
+                InstagramCommentReply(
+                    comment_id=f"dmed-{index}",
+                    commenter_igsid=COMMENTER,
+                    created_at=utcnow() - timedelta(minutes=index + 5),
+                    public_replied=True,
+                    private_replied=True,
+                )
+            )
+
+    _push_classification(monkeypatch, "important")
+    assert post_comment(
+        client, comment_body("الهودي ده بكام؟", comment_id="over-the-dm-cap")
+    ).status_code == 200
+
+    assert private_replies(fake_graph) == []
+    assert public_replies(fake_graph) == []
+
+
 def test_over_the_rate_limit_drops_and_raises_exactly_one_flood_alert(
     client, comments_on, fake_graph
 ):
+    """The flood guard, which is what stops a spammer costing a model call per
+    comment. It is counted at INSTAGRAM_FAQ_RATE_LIMIT now rather than
+    INSTAGRAM_COMMENT_RATE_LIMIT: the latter became the DM budget alone, and
+    is spent at the DM, not at ingest."""
     with session_scope() as session:
-        for index in range(comments_on.instagram_comment_rate_limit):
+        for index in range(comments_on.instagram_faq_rate_limit):
             session.add(
                 InstagramCommentReply(
                     comment_id=f"1790000000000{index:04d}",
@@ -455,17 +515,48 @@ def _push_classification(monkeypatch, category):
     return provider
 
 
-def test_a_positive_comment_gets_liked_not_dmed(client, comments_on, fake_graph, monkeypatch):
+def test_a_positive_comment_gets_a_public_thank_you_and_no_dm(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """A compliment gets a visible answer -- and never a DM.
+
+    It used to get a *like*, which on this integration reached nobody:
+    Instagram has no API for liking a comment, so every one 400ed and the
+    branch was silent. A fixed line from POSITIVE_ACKS is what the like was
+    always meant to be. Still no DM, no model-written sentence, and no call
+    to the likes endpoint.
+    """
+    from assistant.channels.instagram import POSITIVE_ACKS
+
+    _push_classification(monkeypatch, "positive")
+    assert post_comment(client, comment_body("حلو جداً 🖤")).status_code == 200
+
+    sent = public_replies(fake_graph)
+    assert len(sent) == 1
+    assert sent[0]["json"]["message"] in POSITIVE_ACKS
+    assert private_replies(fake_graph) == []
+    assert [c for c in fake_graph.posts if c["url"].endswith("/likes")] == []
+    with session_scope() as session:
+        row = session.get(InstagramCommentReply, COMMENT_ID)
+        assert row is not None and row.public_replied is True
+        assert row.private_replied is False
+
+
+def test_a_positive_comment_is_silent_when_public_replies_are_off(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """INSTAGRAM_PUBLIC_REPLY_ENABLED=0 means "do not speak in public", and a
+    compliment has no private half to fall through to."""
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(comments_on, instagram_public_reply_enabled=False),
+    )
     _push_classification(monkeypatch, "positive")
     assert post_comment(client, comment_body("حلو جداً 🖤")).status_code == 200
 
     assert public_replies(fake_graph) == []
     assert private_replies(fake_graph) == []
-    likes = [c for c in fake_graph.posts if c["url"].endswith("/likes")]
-    assert len(likes) == 1
-    with session_scope() as session:
-        row = session.get(InstagramCommentReply, COMMENT_ID)
-        assert row is not None and row.public_replied is True
 
 
 def test_a_negative_comment_gets_a_silent_alert_not_a_public_reply(
@@ -688,21 +779,29 @@ def test_hide_comment_exists_shipped_unused(client, comments_on, fake_graph):
     assert hides[0]["json"] == {"hide": True}
 
 
-def test_like_comment_posts_to_the_likes_endpoint(client, comments_on, fake_graph):
+def test_there_is_no_like_comment_and_nothing_calls_the_likes_endpoint(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """Instagram cannot like a comment, so nothing may try.
+
+    `POST /{ig-comment-id}/likes` is answered 400 "does not support this
+    operation" by Meta for every comment -- including ones the same token
+    loads fine over GET, which is how this was told apart from a missing
+    object or a missing scope. The old test asserted only that the client
+    posted to that URL, which it faithfully did; the fake shelf accepts any
+    endpoint, so a call Meta rejects 100% of the time passed forever.
+    """
     from integrations.instagram.client import InstagramClient
 
-    assert InstagramClient().like_comment(COMMENT_ID) is True
-    expected_url = f"{GRAPH}/{comments_on.instagram_api_version}/{COMMENT_ID}/likes"
-    likes = [c for c in fake_graph.posts if c["url"] == expected_url]
-    assert len(likes) == 1
+    assert not hasattr(InstagramClient, "like_comment")
 
+    _push_classification(monkeypatch, "positive")
+    assert post_comment(client, comment_body("تحفة يا برو")).status_code == 200
 
-def test_like_comment_failure_is_logged_not_raised(client, comments_on, fake_graph, caplog):
-    from integrations.instagram.client import InstagramClient
-
-    fake_graph.fail_next_posts = 1
-    assert InstagramClient().like_comment(COMMENT_ID) is False
-    assert "could not like comment" in caplog.text
+    assert [c for c in fake_graph.posts if c["url"].endswith("/likes")] == []
+    # The compliment is answered in public -- just never through /likes.
+    assert len(public_replies(fake_graph)) == 1
+    assert private_replies(fake_graph) == []
 
 
 # --- the fixed FAQ answers (no model call, no DM) ---------------------------

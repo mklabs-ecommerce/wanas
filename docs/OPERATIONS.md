@@ -172,7 +172,8 @@ anything a customer sees:
 | `complaint` — a customer with a real problem | A fixed public line that admits nothing (nobody has checked the order yet) + the same DM handoff + a `customer_complaint` alert |
 | `negative` — a hater, not a customer | A silent `negative_comment` alert. No public action, no DM |
 | `spam` — follower bots, scam links, crypto | A `spam_comment` alert and nothing else. The comment is **not hidden**: hiding is invisible to the shop, so a misclassified customer would vanish with no trace. Hide by hand, from the alert |
-| `positive` / `neither` | A like / nothing |
+| `positive` — a compliment | One short fixed line from `POSITIVE_ACKS` (`assistant/channels/instagram.py`), and no DM. **Not a like:** Instagram has no API for liking a comment (`POST /{ig-comment-id}/likes` is answered 400 "does not support this operation" for every comment, including ones the same token loads over GET), so the like the category was designed around reached nobody and the branch was silent |
+| `neither` — a bare @mention pointing a friend at the post | Nothing |
 
 The FAQ answers are a **lookup, not a model call** — three keys, three fixed
 Arabic sentences, matched on a normalised comment. The 110 EGP in the
@@ -222,6 +223,23 @@ is `INSTAGRAM_ACCOUNT_ID` (what addresses the Graph endpoints) and `id` is
 comment or an echo is Meta's choice, and the "never answer yourself" check
 tests membership of the pair — with only one set, the shop's own comment can
 arrive wearing the other number and read as a stranger's.
+
+**The two rate limits, and which one stops what.**
+`INSTAGRAM_FAQ_RATE_LIMIT` (5/hour per commenter) is the **flood guard**: it
+caps how many comments from one person are examined at all, and so caps the
+model calls a spammer can cost. Tripping it drops the comment and raises one
+`comment_flood` alert. `INSTAGRAM_COMMENT_RATE_LIMIT` (3/hour) is the **DM
+budget**, and it is spent where the DM is actually sent — not at ingest.
+
+That split is load-bearing. Charging the DM budget at ingest meant a comment
+that only ever gets a public line spent it: three compliments under a post
+used up all three DMs, and the real question that followed them was dropped
+with no reply and no public line either. A compliment and an FAQ answer cost
+nobody an inbox, so neither may spend the budget that protects one. When the
+DM budget *is* gone, the public "check your DMs" line is withheld with it —
+promising a DM that is not coming is worse than saying nothing — except on a
+`complaint`, which keeps its public line because silence on a public
+complaint is the worst outcome available here.
 
 **Turning comments off in a hurry:** set `INSTAGRAM_COMMENTS_ENABLED=0` and
 redeploy. The DM half keeps working; only the public surface goes dark.
