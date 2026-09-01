@@ -168,6 +168,10 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
   channels/whatsapp.py        the WhatsApp webhook + outbound sender registration
   channels/instagram.py       the Instagram twin: DMs (text, attachments,
                                quick replies) + comment ingest; comments ship OFF
+  comment_faq.py              the three public comment answers (shipping cost,
+                               delivery time, payment) as a lookup, never a
+                               model call -- the public surface must never
+                               display a sentence a model chose
   harness/                    local dev-only chat UI (web + terminal), unauthenticated
                               by design and OFF unless HARNESS_ENABLED=1
 api/

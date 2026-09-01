@@ -168,12 +168,20 @@ def normalise_chart_reading(parsed: dict, *, sizes: list[str]) -> SizeChartReadi
     )
 
 
-#: The four buckets a public Instagram comment sorts into. Deliberately this
+#: The six buckets a public Instagram comment sorts into. Deliberately this
 #: narrow -- an "important" comment gets a DM handoff, "positive" gets a like,
-#: "negative" gets a silent internal alert, "neither" (spam, a bare @mention
-#: pointing a friend at the post) gets nothing. Nothing here writes to the
-#: comment publicly; that stays fixed wording the caller owns.
-COMMENT_CATEGORIES = ("important", "positive", "negative", "neither")
+#: "negative" gets a silent internal alert, "neither" (a bare @mention
+#: pointing a friend at the post) gets nothing.
+#:
+#: `complaint` is split out of `negative` because the two deserve opposite
+#: treatment: a hater ignored is fine, a paying customer ignored *in public*
+#: is the worst outcome available on this surface, so a complaint gets a
+#: visible answer and a DM. `spam` is split out of `neither` only so the
+#: owner sees it in the queue -- nothing is sent and nothing is hidden.
+#:
+#: Nothing here writes to the comment publicly; that stays fixed wording the
+#: caller owns.
+COMMENT_CATEGORIES = ("important", "positive", "negative", "complaint", "spam", "neither")
 
 
 @dataclass

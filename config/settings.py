@@ -79,6 +79,9 @@ class Settings:
     #: conversation model.
     llm_media_model: str
     llm_api_key: str
+    #: Optional separate model for the Instagram comment classifier. Blank
+    #: reuses the conversation model, which is today's behaviour exactly.
+    comment_classifier_model: str
     llm_debug_payload: bool
     #: OpenRouter routes the conversation model by default. Its own variable,
     #: deliberately not an alias of `llm_api_key` above: sharing one would
@@ -113,6 +116,11 @@ class Settings:
     #: Per-commenter cap inside a rolling hour, so one person spamming a post
     #: cannot cost 40 model calls.
     instagram_comment_rate_limit: int      # INSTAGRAM_COMMENT_RATE_LIMIT, default 3
+    #: The same cap for the fixed FAQ answers, counted separately. An FAQ
+    #: reply sends no DM and costs no model call, so it must not spend the
+    #: budget that exists to stop a flood of DMs -- but it is still visible
+    #: under a post, so it is not unlimited either.
+    instagram_faq_rate_limit: int          # INSTAGRAM_FAQ_RATE_LIMIT, default 5
     #: Signs the public media URLs Meta fetches attachments from (STEP 5).
     #: Falls back to DASHBOARD_SESSION_SECRET so one less secret has to be set.
     media_url_secret: str                  # MEDIA_URL_SECRET
@@ -268,6 +276,7 @@ def load_settings() -> Settings:
         llm_model=_first_env("LLM_MODEL", "GEMINI_MODEL", default=""),
         llm_media_model=_first_env("LLM_MEDIA_MODEL", "GEMINI_MEDIA_MODEL", default=""),
         llm_api_key=_first_env("LLM_API_KEY", "GEMINI_API_KEY", default=""),
+        comment_classifier_model=_first_env("COMMENT_CLASSIFIER_MODEL", default=""),
         llm_debug_payload=_bool("LLM_DEBUG_PAYLOAD", False),
         openrouter_api_key=_first_env("OPENROUTER_API_KEY", default=""),
         whatsapp_phone_number_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),
@@ -285,6 +294,7 @@ def load_settings() -> Settings:
         instagram_public_reply_enabled=_bool("INSTAGRAM_PUBLIC_REPLY_ENABLED", True),
         instagram_comment_max_age_hours=_float("INSTAGRAM_COMMENT_MAX_AGE_HOURS", 48.0),
         instagram_comment_rate_limit=_int("INSTAGRAM_COMMENT_RATE_LIMIT", 3),
+        instagram_faq_rate_limit=_int("INSTAGRAM_FAQ_RATE_LIMIT", 5),
         media_url_secret=_first_env("MEDIA_URL_SECRET", "DASHBOARD_SESSION_SECRET", default=""),
         history_cap=_int("HISTORY_CAP", 150),
         model_context_messages=_int("MODEL_CONTEXT_MESSAGES", 24),

@@ -609,6 +609,65 @@ def test_classify_comment_rejects_a_non_json_reply(captured, provider):
     assert "not JSON" in str(excinfo.value)
 
 
+def test_classify_comment_offers_all_six_categories(provider):
+    """The prompt and the accepted set have to agree: a category the prompt
+    never describes is one the model never returns, and a category the prompt
+    describes but the set rejects is silently coerced to `neither`."""
+    from assistant.providers.base import COMMENT_CATEGORIES
+
+    rendered = provider._COMMENT_INSTRUCTION.format(comment="x")
+    for category in COMMENT_CATEGORIES:
+        assert f'"{category}"' in rendered
+    assert len(COMMENT_CATEGORIES) == 6
+
+
+def test_classify_comment_reads_the_two_new_categories(captured, provider):
+    for category in ("complaint", "spam"):
+        captured["queue"].append(text_reply(json.dumps({"category": category})))
+        assert provider.classify_comment("...").category == category
+
+
+def test_classify_comment_falls_back_to_the_chat_model(captured, monkeypatch):
+    """Empty by default, so today's behaviour is bit-for-bit unchanged."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, comment_classifier_model=""),
+    )
+    provider = OpenRouterProvider(api_key=KEY, model="chat/model-1")
+    captured["queue"].append(text_reply(json.dumps({"category": "important"})))
+    provider.classify_comment("بكام؟")
+
+    assert captured["sent"][0]["body"]["model"] == "chat/model-1"
+
+
+def test_a_classifier_model_decouples_the_public_surface_from_the_chat_model(
+    captured, monkeypatch
+):
+    """Not a cost setting -- the call rounds to nothing. Without it, upgrading
+    the chat model silently changes classification on a live public surface,
+    and one model being pulled takes chat and comments down together."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, comment_classifier_model="cheap/classifier-1"),
+    )
+    provider = OpenRouterProvider(api_key=KEY, model="chat/model-1")
+    captured["queue"].append(text_reply(json.dumps({"category": "spam"})))
+    provider.classify_comment("bit.ly/free-followers")
+
+    assert captured["sent"][0]["body"]["model"] == "cheap/classifier-1"
+    # ...and nothing else about the call moved: still JSON-only, no tools.
+    assert captured["sent"][0]["body"]["max_tokens"] == 64
+    assert captured["sent"][0]["body"]["temperature"] == 0.0
+    assert "tools" not in captured["sent"][0]["body"]
+
+
+def test_the_classifier_model_env_var_reaches_settings(monkeypatch):
+    monkeypatch.setenv("COMMENT_CLASSIFIER_MODEL", "cheap/classifier-1")
+    assert load_settings().comment_classifier_model == "cheap/classifier-1"
+
+
 def test_vision_rate_limit_names_its_kind(captured, provider):
     captured["queue"].append(FakeResponse({}, status_code=429, text="slow down"))
     with pytest.raises(ProviderError) as excinfo:

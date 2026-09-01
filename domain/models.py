@@ -112,9 +112,18 @@ HANDOFF_REASONS = (
 #: `reply_delivery_failed`; `instagram_token_refresh_failed` is what stops the
 #: channel from dying silently on day 60; `comment_flood` is rate-limited to
 #: one alert per burst, not one per dropped comment.
+#:
+#: The comment classifier's three: `customer_complaint` is a paying customer
+#: with a problem, said in public, and outranks `negative_comment`;
+#: `spam_comment` is the *only* thing that happens to spam, since hiding a
+#: comment is invisible to the shop and would make a misclassified customer
+#: vanish without a trace; `classifier_unavailable` is what keeps a provider
+#: outage from meaning silent loss, now that an unclassifiable comment is
+#: dropped rather than DMed.
 ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancelled", "swap_requested",
                  "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed",
-                 "instagram_reply_delivery_failed", "instagram_token_refresh_failed", "comment_flood")
+                 "instagram_reply_delivery_failed", "instagram_token_refresh_failed", "comment_flood",
+                 "negative_comment", "customer_complaint", "spam_comment", "classifier_unavailable")
 
 
 # --------------------------------------------------------------------------
@@ -726,6 +735,12 @@ class InstagramCommentReply(Base):
     commenter_igsid: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     public_replied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     private_replied: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Set when this comment was answered from the fixed FAQ table
+    #: (`assistant/comment_faq.py`) instead of being handed to DM. It is what
+    #: makes the two rate limits countable apart: an FAQ answer sends no DM
+    #: and costs no model call, so it must not spend the budget that exists
+    #: to stop a flood of DMs.
+    faq_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 

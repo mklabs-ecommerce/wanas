@@ -545,12 +545,19 @@ class GeminiProvider(LLMProvider):
     }
 
     def classify_comment(self, text: str) -> CommentClassification:
+        # The same six buckets, described the same way as the OpenRouter
+        # provider's `_COMMENT_INSTRUCTION`: `complaint` and `negative` are
+        # told apart by who is writing, not by tone.
         instruction = (
             "دي كومنت وصل على بوست أو ريل لمحل هدوم على انستجرام. صنّفه لحاجة واحدة بس من دول:\n"
             '- "important": بيسأل سؤال فعلي عن المنتج، السعر، المقاس، التوفر، أو أوردر.\n'
             '- "positive": إعجاب أو تعليق إيجابي (قلوب، إيموچي حلوة، مدح) من غير سؤال فعلي.\n'
-            '- "negative": شكوى أو تعليق سلبي.\n'
-            '- "neither": حاجة تانية -- سبام، أو بس بيمنشن صاحبه («@صاحبته شوفي دي») من غير '
+            '- "complaint": زبون فعلاً اشترى وعنده مشكلة حقيقية -- الأوردر اتأخر، وصله مقاس '
+            "أو لون غلط، حاجة مكسورة، أو حد سأل ومحدش رد عليه.\n"
+            '- "negative": تريقة أو رأي وحش من حد مش زبون -- شتيمة، أو تعليق سلبي على البراند '
+            "من غير مشكلة في أوردر بعينه.\n"
+            '- "spam": بوتات متابعين، لينكات نصب، كريبتو، إعلان لحاجة تانية خالص.\n'
+            '- "neither": حاجة تانية -- بس بيمنشن صاحبه («@صاحبته شوفي دي») من غير '
             "سؤال حقيقي من الكاتب نفسه.\n\n"
             f"الكومنت:\n{text}"
         )
@@ -562,7 +569,11 @@ class GeminiProvider(LLMProvider):
                 "responseSchema": self._COMMENT_SCHEMA,
             },
         }
-        raw = self._first_text(self._generate_media(payload, self._media_model()))
+        # The classifier's own model when one is configured, for the same
+        # reason the OpenRouter provider takes one: comments are a live
+        # public surface and must not move whenever the chat model does.
+        model = settings.comment_classifier_model.replace("models/", "") or self._media_model()
+        raw = self._first_text(self._generate_media(payload, model))
         try:
             parsed = json.loads(raw or "{}")
         except json.JSONDecodeError as exc:

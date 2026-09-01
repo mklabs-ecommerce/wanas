@@ -1378,6 +1378,9 @@ const EN = {
   "تعليقات آخر ٣٠ يوم": "Comments in the last 30 days",
   "تعليقات انستجرام": "Instagram comments",
   "تعليقات كتير": "Comment flood",
+  "شكوى زبون": "Customer complaint",
+  "تعليق سبام": "Spam comment",
+  "تصنيف التعليقات واقف": "Comment classifier down",
   "تفعيل الحساب": "Activate account",
   "تقفله بدل ما تمسحه؟ هيختفي من البوت ومن الموقع، والطلبات القديمة تفضل زي ما هي.": "Close it instead of deleting it? It disappears from the bot and the site, and the old orders stay exactly as they are.",
   "تلقائية": "automatic",
@@ -1892,6 +1895,9 @@ const HANDOFF_REASONS = {
   low_stock: tr("مخزون منخفض"),
   order_modified: tr("طلب اتعدّل"),
   negative_comment: tr("تعليق سلبي"),
+  customer_complaint: tr("شكوى زبون"),
+  spam_comment: tr("تعليق سبام"),
+  classifier_unavailable: tr("تصنيف التعليقات واقف"),
   comment_flood: tr("تعليقات كتير"),
 };
 const reasonLabel = (r) => HANDOFF_REASONS[r] || r || "—";

@@ -1,5 +1,68 @@
 # Changelog
 
+## Unreleased — Answering a comment where it was asked
+
+- **Three questions are now answered in public, and end there.** "الشحن
+  بكام؟", "التوصيل بياخد قد إيه؟", "بتاخدوا كاش؟" have one answer, identical
+  for every customer and every product. They used to classify as `important`
+  and cost a DM each, when one sentence under the post answers them
+  completely — and answers them for everyone else scrolling past too.
+  `assistant/comment_faq.py` is a **lookup, not a classifier**: no model call
+  is reachable from it, on the same principle the fixed `PUBLIC_ACKS` and
+  `domain/services/search_terms.py` follow — when the answer is a rule, it
+  lives below the model, where it is a rule. Matching runs over the catalog
+  search's own Arabic/franco normaliser and needs two things present, never
+  one: a subject and the question being asked about it, so `الشحن بكام` is a
+  flat rate, `الشحن كام يوم` is a delivery time, and `الهودي ده بكام؟` is a
+  product question that still reaches the model.
+  - Its own budget, `INSTAGRAM_FAQ_RATE_LIMIT` (default 5/hour per
+    commenter), counted apart from the 3/hour DM cap: that cap exists to stop
+    a flood of DMs, and an FAQ reply sends no DM and costs no model call — but
+    it is visible under a post, so it is not unlimited either. Over it, the
+    comment drops quietly; a chatty commenter is not a flood.
+  - With `INSTAGRAM_PUBLIC_REPLY_ENABLED=0` an FAQ match falls through to the
+    DM handoff. That flag means "do not speak in public", never "ignore the
+    customer".
+
+- **A complaint is no longer filed under "negative".** They read alike to a
+  sentiment model and deserve opposite treatment: a hater ignored is fine, a
+  paying customer ignored *in public* is the worst outcome available on this
+  surface. `complaint` gets a fixed public line that **admits nothing** —
+  nobody has looked at the order yet — plus the DM handoff and a
+  `customer_complaint` alert staff read above `negative_comment`.
+
+- **Spam gets an alert and nothing else.** `InstagramClient.hide_comment`
+  still ships with a test and no caller, deliberately: hiding is invisible to
+  the shop, so a misclassified real customer would vanish with no trace anyone
+  could follow. The owner hides by hand, from the alert.
+
+- **A classifier outage is now silence, not a burst.** `_classify` used to
+  fall back to `important`, which turned a provider being down into public
+  replies and DMs on a live post that no model had decided on. It falls back
+  to `neither` and raises a `classifier_unavailable` alert carrying the
+  comment, its id, the post and the commenter — silence is the safe failure on
+  a public surface, and the alert is what stops silence from meaning loss.
+
+- **`COMMENT_CLASSIFIER_MODEL`**, empty by default, so nothing moves today.
+  Not a cost setting — the call is ~250 tokens in and rounds to nothing. It is
+  decoupling: without it, upgrading the chat model silently changes how a live
+  public surface is classified, and one model being pulled or rate-limited
+  takes chat and comments down together.
+
+- **A follow-up under our own reply is now answered.** Every `parent_id` used
+  to be dropped, which was right while the only public output was "شوف
+  الدايركت" — nobody answers that. Now that a fixed answer goes out in public,
+  «طب والشحن بكام؟» underneath it is both likely and reasonable, so a reply in
+  a thread we replied in goes through the whole chain. A reply between two
+  other people still drops. The own-account check stays first, so this cannot
+  open a self-reply loop.
+
+- **Fixed: an emoji-only comment spent one of the commenter's three hourly
+  slots** and received nothing for it. The reply row was written inside the
+  rate-limit block and the "says nothing" check ran after it; the check now
+  runs first. The duplicate claim still happens before everything, so a
+  redelivered "🔥" is not re-examined.
+
 ## Unreleased — Adding a product, with the pictures on it
 
 - **Boot now says which products have drifted.** `RECONCILE_REPORT_ON_BOOT`

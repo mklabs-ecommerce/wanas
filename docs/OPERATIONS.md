@@ -138,11 +138,45 @@ the env var — and enqueues an `instagram_token_refresh_failed` alert when it
 cannot. `/health`'s `instagram_token_expires_at` should always be ~50–60 days
 out; if it stops moving, fix the refresh before it hits zero.
 
+**What a comment can get.** Six outcomes, and only two of them ever write
+anything a customer sees:
+
+| The comment | What happens |
+| --- | --- |
+| A **fixed-answer question** — shipping cost, delivery time, payment | One public sentence from `assistant/comment_faq.py`, and that is the whole interaction: no DM, no session, no model call. The classifier is never asked. |
+| `important` — a real product/price/size/order question | One fixed public ack + a private reply that seeds the DM thread |
+| `complaint` — a customer with a real problem | A fixed public line that admits nothing (nobody has checked the order yet) + the same DM handoff + a `customer_complaint` alert |
+| `negative` — a hater, not a customer | A silent `negative_comment` alert. No public action, no DM |
+| `spam` — follower bots, scam links, crypto | A `spam_comment` alert and nothing else. The comment is **not hidden**: hiding is invisible to the shop, so a misclassified customer would vanish with no trace. Hide by hand, from the alert |
+| `positive` / `neither` | A like / nothing |
+
+The FAQ answers are a **lookup, not a model call** — three keys, three fixed
+Arabic sentences, matched on a normalised comment. The 110 EGP in the
+shipping answer is a hardcoded string because the rate is flat to every
+governorate; the fee the bot quotes *in DM* comes from the `ShippingRate`
+table, so **if the flat rate changes, both move** — `manage.py set-fee`
+for the DM side, `assistant/comment_faq.py` for the public one. They have
+their own rate limit, `INSTAGRAM_FAQ_RATE_LIMIT` (5/hour per commenter),
+counted apart from `INSTAGRAM_COMMENT_RATE_LIMIT` (3/hour), because an FAQ
+reply costs no DM and no model call.
+
+**When the classifier is down.** A provider outage no longer produces public
+replies. An unclassifiable comment is left alone and raises a
+`classifier_unavailable` alert in the review queue carrying the text, the
+comment id, the post and the commenter — enough to answer it by hand.
+A run of those in the queue means the LLM provider, not the comment surface:
+check the key, the quota, and `COMMENT_CLASSIFIER_MODEL` if one is pinned.
+Silence is the intended failure here; the alerts are what stop it meaning
+lost customers.
+
 **Turning comments off in a hurry:** set `INSTAGRAM_COMMENTS_ENABLED=0` and
 redeploy. The DM half keeps working; only the public surface goes dark.
-Comments also ship with a per-commenter rate limit and drop the shop's own
-comments before anything else runs — but if the bot is ever seen replying to
-itself under a post, that flag is the kill switch.
+`INSTAGRAM_PUBLIC_REPLY_ENABLED=0` is the softer version — the bot stops
+speaking in public but still answers in DM, including the questions it would
+have answered publicly. Comments also ship with per-commenter rate limits and
+drop the shop's own comments before anything else runs — but if the bot is
+ever seen replying to itself under a post, `INSTAGRAM_COMMENTS_ENABLED=0` is
+the kill switch.
 
 ## Registering the webhooks
 

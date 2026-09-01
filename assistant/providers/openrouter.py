@@ -534,31 +534,48 @@ class OpenRouterProvider(LLMProvider):
 
     # -- comments: classification (cheap, no tools, no history) -----------
 
+    #: Six categories, and the two new ones are described by *who is writing*
+    #: rather than by tone: a complaint and a hater's insult read alike to a
+    #: sentiment model, and they get opposite treatment here.
     _COMMENT_INSTRUCTION = (
         "دي كومنت وصل على بوست أو ريل لمحل هدوم على انستجرام. صنّفه لحاجة واحدة بس من دول:\n"
         '- "important": بيسأل سؤال فعلي عن المنتج، السعر، المقاس، التوفر، أو أوردر.\n'
         '- "positive": إعجاب أو تعليق إيجابي (قلوب، إيموچي حلوة، مدح) من غير سؤال فعلي.\n'
-        '- "negative": شكوى أو تعليق سلبي.\n'
-        '- "neither": حاجة تانية -- سبام، أو بس بيمنشن صاحبه («@صاحبته شوفي دي») من غير '
+        '- "complaint": زبون فعلاً اشترى وعنده مشكلة حقيقية -- الأوردر اتأخر، وصله مقاس '
+        "أو لون غلط، حاجة مكسورة، أو حد سأل ومحدش رد عليه.\n"
+        '- "negative": تريقة أو رأي وحش من حد مش زبون -- شتيمة، أو تعليق سلبي على البراند '
+        "من غير مشكلة في أوردر بعينه.\n"
+        '- "spam": بوتات متابعين، لينكات نصب، كريبتو، إعلان لحاجة تانية خالص.\n'
+        '- "neither": حاجة تانية -- بس بيمنشن صاحبه («@صاحبته شوفي دي») من غير '
         "سؤال حقيقي من الكاتب نفسه.\n\n"
         "الكومنت:\n{comment}\n\n"
-        'رد بـ JSON بس، بالشكل ده بالظبط: {{"category": "important|positive|negative|neither"}}'
+        "رد بـ JSON بس، بالشكل ده بالظبط: "
+        '{{"category": "important|positive|negative|complaint|spam|neither"}}'
     )
 
     def classify_comment(self, text: str) -> CommentClassification:
         instruction = self._COMMENT_INSTRUCTION.format(comment=text)
         payload = {
-            "model": self.model,
+            # Its own model when one is configured. Not for cost -- this call
+            # is ~250 tokens in and rounds to nothing -- but for decoupling:
+            # without it, upgrading the chat model silently changes what
+            # happens on a live public surface, and one model being pulled or
+            # rate-limited takes chat and comments down together. Blank
+            # reuses the chat model, which is the behaviour this replaced.
+            "model": settings.comment_classifier_model or self.model,
             "temperature": 0.0,
             "max_tokens": 64,
             "response_format": {"type": "json_object"},
             "messages": [{"role": "user", "content": instruction}],
         }
 
+        # Named in the errors below rather than `self.model`: a classifier
+        # outage has to say which model was actually called.
+        model = payload["model"]
         response = self._post(payload)
         if response.status_code == 429:
             raise ProviderError(
-                f"rate limited on model {self.model!r}: {response.text[:300]}",
+                f"rate limited on model {model!r}: {response.text[:300]}",
                 kind="rate_limit",
             )
         if response.status_code in (401, 403):
@@ -570,7 +587,7 @@ class OpenRouterProvider(LLMProvider):
         if response.status_code >= 400:
             raise ProviderError(
                 f"openrouter classification error {response.status_code} on model "
-                f"{self.model!r}: {response.text[:500]}"
+                f"{model!r}: {response.text[:500]}"
             )
 
         body = response.json()

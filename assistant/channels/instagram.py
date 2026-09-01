@@ -33,7 +33,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request, Response
 
-from assistant import messages as msg, session as session_store
+from assistant import comment_faq, messages as msg, session as session_store
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.providers import get_provider
@@ -406,23 +406,59 @@ def _post_context_note(media: dict | None) -> str:
     )
 
 
-def _classify(text: str) -> str:
-    """important | positive | negative | neither, from the cheap classifier.
+def _classify(text: str, *, comment_id: str, media_id, commenter) -> str:
+    """One of COMMENT_CATEGORIES, from the cheap classifier.
 
     Unavailable (no key, RehearsalProvider, a transient failure) falls back to
-    "important" rather than dropping the comment silently -- that is exactly
-    what every comment got before this classifier existed, so a provider that
-    cannot classify degrades to the old, safe behaviour instead of a new,
-    worse one.
+    "neither" -- nothing said, nothing sent -- and raises an alert. It used to
+    fall back to "important", which meant a provider outage produced a *burst*
+    of public replies and DMs on a live post with no model having decided any
+    of them. Silence is the safe failure on a public surface; the
+    `classifier_unavailable` alert is what keeps silence from meaning loss,
+    since the owner can work the queue and answer those by hand.
     """
     try:
         return get_provider().classify_comment(text).category
     except ProviderError as exc:
-        log.info("comment classification unavailable (%s); treating as important", exc.kind)
-        return "important"
-    except Exception:
-        log.exception("comment classification failed; treating as important")
-        return "important"
+        log.warning("comment classification unavailable (%s); staying silent", exc.kind)
+        _classifier_unavailable(comment_id, text, media_id, commenter, str(exc))
+        return "neither"
+    except Exception as exc:  # noqa: BLE001 -- the reason goes into the alert
+        log.exception("comment classification failed; staying silent")
+        _classifier_unavailable(comment_id, text, media_id, commenter, str(exc))
+        return "neither"
+
+
+def _classifier_unavailable(comment_id: str, text: str, media_id, commenter, error: str) -> None:
+    """The comment nobody classified, handed to a person instead.
+
+    Carries everything needed to answer it by hand without going back to
+    Meta: what was said, which comment, which post, and who wrote it.
+    """
+    with session_scope() as db:
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason="classifier_unavailable",
+            summary=f"Comment classifier unavailable ({error[:120]}); "
+            f"unanswered comment from {commenter}: {text[:160]}",
+            channel=CHANNEL,
+            external_id=commenter,
+            payload={
+                "comment_id": comment_id,
+                "media_id": media_id,
+                "commenter_id": commenter,
+                "text": text,
+                "error": error[:300],
+            },
+        )
+
+
+#: The one public sentence a complaint gets. Fixed, like every other public
+#: line here -- and deliberately admitting nothing: nobody has looked at the
+#: order yet, so an apology in public would be the shop confessing to
+#: something that may not have happened.
+COMPLAINT_ACK = "بعتنالك في الدايركت عشان نظبطها فوراً 🖤"
 
 
 def _parse_comment_timestamp(raw) -> datetime | None:
@@ -443,14 +479,32 @@ def _parse_comment_timestamp(raw) -> datetime | None:
     return parsed
 
 
+def _is_our_own_thread(parent_id: str) -> bool:
+    """Whether this reply hangs under something *we* replied to.
+
+    A `parent_id` used to be dropped unconditionally, which was right while
+    the bot's only public output was "شوف الدايركت" -- nobody answers that.
+    Now that a fixed FAQ answer goes out in public, a customer following up
+    under it («طب والشحن بكام؟») is both likely and reasonable, so a reply in
+    one of our own threads is processed like any other comment. A reply
+    between two other people, in a thread that is none of the shop's
+    business, is still dropped. The own-account check runs before this, so
+    this cannot open a self-reply loop.
+    """
+    from domain.models import InstagramCommentReply
+
+    with session_scope() as db:
+        return db.get(InstagramCommentReply, parent_id) is not None
+
+
 def _accept_comment(value: dict, entry_time=None) -> None:
-    """Comment ingest: a strict filter chain, then exactly two actions.
+    """Comment ingest: a strict filter chain, then one of four outcomes.
 
     The chain runs in the order the plan fixes, each drop an INFO log naming
-    the reason. What survives gets one fixed public ack (never a model call)
-    and one private reply that opens the DM thread with the session already
-    seeded, so the customer's next DM lands in a conversation that knows why
-    they are here.
+    the reason. What survives is either answered in public from the fixed FAQ
+    table and finished there, or handed to DM with one fixed public ack and a
+    private reply that opens the thread with the session already seeded -- or
+    it goes to the review queue and nowhere else.
 
     The agent never runs on comment text: a full turn on "بكام؟" with no
     product context answers worse than an opener inviting them to say it.
@@ -469,18 +523,23 @@ def _accept_comment(value: dict, entry_time=None) -> None:
 
     # 2. THE SHOP'S OWN COMMENT OR ITS OWN REPLY. Without this the bot replies
     #    to itself, forever, publicly, on a live post -- the worst available
-    #    failure on this surface.
+    #    failure on this surface. Stays first, ahead of the thread rule below.
     if commenter == settings.instagram_account_id:
         log.info("dropping the shop's own comment/reply (%s)", comment_id)
         return
 
-    # 3. A reply inside someone else's thread. Let DM carry it.
-    if value.get("parent_id"):
+    # 3. A reply inside someone else's thread. Let DM carry it. A reply under
+    #    one of *our* replies is a follow-up to something we said, and goes
+    #    through the whole chain like any other comment -- see
+    #    `_is_our_own_thread`.
+    parent_id = value.get("parent_id")
+    if parent_id and not _is_our_own_thread(str(parent_id)):
         log.info("dropping threaded reply %s", comment_id)
         return
 
     # 4. Duplicate delivery. Prefixed like every claim: `igc:` shares the
-    #    webhook_events table with `ig:` and every WhatsApp id.
+    #    webhook_events table with `ig:` and every WhatsApp id. Claimed even
+    #    for a comment that says nothing, so a redelivery is not re-examined.
     if not claim_message(f"igc:{comment_id}"):
         log.info("ignoring duplicate comment delivery %s", comment_id)
         return
@@ -501,8 +560,27 @@ def _accept_comment(value: dict, entry_time=None) -> None:
             )
             return
 
-    # 6. Per-commenter cap inside a rolling hour. One person spamming a post
-    #    must cost staff's attention once, not forty model-free sends.
+    # 6. Empty, emoji-only, under three real characters. Checked *before* the
+    #    reply row is written: a "🔥" receives nothing, so it must not spend
+    #    one of the commenter's hourly slots on the way to receiving it.
+    if _comment_says_nothing(text):
+        log.info("dropping comment %s: no actionable text", comment_id)
+        return
+
+    # 7. Which budget this comment spends, decided before it is counted.
+    #    Matching is a pure lookup -- no model call, no send (see
+    #    `assistant/comment_faq.py`) -- so asking here is free. With public
+    #    replies switched off there is no public answer to give and the
+    #    question falls through to the DM handoff: that flag means "do not
+    #    speak in public", never "ignore the customer".
+    faq_key = comment_faq.match(text) if settings.instagram_public_reply_enabled else None
+
+    # 8. Per-commenter cap inside a rolling hour. One person spamming a post
+    #    must cost staff's attention once, not forty model-free sends. The two
+    #    budgets are counted apart: an FAQ answer sends no DM and costs no
+    #    model call, so it must not spend the cap that exists to stop a flood
+    #    of DMs -- but it is still visible under a post, so it has its own.
+    limit = settings.instagram_faq_rate_limit if faq_key else settings.instagram_comment_rate_limit
     with session_scope() as db:
         # Counted in Python with normalised datetimes rather than compared in
         # SQL: SQLite stores these columns naive and PostgreSQL aware, and a
@@ -518,13 +596,24 @@ def _accept_comment(value: dict, entry_time=None) -> None:
             for row in rows
             if row.created_at is not None
             and as_aware(row.created_at) >= cutoff
+            and bool(row.faq_key) == bool(faq_key)
         )
-        if recent >= settings.instagram_comment_rate_limit:
+        if recent >= limit:
+            if faq_key:
+                # Not a flood, and not an alert: nothing reached a person's
+                # inbox and nothing cost a model call. Just a chatty commenter.
+                log.info(
+                    "dropping comment %s: %s is over the FAQ rate limit (%d/hour)",
+                    comment_id,
+                    commenter,
+                    limit,
+                )
+                return
             log.warning(
                 "dropping comment %s: %s is over the comment rate limit (%d/hour)",
                 comment_id,
                 commenter,
-                settings.instagram_comment_rate_limit,
+                limit,
             )
             queues.enqueue(
                 db,
@@ -546,7 +635,8 @@ def _accept_comment(value: dict, entry_time=None) -> None:
             return
 
         # Written BEFORE anything is sent: a crash after this point leaves a
-        # row that stops the retry, never a second DM to someone who got one.
+        # row that stops the retry, never a second reply under someone's
+        # comment or a second DM to someone who already got one.
         db.add(
             InstagramCommentReply(
                 comment_id=comment_id,
@@ -554,22 +644,31 @@ def _accept_comment(value: dict, entry_time=None) -> None:
                 commenter_igsid=commenter,
                 public_replied=False,
                 private_replied=False,
+                faq_key=faq_key,
             )
         )
         db.flush()
 
-    # 7. Empty, emoji-only, under three real characters.
-    if _comment_says_nothing(text):
-        log.info("dropping comment %s: no actionable text", comment_id)
-        return
-
     client = InstagramClient()
 
-    # 8. Classify: important gets the DM handoff below; positive gets a like
-    #    and nothing else; negative gets a silent internal alert and no public
-    #    engagement; neither (spam, a bare @mention pointing a friend at the
-    #    post) gets nothing at all. Only "important" falls through past here.
-    category = _classify(text)
+    # 9. A question whose answer is fixed and identical for every customer.
+    #    Answered in public, where it was asked and where everyone else
+    #    scrolling past can read it -- and that is the whole interaction: no
+    #    DM, no seeded session, and the classifier is never called, which is
+    #    the saving.
+    if faq_key:
+        result = client.reply_to_comment(comment_id, comment_faq.reply_for(faq_key))
+        if result.delivered:
+            _mark_comment(comment_id, public_replied=True)
+        else:
+            log.error("public FAQ reply to comment %s failed: %s", comment_id, result.error)
+        return
+
+    # 10. Classify: important and complaint get the DM handoff below; positive
+    #     gets a like and nothing else; negative and spam get a silent
+    #     internal alert and no public engagement; neither (a bare @mention
+    #     pointing a friend at the post) gets nothing at all.
+    category = _classify(text, comment_id=comment_id, media_id=media_id, commenter=commenter)
 
     if category == "positive":
         if client.like_comment(comment_id):
@@ -577,27 +676,105 @@ def _accept_comment(value: dict, entry_time=None) -> None:
         return
 
     if category == "negative":
-        with session_scope() as db:
-            queues.enqueue(
-                db,
-                kind=QueueKind.ALERT.value,
-                reason="negative_comment",
-                summary=f"Negative comment from {commenter} on media {media_id}: {text[:200]}",
-                channel=CHANNEL,
-                external_id=commenter,
-                payload={"comment_id": comment_id, "media_id": media_id, "text": text},
-            )
+        _comment_alert(
+            "negative_comment",
+            f"Negative comment from {commenter} on media {media_id}: {text[:200]}",
+            comment_id=comment_id,
+            media_id=media_id,
+            commenter=commenter,
+            text=text,
+        )
         return
 
-    if category == "neither":
-        log.info("dropping comment %s: classified as neither", comment_id)
+    if category == "spam":
+        # An alert and nothing else. `InstagramClient.hide_comment` exists and
+        # stays uncalled deliberately: hiding is invisible to the shop, so a
+        # misclassified real customer would vanish with no trace anyone could
+        # follow. The owner hides by hand, from this alert.
+        _comment_alert(
+            "spam_comment",
+            f"Spam comment from {commenter} on media {media_id}: {text[:200]}",
+            comment_id=comment_id,
+            media_id=media_id,
+            commenter=commenter,
+            text=text,
+        )
         return
 
-    # a) The public ack -- deterministic per comment id (crc32; Python's hash()
-    #    is salted per process and would pick differently on a retry).
+    if category == "complaint":
+        # A paying customer with a real problem, said in public. A hater
+        # ignored is fine; this one ignored is the worst outcome available on
+        # this surface -- so it gets a visible answer, a DM, and a queue item
+        # staff read above `negative_comment`.
+        _comment_alert(
+            "customer_complaint",
+            f"COMPLAINT from {commenter} on media {media_id}: {text[:200]}",
+            comment_id=comment_id,
+            media_id=media_id,
+            commenter=commenter,
+            text=text,
+            priority="high",
+        )
+        _dm_handoff(client, comment_id, text, media_id, public_reply=COMPLAINT_ACK)
+        return
+
+    if category != "important":
+        log.info("dropping comment %s: classified as %s", comment_id, category)
+        return
+
+    # The public ack -- deterministic per comment id (crc32; Python's hash()
+    # is salted per process and would pick differently on a retry).
+    ack = PUBLIC_ACKS[zlib.crc32(comment_id.encode("utf-8")) % len(PUBLIC_ACKS)]
+    _dm_handoff(client, comment_id, text, media_id, public_reply=ack)
+
+
+def _comment_alert(
+    reason: str,
+    summary: str,
+    *,
+    comment_id,
+    media_id,
+    commenter,
+    text,
+    priority: str | None = None,
+) -> None:
+    """One queue item about one comment.
+
+    The only place a comment is escalated to a person, so every reason carries
+    the same payload shape and staff read one thing, not four.
+    """
+    payload = {"comment_id": comment_id, "media_id": media_id, "text": text}
+    if priority:
+        payload["priority"] = priority
+    with session_scope() as db:
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason=reason,
+            summary=summary,
+            channel=CHANNEL,
+            external_id=commenter,
+            payload=payload,
+        )
+
+
+def _dm_handoff(
+    client: InstagramClient,
+    comment_id: str,
+    text: str,
+    media_id,
+    *,
+    public_reply: str,
+) -> None:
+    """One fixed public line, one private reply, one seeded session.
+
+    Shared by `important` and `complaint`: the only thing that differs between
+    them is which fixed sentence goes in public, and neither is written by a
+    model.
+    """
+    # a) The public ack, when the shop is speaking in public at all.
     if settings.instagram_public_reply_enabled:
-        ack = PUBLIC_ACKS[zlib.crc32(comment_id.encode("utf-8")) % len(PUBLIC_ACKS)]
-        result = client.reply_to_comment(comment_id, ack)
+        result = client.reply_to_comment(comment_id, public_reply)
         if result.delivered:
             _mark_comment(comment_id, public_replied=True)
 
@@ -605,8 +782,8 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     opener = f"شفت كومنتك على البوست 👀\n«{text[:200]}»\nقولّي وأنا تحت أمرك 🖤"
     private = client.send_private_reply(comment_id, opener)
     if not private.delivered:
-        # The row above keeps any retry from double-DMing; staff can chase
-        # this through the log line.
+        # The row written at ingest keeps any retry from double-DMing; staff
+        # can chase this through the log line.
         log.error("private reply to comment %s failed: %s", comment_id, private.error)
         return
 
