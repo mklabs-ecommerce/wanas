@@ -118,6 +118,17 @@ integrations/            everything that talks to an external vendor over
                             `write_plan` in bulk from the JSON file,
                             `set_product_chart` for one product from the
                             dashboard
+    size_chart_import.py    and the way back: `custom.size_chart_data` /
+                            `custom.size_chart` read into `size_charts` rows
+                            and `Product.size_chart_image`, so a chart edited
+                            in Shopify Admin reaches the bot. Additive and
+                            never deleting, like product_import; a chart the
+                            local view already agrees with is skipped (a round
+                            trip of our own publish must not replace a file
+                            that ships with the code with a CDN url), and a
+                            payload with no `chart_id` lands under
+                            `shopify-<product_id>` rather than claiming a
+                            chart its sibling products share
     admin_customers.py, admin_orders.py, admin_products.py,
     admin_collections.py, admin_inventory.py                dashboard admin
     product_reconcile.py    the other direction, and the only one that
@@ -244,6 +255,9 @@ scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
                           SKU), shopify_check_live.py (read-only smoke check),
                           shopify_size_charts.py (publish the size charts to
                           Shopify as product metafields, for the storefront),
+                          shopify_size_charts_import.py (the same metafields
+                          back into the database, so a chart edited in Shopify
+                          Admin reaches the bot),
                           shopify_reconcile_products.py (delete the wanas.db
                           products Shopify no longer has -- archiving any
                           that ever sold; refuses an empty or mostly-empty

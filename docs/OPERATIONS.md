@@ -521,7 +521,20 @@ python scripts/shopify_check_live.py    # read-only: do the two sides agree?
 python scripts/shopify_set_skus.py      # link local variant_id -> Shopify SKU
 python scripts/shopify_sync.py          # reconcile the catalog
 python scripts/shopify_reconcile_products.py   # drop wanas.db products Shopify no longer has
+python scripts/shopify_size_charts.py          # publish the size charts to Shopify
+python scripts/shopify_size_charts_import.py   # and read edited ones back
 ```
+
+The two size-chart scripts are a pair, and which one to run depends on where
+the chart was authored. `shopify_size_charts.py` pushes `data/size_charts.json`
+out so the storefront can render it. `shopify_size_charts_import.py` brings
+back what has been edited or added in Shopify Admin since, so the bot quotes
+the numbers the product page shows instead of the ones the file shipped with.
+The import never deletes: a product whose metafields are empty is left alone,
+and a chart the database already agrees with is skipped rather than replaced
+by a CDN url. A chart authored in Admin with no `chart_id` of ours lands under
+`shopify-<product_id>`, so an edit made on one t-shirt cannot rewrite the
+chart its two siblings share.
 
 `shopify_reconcile_products.py` is the one that deletes, so read its dry-run
 report before `--apply`. A product that has ever been ordered is **archived**
