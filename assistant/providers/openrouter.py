@@ -48,6 +48,7 @@ import httpx
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
 from assistant.providers.base import (
     COMMENT_CATEGORIES,
+    LEGACY_COMMENT_CATEGORIES,
     CommentClassification,
     ImageReading,
     LLMProvider,
@@ -538,19 +539,26 @@ class OpenRouterProvider(LLMProvider):
     #: rather than by tone: a complaint and a hater's insult read alike to a
     #: sentiment model, and they get opposite treatment here.
     _COMMENT_INSTRUCTION = (
-        "دي كومنت وصل على بوست أو ريل لمحل هدوم على انستجرام. صنّفه لحاجة واحدة بس من دول:\n"
-        '- "important": بيسأل سؤال فعلي عن المنتج، السعر، المقاس، التوفر، أو أوردر.\n'
-        '- "positive": إعجاب أو تعليق إيجابي (قلوب، إيموچي حلوة، مدح) من غير سؤال فعلي.\n'
-        '- "complaint": زبون فعلاً اشترى وعنده مشكلة حقيقية -- الأوردر اتأخر، وصله مقاس '
-        "أو لون غلط، حاجة مكسورة، أو حد سأل ومحدش رد عليه.\n"
-        '- "negative": تريقة أو رأي وحش من حد مش زبون -- شتيمة، أو تعليق سلبي على البراند '
-        "من غير مشكلة في أوردر بعينه.\n"
+        "دي كومنت وصل على بوست أو ريل لمحل هدوم ستريت وير على انستجرام. "
+        "صنّفه لحاجة واحدة بس من دول:\n"
+        '- "price": بيسأل عن سعر قطعة («بكام؟»، «السعر كام؟»).\n'
+        '- "availability": بيسأل لسه موجود ولا خلص، أو متوفر ولا لأ.\n'
+        '- "size": سؤال عن المقاسات، أو عن مقاسه هو، أو عن جدول المقاسات.\n'
+        '- "variant": بيسأل عن لون تاني أو موديل تاني أو حاجة شبهها.\n'
+        '- "product_info": بيسأل عن الخامة أو القماش أو الجودة أو الغسيل.\n'
+        '- "order_status": زبون اشترى بالفعل وبيسأل أوردره فين أو هيوصل امتى.\n'
+        '- "complaint": زبون اشترى وعنده مشكلة حقيقية -- اتأخر، وصله مقاس أو لون '
+        "غلط، حاجة مكسورة، أو سأل ومحدش رد عليه.\n"
+        '- "positive": مدح أو إعجاب من غير سؤال («جميل»، «تحفة»، قلوب).\n'
+        '- "negative": تريقة أو رأي وحش من حد مش زبون، من غير مشكلة في أوردر بعينه.\n'
+        '- "tag_friend": بيمنشن صاحبه بس («@سارة بصي دي») من غير سؤال منه هو.\n'
         '- "spam": بوتات متابعين، لينكات نصب، كريبتو، إعلان لحاجة تانية خالص.\n'
-        '- "neither": حاجة تانية -- بس بيمنشن صاحبه («@صاحبته شوفي دي») من غير '
-        "سؤال حقيقي من الكاتب نفسه.\n\n"
+        '- "other": أي حاجة تانية فيها كلام حقيقي مش داخلة في اللي فوق.\n\n'
+        "لو الكومنت فيه أكتر من حاجة، اختار اللي الزبون عايزه أكتر.\n\n"
         "الكومنت:\n{comment}\n\n"
         "رد بـ JSON بس، بالشكل ده بالظبط: "
-        '{{"category": "important|positive|negative|complaint|spam|neither"}}'
+        '{{"category": "price|availability|size|variant|product_info|order_status'
+        '|complaint|positive|negative|tag_friend|spam|other"}}'
     )
 
     def classify_comment(self, text: str) -> CommentClassification:
@@ -599,9 +607,10 @@ class OpenRouterProvider(LLMProvider):
             raise ProviderError(f"classification reply was not JSON: {raw!r:.200}") from exc
 
         category = str(parsed.get("category") or "").strip().lower()
+        category = LEGACY_COMMENT_CATEGORIES.get(category, category)
         if category not in COMMENT_CATEGORIES:
-            log.warning("classify_comment returned an unknown category %r; treating as neither", category)
-            category = "neither"
+            log.warning("classify_comment returned an unknown category %r; treating as other", category)
+            category = "other"
         return CommentClassification(category=category)
 
 

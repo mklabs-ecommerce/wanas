@@ -166,14 +166,42 @@ out; if it stops moving, fix the refresh before it hits zero.
 anything a customer sees:
 
 | The comment | What happens |
-| --- | --- |
+|---|---|
 | A **fixed-answer question** — shipping cost, delivery time, payment | One public sentence from `assistant/comment_faq.py`, and that is the whole interaction: no DM, no session, no model call. The classifier is never asked. |
-| `important` — a real product/price/size/order question | One fixed public ack + a private reply that seeds the DM thread |
-| `complaint` — a customer with a real problem | A fixed public line that admits nothing (nobody has checked the order yet) + the same DM handoff + a `customer_complaint` alert |
-| `negative` — a hater, not a customer | A silent `negative_comment` alert. No public action, no DM |
-| `spam` — follower bots, scam links, crypto | A `spam_comment` alert and nothing else. The comment is **not hidden**: hiding is invisible to the shop, so a misclassified customer would vanish with no trace. Hide by hand, from the alert |
-| `positive` — a compliment | One short fixed line from `POSITIVE_ACKS` (`assistant/channels/instagram.py`), and no DM. **Not a like:** Instagram has no API for liking a comment (`POST /{ig-comment-id}/likes` is answered 400 "does not support this operation" for every comment, including ones the same token loads over GET), so the like the category was designed around reached nobody and the branch was silent |
-| `neither` — a bare @mention pointing a friend at the post | Nothing |
+| `price` / `availability` / `size` / `variant` / `product_info` | A public line from that category's bank plus the DM handoff. They route identically and differ in *wording* — a size question opens on sizes, a price question on the price — which is the whole reason they are separate categories |
+| `order_status` — someone waiting on an order | Its own voice (reassure, then redirect), the DM handoff asking for the order number, and an `order_status_comment` queue item. Keeps its public line even when the DM budget is spent |
+| `complaint` — a customer with a real problem | A public line that admits nothing (nobody has checked the order yet) + the DM handoff + a high-priority `customer_complaint` alert. Keeps its public line when the DM budget is spent |
+| `negative` — a hater, not a customer | One short, calm, un-defensive public line **and** a `negative_comment` alert. No DM: chasing a critic into their inbox is how a bad comment becomes a screenshot. This used to be silence, and silence was the bug — the line is written for the hundred people reading, not for the one who wrote it |
+| `positive` — a compliment | One short public thank-you. No DM, no like (Instagram has no API for liking a comment) |
+| `tag_friend` — an @mention and nothing else | One light public line. The person worth answering is the friend about to open the notification. No DM, no alert |
+| `spam` — follower bots, scam links, crypto | A `spam_comment` alert and nothing else — **the one category with no customer-visible answer**, because a public reply to a scam bot republishes it to everyone reading the post. The comment is still **not hidden**: hiding is invisible to the shop, so a misclassified customer would vanish with no trace. Hide by hand, from the alert |
+| `other` — real text the model could not place | The polite catch-all: a public line that asks, plus the DM handoff. An unknown or retired category name lands here too, so a model on an old prompt degrades to a real answer rather than to silence |
+
+**Every category answers somebody, and that is a tested property.** `_ACTIONS`
+in `assistant/channels/instagram.py` is a table rather than an if/elif chain
+precisely so `test_every_category_has_an_action_and_none_is_silent` can read
+it: a missing branch used to be invisible, which is how `negative` shipped
+classified, alerted on, and never answered.
+
+**The words are banks, not lines.** `assistant/comment_replies.py` holds 4–8
+hand-written variants per category, and the pick is
+`crc32(comment_id) % len(bank)` — **deterministic, never random**, because
+Meta redelivers any webhook it does not get a clean 200 for and a retry has to
+reproduce the same sentence rather than post a second, differently worded
+reply under one customer's comment. Every string is still fixed and
+hand-written; nothing on the public surface is a sentence a model chose.
+
+**Prices in public.** Meta does not prohibit stating a price in a comment
+reply — the private-reply rules govern *initiating* a DM (one per comment,
+inside 7 days), not what may be said publicly. The reason a product price
+still goes to DM is accuracy, not policy: "بكام؟" under a post that shows
+several pieces does not say which one, prices and sales change while a post
+lives on, and a wrong number published under a post is worse than a question
+asked. So the fixed, product-independent answers (shipping, delivery, payment)
+*are* public, and anything needing a per-product lookup is answered in DM by
+the agent, which reads live Shopify. The public handoff lines therefore never
+claim the price has already been sent — that promise is tested against in
+`test_no_public_line_ever_promises_a_price_it_does_not_send`.
 
 The FAQ answers are a **lookup, not a model call** — three keys, three fixed
 Arabic sentences, matched on a normalised comment. The 110 EGP in the

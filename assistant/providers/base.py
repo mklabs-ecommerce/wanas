@@ -168,28 +168,60 @@ def normalise_chart_reading(parsed: dict, *, sizes: list[str]) -> SizeChartReadi
     )
 
 
-#: The six buckets a public Instagram comment sorts into. Deliberately this
-#: narrow -- an "important" comment gets a DM handoff, "positive" gets a like,
-#: "negative" gets a silent internal alert, "neither" (a bare @mention
-#: pointing a friend at the post) gets nothing.
+#: The buckets a public Instagram comment sorts into.
 #:
-#: `complaint` is split out of `negative` because the two deserve opposite
+#: This used to be six, and one of them -- `important` -- absorbed every real
+#: question a shopper can ask: price, stock, size, colour, fabric, and "where
+#: is my order". They all got one identical public line and one identical DM,
+#: which is what made the surface read as a bot. They are now separate
+#: because they deserve *different words*, not because the routing differs;
+#: `assistant/comment_replies.py` owns the words and the caller owns the
+#: routing.
+#:
+#: `complaint` stays split from `negative` because the two deserve opposite
 #: treatment: a hater ignored is fine, a paying customer ignored *in public*
-#: is the worst outcome available on this surface, so a complaint gets a
-#: visible answer and a DM. `spam` is split out of `neither` only so the
-#: owner sees it in the queue -- nothing is sent and nothing is hidden.
+#: is the worst outcome available on this surface. `order_status` is split
+#: from both because the person is neither angry nor browsing -- they are
+#: waiting on something they already paid for, and that is a third voice.
+#: `tag_friend` is split from `other` because the person worth answering is
+#: the friend about to get the notification, not the tagger. `spam` is the
+#: only category that gets no public reply at all -- answering a scam bot
+#: publishes it to everyone reading the post.
 #:
 #: Nothing here writes to the comment publicly; that stays fixed wording the
-#: caller owns.
-COMMENT_CATEGORIES = ("important", "positive", "negative", "complaint", "spam", "neither")
+#: caller owns, picked from a bank rather than a single line.
+COMMENT_CATEGORIES = (
+    # real questions about a product, one per thing a shopper actually asks
+    "price",
+    "availability",
+    "size",
+    "variant",
+    "product_info",
+    # a customer who has already bought
+    "order_status",
+    "complaint",
+    # sentiment and noise
+    "positive",
+    "negative",
+    "tag_friend",
+    "spam",
+    "other",
+)
+
+#: Categories this used to have, mapped onto the ones that replaced them. A
+#: model pinned to an older prompt (or a hand-written fixture) can still
+#: answer `important`/`neither` and be routed sensibly instead of silently
+#: becoming a no-op.
+LEGACY_COMMENT_CATEGORIES = {"important": "other", "neither": "other"}
 
 
 @dataclass
 class CommentClassification:
     #: One of COMMENT_CATEGORIES. Anything else the provider returns is
-    #: coerced to "neither" by the caller -- silence is the safe default for
-    #: an answer that does not parse, not a guess at engagement.
-    category: str = "neither"
+    #: coerced by the caller -- an old name through
+    #: LEGACY_COMMENT_CATEGORIES, anything unrecognised to "other", which
+    #: answers politely and asks rather than guessing at engagement.
+    category: str = "other"
 
 
 class LLMProvider:

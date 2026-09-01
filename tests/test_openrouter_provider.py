@@ -588,18 +588,28 @@ def test_vision_auth_rejection_names_its_kind(captured, provider, status):
 
 
 def test_classify_comment_reads_the_category(captured, provider):
-    captured["queue"].append(text_reply(json.dumps({"category": "important"})))
+    captured["queue"].append(text_reply(json.dumps({"category": "price"})))
     result = provider.classify_comment("بكام الهودي ده؟")
-    assert result.category == "important"
+    assert result.category == "price"
 
     sent = captured["sent"][0]
     assert sent["body"]["response_format"] == {"type": "json_object"}
     assert "بكام الهودي ده؟" in sent["body"]["messages"][0]["content"]
 
 
-def test_classify_comment_coerces_an_unknown_category_to_neither(captured, provider):
+def test_classify_comment_coerces_an_unknown_category_to_other(captured, provider):
+    """Unrecognised no longer means silence: `other` answers politely and asks,
+    which is the safe thing to say to a real person whose comment the model
+    could not place."""
     captured["queue"].append(text_reply(json.dumps({"category": "sarcastic"})))
-    assert provider.classify_comment("...").category == "neither"
+    assert provider.classify_comment("...").category == "other"
+
+
+def test_classify_comment_maps_the_retired_names_forward(captured, provider):
+    """A model pinned to the old prompt still routes somewhere sensible."""
+    for legacy in ("important", "neither"):
+        captured["queue"].append(text_reply(json.dumps({"category": legacy})))
+        assert provider.classify_comment("...").category == "other"
 
 
 def test_classify_comment_rejects_a_non_json_reply(captured, provider):
@@ -609,20 +619,22 @@ def test_classify_comment_rejects_a_non_json_reply(captured, provider):
     assert "not JSON" in str(excinfo.value)
 
 
-def test_classify_comment_offers_all_six_categories(provider):
+def test_classify_comment_offers_every_category(provider):
     """The prompt and the accepted set have to agree: a category the prompt
     never describes is one the model never returns, and a category the prompt
-    describes but the set rejects is silently coerced to `neither`."""
+    describes but the set rejects is silently coerced away."""
     from assistant.providers.base import COMMENT_CATEGORIES
 
     rendered = provider._COMMENT_INSTRUCTION.format(comment="x")
     for category in COMMENT_CATEGORIES:
         assert f'"{category}"' in rendered
-    assert len(COMMENT_CATEGORIES) == 6
+    assert len(COMMENT_CATEGORIES) == 12
 
 
-def test_classify_comment_reads_the_two_new_categories(captured, provider):
-    for category in ("complaint", "spam"):
+def test_classify_comment_reads_every_category(captured, provider):
+    from assistant.providers.base import COMMENT_CATEGORIES
+
+    for category in COMMENT_CATEGORIES:
         captured["queue"].append(text_reply(json.dumps({"category": category})))
         assert provider.classify_comment("...").category == category
 

@@ -15,6 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from assistant import comment_replies
 from assistant.channels import instagram as adapter
 from config.settings import settings
 from domain.db import SessionLocal, session_scope
@@ -154,7 +155,7 @@ def classifier(monkeypatch):
         name = "fixed-for-tests"
 
         def __init__(self):
-            self.category = "important"
+            self.category = "price"
             self.calls: list[str] = []
 
         def classify_comment(self, text):
@@ -261,9 +262,9 @@ def test_a_valid_comment_gets_one_public_and_one_private_reply_and_a_seeded_sess
     privs = private_replies(fake_graph)
     assert len(pubs) == 1
     assert len(privs) == 1
-    # The public ack is one of the fixed lines -- never a model call -- and
-    # deterministic per comment id.
-    assert pubs[0]["json"]["message"] in adapter.PUBLIC_ACKS
+    # The public line is one of the fixed lines in that category's bank --
+    # never a model call -- and deterministic per comment id.
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply("price", COMMENT_ID)
 
     # The private reply went to the messages endpoint under the comment id...
     payload = privs[0]["json"]
@@ -526,14 +527,12 @@ def test_a_positive_comment_gets_a_public_thank_you_and_no_dm(
     always meant to be. Still no DM, no model-written sentence, and no call
     to the likes endpoint.
     """
-    from assistant.channels.instagram import POSITIVE_ACKS
-
     _push_classification(monkeypatch, "positive")
     assert post_comment(client, comment_body("حلو جداً 🖤")).status_code == 200
 
     sent = public_replies(fake_graph)
     assert len(sent) == 1
-    assert sent[0]["json"]["message"] in POSITIVE_ACKS
+    assert sent[0]["json"]["message"] == comment_replies.public_reply("positive", COMMENT_ID)
     assert private_replies(fake_graph) == []
     assert [c for c in fake_graph.posts if c["url"].endswith("/likes")] == []
     with session_scope() as session:
@@ -559,35 +558,48 @@ def test_a_positive_comment_is_silent_when_public_replies_are_off(
     assert private_replies(fake_graph) == []
 
 
-def test_a_negative_comment_gets_a_silent_alert_not_a_public_reply(
+def test_a_negative_comment_gets_a_calm_public_line_and_an_alert(
     client, comments_on, fake_graph, monkeypatch
 ):
+    """This used to be silence plus an alert, and silence was the bug.
+
+    A bad word under a live post is read by everyone scrolling past, and the
+    shop saying nothing is what they see. One short, calm, un-defensive line
+    is written for *them*, not for the person who wrote the comment. Still no
+    DM: chasing a critic into their inbox is how a bad comment becomes a
+    screenshot.
+    """
     _push_classification(monkeypatch, "negative")
     assert post_comment(client, comment_body("الخدمة وحشة قوي")).status_code == 200
 
-    assert public_replies(fake_graph) == []
+    pubs = public_replies(fake_graph)
+    assert len(pubs) == 1
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply("negative", COMMENT_ID)
     assert private_replies(fake_graph) == []
-    likes = [c for c in fake_graph.posts if c["url"].endswith("/likes")]
-    assert likes == []
-    with session_scope() as session:
-        alerts = [
-            i
-            for i in queues.open_items(session, QueueKind.ALERT.value)
-            if i.reason == "negative_comment"
-        ]
+    assert [c for c in fake_graph.posts if c["url"].endswith("/likes")] == []
+
+    alerts = alerts_named("negative_comment")
     assert len(alerts) == 1
     assert alerts[0].payload["comment_id"] == COMMENT_ID
 
 
-def test_a_neither_comment_gets_no_action_at_all(client, comments_on, fake_graph, monkeypatch):
-    """A bare @mention pointing a friend at the post -- the tagger is not
-    asking anything themselves."""
-    _push_classification(monkeypatch, "neither")
+def test_tagging_a_friend_gets_a_light_public_line_and_no_dm(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """A bare @mention pointing a friend at the post.
+
+    The tagger is not asking anything, so there is nothing to DM them about --
+    but the person worth winning over is the *friend* who is about to open
+    this notification, and they should not find the shop silent under its own
+    post. One light line, no DM, no alert.
+    """
+    _push_classification(monkeypatch, "tag_friend")
     assert post_comment(client, comment_body("@sara شوفي دي")).status_code == 200
 
-    assert public_replies(fake_graph) == []
+    pubs = public_replies(fake_graph)
+    assert len(pubs) == 1
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply("tag_friend", COMMENT_ID)
     assert private_replies(fake_graph) == []
-    assert [c for c in fake_graph.posts if c["url"].endswith("/likes")] == []
     with session_scope() as session:
         assert queues.open_items(session, QueueKind.ALERT.value) == []
 
@@ -598,6 +610,10 @@ def test_an_important_comment_still_gets_the_dm_handoff(
     _push_classification(monkeypatch, "important")
     assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
 
+    # `important` is a retired name; LEGACY_COMMENT_CATEGORIES maps it onto
+    # `other`, which still answers publicly and still opens the DM. A model
+    # pinned to the old prompt therefore degrades to a polite answer rather
+    # than to silence.
     assert len(public_replies(fake_graph)) == 1
     assert len(private_replies(fake_graph)) == 1
 
@@ -614,7 +630,7 @@ def test_a_complaint_gets_a_public_line_a_dm_and_a_priority_alert(
     pubs = public_replies(fake_graph)
     assert len(pubs) == 1
     # Fixed wording, and it admits nothing: nobody has looked at the order yet.
-    assert pubs[0]["json"]["message"] == adapter.COMPLAINT_ACK
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply("complaint", COMMENT_ID)
     assert len(private_replies(fake_graph)) == 1
 
     alerts = alerts_named("customer_complaint")
@@ -855,7 +871,7 @@ def test_a_product_question_is_not_an_faq(client, comments_on, fake_graph, class
     assert classifier.calls == ["الهودي الأسود ده بكام؟"]
     assert len(private_replies(fake_graph)) == 1
     pubs = public_replies(fake_graph)
-    assert pubs[0]["json"]["message"] in adapter.PUBLIC_ACKS
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply("price", COMMENT_ID)
 
 
 def test_an_faq_reply_writes_its_row_and_a_redelivery_sends_nothing_twice(
@@ -943,3 +959,172 @@ def test_the_faq_table_is_a_lookup_not_a_classifier():
     # No link in the payment answer: Instagram suppresses the reach of a
     # comment carrying one, so the answer would be published and then unread.
     assert "http" not in comment_faq.FAQ_REPLIES["payment"]
+
+
+# --- the redesign: every category answers somebody ---------------------------
+
+
+def test_every_category_has_an_action_and_none_is_silent():
+    """The property the old if/elif chain could not state.
+
+    `negative` shipped for months classified, alerted on, and never answered,
+    because a missing branch is invisible. Now the routing is a table, so
+    "does every category do something?" is something a test can read.
+    """
+    from assistant.channels.instagram import _ACTIONS
+    from assistant.providers.base import COMMENT_CATEGORIES
+
+    assert set(_ACTIONS) == set(COMMENT_CATEGORIES)
+    for category, action in _ACTIONS.items():
+        assert action.public or action.dm or action.alert_reason, category
+        if category == "spam":
+            # The one deliberate exception: answering a scam bot in public
+            # republishes it to everyone reading the post.
+            assert not action.public and not action.dm
+            assert action.alert_reason
+        else:
+            assert action.public, f"{category} has no customer-visible answer"
+
+
+def test_every_category_has_reply_variants_and_they_differ():
+    """A bank, not a line. One line per category is what made two customers
+    asking the same question get identical text."""
+    from assistant.channels.instagram import _ACTIONS
+
+    for category, action in _ACTIONS.items():
+        if not action.public:
+            continue
+        assert comment_replies.bank_size(category) >= 4, category
+        # Every variant distinct -- a bank with a duplicate is a smaller bank.
+        bank = {
+            comment_replies.public_reply(category, f"seed-{i}") for i in range(400)
+        }
+        assert len(bank) == comment_replies.bank_size(category), category
+
+
+def test_two_different_comments_get_different_wording():
+    """The actual complaint: two price questions, one copy-pasted answer."""
+    seen = {comment_replies.public_reply("price", f"comment-{i}") for i in range(60)}
+    assert len(seen) == comment_replies.bank_size("price")
+
+    openers = {comment_replies.dm_opener("price", f"comment-{i}", "بكام؟") for i in range(60)}
+    assert len(openers) > 1
+
+
+def test_variant_choice_is_stable_for_one_comment():
+    """Deterministic, not random: Meta redelivers a webhook whenever it does
+    not get a clean 200, and a retry must reproduce the same sentence rather
+    than put a second differently-worded reply under one comment."""
+    first = comment_replies.public_reply("price", COMMENT_ID)
+    assert all(comment_replies.public_reply("price", COMMENT_ID) == first for _ in range(50))
+
+
+def test_the_dm_opener_quotes_the_customer_and_is_category_shaped():
+    opener = comment_replies.dm_opener("size", COMMENT_ID, "عندكم لارج؟")
+    assert "عندكم لارج؟" in opener
+    # A size opener talks about sizes; it is not the price opener with a
+    # different noun swapped in.
+    price = comment_replies.dm_opener("price", COMMENT_ID, "عندكم لارج؟")
+    assert opener != price
+
+
+@pytest.mark.parametrize(
+    "category",
+    ["price", "availability", "size", "variant", "product_info", "order_status", "other"],
+)
+def test_each_question_category_gets_a_public_line_and_a_dm(
+    client, comments_on, fake_graph, monkeypatch, category
+):
+    _push_classification(monkeypatch, category)
+    assert post_comment(client, comment_body("سؤال")).status_code == 200
+
+    pubs = public_replies(fake_graph)
+    assert len(pubs) == 1
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply(category, COMMENT_ID)
+    assert len(private_replies(fake_graph)) == 1
+
+
+@pytest.mark.parametrize("category", ["positive", "tag_friend", "negative"])
+def test_each_no_dm_category_gets_a_public_line_and_no_dm(
+    client, comments_on, fake_graph, monkeypatch, category
+):
+    _push_classification(monkeypatch, category)
+    assert post_comment(client, comment_body("كلام")).status_code == 200
+
+    pubs = public_replies(fake_graph)
+    assert len(pubs) == 1
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply(category, COMMENT_ID)
+    assert private_replies(fake_graph) == []
+
+
+def test_an_order_status_question_is_answered_and_flagged(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """Neither angry nor browsing: waiting on something already paid for. It
+    gets its own voice, a DM asking for the order number, and a queue item --
+    it used to be swallowed by `important` and read like a sales reply."""
+    _push_classification(monkeypatch, "order_status")
+    assert post_comment(client, comment_body("الأوردر بتاعي فين؟")).status_code == 200
+
+    assert len(public_replies(fake_graph)) == 1
+    assert len(private_replies(fake_graph)) == 1
+    assert len(alerts_named("order_status_comment")) == 1
+
+
+def test_an_unknown_category_is_answered_as_other_not_dropped(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """A model that invents a category must not produce silence on a live
+    post -- it degrades to the polite catch-all that asks."""
+    _push_classification(monkeypatch, "something_new")
+    assert post_comment(client, comment_body("سؤال غريب")).status_code == 200
+
+    pubs = public_replies(fake_graph)
+    assert len(pubs) == 1
+    assert pubs[0]["json"]["message"] == comment_replies.public_reply("other", COMMENT_ID)
+
+
+def test_public_replies_off_still_dms_the_question_categories(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """"Do not speak in public" is not "ignore the customer"."""
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(comments_on, instagram_public_reply_enabled=False),
+    )
+    _push_classification(monkeypatch, "price")
+    assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
+
+    assert public_replies(fake_graph) == []
+    assert len(private_replies(fake_graph)) == 1
+
+
+def test_the_dm_half_can_be_switched_off_on_its_own(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """The mirror flag: answer in public, never cold-DM anyone."""
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(comments_on, instagram_comments_dm_enabled=False),
+    )
+    _push_classification(monkeypatch, "price")
+    assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
+
+    assert len(public_replies(fake_graph)) == 1
+    assert private_replies(fake_graph) == []
+
+
+def test_no_public_line_ever_promises_a_price_it_does_not_send():
+    """The broken promise this surface must never publish.
+
+    A public line that says "I sent you the price" while the DM it refers to
+    is an opener is a lie published under a post. The handoff banks invite the
+    customer to the DM; they never claim the answer is already there.
+    """
+    for category in ("price", "availability", "size", "variant", "product_info"):
+        for i in range(50):
+            line = comment_replies.public_reply(category, f"c-{i}")
+            assert "بعتلك السعر" not in line
+            assert "بعتلك كل التفاصيل" not in line

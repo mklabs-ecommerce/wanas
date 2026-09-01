@@ -28,16 +28,25 @@ from __future__ import annotations
 
 import logging
 import re
-import zlib
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request, Response
 
-from assistant import comment_faq, messages as msg, session as session_store
+from assistant import (
+    comment_faq,
+    comment_replies,
+    messages as msg,
+    session as session_store,
+)
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.providers import get_provider
-from assistant.providers.base import ProviderError
+from assistant.providers.base import (
+    COMMENT_CATEGORIES,
+    LEGACY_COMMENT_CATEGORIES,
+    ProviderError,
+)
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
 from common.security import verify_signature
@@ -359,34 +368,12 @@ def _collect_message(
 # comments -- a public surface, shipped OFF (INSTAGRAM_COMMENTS_ENABLED=0)
 # --------------------------------------------------------------------------
 
-#: Fixed, short, human lines -- NOT a model call. Rotated deterministically
-#: so the account's comments do not read as a bot loop. A comment is answered
-#: publicly in a few words and continued privately in DM, where the real
-#: conversation happens.
-PUBLIC_ACKS = (
-    "بعتلك رسالة في الدايركت 🖤",
-    "جوابك في الدايركت ✨",
-    "كلمني في الدايركت وأقولك كل التفاصيل 🖤",
-)
-
-#: What a `positive` comment gets said back to it. Praise used to get a *like*
-#: and nothing else, which on this integration meant nothing at all: liking a
-#: comment needs `instagram_manage_engagement` and an account connected
-#: through Facebook Business Login, and this shop authenticates with
-#: standalone Instagram Login, where the endpoint does not exist. Every like
-#: 400ed, so the whole "positive" branch was silent -- someone said something
-#: nice under a live post and the shop ignored them.
-#:
-#: So the real answer is a public one, in the same shape as every other public
-#: line here: fixed, short, rotated deterministically, never a model call. The
-#: like is still attempted underneath, because it costs one request and starts
-#: working by itself the day the account moves to Business Login.
-POSITIVE_ACKS = (
-    "منور 🖤",
-    "تسلم يا وحش 🔥",
-    "نورتنا 🖤",
-    "ده ذوقك 🔥",
-)
+# The public wording moved to `assistant/comment_replies.py`. It used to be
+# two tuples here -- PUBLIC_ACKS and POSITIVE_ACKS -- and one line per
+# category everywhere else, which is what made two people asking the same
+# question get byte-identical text back. Categories now own *banks*, and
+# the rule that kept these here in the first place is unchanged: every
+# public sentence is hand-written and fixed, never model-chosen.
 
 #: Emoji ranges, variation selectors and zero-width joiners -- what gets
 #: stripped before deciding whether a comment actually said anything.
@@ -430,27 +417,49 @@ def _post_context_note(media: dict | None) -> str:
     )
 
 
+#: What a classifier outage classifies as. Not a category the model can pick:
+#: an outage must not look like a customer who said nothing, and it must not
+#: produce a public reply or a DM either -- see `_classify`.
+CLASSIFIER_UNAVAILABLE = "unavailable"
+
+
+def _normalise_category(category: str) -> str:
+    """A raw classifier answer, resolved to a category the routing knows.
+
+    One place, on the way in, rather than at each lookup. Doing it per-lookup
+    is how `_ACTIONS` fell back to `other` for a legacy `important` while the
+    reply bank -- asked for `important` -- found nothing and published
+    silence: the comment got its DM and no public line at all.
+    """
+    resolved = LEGACY_COMMENT_CATEGORIES.get(category, category)
+    return resolved if resolved in COMMENT_CATEGORIES else "other"
+
+
 def _classify(text: str, *, comment_id: str, media_id, commenter) -> str:
     """One of COMMENT_CATEGORIES, from the cheap classifier.
 
     Unavailable (no key, RehearsalProvider, a transient failure) falls back to
-    "neither" -- nothing said, nothing sent -- and raises an alert. It used to
-    fall back to "important", which meant a provider outage produced a *burst*
-    of public replies and DMs on a live post with no model having decided any
-    of them. Silence is the safe failure on a public surface; the
-    `classifier_unavailable` alert is what keeps silence from meaning loss,
-    since the owner can work the queue and answer those by hand.
+    CLASSIFIER_UNAVAILABLE -- nothing said, nothing sent -- and raises an
+    alert. It used to fall back to "important", which meant a provider outage
+    produced a *burst* of public replies and DMs on a live post with no model
+    having decided any of them. Silence is the safe failure on a public
+    surface; the `classifier_unavailable` alert is what keeps silence from
+    meaning loss, since the owner can work the queue and answer those by hand.
+
+    Note this is the one silence the redesign kept. Every *category* now
+    answers somebody -- but an outage is not a category, and guessing at one
+    would publish a line no model chose under a live post.
     """
     try:
-        return get_provider().classify_comment(text).category
+        return _normalise_category(get_provider().classify_comment(text).category)
     except ProviderError as exc:
         log.warning("comment classification unavailable (%s); staying silent", exc.kind)
         _classifier_unavailable(comment_id, text, media_id, commenter, str(exc))
-        return "neither"
+        return CLASSIFIER_UNAVAILABLE
     except Exception as exc:  # noqa: BLE001 -- the reason goes into the alert
         log.exception("comment classification failed; staying silent")
         _classifier_unavailable(comment_id, text, media_id, commenter, str(exc))
-        return "neither"
+        return CLASSIFIER_UNAVAILABLE
 
 
 def _classifier_unavailable(comment_id: str, text: str, media_id, commenter, error: str) -> None:
@@ -478,11 +487,82 @@ def _classifier_unavailable(comment_id: str, text: str, media_id, commenter, err
         )
 
 
-#: The one public sentence a complaint gets. Fixed, like every other public
-#: line here -- and deliberately admitting nothing: nobody has looked at the
-#: order yet, so an apology in public would be the shop confessing to
-#: something that may not have happened.
-COMPLAINT_ACK = "بعتنالك في الدايركت عشان نظبطها فوراً 🖤"
+@dataclass(frozen=True)
+class _Action:
+    """What one comment category is allowed to do.
+
+    A table rather than a branch, so "does every category actually answer
+    somebody?" is a property you can *read* -- and assert in a test -- instead
+    of a chain of ifs where a missing `else` is silence nobody notices. That
+    is exactly how `negative` shipped: classified, alerted on, and never
+    answered, for months.
+    """
+
+    #: Reply publicly, with a line picked from that category's bank.
+    public: bool = True
+    #: Open a DM. Spends the DM budget; see `_dm_budget_available`.
+    dm: bool = False
+    #: When the DM budget is gone, may the public line still go out alone?
+    #: True only where silence is worse than a bare acknowledgement.
+    public_reply_without_dm: bool = False
+    #: Raise a queue item for staff, with this reason.
+    alert_reason: str | None = None
+    alert_label: str = ""
+    alert_priority: str | None = None
+
+
+#: Every category, and what it does. The five product questions route
+#: identically -- public line plus DM -- and differ only in *wording*, which
+#: is the whole point of splitting them: `comment_replies` has a separate bank
+#: for each, so a size question and a price question no longer read as the
+#: same sentence with a different noun.
+_ACTIONS: dict[str, _Action] = {
+    "price": _Action(dm=True),
+    "availability": _Action(dm=True),
+    "size": _Action(dm=True),
+    "variant": _Action(dm=True),
+    "product_info": _Action(dm=True),
+    "order_status": _Action(
+        dm=True,
+        public_reply_without_dm=True,
+        alert_reason="order_status_comment",
+        alert_label="Order-status question",
+    ),
+    "complaint": _Action(
+        dm=True,
+        # A complaint keeps its public line even with the DM budget spent:
+        # the alert is already raised and staff answer by hand, and silence
+        # on a public complaint is the worst outcome available here.
+        public_reply_without_dm=True,
+        alert_reason="customer_complaint",
+        alert_label="COMPLAINT",
+        alert_priority="high",
+    ),
+    # Answered in public, and never DMed. A compliment is not a question, so
+    # opening a DM for it would be the shop cold-messaging someone who only
+    # said something nice.
+    "positive": _Action(),
+    "tag_friend": _Action(),
+    # Answered publicly *and* flagged. The public line is for the hundred
+    # people reading, not for the one who wrote it -- see `_NEGATIVE` in
+    # `comment_replies`. No DM: chasing a critic into their inbox is how a
+    # bad comment becomes a screenshot.
+    "negative": _Action(
+        alert_reason="negative_comment",
+        alert_label="Negative comment",
+    ),
+    # The one category with no customer-visible action, deliberately. A public
+    # answer to a scam bot republishes it to everyone reading the post, and a
+    # DM walks into it. `hide_comment` still stays uncalled: hiding is
+    # invisible to the shop, so a misclassified customer would vanish with no
+    # trace. The owner hides by hand, from this alert.
+    "spam": _Action(
+        public=False,
+        alert_reason="spam_comment",
+        alert_label="Spam comment",
+    ),
+    "other": _Action(dm=True),
+}
 
 
 def _parse_comment_timestamp(raw) -> datetime | None:
@@ -703,121 +783,97 @@ def _accept_comment(value: dict, entry_time=None) -> None:
             log.error("public FAQ reply to comment %s failed: %s", comment_id, result.error)
         return
 
-    # 10. Classify: important and complaint get the DM handoff below; positive
-    #     gets a like and nothing else; negative and spam get a silent
-    #     internal alert and no public engagement; neither (a bare @mention
-    #     pointing a friend at the post) gets nothing at all.
+    # 10. Classify, then act. Every category below does *something* --
+    #     the one thing this surface must never do is receive a real comment
+    #     from a real person and answer it with nothing, which is what
+    #     `negative` and the old `neither` did for months.
+    #
+    #     What a category is allowed to do is data, not a branch: see
+    #     `_ACTIONS`. The words themselves live in
+    #     `assistant/comment_replies.py`, one bank per category rather than
+    #     one line, because two people asking the same question used to get
+    #     byte-identical text back.
     category = _classify(text, comment_id=comment_id, media_id=media_id, commenter=commenter)
+    action = _ACTIONS.get(category)
+    if action is None:
+        # Only CLASSIFIER_UNAVAILABLE reaches here -- `_normalise_category`
+        # has already resolved every real answer. Its alert is raised inside
+        # `_classify`, so there is nothing left to do but stay quiet.
+        log.info("comment %s: classifier unavailable, nothing sent", comment_id)
+        return
 
-    if category == "positive":
-        # A short public thank-you, and nothing else -- no DM, no model call.
-        # There is no like: Instagram cannot like a comment (see the note where
-        # `like_comment` used to live in `integrations/instagram/client.py`),
-        # so a like was silence dressed as an action. Silence was the honest
-        # version of that, but it was still silence: someone said something
-        # nice under a live post and the shop ignored them. A fixed line from
-        # POSITIVE_ACKS is the visible answer the like was always meant to be.
-        if not settings.instagram_public_reply_enabled:
-            log.info("comment %s is positive: public replies off, nothing sent", comment_id)
+    # a) The internal half: staff see it, the customer does not.
+    if action.alert_reason:
+        _comment_alert(
+            action.alert_reason,
+            f"{action.alert_label} from {commenter} on media {media_id}: {text[:200]}",
+            comment_id=comment_id,
+            media_id=media_id,
+            commenter=commenter,
+            text=text,
+            priority=action.alert_priority,
+        )
+
+    # b) The DM half, and the budget it spends. Checked before the public line
+    #    is written, because a public "check your DMs" whose DM never comes is
+    #    the broken promise this surface must never publish -- so when the
+    #    budget is gone the handoff is downgraded to its public line alone
+    #    (`complaint`, which must never be met with silence) or to nothing.
+    wants_dm = action.dm and settings.instagram_comments_dm_enabled
+    if wants_dm and not _dm_budget_available(
+        recent_dms, comment_id=comment_id, commenter=commenter, media_id=media_id
+    ):
+        if not action.public_reply_without_dm:
             return
-        thanks = POSITIVE_ACKS[zlib.crc32(comment_id.encode("utf-8")) % len(POSITIVE_ACKS)]
-        result = client.reply_to_comment(comment_id, thanks)
+        wants_dm = False
+
+    # c) The public half.
+    public = comment_replies.public_reply(category, comment_id) if action.public else None
+    if public is not None and not settings.instagram_public_reply_enabled:
+        public = None
+
+    if wants_dm:
+        _dm_handoff(client, comment_id, text, media_id, category=category, public_reply=public)
+        return
+
+    if public is not None:
+        result = client.reply_to_comment(comment_id, public)
         if result.delivered:
             _mark_comment(comment_id, public_replied=True)
         else:
-            log.error("public thank-you to comment %s failed: %s", comment_id, result.error)
+            log.error("public reply to comment %s failed: %s", comment_id, result.error)
         return
 
-    if category == "negative":
-        _comment_alert(
-            "negative_comment",
-            f"Negative comment from {commenter} on media {media_id}: {text[:200]}",
-            comment_id=comment_id,
-            media_id=media_id,
-            commenter=commenter,
-            text=text,
+    log.info("comment %s classified as %s: no customer-visible action", comment_id, category)
+
+
+def _dm_budget_available(recent_dms: int, *, comment_id: str, commenter, media_id) -> bool:
+    """Whether this commenter may still be DMed inside the rolling hour.
+
+    Separate from the flood guard at step 8 on purpose: a compliment or an FAQ
+    answer costs nobody an inbox, so neither may use up the three DMs an hour
+    that exist to stop one person filling a real person's.
+    """
+    if recent_dms < settings.instagram_comment_rate_limit:
+        return True
+    log.warning(
+        "not DMing comment %s: %s is over the DM rate limit (%d/hour)",
+        comment_id,
+        commenter,
+        settings.instagram_comment_rate_limit,
+    )
+    with session_scope() as db:
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason="comment_flood",
+            summary=f"Comment flood from {commenter} on media {media_id}; "
+            "DMs are being withheld",
+            channel=CHANNEL,
+            external_id=commenter,
+            payload={"comment_id": comment_id, "media_id": media_id},
         )
-        return
-
-    if category == "spam":
-        # An alert and nothing else. `InstagramClient.hide_comment` exists and
-        # stays uncalled deliberately: hiding is invisible to the shop, so a
-        # misclassified real customer would vanish with no trace anyone could
-        # follow. The owner hides by hand, from this alert.
-        _comment_alert(
-            "spam_comment",
-            f"Spam comment from {commenter} on media {media_id}: {text[:200]}",
-            comment_id=comment_id,
-            media_id=media_id,
-            commenter=commenter,
-            text=text,
-        )
-        return
-
-    # 11. The DM budget, spent only where a DM is actually sent. Separate from
-    #     the flood guard at step 8 on purpose: a compliment or an FAQ answer
-    #     costs nobody an inbox, so neither may use up the three DMs an hour
-    #     that exist to stop one person filling a person's inbox.
-    def _dm_budget_available() -> bool:
-        if recent_dms < settings.instagram_comment_rate_limit:
-            return True
-        log.warning(
-            "not DMing comment %s: %s is over the DM rate limit (%d/hour)",
-            comment_id,
-            commenter,
-            settings.instagram_comment_rate_limit,
-        )
-        with session_scope() as db:
-            queues.enqueue(
-                db,
-                kind=QueueKind.ALERT.value,
-                reason="comment_flood",
-                summary=f"Comment flood from {commenter} on media {media_id}; "
-                "DMs are being withheld",
-                channel=CHANNEL,
-                external_id=commenter,
-                payload={"comment_id": comment_id, "media_id": media_id},
-            )
-        return False
-
-    if category == "complaint":
-        # A paying customer with a real problem, said in public. A hater
-        # ignored is fine; this one ignored is the worst outcome available on
-        # this surface -- so it gets a visible answer, a DM, and a queue item
-        # staff read above `negative_comment`.
-        _comment_alert(
-            "customer_complaint",
-            f"COMPLAINT from {commenter} on media {media_id}: {text[:200]}",
-            comment_id=comment_id,
-            media_id=media_id,
-            commenter=commenter,
-            text=text,
-            priority="high",
-        )
-        # A complaint still gets its public line even when the DM budget is
-        # gone -- the alert above is already raised, and staff answer it by
-        # hand. Silence on a public complaint is the worst outcome here.
-        if _dm_budget_available():
-            _dm_handoff(client, comment_id, text, media_id, public_reply=COMPLAINT_ACK)
-        elif settings.instagram_public_reply_enabled:
-            result = client.reply_to_comment(comment_id, COMPLAINT_ACK)
-            if result.delivered:
-                _mark_comment(comment_id, public_replied=True)
-        return
-
-    if category != "important":
-        log.info("dropping comment %s: classified as %s", comment_id, category)
-        return
-
-    # The public ack -- deterministic per comment id (crc32; Python's hash()
-    # is salted per process and would pick differently on a retry).
-    ack = PUBLIC_ACKS[zlib.crc32(comment_id.encode("utf-8")) % len(PUBLIC_ACKS)]
-    if not _dm_budget_available():
-        # No public "check your DMs" either: the whole point of that line is
-        # the DM that follows it, and promising one that is not coming is the
-        # broken promise this channel must never make.
-        return
-    _dm_handoff(client, comment_id, text, media_id, public_reply=ack)
+    return False
 
 
 def _comment_alert(
@@ -856,22 +912,32 @@ def _dm_handoff(
     text: str,
     media_id,
     *,
-    public_reply: str,
+    category: str,
+    public_reply: str | None,
 ) -> None:
-    """One fixed public line, one private reply, one seeded session.
+    """One public line, one private reply, one seeded session.
 
-    Shared by `important` and `complaint`: the only thing that differs between
-    them is which fixed sentence goes in public, and neither is written by a
-    model.
+    Shared by every category that opens a DM. What differs between them is
+    only *wording* -- which bank the public line and the opener are drawn
+    from -- and neither is written by a model; see
+    `assistant/comment_replies.py`.
+
+    `public_reply` is None when the shop is not speaking in public at all
+    (INSTAGRAM_PUBLIC_REPLY_ENABLED=0). That flag means "do not speak in
+    public", never "ignore the customer", so the DM half still runs.
     """
-    # a) The public ack, when the shop is speaking in public at all.
-    if settings.instagram_public_reply_enabled:
+    # a) The public line, when the shop is speaking in public at all.
+    if public_reply is not None:
         result = client.reply_to_comment(comment_id, public_reply)
         if result.delivered:
             _mark_comment(comment_id, public_replied=True)
+        else:
+            log.error("public reply to comment %s failed: %s", comment_id, result.error)
 
-    # b) The private reply -- what actually starts the conversation.
-    opener = f"شفت كومنتك على البوست 👀\n«{text[:200]}»\nقولّي وأنا تحت أمرك 🖤"
+    # b) The private reply -- what actually starts the conversation. Worded
+    #    for the category, so a size question opens on sizes and a complaint
+    #    opens on an apology, rather than all of them opening identically.
+    opener = comment_replies.dm_opener(category, comment_id, text)
     private = client.send_private_reply(comment_id, opener)
     if not private.delivered:
         # The row written at ingest keeps any retry from double-DMing; staff

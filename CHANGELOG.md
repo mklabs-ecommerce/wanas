@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased — Every comment gets an answer, in its own words
+
+- **Twelve categories where there were six, and every one of them answers
+  somebody.** `important` used to absorb every real question a shopper can
+  ask — price, stock, size, colour, fabric, "where is my order" — and hand
+  them all one identical public line and one identical DM. They are now
+  `price`, `availability`, `size`, `variant`, `product_info` and
+  `order_status`, routed the same but *worded* differently, which is the
+  point. `tag_friend` splits from the old `neither`, and `other` replaces it
+  as a catch-all that answers rather than a bucket that does nothing.
+- **`negative` is no longer silence.** A bad word under a live post was
+  classified, alerted on, and never answered, for months. It now gets one
+  short, calm, un-defensive public line — written for the hundred people
+  reading it, not for the one who wrote it — and still no DM, because
+  chasing a critic into their inbox is how a bad comment becomes a
+  screenshot. `spam` stays the one category with no customer-visible answer:
+  replying to a scam bot republishes it to everyone scrolling past.
+- **Routing is a table, not a branch.** `_ACTIONS` in
+  `assistant/channels/instagram.py` says what each category may do — public
+  line, DM, alert, priority — so "does every category answer somebody?" is a
+  property a test reads rather than a missing `else` nobody notices. That
+  missing `else` is exactly how `negative` shipped mute.
+- **Categories own banks of wording, not one line each.** New module
+  `assistant/comment_replies.py`: 4–8 hand-written variants per category plus
+  a per-category DM opener, so two people asking the same question stop
+  getting byte-identical text with the quoted comment swapped in. Selection is
+  `crc32(comment_id) % len(bank)` — **deterministic, never random**: Meta
+  redelivers any webhook it does not get a clean 200 for, and a retry has to
+  reproduce the same sentence rather than post a second, differently worded
+  reply under one comment. Every string is still fixed and hand-written; the
+  rule that the public surface never shows a model-chosen sentence is
+  unchanged.
+- **Prices in public: allowed by Meta, still answered in DM, and no longer
+  promised falsely.** Meta's private-reply rules govern *initiating* a DM (one
+  per comment, inside 7 days) — they say nothing about quoting a price in a
+  comment reply, and the fixed product-independent answers (shipping,
+  delivery, payment) already are public. A per-product price stays in DM for
+  accuracy, not policy: "بكام؟" under a post showing several pieces does not
+  say which one, and a wrong number published under a post outlives the sale.
+  What changed is the honesty — no public line claims the price has already
+  been sent, which one of them did while the DM behind it was a bare opener.
+- `INSTAGRAM_COMMENTS_DM_ENABLED` (default on) mirrors
+  `INSTAGRAM_PUBLIC_REPLY_ENABLED` for the private half: answer in public,
+  cold-DM nobody.
+- A classifier outage is still the one silence, and still raises
+  `classifier_unavailable`. An outage is not a category, and guessing at one
+  would publish a line no model chose.
+
 ## Unreleased — Answering a comment where it was asked
 
 - **Three questions are now answered in public, and end there.** "الشحن

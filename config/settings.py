@@ -115,6 +115,11 @@ class Settings:
     #: Whether the bot writes a visible reply under the comment at all, or
     #: only slides into the DM.
     instagram_public_reply_enabled: bool   # INSTAGRAM_PUBLIC_REPLY_ENABLED, default True
+    #: The mirror of the flag above, for the private half. Off means every
+    #: category answers in public only and nobody is cold-DMed -- the setting
+    #: to reach for if private replies ever draw a warning from Meta, without
+    #: taking the whole comment surface down with them.
+    instagram_comments_dm_enabled: bool    # INSTAGRAM_COMMENTS_DM_ENABLED, default True
     #: A comment older than this is ignored -- Meta's private-reply window is
     #: 7 days and a reply to a month-old post is noise, not service.
     instagram_comment_max_age_hours: float  # INSTAGRAM_COMMENT_MAX_AGE_HOURS, default 48.0
@@ -329,6 +334,7 @@ def load_settings() -> Settings:
         instagram_app_scoped_id=os.getenv("INSTAGRAM_APP_SCOPED_ID", ""),
         instagram_comments_enabled=_bool("INSTAGRAM_COMMENTS_ENABLED", False),
         instagram_public_reply_enabled=_bool("INSTAGRAM_PUBLIC_REPLY_ENABLED", True),
+        instagram_comments_dm_enabled=_bool("INSTAGRAM_COMMENTS_DM_ENABLED", True),
         instagram_comment_max_age_hours=_float("INSTAGRAM_COMMENT_MAX_AGE_HOURS", 48.0),
         instagram_comment_rate_limit=_int("INSTAGRAM_COMMENT_RATE_LIMIT", 3),
         instagram_faq_rate_limit=_int("INSTAGRAM_FAQ_RATE_LIMIT", 5),
