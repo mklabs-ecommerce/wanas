@@ -294,6 +294,8 @@ class FakeShopify:
                 "address": address,
                 "governorate": governorate,
                 "shipping_fee": Decimal(str(shipping_fee)),
+                "discounts": Decimal("0"),
+                "tax": Decimal("0"),
                 "tags": ["chatbot", "whatsapp", "cash-on-delivery"],
                 # Every order the bot places is cash on delivery -- see
                 # `integrations/shopify/orders.py`, which leaves it PENDING
@@ -390,6 +392,8 @@ class FakeShopify:
         governorate="",
         items,
         shipping_fee=0,
+        discount=0,
+        tax=0,
         payment_gateways=("shopify_payments",),
         financial_status="PENDING",
     ):
@@ -414,6 +418,8 @@ class FakeShopify:
                 "address": address,
                 "governorate": governorate,
                 "shipping_fee": Decimal(str(shipping_fee)),
+                "discounts": Decimal(str(discount)),
+                "tax": Decimal(str(tax)),
                 "tags": [],
                 # A storefront order is card-paid by default; a test wanting
                 # a COD website order (or none at all, for the `unknown`
@@ -892,19 +898,30 @@ class FakeShopify:
                 "returning" if self._orders_for_customer(order) > 1 else "new"
             ),
             "governorate": order["governorate"],
-            "total": str(
-                sum(
-                    (order["line_meta"][sku]["unit_price"] * qty for sku, qty in order["lines"].items()),
-                    Decimal("0"),
-                )
-                + order["shipping_fee"]
-            ),
+            "total": str(self._order_gross(order) - order.get("discounts", Decimal("0")) + order["shipping_fee"]),
+            # What Shopify's sales reports are built from -- see
+            # `admin_orders._order_summary`. The fake shop has no returns
+            # (this one is cash on delivery, with nothing to refund against),
+            # so `refunded` is a constant zero rather than a field a test can
+            # set into a state production cannot reach.
+            "gross_sales": str(self._order_gross(order)),
+            "discounts": str(order.get("discounts", Decimal("0"))),
+            "shipping_fee": str(order["shipping_fee"]),
+            "tax": str(order.get("tax", Decimal("0"))),
+            "refunded": "0.00",
             "line_items": [
                 {"title": order["line_meta"][sku]["title"], "quantity": qty, "sku": sku}
                 for sku, qty in order["lines"].items()
             ],
             "source": "chatbot" if "chatbot" in order["tags"] else "website",
         }
+
+    def _order_gross(self, order):
+        """The line items before any discount -- the fake's `originalTotalSet`."""
+        return sum(
+            (order["line_meta"][sku]["unit_price"] * qty for sku, qty in order["lines"].items()),
+            Decimal("0"),
+        )
 
     def first_order_ids(self, **_kwargs):
         """Which orders were their buyer's first, from the whole shelf.
@@ -944,12 +961,7 @@ class FakeShopify:
             "note": None,
             "customer_email": order["email"],
             "address": order["address"],
-            "subtotal": str(
-                sum(
-                    (order["line_meta"][sku]["unit_price"] * qty for sku, qty in order["lines"].items()),
-                    Decimal("0"),
-                )
-            ),
+            "subtotal": str(self._order_gross(order) - order.get("discounts", Decimal("0"))),
             "shipping_fee": str(order["shipping_fee"]),
             "line_items": [
                 {"id": f"gid://shopify/LineItem/{sku}", "title": order["line_meta"][sku]["title"], "quantity": qty, "sku": sku}

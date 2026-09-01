@@ -108,6 +108,50 @@ def _with_customer_kind(orders: list[dict]) -> list[dict]:
     )
 
 
+def _sales(orders: list[dict]) -> dict[str, str]:
+    """Shopify's own sales arithmetic, over the orders handed in.
+
+    The definitions are Shopify Analytics', so that a staff member comparing
+    this page against the admin's Sales report reads the same two numbers:
+
+        net sales   = gross sales - discounts - returns
+        total sales = net sales + shipping + taxes
+
+    Gross sales is what the line items came to before any discount
+    (`admin_orders._gross_sales`), *not* the order's `total` -- `total` already
+    has shipping in it, so summing it and calling the result "sales" mixes the
+    shop's revenue with the courier's.
+
+    Cancelled orders are not in `orders`: this page excludes them from every
+    figure it prints, and this is not the place to start disagreeing with the
+    card next to it. Shopify's report makes the opposite choice, which is why
+    the screen says so out loud.
+
+    Every field is read with a default: an order dict from before these fields
+    were asked for -- or from a Shopify that answered without them -- must
+    degrade to zero rather than raise on a page that is only reporting.
+    """
+
+    def total(field: str) -> Decimal:
+        return sum((Decimal(str(o.get(field) or "0")) for o in orders), Decimal("0"))
+
+    gross = total("gross_sales")
+    discounts = total("discounts")
+    returns = total("refunded")
+    shipping = total("shipping_fee")
+    taxes = total("tax")
+    net = gross - discounts - returns
+    return {
+        "gross_sales": str(gross),
+        "discounts": str(discounts),
+        "returns": str(returns),
+        "net_sales": str(net),
+        "shipping": str(shipping),
+        "taxes": str(taxes),
+        "total_sales": str(net + shipping + taxes),
+    }
+
+
 def _is_test_order(order: dict, exclude_phones: set[str]) -> bool:
     if not exclude_phones:
         return False
@@ -193,6 +237,7 @@ def summarize(
 
     active = [o for o in orders if not o["cancelled"]]
     revenue = sum((Decimal(o["total"]) for o in active), Decimal("0"))
+    sales = _sales(active)
     order_count = len(active)
     cancelled_count = len(orders) - order_count
     aov = (revenue / order_count) if order_count else Decimal("0")
@@ -211,12 +256,16 @@ def summarize(
 
     by_day: Counter[str] = Counter()
     revenue_by_day: dict[str, Decimal] = {}
+    orders_by_day: dict[str, list[dict]] = {}
     for order in active:
         day = (order.get("created_at") or "")[:10]
         if not day:
             continue
         by_day[day] += 1
         revenue_by_day[day] = revenue_by_day.get(day, Decimal("0")) + Decimal(order["total"])
+        orders_by_day.setdefault(day, []).append(order)
+
+    sales_by_day = {day: _sales(day_orders) for day, day_orders in orders_by_day.items()}
 
     status_breakdown: Counter[str] = Counter()
     for order in orders:
@@ -257,9 +306,19 @@ def summarize(
             {"title": title, "quantity": qty} for title, qty in best_sellers.most_common(TOP_PRODUCTS)
         ],
         "revenue_by_day": [
-            {"date": day, "revenue": str(revenue_by_day[day]), "orders": by_day[day]}
+            {
+                "date": day,
+                "revenue": str(revenue_by_day[day]),
+                "orders": by_day[day],
+                #: The same two figures the KPI cards show, per day, so the
+                #: chart under a card is the card broken up rather than a
+                #: different number that happens to sit near it.
+                "total_sales": sales_by_day[day]["total_sales"],
+                "net_sales": sales_by_day[day]["net_sales"],
+            }
             for day in sorted(revenue_by_day)
         ],
+        "sales": sales,
         "status_breakdown": dict(status_breakdown),
         "source_breakdown": dict(source_breakdown),
         "channel_breakdown": dict(channel_breakdown),

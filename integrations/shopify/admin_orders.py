@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from decimal import Decimal
 
 from integrations.shopify.client import (
     ShopifyConfigError,
@@ -67,7 +68,13 @@ ORDER_SUMMARY_FIELDS = """
   shippingAddress { name phone city province }
   fulfillments(first: 5) { id status displayStatus }
   totalPriceSet { shopMoney { amount currencyCode } }
-  lineItems(first: 50) { nodes { title quantity sku } }
+  totalDiscountsSet { shopMoney { amount currencyCode } }
+  totalShippingPriceSet { shopMoney { amount currencyCode } }
+  totalTaxSet { shopMoney { amount currencyCode } }
+  totalRefundedSet { shopMoney { amount currencyCode } }
+  lineItems(first: 50) {
+    nodes { title quantity sku originalTotalSet { shopMoney { amount currencyCode } } }
+  }
 """
 
 ORDERS_QUERY = """
@@ -143,6 +150,22 @@ mutation($fulfillment: FulfillmentInput!) {
 
 def _money(block: dict | None) -> str:
     return ((block or {}).get("shopMoney") or {}).get("amount") or "0.00"
+
+
+def _gross_sales(node: dict) -> str:
+    """What the line items came to before any discount -- Shopify's "gross
+    sales".
+
+    Summed from `originalTotalSet` per line rather than taken off
+    `subtotalPriceSet`, because that field's meaning has moved between API
+    versions (it is net of discounts, and in recent versions of returns too),
+    and a KPI that quietly changes definition on an API bump is worse than one
+    that costs a few extra bytes on the wire. Lines past the query's `first:`
+    cap are not counted; nothing this shop sells comes close to it.
+    """
+    lines = (node.get("lineItems") or {}).get("nodes") or []
+    total = sum((Decimal(_money(li.get("originalTotalSet"))) for li in lines), Decimal("0"))
+    return str(total)
 
 
 #: Gateway names that mean the money has not moved yet. Shopify lets a shop
@@ -340,6 +363,17 @@ def _order_summary(node: dict) -> dict:
         "app": ((node.get("app") or {}).get("name") or None),
         "governorate": address.get("province") or address.get("city"),
         "total": _money(node.get("totalPriceSet")),
+        #: The four figures Shopify's own sales reports are built out of, so
+        #: the dashboard can say "total sales" and "net sales" and mean what
+        #: the merchant sees in Shopify Analytics rather than something close
+        #: to it. `total` is what the customer owes *now*; these are what the
+        #: shop sold. Kept as strings, like every other money field here --
+        #: the arithmetic happens in Decimal, in `dashboard_stats`.
+        "gross_sales": _gross_sales(node),
+        "discounts": _money(node.get("totalDiscountsSet")),
+        "shipping_fee": _money(node.get("totalShippingPriceSet")),
+        "tax": _money(node.get("totalTaxSet")),
+        "refunded": _money(node.get("totalRefundedSet")),
         "line_items": [
             {"title": li.get("title"), "quantity": li.get("quantity"), "sku": li.get("sku")}
             for li in (node.get("lineItems") or {}).get("nodes") or []

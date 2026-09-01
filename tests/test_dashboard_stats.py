@@ -25,7 +25,8 @@ VARIANT = "wanas-hoodie-s-olive"
 
 
 def _order(*, total, cancelled=False, fulfillment_status="UNFULFILLED", source="chatbot",
-           customer_phone="0100", created_at="2026-01-05", line_items=None):
+           customer_phone="0100", created_at="2026-01-05", line_items=None,
+           gross_sales=None, discounts="0", shipping_fee="0", tax="0", refunded="0"):
     return {
         "id": f"gid://shopify/Order/{total}-{customer_phone}",
         "name": "#1",
@@ -38,6 +39,13 @@ def _order(*, total, cancelled=False, fulfillment_status="UNFULFILLED", source="
         "customer_phone": customer_phone,
         "governorate": "Cairo",
         "total": str(total),
+        # Defaults to an order with no discount, no shipping and no tax, so
+        # the sales fields agree with `total` unless a test says otherwise.
+        "gross_sales": str(total if gross_sales is None else gross_sales),
+        "discounts": str(discounts),
+        "shipping_fee": str(shipping_fee),
+        "tax": str(tax),
+        "refunded": str(refunded),
         "line_items": line_items or [{"title": "WANAS Hoodie", "quantity": 1, "sku": VARIANT}],
         "source": source,
     }
@@ -113,9 +121,68 @@ def test_revenue_by_day_groups_and_sums():
         _order(total=30, created_at="2026-01-06T10:00:00Z", customer_phone="3"),
     ]
     series = dashboard_stats.summarize(orders_in)["revenue_by_day"]
-    assert series == [
-        {"date": "2026-01-05", "revenue": "150", "orders": 2},
-        {"date": "2026-01-06", "revenue": "30", "orders": 1},
+    assert [(d["date"], d["revenue"], d["orders"]) for d in series] == [
+        ("2026-01-05", "150", 2),
+        ("2026-01-06", "30", 1),
+    ]
+
+
+# --------------------------------------------------------------------------
+# Shopify's own two sales figures
+# --------------------------------------------------------------------------
+
+
+def test_net_and_total_sales_follow_shopifys_definitions():
+    """gross - discounts - returns = net; + shipping + taxes = total."""
+    sales = dashboard_stats.summarize(
+        [_order(total=560, gross_sales=500, discounts=50, shipping_fee=60, tax=25, refunded=30)]
+    )["sales"]
+    assert sales["gross_sales"] == "500"
+    assert sales["discounts"] == "50"
+    assert sales["returns"] == "30"
+    assert sales["net_sales"] == "420"
+    assert sales["total_sales"] == "505"
+
+
+def test_sales_leave_the_courier_out_of_the_net_figure():
+    """Shipping is on the total and never on the net -- summing `total` and
+    calling it sales is exactly the mistake these two fields exist to stop."""
+    sales = dashboard_stats.summarize([_order(total=350, gross_sales=300, shipping_fee=50)])["sales"]
+    assert sales["net_sales"] == "300"
+    assert sales["total_sales"] == "350"
+
+
+def test_cancelled_orders_are_out_of_both_sales_figures():
+    sales = dashboard_stats.summarize(
+        [
+            _order(total=100, gross_sales=100),
+            _order(total=999, gross_sales=999, cancelled=True, customer_phone="2"),
+        ]
+    )["sales"]
+    assert sales["gross_sales"] == "100"
+    assert sales["total_sales"] == "100"
+
+
+def test_an_order_from_before_these_fields_reads_as_zero_rather_than_raising():
+    bare = _order(total=100)
+    for field in ("gross_sales", "discounts", "shipping_fee", "tax", "refunded"):
+        bare.pop(field)
+    sales = dashboard_stats.summarize([bare])["sales"]
+    assert sales["total_sales"] == "0"
+
+
+def test_the_daily_series_carries_both_sales_figures():
+    series = dashboard_stats.summarize(
+        [
+            _order(total=110, gross_sales=100, shipping_fee=10, created_at="2026-01-05T10:00:00Z"),
+            _order(total=55, gross_sales=50, shipping_fee=5, created_at="2026-01-05T18:00:00Z",
+                   customer_phone="2"),
+            _order(total=30, gross_sales=30, created_at="2026-01-06T10:00:00Z", customer_phone="3"),
+        ]
+    )["revenue_by_day"]
+    assert [(d["date"], d["net_sales"], d["total_sales"]) for d in series] == [
+        ("2026-01-05", "150", "165"),
+        ("2026-01-06", "30", "30"),
     ]
 
 
@@ -215,6 +282,23 @@ def test_stats_endpoint_reflects_a_placed_order(logged_in, cairo_rate, seeded, s
     body = res.json()
     assert body["order_count"] == 1
     assert Decimal(body["revenue"]) > 0
+
+
+def test_stats_endpoint_separates_net_from_total_on_a_real_shopify_read(logged_in, shopify):
+    """End to end, against the fake shop: a discounted website order with a
+    shipping fee has to arrive as three different numbers, not one repeated."""
+    shopify.seed_order(
+        customer_name="Web Buyer", phone="201555000111", governorate="Cairo",
+        items=[{"variant_id": "1", "quantity": 2, "unit_price": 500, "title": "WANAS Hoodie"}],
+        shipping_fee=60, discount=100,
+    )
+    body = logged_in.get("/dashboard/api/stats?days=30").json()
+    sales = body["sales"]
+    assert Decimal(sales["gross_sales"]) == Decimal("1000")
+    assert Decimal(sales["discounts"]) == Decimal("100")
+    assert Decimal(sales["net_sales"]) == Decimal("900")
+    assert Decimal(sales["total_sales"]) == Decimal("960")
+    assert Decimal(body["revenue"]) == Decimal("960")
 
 
 def test_stats_endpoint_reports_an_outage(logged_in, shopify):
