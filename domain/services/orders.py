@@ -752,6 +752,99 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
     return order_payload(order)
 
 
+#: The shop's published terms, from `docs/policy.md`. Here rather than in the
+#: prompt for the same reason the status rule is: a number the model recites
+#: from memory is a number it can get wrong, and this one is charged at the
+#: door in cash.
+EXCHANGE_WINDOW_HOURS = 24
+#: On top of the regular shipping fee, and only when the customer changed
+#: their mind. A defect or a wrong item is the shop's to pay for.
+EXCHANGE_SURCHARGE = to_decimal(20)
+
+
+def return_terms(order: Order | None = None) -> dict:
+    """What a customer may still do with an order, and what it costs them.
+
+    Two things the model must not work out for itself. The first is the
+    *route*: before the courier has it, cancelling is free; after that the
+    only way back is refusing the parcel at the door, which is a return, not
+    a cancellation. The second is the *arithmetic*: refusing at the door
+    costs the delivery attempt **and** the trip back, so the customer owes
+    twice the shipping fee. A model quoting one leg understates a
+    cash-on-delivery bill, which is an argument at the door.
+
+    `exchange_window` is deliberately three-valued. `delivered_at` is only
+    stamped when Shopify reports the shipment delivered or staff press the
+    button, so an order that really did arrive can still have no timestamp --
+    and "unknown" must never be rounded down to "closed". Refusing an
+    exchange on a date nobody recorded is the failure this avoids.
+    """
+    terms: dict = {
+        "exchange_window_hours": EXCHANGE_WINDOW_HOURS,
+        "exchange_surcharge": money(EXCHANGE_SURCHARGE),
+        "exchange_condition": "original_packaging_unworn_clean",
+        "defective_or_wrong_item": "shop_pays_shipping",
+        "changed_mind": "customer_pays_shipping_plus_surcharge",
+        "returns_accepted": "at_the_door_only",
+    }
+    if order is None:
+        return terms
+
+    shipping = to_decimal(order.shipping_fee)
+    terms.update(
+        {
+            "order_id": order.order_id,
+            "reference": order.shopify_order_name or order.order_id,
+            "status": order.status,
+            "cancellable": order.modifiable,
+            "shipping_fee": money(shipping),
+        }
+    )
+
+    if order.modifiable:
+        # Nothing has left the shop, so nothing is owed for taking it back.
+        terms["route"] = "cancel_now"
+        terms["customer_pays"] = 0
+        return terms
+
+    if order.status == OrderStatus.CANCELLED.value:
+        terms["route"] = "already_cancelled"
+        terms["customer_pays"] = 0
+        return terms
+
+    delivered_at = as_aware(order.delivered_at)
+    if order.status == OrderStatus.DELIVERED.value:
+        # They have it. Refusing at the door is no longer on the table; an
+        # exchange inside the window is the only route left.
+        terms["route"] = "exchange_within_window"
+        terms["customer_pays"] = money(shipping + EXCHANGE_SURCHARGE)
+        terms["customer_pays_note"] = "changed_mind_only"
+    else:
+        terms["route"] = "refuse_at_the_door"
+        terms["customer_pays"] = money(shipping * 2)
+        terms["customer_pays_legs"] = {
+            "delivery_attempt": money(shipping),
+            "return_trip": money(shipping),
+        }
+
+    if delivered_at is None:
+        # Shipped, and nothing has reported it arriving. That is not the same
+        # as "not arrived": the stamp only exists if Shopify was told or
+        # staff pressed the button, and this shop's couriers often do
+        # neither. Unknown, and the caller has to ask rather than assume.
+        terms["exchange_window"] = "unknown"
+        terms["exchange_window_reason"] = (
+            "delivery_not_reported" if order.status == OrderStatus.SHIPPED.value
+            else "no_delivery_timestamp"
+        )
+        return terms
+
+    hours = (utcnow() - delivered_at).total_seconds() / 3600
+    terms["hours_since_delivery"] = round(hours, 1)
+    terms["exchange_window"] = "open" if hours <= EXCHANGE_WINDOW_HOURS else "closed"
+    return terms
+
+
 def cancel(
     session: Session,
     order: Order,

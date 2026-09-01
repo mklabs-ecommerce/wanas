@@ -1,18 +1,27 @@
 """Ordering and after-the-order tools.
 
 confirm_order, get_my_orders, modify_order_quantity, cancel_order,
-request_item_swap, submit_feedback.
+get_return_terms, request_item_swap, submit_feedback.
 
 The status rule lives here, not in the prompt: modify and cancel check the
 order's status themselves and refuse a shipped order regardless of how the
 request was phrased. A prompt rule would be a suggestion the model could talk
 itself out of.
+
+The *terms* follow the same rule. A refusal that only says "not modifiable"
+leaves the model to invent what happens next, and what happens next costs
+money: a shipped order can only come back by being refused at the door, and
+that is a return the customer pays the round trip on -- both the delivery
+attempt and the trip back. So `cancel_order` refuses a shipped order with the
+route and the arithmetic attached (`orders.return_terms`), and
+`get_return_terms` answers the question on its own for a customer who asks
+before naming an order.
 """
 
 from __future__ import annotations
 
 from assistant.tools.base import ToolContext, tool
-from domain.models import Variant
+from domain.models import OrderStatus, Variant
 from domain.services import orders
 from domain.services.notifications import item_swap_requested
 
@@ -93,7 +102,9 @@ def modify_order_quantity(ctx: ToolContext, order_id: str, variant_id: str, quan
 
 @tool(
     "cancel_order",
-    "Cancel an order that has not shipped. Returns all its stock and notifies staff.",
+    "Cancel an order that has not shipped. Returns all its stock and notifies staff. A shipped "
+    "order is refused with `already_shipped` and the terms that now apply instead -- read those "
+    "numbers back, do not soften them and do not quote a fee of your own.",
     properties={"order_id": {"type": "string"}},
     required=("order_id",),
 )
@@ -101,7 +112,35 @@ def cancel_order(ctx: ToolContext, order_id: str) -> dict:
     order = orders.find_order_for_identity(ctx.session, ctx.channel, ctx.external_id, order_id)
     if order is None:
         return {"error": "order_not_found", "order_id": order_id}
-    return orders.cancel(ctx.session, order, by="customer")
+
+    result = orders.cancel(ctx.session, order, by="customer")
+    if result.get("error") != "not_modifiable":
+        return result
+    if order.status == OrderStatus.CANCELLED.value:
+        # Nothing to explain: it is already where they want it.
+        return result
+    # Refused because the courier has it. Saying only "no" is what left the
+    # model free to promise a free cancellation the shop cannot honour, or to
+    # quote one leg of a fee that is charged both ways.
+    code = "already_delivered" if order.status == OrderStatus.DELIVERED.value else "already_shipped"
+    return {"error": code, **orders.return_terms(order)}
+
+
+@tool(
+    "get_return_terms",
+    "The shop's exchange, return and cancellation terms, with this order's own numbers filled in. "
+    "Call it before saying anything about a fee, a deadline or whether something can still be "
+    "cancelled -- the terms and the money come from here, never from memory. order_id is optional; "
+    "without one you get the general terms and no per-order amount.",
+    properties={"order_id": {"type": "string", "description": "Optional; from get_my_orders."}},
+)
+def get_return_terms(ctx: ToolContext, order_id: str | None = None) -> dict:
+    if not order_id:
+        return orders.return_terms()
+    order = orders.find_order_for_identity(ctx.session, ctx.channel, ctx.external_id, order_id)
+    if order is None:
+        return {"error": "order_not_found", "order_id": order_id}
+    return orders.return_terms(order)
 
 
 @tool(

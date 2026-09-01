@@ -90,6 +90,18 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   commits, the stage has to be bound when the transition happens, not read off
   the order later. A single fulfilment walks two stages in one transaction, and
   reading late made both of them say "shipped".
+- **The exchange and cancellation terms are published, and they are money.**
+  The wording is `docs/policy.md`; the numbers are `EXCHANGE_WINDOW_HOURS`
+  and `EXCHANGE_SURCHARGE` in `domain/services/orders.py`, read by
+  `orders.return_terms` and handed to the model by `get_return_terms`. Two
+  things must never be worked out by the model: **refusing a shipped parcel
+  at the door costs the round trip**, both the delivery attempt and the trip
+  back, so it is twice `shipping_fee` and not once; and an exchange window
+  can only be reported when `delivered_at` exists. It is stamped when Shopify
+  reports the shipment delivered or staff press the button, and this shop's
+  couriers often do neither — so a parcel that arrived can still read
+  `Shipped`. `exchange_window` is three-valued for exactly that reason, and
+  `unknown` must never be answered as "the 24 hours passed".
 - **Payment is cash on delivery only.** No gateway, no `Pending payment`
   status/timeout logic.
 - **Email is optional.** Orders arrive over WhatsApp and the flow never asks
@@ -148,7 +160,7 @@ hard architectural boundary, not a nice-to-have.
 Tool argument/return shapes and refusal codes are defined by the `@tool`
 decorators in `assistant/tools/*.py` and pinned down by
 `tests/test_tool_contracts.py` (every refusal, and that there are exactly
-eighteen tools) — that pairing is what to build against, not a separate
+nineteen tools) — that pairing is what to build against, not a separate
 spec.
 
 **A photo and a voice note do not escape any of this.** A voice note is

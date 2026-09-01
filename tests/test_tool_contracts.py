@@ -6,11 +6,13 @@ the whole design rests on tools refusing rather than the model behaving.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import select
 
 from assistant.tools.base import REGISTRY, ToolContext, call_tool, load_all
-from domain.models import Client, Order, QueueKind, ShippingRate, Variant
+from domain.models import Client, Order, QueueKind, ShippingRate, Variant, utcnow
 from domain.services import (
     carts,
     identities,
@@ -37,7 +39,7 @@ def call(ctx, name, **arguments):
 # --- the seventeen --------------------------------------------------------
 
 
-def test_exactly_eighteen_tools():
+def test_exactly_nineteen_tools():
     """Every capability the bot has is on this list. A behaviour described in
     the docs with no tool here is a behaviour the bot cannot do."""
     assert sorted(REGISTRY) == sorted(
@@ -55,6 +57,7 @@ def test_exactly_eighteen_tools():
             "get_my_orders",
             "modify_order_quantity",
             "cancel_order",
+            "get_return_terms",
             "request_item_swap",
             "submit_feedback",
             "request_human",
@@ -62,7 +65,7 @@ def test_exactly_eighteen_tools():
             "link_client",
         ]
     )
-    assert len(REGISTRY) == 18
+    assert len(REGISTRY) == 19
 
 
 def test_every_tool_returns_an_object_never_prose(ctx):
@@ -600,7 +603,113 @@ def test_not_modifiable_after_shipped(ctx, placed):
         "error": "not_modifiable",
         "status": "Shipped",
     }
-    assert call(ctx, "cancel_order", order_id=placed) == {"error": "not_modifiable", "status": "Shipped"}
+    refused = call(ctx, "cancel_order", order_id=placed)
+    assert refused["error"] == "already_shipped"
+    assert refused["cancellable"] is False
+
+
+# --- the exchange / cancellation terms (docs/policy.md) -------------------
+#
+# The numbers here are charged at the door in cash. Every one of them is
+# asserted against `docs/policy.md`, not against what the tool happens to
+# return, so a change to the terms has to be a deliberate edit in both places.
+
+
+def _ship(ctx, order_id):
+    order = ctx.session.get(Order, order_id)
+    orders.advance_status(ctx.session, order, "Packed")
+    orders.advance_status(ctx.session, order, "Shipped")
+    ctx.session.flush()
+    return order
+
+
+def _deliver(ctx, order_id, *, hours_ago=0.0):
+    order = _ship(ctx, order_id)
+    orders.advance_status(ctx.session, order, "Delivered")
+    order.delivered_at = utcnow() - timedelta(hours=hours_ago)
+    ctx.session.flush()
+    return order
+
+
+def test_cancelling_before_shipping_costs_the_customer_nothing(ctx, placed):
+    terms = call(ctx, "get_return_terms", order_id=placed)
+    assert terms["cancellable"] is True
+    assert terms["route"] == "cancel_now"
+    assert terms["customer_pays"] == 0
+
+    assert call(ctx, "cancel_order", order_id=placed)["status"] == "Cancelled"
+
+
+def test_cancelling_after_shipping_is_a_return_and_costs_the_round_trip(ctx, placed):
+    """The one the model must not work out for itself: refusing the parcel at
+    the door is charged both ways. Quoting the 60 rather than the 120 is an
+    argument at the door on a cash-on-delivery order."""
+    _ship(ctx, placed)
+
+    refused = call(ctx, "cancel_order", order_id=placed)
+    assert refused["error"] == "already_shipped"
+    assert refused["cancellable"] is False
+    assert refused["route"] == "refuse_at_the_door"
+    assert refused["shipping_fee"] == 60
+    assert refused["customer_pays"] == 120, "one-way is the wrong number"
+    assert refused["customer_pays_legs"] == {"delivery_attempt": 60, "return_trip": 60}
+
+    # And it really did not cancel anything on the way past.
+    assert ctx.session.get(Order, placed).status == "Shipped"
+
+
+def test_a_shipped_order_cannot_report_the_exchange_window(ctx, placed):
+    """`delivered_at` is stamped only when Shopify reports the delivery or
+    staff press the button. A parcel that arrived and was never reported still
+    reads Shipped, so the window is unknown -- never "closed"."""
+    _ship(ctx, placed)
+    terms = call(ctx, "get_return_terms", order_id=placed)
+    assert terms["exchange_window"] == "unknown"
+    assert terms["exchange_window_reason"] == "delivery_not_reported"
+    assert "hours_since_delivery" not in terms
+
+
+def test_an_exchange_inside_the_window_is_open(ctx, placed):
+    _deliver(ctx, placed, hours_ago=3)
+    terms = call(ctx, "get_return_terms", order_id=placed)
+    assert terms["exchange_window"] == "open"
+    assert terms["hours_since_delivery"] == 3.0
+    assert terms["route"] == "exchange_within_window"
+
+
+def test_an_exchange_after_twenty_four_hours_is_closed(ctx, placed):
+    _deliver(ctx, placed, hours_ago=30)
+    terms = call(ctx, "get_return_terms", order_id=placed)
+    assert terms["exchange_window"] == "closed"
+    assert terms["exchange_window_hours"] == 24
+
+
+def test_a_defective_item_ships_at_the_shops_expense_and_a_swap_costs_twenty(ctx, placed):
+    """Who pays is decided by *why*, and the model is given both answers
+    rather than being trusted to remember which way round they go."""
+    _deliver(ctx, placed, hours_ago=2)
+    terms = call(ctx, "get_return_terms", order_id=placed)
+    assert terms["defective_or_wrong_item"] == "shop_pays_shipping"
+    assert terms["changed_mind"] == "customer_pays_shipping_plus_surcharge"
+    assert terms["exchange_surcharge"] == 20
+    # Regular shipping *plus* the surcharge -- not the surcharge on its own.
+    assert terms["customer_pays"] == 80
+    assert terms["exchange_condition"] == "original_packaging_unworn_clean"
+
+
+def test_the_terms_answer_without_an_order_but_quote_no_amount(ctx):
+    """"ممكن أستبدل؟" arrives before any order id does."""
+    terms = call(ctx, "get_return_terms")
+    assert terms["exchange_window_hours"] == 24
+    assert terms["exchange_surcharge"] == 20
+    assert terms["returns_accepted"] == "at_the_door_only"
+    assert "customer_pays" not in terms and "shipping_fee" not in terms
+
+
+def test_return_terms_are_scoped_to_the_asking_customer(ctx, placed, seeded):
+    other = ToolContext(session=seeded, channel="whatsapp", external_id="201000000002")
+    identities.client_for(seeded, "whatsapp", "201000000002")
+    assert call(other, "get_return_terms", order_id=placed)["error"] == "order_not_found"
 
 
 def test_cancel_order_not_found(ctx):

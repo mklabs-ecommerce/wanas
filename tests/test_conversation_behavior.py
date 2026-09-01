@@ -364,6 +364,36 @@ def test_the_prompt_still_carries_the_rules_that_are_not_negotiable():
         assert rule in SYSTEM_PROMPT
 
 
+def test_the_prompt_carries_the_published_exchange_and_cancellation_terms():
+    """The terms are in `docs/policy.md`; these are the four numbers and the
+    one rule a customer is told out loud. A model that has never been given
+    them answers from somewhere, and where it answers from is invention."""
+    section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
+    assert "24 ساعة" in section, "the exchange window"
+    assert "20 جنيه" in section, "the exchange surcharge"
+    assert "علبتها الأصلية" in section and "مش ملبوسة" in section
+    assert "الشحن على المحل" in section, "a defect is the shop's to pay for"
+    assert "رايح وجاي" in section, "refusing at the door costs both trips"
+
+
+def test_the_prompt_defers_the_terms_to_the_tool_rather_than_to_memory():
+    """Same rule as every other number in here: the tool decides, not the
+    model. A recited fee is a fee that drifts."""
+    section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
+    assert "get_return_terms" in section
+    assert "متقولش رسوم ولا مدة ولا «ينفع» من دماغك" in section
+    assert "customer_pays" in section, "the model reads the amount back, it does not compute it"
+
+
+def test_the_prompt_forbids_calling_an_unknown_delivery_date_a_missed_window():
+    """The gap this covers is real: a parcel the courier never reported still
+    reads Shipped, so "the 24 hours passed" would be a refusal invented out
+    of a missing timestamp."""
+    section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
+    assert "exchange_window=unknown" in section
+    assert "متقولش إن الـ24 ساعة عدت" in section
+
+
 def test_the_prompt_forbids_leaking_internals():
     assert "متذكرش أسماء الأدوات ولا الـ IDs" in SYSTEM_PROMPT
     assert "متكتبش أي مسار ملف ولا لينك أبداً" in SYSTEM_PROMPT
@@ -371,8 +401,12 @@ def test_the_prompt_forbids_leaking_internals():
 
 def test_the_prompt_did_not_become_a_wall_of_text():
     """A prompt nobody can hold in their head is one the model stops
-    following. Kept in the range where the instructions still read as rules."""
-    assert 3000 < len(SYSTEM_PROMPT) < 9000
+    following. Kept in the range where the instructions still read as rules.
+
+    The ceiling moved once, for the exchange/cancellation terms: those are
+    numbers charged in cash at the door, and the alternative to spending the
+    characters was a model reciting them from memory."""
+    assert 3000 < len(SYSTEM_PROMPT) < 11000
 
 
 # --------------------------------------------------------------------------
