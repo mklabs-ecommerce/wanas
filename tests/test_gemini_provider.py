@@ -63,7 +63,7 @@ def captured(monkeypatch):
     queue: list[FakeResponse] = []
 
     def fake_post(url, params=None, json=None, timeout=None, headers=None):
-        sent.append({"url": url, "params": params or {}, "body": json})
+        sent.append({"url": url, "params": params or {}, "body": json, "headers": headers or {}})
         if not queue:
             return FakeResponse(text_reply("ok"))
         nxt = queue.pop(0)
@@ -128,8 +128,11 @@ def test_gemini_key_env_alias_is_accepted(monkeypatch):
 def model_list(monkeypatch):
     listed = {"models": []}
 
-    def fake_get(url, params=None, timeout=None):
-        return FakeResponse(listed)
+    def fake_get(url, params=None, timeout=None, headers=None):
+        listed.setdefault("requests", []).append(
+            {"url": url, "params": params or {}, "headers": headers or {}}
+        )
+        return FakeResponse({"models": listed["models"]})
 
     monkeypatch.setattr(gemini_module.httpx, "get", fake_get)
     return listed
@@ -378,8 +381,9 @@ def test_the_api_key_is_never_in_the_logged_payload(captured, monkeypatch, caplo
         provider.generate("prompt", [msg.user("hi")], [])
 
     assert secret not in caplog.text
-    # It travels as a query parameter, which is not part of the logged URL.
-    assert captured["sent"][0]["params"]["key"] == secret
+    # It travels as a header, which is neither the logged URL nor the body.
+    assert captured["sent"][0]["headers"]["x-goog-api-key"] == secret
+    assert secret not in json.dumps(captured["sent"][0]["body"])
 
 
 def test_an_invalid_argument_keeps_the_response_body_in_the_error(captured, provider):
@@ -483,3 +487,96 @@ def test_the_runtime_never_reads_an_option_position(seeded):
         variant = next(v for v in seeded.query(Variant).all() if v.length)
     assert variant.size and variant.color and variant.length
     assert not hasattr(variant, "option1")
+
+
+# --------------------------------------------------------------------------
+# The key never travels in a URL
+# --------------------------------------------------------------------------
+
+
+def test_the_key_is_a_header_not_a_query_parameter(provider, captured):
+    """It was `?key=...`, and httpx logs every request URL in full at INFO --
+    which app.py turns on process-wide. The live key was therefore written in
+    clear text into Railway's logs on every model call. A credential must
+    never travel in a URL: too many things log one, and none of them know it
+    is a secret."""
+    provider.generate("sys", [msg.user("hi")], tool_specs())
+
+    request = captured["sent"][0]
+    assert request["headers"]["x-goog-api-key"] == provider.api_key
+    assert "key" not in request["params"]
+    assert provider.api_key not in request["url"]
+
+
+def test_no_request_this_provider_makes_puts_the_key_in_the_url(provider, captured, monkeypatch):
+    """Every call site, not just the conversational one -- the media calls
+    and the model list were writing the same URL."""
+    listed = []
+    monkeypatch.setattr(
+        gemini_module.httpx,
+        "get",
+        lambda url, params=None, timeout=None, headers=None: listed.append(
+            {"url": url, "params": params or {}, "headers": headers or {}}
+        )
+        or FakeResponse({"models": []}),
+    )
+    GeminiProvider(api_key="AQ.Ab-secret", model="x", auto_resolve=False).available_models()
+
+    assert listed, "fixture check: the model list was actually requested"
+    for request in listed:
+        assert "key" not in request["params"]
+        assert "AQ.Ab-secret" not in request["url"]
+        assert request["headers"]["x-goog-api-key"] == "AQ.Ab-secret"
+
+
+# --------------------------------------------------------------------------
+# A busy model is retried, not apologised for
+# --------------------------------------------------------------------------
+
+
+def test_a_503_is_retried_rather_than_becoming_an_apology(provider, captured, monkeypatch):
+    """What a customer actually got, in reply to "مساء الخير": "there is a
+    problem on our side, try again in a bit" -- for a shared model that was
+    briefly busy and fine a second later."""
+    monkeypatch.setattr(gemini_module.time, "sleep", lambda _s: None)
+    captured["queue"].extend(
+        [
+            FakeResponse(status_code=503, text="UNAVAILABLE: model is overloaded"),
+            FakeResponse(text_reply("مساء النور 🌙")),
+        ]
+    )
+
+    reply = provider.generate("sys", [msg.user("مساء الخير")], tool_specs())
+
+    assert reply.text == "مساء النور 🌙"
+    assert len(captured["sent"]) == 2
+
+
+def test_the_retry_is_bounded_and_the_error_still_surfaces(provider, captured, monkeypatch):
+    """A real outage is a real outage. Retrying forever would hold a worker
+    thread through it, and the honest apology is the right answer."""
+    slept = []
+    monkeypatch.setattr(gemini_module.time, "sleep", slept.append)
+    captured["queue"].extend(
+        [FakeResponse(status_code=503, text="overloaded") for _ in range(gemini_module._RETRY_LIMIT + 1)]
+    )
+
+    with pytest.raises(ProviderError) as excinfo:
+        provider.generate("sys", [msg.user("hi")], tool_specs())
+
+    assert "503" in str(excinfo.value)
+    assert len(captured["sent"]) == gemini_module._RETRY_LIMIT + 1
+    assert slept == [1.0, 2.0], "backs off rather than hammering a busy model"
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
+def test_a_refusal_is_not_retried(provider, captured, monkeypatch, status):
+    """These say the request is wrong or the quota is gone. Sending it again
+    changes nothing and costs the customer two more seconds of silence."""
+    monkeypatch.setattr(gemini_module.time, "sleep", lambda _s: None)
+    captured["queue"].append(FakeResponse(status_code=status, text="nope"))
+
+    with pytest.raises(ProviderError):
+        provider.generate("sys", [msg.user("hi")], tool_specs())
+
+    assert len(captured["sent"]) == 1

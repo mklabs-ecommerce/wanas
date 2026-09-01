@@ -50,6 +50,18 @@ from domain.services.scheduler import scheduler
 from integrations.shopify.webhooks import router as shopify_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+#: httpx logs every outbound request URL, in full, at INFO -- and the line
+#: above turns INFO on for every logger in the process, third-party ones
+#: included. That is how the Gemini key ended up in clear text in Railway's
+#: logs on every model call: it travelled as `?key=...`, and a URL is not a
+#: safe place to put a secret precisely because so many things log one.
+#: `gemini.py` now sends it as a header, and this is the second lock on the
+#: same door -- no vendor client can leak a query parameter we did not think
+#: of. Warnings and errors from httpx still come through.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 log = logging.getLogger("wanas")
 
 

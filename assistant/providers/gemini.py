@@ -35,6 +35,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import time
 
 import httpx
 
@@ -53,6 +54,14 @@ from config.settings import settings
 log = logging.getLogger("wanas.provider.gemini")
 
 BASE_URL = "https://generativelanguage.googleapis.com"
+
+#: Google is briefly out of capacity, not refusing us. Retried rather than
+#: turned into an apology: 503 UNAVAILABLE on a shared model is routine and
+#: usually over in a second, and the customer who gets the apology asked an
+#: ordinary question.
+_TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
+_RETRY_LIMIT = 2
+_RETRY_BACKOFF = 1.0
 API_VERSION = "v1beta"
 
 #: Tried in order when the configured model is not available to this key.
@@ -124,7 +133,8 @@ class GeminiProvider(LLMProvider):
         try:
             response = httpx.get(
                 f"{BASE_URL}/{API_VERSION}/models",
-                params={"key": self.api_key, "pageSize": 200},
+                params={"pageSize": 200},
+                headers=self._auth_headers(),
                 timeout=self.timeout,
             )
         except httpx.HTTPError as exc:
@@ -266,7 +276,7 @@ class GeminiProvider(LLMProvider):
             self.resolve_model()
 
         payload = self._build_payload(system_prompt, history, tools)
-        response = self._post(payload)
+        response = self._post_with_retry(payload)
 
         if response.status_code == 404 and self.auto_resolve:
             # The configured model was deprecated out from under us. Re-resolve
@@ -275,7 +285,7 @@ class GeminiProvider(LLMProvider):
             log.warning("model %r returned 404; re-resolving against the live model list", self.model)
             self.resolve_model(force=True)
             payload = self._build_payload(system_prompt, history, tools)
-            response = self._post(payload)
+            response = self._post_with_retry(payload)
 
         if response.status_code == 429:
             # Naming the model matters: an alias that resolves to a
@@ -300,22 +310,66 @@ class GeminiProvider(LLMProvider):
 
         return self._parse(response.json())
 
+    def _post_with_retry(self, payload: dict) -> httpx.Response:
+        """`_post`, retried while Google says it is briefly out of capacity.
+
+        A 503 UNAVAILABLE here is not our request being wrong; it is the
+        shared model being busy, and Google's own advice is to try again. The
+        customer saw the consequence of not doing so: "there is a problem on
+        our side, try again in a bit" in reply to "good evening", for a
+        condition that had cleared by the time they read it.
+
+        Bounded and short. The turn already runs on a worker thread behind the
+        debounce window, so a couple of seconds is invisible to the customer,
+        while an unbounded retry would hold a worker through a real outage --
+        and the honest apology is the right answer to one of those.
+        """
+        delay = _RETRY_BACKOFF
+        for attempt in range(_RETRY_LIMIT + 1):
+            response = self._post(payload)
+            if response.status_code not in _TRANSIENT_STATUSES or attempt == _RETRY_LIMIT:
+                return response
+            log.warning(
+                "gemini %s on model %r, retrying in %.1fs (%d/%d)",
+                response.status_code,
+                self.model,
+                delay,
+                attempt + 1,
+                _RETRY_LIMIT,
+            )
+            time.sleep(delay)
+            delay *= 2
+        return response  # pragma: no cover - the loop always returns above
+
+    def _auth_headers(self) -> dict[str, str]:
+        """The key as a header, never as `?key=`.
+
+        Google accepts both. The query-parameter form put the key in the
+        *URL*, and httpx logs every request URL in full at INFO -- which
+        `logging.basicConfig(level=INFO)` in `app.py` turns on for the whole
+        process. The result was the live Gemini key written in clear text into
+        Railway's logs on every model call, defeating the care taken
+        everywhere else in this file to keep it out of them. A credential must
+        never travel in a URL: too many things log those, and none of them
+        know it is a secret.
+        """
+        return {"content-type": "application/json", "x-goog-api-key": self.api_key}
+
     def _post(self, payload: dict) -> httpx.Response:
         url = f"{BASE_URL}/{API_VERSION}/models/{self.model}:generateContent"
 
         if settings.llm_debug_payload:
-            # Off by default. The API key travels as a query parameter, never
-            # in the body, so the dumped payload carries no credential -- and
-            # the URL is logged without its parameters for the same reason.
+            # Off by default. The key is a header and never the body, so the
+            # dumped payload carries no credential, and `url` has nothing
+            # secret in it to strip.
             log.warning("POST %s payload:\n%s", url, _debug_dump(payload))
 
         try:
             return httpx.post(
                 url,
-                params={"key": self.api_key},
                 json=payload,
                 timeout=self.timeout,
-                headers={"content-type": "application/json"},
+                headers=self._auth_headers(),
             )
         except httpx.HTTPError as exc:
             raise ProviderError(f"network error talking to Gemini: {exc}") from exc
@@ -388,10 +442,9 @@ class GeminiProvider(LLMProvider):
         try:
             response = httpx.post(
                 url,
-                params={"key": self.api_key},
                 json=payload,
                 timeout=self.media_timeout,
-                headers={"content-type": "application/json"},
+                headers=self._auth_headers(),
             )
         except httpx.HTTPError as exc:
             raise ProviderError(f"network error talking to Gemini: {exc}") from exc
