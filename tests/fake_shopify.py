@@ -394,6 +394,7 @@ class FakeShopify:
         shipping_fee=0,
         discount=0,
         tax=0,
+        taxes_included=False,
         payment_gateways=("shopify_payments",),
         financial_status="PENDING",
     ):
@@ -420,6 +421,7 @@ class FakeShopify:
                 "shipping_fee": Decimal(str(shipping_fee)),
                 "discounts": Decimal(str(discount)),
                 "tax": Decimal(str(tax)),
+                "taxes_included": taxes_included,
                 "tags": [],
                 # A storefront order is card-paid by default; a test wanting
                 # a COD website order (or none at all, for the `unknown`
@@ -898,7 +900,15 @@ class FakeShopify:
                 "returning" if self._orders_for_customer(order) > 1 else "new"
             ),
             "governorate": order["governorate"],
-            "total": str(self._order_gross(order) - order.get("discounts", Decimal("0")) + order["shipping_fee"]),
+            # What the customer owes: the tax is added on top of a
+            # tax-exclusive order and put back into a tax-inclusive one, which
+            # is the same arithmetic either way.
+            "total": str(
+                self._order_gross(order)
+                + order.get("tax", Decimal("0"))
+                - order.get("discounts", Decimal("0"))
+                + order["shipping_fee"]
+            ),
             # What Shopify's sales reports are built from -- see
             # `admin_orders._order_summary`. The fake shop has no returns
             # (this one is cash on delivery, with nothing to refund against),
@@ -909,6 +919,7 @@ class FakeShopify:
             "shipping_fee": str(order["shipping_fee"]),
             "tax": str(order.get("tax", Decimal("0"))),
             "refunded": "0.00",
+            "taxes_included": bool(order.get("taxes_included")),
             "line_items": [
                 {"title": order["line_meta"][sku]["title"], "quantity": qty, "sku": sku}
                 for sku, qty in order["lines"].items()
@@ -917,11 +928,16 @@ class FakeShopify:
         }
 
     def _order_gross(self, order):
-        """The line items before any discount -- the fake's `originalTotalSet`."""
-        return sum(
+        """The line items before any discount -- the fake's `originalTotalSet`,
+        with the tax taken back out for a tax-inclusive order exactly as
+        `admin_orders._gross_sales` does."""
+        total = sum(
             (order["line_meta"][sku]["unit_price"] * qty for sku, qty in order["lines"].items()),
             Decimal("0"),
         )
+        if order.get("taxes_included"):
+            total -= order.get("tax", Decimal("0"))
+        return total
 
     def first_order_ids(self, **_kwargs):
         """Which orders were their buyer's first, from the whole shelf.

@@ -72,6 +72,7 @@ ORDER_SUMMARY_FIELDS = """
   totalShippingPriceSet { shopMoney { amount currencyCode } }
   totalTaxSet { shopMoney { amount currencyCode } }
   totalRefundedSet { shopMoney { amount currencyCode } }
+  taxesIncluded
   lineItems(first: 50) {
     nodes { title quantity sku originalTotalSet { shopMoney { amount currencyCode } } }
   }
@@ -162,9 +163,18 @@ def _gross_sales(node: dict) -> str:
     and a KPI that quietly changes definition on an API bump is worse than one
     that costs a few extra bytes on the wire. Lines past the query's `first:`
     cap are not counted; nothing this shop sells comes close to it.
+
+    A tax-inclusive shop -- which this one is, VAT sits inside the price on
+    the storefront -- prices its lines with the tax already in them, so the
+    tax comes back out here. Sales reports are tax-exclusive on both sides of
+    the line: leaving it in counted the same VAT twice, once inside gross and
+    again when `dashboard_stats` added `tax` on to reach total sales, and the
+    page read a few pounds above the order it was summing.
     """
     lines = (node.get("lineItems") or {}).get("nodes") or []
     total = sum((Decimal(_money(li.get("originalTotalSet"))) for li in lines), Decimal("0"))
+    if node.get("taxesIncluded"):
+        total -= Decimal(_money(node.get("totalTaxSet")))
     return str(total)
 
 
@@ -374,6 +384,10 @@ def _order_summary(node: dict) -> dict:
         "shipping_fee": _money(node.get("totalShippingPriceSet")),
         "tax": _money(node.get("totalTaxSet")),
         "refunded": _money(node.get("totalRefundedSet")),
+        #: Whether the prices above already have the tax in them. Kept on the
+        #: order so a reader of this dict can tell which of the two shapes
+        #: `gross_sales` is in without going back to Shopify.
+        "taxes_included": bool(node.get("taxesIncluded")),
         "line_items": [
             {"title": li.get("title"), "quantity": li.get("quantity"), "sku": li.get("sku")}
             for li in (node.get("lineItems") or {}).get("nodes") or []

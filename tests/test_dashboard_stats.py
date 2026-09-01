@@ -301,6 +301,24 @@ def test_stats_endpoint_separates_net_from_total_on_a_real_shopify_read(logged_i
     assert Decimal(body["revenue"]) == Decimal("960")
 
 
+def test_a_tax_inclusive_shop_does_not_count_its_vat_twice(logged_in, shopify):
+    """This shop prices with VAT inside, so the tax is part of the line total.
+
+    Counting it there *and* adding `tax` on to reach total sales read the page
+    a few pounds above the orders it was summing -- which is how it was found.
+    Total sales has to come back to what the customer actually owes.
+    """
+    shopify.seed_order(
+        customer_name="Web Buyer", phone="201555000222", governorate="Cairo",
+        items=[{"variant_id": "1", "quantity": 1, "unit_price": 590, "title": "WANAS Hoodie"}],
+        shipping_fee=118, tax="72.46", taxes_included=True,
+    )
+    body = logged_in.get("/dashboard/api/stats?days=30").json()
+    assert Decimal(body["sales"]["gross_sales"]) == Decimal("517.54")
+    assert Decimal(body["sales"]["total_sales"]) == Decimal("708")
+    assert Decimal(body["revenue"]) == Decimal("708")
+
+
 def test_stats_endpoint_reports_an_outage(logged_in, shopify):
     shopify.down = True
     assert logged_in.get("/dashboard/api/stats?days=30").status_code == 503
