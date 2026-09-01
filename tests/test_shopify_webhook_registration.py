@@ -60,8 +60,8 @@ def test_a_rejected_topic_is_reported_not_raised(shopify):
 
     assert "orders/cancelled" not in report["created"]
     assert any("orders/cancelled" in p for p in report["problems"])
-    # The other three still went through -- one rejection does not block the rest.
-    assert len(report["created"]) == 3
+    # Everything else still went through -- one rejection does not block the rest.
+    assert len(report["created"]) == len(shopify_webhooks.TOPICS) - 1
 
 
 def test_a_total_outage_propagates_for_the_caller_to_handle(shopify):

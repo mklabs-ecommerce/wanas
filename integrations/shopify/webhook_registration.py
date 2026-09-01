@@ -57,6 +57,20 @@ TOPICS: dict[str, str] = {
     "orders/partially_fulfilled": "ORDERS_PARTIALLY_FULFILLED",
     "fulfillments/update": "FULFILLMENTS_UPDATE",
     "orders/cancelled": "ORDERS_CANCELLED",
+    #: A product created in Shopify Admin, mirrored into wanas.db as it
+    #: happens. `product_import` still runs its catalogue-wide reconcile at
+    #: boot -- that is the safety net for a delivery Shopify dropped -- but a
+    #: boot is the wrong granularity for "staff added a product this
+    #: afternoon", and on a shop that does not redeploy it never comes.
+    "products/create": "PRODUCTS_CREATE",
+    #: And the update, which is not redundant: Shopify fires `create` the
+    #: moment Save is pressed, when a product often still wears nothing but
+    #: the placeholder variant -- `is_placeholder_only` skips exactly that,
+    #: and correctly, since mirroring it writes a phantom "One Size" row at
+    #: 0.00. The sizes and colours arrive a moment later as an *update*, and
+    #: without this topic that product waits for a redeploy. A product already
+    #: known costs one read and returns.
+    "products/update": "PRODUCTS_UPDATE",
 }
 
 

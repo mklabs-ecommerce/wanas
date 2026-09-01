@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from config.settings import settings
-from domain.models import Order, OrderStatus, ShippingRate
+from domain.models import Order, OrderStatus, Product, ShippingRate
 from domain.services import (
     carts,
     notifications,
@@ -278,3 +278,94 @@ def test_an_order_is_found_by_its_numeric_id_alone(post, placed, seeded):
 def SHOPIFY_NUMERIC_ID_FOR(placed: dict) -> int:
     """The numeric half of the gid we stored at order time."""
     return int(placed["shopify_order_id"].rsplit("/", 1)[-1])
+
+
+# --- a product added in Shopify Admin --------------------------------------
+
+
+def product_body(gid: str, *, status: str = "active") -> dict:
+    return {
+        "id": int(gid.rsplit("/", 1)[-1]) if gid.rsplit("/", 1)[-1].isdigit() else 1,
+        "admin_graphql_api_id": gid,
+        "status": status,
+    }
+
+
+def _manual_product(shopify, title="Loose Cargo Pants"):
+    """A product on the store that no dashboard create put there."""
+    gid = shopify.shopify_create_product(
+        title=title, description="", category="Joggers & Sweatpants",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+    )
+    shopify.shopify_create_variants(
+        gid,
+        [{
+            "inventoryItem": {"sku": "", "tracked": True},
+            "price": "450.00",
+            "optionValues": [{"optionName": "Size", "name": "S"}],
+        }],
+    )
+    return gid
+
+
+def test_a_product_created_in_shopify_admin_reaches_the_bot(post, seeded, shopify):
+    """The gap: the bot's search reads wanas.db and never Shopify's live
+    product list, so until this lands the product exists for staff and does
+    not exist for customers. It used to wait for the next boot."""
+    from domain.services.catalog import get_products
+
+    gid = _manual_product(shopify)
+    assert post("products/create", product_body(gid)).status_code == 200
+
+    seeded.expire_all()
+    found = get_products(seeded, query="cargo")["products"]
+    assert [p["name"] for p in found] == ["Loose Cargo Pants"]
+
+
+def test_an_update_is_what_lands_a_product_whose_create_was_a_placeholder(post, seeded, shopify):
+    """Shopify fires create the moment Save is pressed, when the product often
+    wears only the placeholder variant -- which is skipped on purpose. This is
+    why products/update is subscribed too."""
+    gid = shopify.shopify_create_product(
+        title="Finished Tee", description="", category="T-Shirts",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+    )
+    assert post("products/create", product_body(gid), delivery_id="whid-p1").status_code == 200
+    seeded.expire_all()
+    assert seeded.get(Product, "finished-tee") is None
+
+    shopify.shopify_create_variants(
+        gid,
+        [{
+            "inventoryItem": {"sku": "", "tracked": True},
+            "price": "300.00",
+            "optionValues": [{"optionName": "Size", "name": "S"}],
+        }],
+    )
+    assert post("products/update", product_body(gid), delivery_id="whid-p2").status_code == 200
+
+    seeded.expire_all()
+    assert seeded.get(Product, "finished-tee") is not None
+
+
+def test_a_draft_product_is_not_mirrored(post, seeded, shopify):
+    """A draft is not for sale. Importing one puts something in the bot's
+    search that a customer can be shown and cannot be sold."""
+    gid = _manual_product(shopify, title="Unfinished Prototype")
+    assert post("products/create", product_body(gid, status="draft")).status_code == 200
+
+    seeded.expire_all()
+    assert seeded.query(Product).filter(Product.name == "Unfinished Prototype").count() == 0
+
+
+def test_a_product_already_known_is_not_imported_twice(post, seeded, shopify):
+    gid = _manual_product(shopify)
+    post("products/create", product_body(gid), delivery_id="whid-p1")
+    post("products/update", product_body(gid), delivery_id="whid-p2")
+
+    seeded.expire_all()
+    assert seeded.query(Product).filter(Product.name == "Loose Cargo Pants").count() == 1
+
+
+def test_a_product_webhook_with_no_id_is_accepted_and_ignored(post, seeded):
+    assert post("products/create", {"status": "active"}).status_code == 200

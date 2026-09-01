@@ -1,4 +1,5 @@
-"""Shopify telling us what happened to an order.
+"""Shopify telling us what happened to an order, and what staff added to the
+catalogue.
 
 The gap this closes: staff fulfil and cancel orders in **Shopify Admin** --
 that is the documented workflow -- and Shopify had no way to say so. The local
@@ -14,6 +15,15 @@ So the shop's own actions become the trigger:
     orders/partially_fulfilled  -> Packed
     fulfillments/update         -> Delivered, when Shopify says delivered
     orders/cancelled            -> Cancelled, stock returned locally
+
+And the second gap, the same shape: the bot's search reads wanas.db, never
+the live Shopify product list, so a product staff add in Shopify Admin exists
+for them and does not exist for customers. `product_import` has always closed
+that -- but only at boot, and a shop that does not redeploy never boots.
+
+    products/create             -> mirrored into wanas.db, as it happens
+    products/update             -> the same, for the sizes and colours that
+                                   arrive after Save
 
 Three properties this has to have, because a webhook endpoint is a public URL
 that writes to the order table:
@@ -49,6 +59,7 @@ from config.settings import settings
 from domain.db import session_scope
 from domain.models import Order, OrderStatus, WebhookEvent
 from domain.services import orders as order_service
+from integrations.shopify import product_import
 
 log = logging.getLogger("wanas.webhooks.shopify")
 
@@ -64,6 +75,18 @@ TOPIC_STATUS = {
 
 CANCEL_TOPIC = "orders/cancelled"
 FULFILMENT_TOPICS = {"fulfillments/create", "fulfillments/update"}
+
+#: A product created or changed in Shopify Admin. The bot's search reads
+#: wanas.db and never the live Shopify product list, so until one of these is
+#: mirrored the product exists for staff and does not exist for customers.
+#: `product_import` has always closed that gap, but only at boot, and a boot
+#: is the wrong granularity for "staff added a product this afternoon".
+#:
+#: Both topics, not just create: Shopify fires `create` when Save is pressed,
+#: while the product often still wears only the placeholder variant, which
+#: `product_import` skips on purpose. The real sizes and colours arrive a
+#: moment later as an update.
+PRODUCT_TOPICS = {"products/create", "products/update"}
 
 #: What Shopify calls a parcel that has arrived.
 DELIVERED_SHIPMENT_STATUSES = {"delivered"}
@@ -141,6 +164,8 @@ def handle_topic(topic: str, payload: dict) -> None:
                 _handle_status(session, payload, TOPIC_STATUS[topic])
             elif topic in FULFILMENT_TOPICS:
                 _handle_fulfilment(session, payload)
+            elif topic in PRODUCT_TOPICS:
+                _handle_product(session, payload)
             else:
                 log.info("no handler for Shopify topic %r", topic)
     except Exception:
@@ -246,3 +271,41 @@ def _handle_cancelled(session: Session, payload: dict) -> None:
         # what they did and the two sides disagreeing is what
         # `shopify_check_live` is for.
         log.warning("could not mirror a Shopify cancellation for %s: %s", order.order_id, result)
+
+
+def _handle_product(session: Session, payload: dict) -> None:
+    """Mirror a product created or changed in Shopify Admin into wanas.db.
+
+    Delegates every rule to `product_import.import_product` -- what counts as
+    a placeholder, as already known, as ours-but-lost, and as somebody else's
+    SKU has to be decided in one place, or a product would be imported by this
+    door and refused by the boot reconcile.
+
+    The gid comes from `admin_graphql_api_id`, which Shopify puts on the REST
+    payload precisely so a Graph API caller does not have to rebuild it from
+    the numeric id.
+    """
+    gid = (payload.get("admin_graphql_api_id") or "").strip()
+    if not gid:
+        product_id = payload.get("id")
+        if not product_id:
+            log.warning("a product webhook arrived with no id")
+            return
+        gid = f"gid://shopify/Product/{product_id}"
+
+    if (payload.get("status") or "active").lower() != "active":
+        # A draft is not for sale. Importing one puts a product in the bot's
+        # search that a customer can be shown and cannot be sold; the boot
+        # reconcile reads ACTIVE only for the same reason, and an activation
+        # arrives here as another update.
+        log.info("skipping product %s: not active", gid)
+        return
+
+    entry = product_import.import_product(session, gid)
+    if entry is not None:
+        log.info(
+            "mirrored Shopify product %r into wanas.db as %s (%d variant(s))",
+            entry["title"],
+            entry["product_id"],
+            entry["variants"],
+        )

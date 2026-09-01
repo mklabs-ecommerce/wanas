@@ -139,16 +139,35 @@ integrations/            everything that talks to an external vendor over
                             dry-run by default, refusing an empty or
                             mostly-empty live read, and archiving rather than
                             deleting anything ever ordered
-    product_import.py       reconcile-on-boot for products created straight
-                            in Shopify Admin; skips one still wearing only
-                            Shopify's own "Default Title" placeholder --
-                            that is a half-made product, and mirroring it
-                            writes a phantom "One Size" row at 0.00 that
-                            outlives the Shopify product it came from
-    webhook_registration.py subscribe Shopify to push order-status changes
+    product_import.py       mirror a product created straight in Shopify
+                            Admin into wanas.db, since the bot's search reads
+                            wanas.db and never the live product list. Two
+                            doors, one set of rules (`_import_one`): the
+                            products/create + products/update webhooks as it
+                            happens, and a catalogue-wide reconcile at boot as
+                            the safety net for a delivery Shopify dropped.
+                            Skips one still wearing only Shopify's own
+                            "Default Title" placeholder -- that is a half-made
+                            product, and mirroring it writes a phantom "One
+                            Size" row at 0.00 that outlives the Shopify
+                            product it came from (which is exactly why
+                            products/update is subscribed as well as create:
+                            Shopify fires create the moment Save is pressed).
+                            A SKU that is not ours is still reported rather
+                            than re-keyed -- with one exception that is
+                            recognition, not a guess: a SKU that rebuilds
+                            itself exactly from `_variant_id` was written by
+                            this codebase, so a dashboard create that pushed
+                            to Shopify and died before mirroring is *adopted*
+                            under the id its own SKUs already say, with
+                            nothing written back
+    webhook_registration.py subscribe Shopify to push order-status changes and
+                            product creates/updates
     webhooks.py              inbound from Shopify: fulfilments and
                             cancellations -> order status -> the customer's
-                            tracking message
+                            tracking message; products/create + products/update
+                            -> product_import, so a product staff add reaches
+                            the bot without waiting for a redeploy
   whatsapp/client.py        Meta Cloud API client
   instagram/
     client.py                Instagram Graph client (chunked text, no

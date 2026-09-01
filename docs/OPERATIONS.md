@@ -536,6 +536,29 @@ by a CDN url. A chart authored in Admin with no `chart_id` of ours lands under
 `shopify-<product_id>`, so an edit made on one t-shirt cannot rewrite the
 chart its two siblings share.
 
+### A product added in Shopify Admin
+
+It reaches the bot on its own. `products/create` and `products/update` are
+registered alongside the order topics, and both run `product_import` for that
+one product, so a product staff add in the afternoon is searchable in the
+conversation minutes later rather than at the next redeploy. The boot-time
+reconcile is still there as the safety net for a delivery Shopify dropped.
+
+Two things it deliberately will not do. It skips a product still wearing only
+Shopify's own "Default Title" placeholder -- that is a half-made product, and
+mirroring it writes a phantom row at 0.00 the bot offers and cannot sell;
+`products/update` is subscribed precisely because Shopify fires `create` at
+that moment, and the real sizes arrive a beat later. And it refuses a variant
+carrying a SKU that is not ours rather than re-keying it. The one exception is
+recognition rather than a guess: a SKU that rebuilds itself exactly from the
+`product_id-size-colour` convention was written by this codebase, so a
+dashboard create that pushed to Shopify and died before mirroring is adopted
+under the id its own SKUs already carry, with nothing written back to Shopify.
+
+If a product is invisible to the bot, `import_missing_products(db, apply=False)`
+says why in one line -- either it is adopted, or the SKU on it belongs to
+somebody else's scheme and wants a human.
+
 `shopify_reconcile_products.py` is the one that deletes, so read its dry-run
 report before `--apply`. A product that has ever been ordered is **archived**
 rather than deleted -- the order lines are the record that money changed
