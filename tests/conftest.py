@@ -58,8 +58,18 @@ os.environ["HARNESS_ENABLED"] = "1"
 # passes on one machine and fails on another.
 #: Kept before the blanking below so the opt-in live conversation tests can
 #: still reach a real model. Nothing else may read it.
-REAL_LLM_KEY = os.getenv("LLM_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
+#: The live suite's way back to a real model, read before the blanking above
+#: takes the keys away. Every provider the shop can actually be configured
+#: with is listed: reading only the Gemini pair silently skipped the live
+#: suite on a deployment running OpenRouter, which is this one.
+REAL_LLM_KEY = (
+    os.getenv("LLM_API_KEY")
+    or os.getenv("OPENROUTER_API_KEY")
+    or os.getenv("GEMINI_API_KEY")
+    or ""
+)
 REAL_LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("GEMINI_MODEL") or ""
+REAL_LLM_PROVIDER = os.getenv("LLM_PROVIDER") or ("gemini" if os.getenv("GEMINI_API_KEY") else "openrouter")
 
 for _name in (
     "LLM_API_KEY",
