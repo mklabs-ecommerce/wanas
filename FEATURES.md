@@ -180,7 +180,7 @@ Guards that make this safe:
 
 ### 1.9 Cancelling an order, and exchanges
 
-Straight from `policy.md`.
+Straight from `docs/policy.md`.
 
 **Cancelling** — the bot does it itself, in Shopify, and emails you every time.
 
@@ -200,6 +200,15 @@ process, so the bot states the terms and files a ticket for you:
 - otherwise an exchange within **24 hours**, in original packaging, unworn and clean;
 - faulty or wrong item → the store pays; changed their mind → the customer pays, plus
   **20 EGP** for the exchange delivery.
+
+**Cancelling after the parcel has left** is the same courier-and-human route, and the
+fee is the part a customer does not expect:
+
+- free of charge at any time **before** it ships — the same contact channel as an
+  exchange request.
+- once it is with the courier it cannot be cancelled remotely.
+- refusing it at the door then counts as a **return**, and the customer pays the
+  **round trip** — the delivery attempt *and* the trip back — not one way.
 
 It is forbidden to waive a fee, soften the terms, or promise an exchange will be accepted.
 
