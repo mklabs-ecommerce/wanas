@@ -347,6 +347,12 @@ def _product_summary(node: dict) -> dict:
         "image_url": (node.get("featuredImage") or {}).get("url"),
         "variant_count": len(variants),
         "any_in_stock": any((v.get("inventoryQuantity") or 0) > 0 for v in variants),
+        # Already in the response the list query asks for, so carrying them
+        # costs nothing on the wire and saves `product_import` a whole
+        # `get_product` per product it was only going to recognise and skip --
+        # which is what makes polling the catalogue on a timer cheap enough to
+        # do at all.
+        "skus": [sku for sku in ((v.get("sku") or "").strip() for v in variants) if sku],
     }
 
 

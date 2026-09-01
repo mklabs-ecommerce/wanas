@@ -2,7 +2,12 @@
 
 Both re-engagement checks (`domain/services/reengagement.py`) are polls: a
 variant coming back in stock and a cart going idle are both things nothing
-tells this app about, so something has to periodically ask. In-process and
+tells this app about, so something has to periodically ask. The catalogue
+check is a poll for a different reason -- Shopify *does* tell us, on
+`products/create`, but that delivery is refused unless
+`SHOPIFY_WEBHOOK_SECRET` is set, and a product staff added being invisible to
+every customer is too expensive a thing to leave resting on one environment
+variable. The webhook is the fast path; this is the floor under it. In-process and
 single-instance, the same scope note as `assistant/dispatcher.py`: this fits
 one Railway instance. Two instances would each run their own copy of this
 loop -- both jobs are idempotent against a duplicate pass (the waitlist
@@ -17,6 +22,7 @@ import logging
 import threading
 
 from config.settings import settings
+from domain.db import session_scope
 from domain.services import reengagement
 from integrations.instagram import token as instagram_token
 
@@ -69,6 +75,37 @@ class Scheduler:
             instagram_token.scheduled_refresh()
         except Exception:
             log.exception("instagram token refresh failed")
+        try:
+            self._import_new_products()
+        except Exception:
+            log.exception("catalog import failed")
+
+    def _import_new_products(self) -> None:
+        """Mirror any product added in Shopify Admin since the last tick.
+
+        Costs one list read when nothing has changed: `product_import` skips
+        the per-product detail call for anything whose SKUs it already knows
+        (`_product_summary` carries them, and the list query was fetching them
+        anyway). Only a genuinely new product costs more than that.
+
+        Deliberately silent on a quiet tick -- a log line every half hour
+        saying "nothing happened" is how a log stops being read.
+        """
+        if not settings.shopify_configured:
+            return
+        from integrations.shopify.product_import import import_missing_products
+
+        with session_scope() as db:
+            report = import_missing_products(db, apply=True)
+        for entry in report["imported"]:
+            log.info(
+                "catalog import: %r is now in the catalog as %s (%d variant(s))",
+                entry["title"],
+                entry["product_id"],
+                entry["variants"],
+            )
+        for problem in report["problems"]:
+            log.warning("catalog import: %s", problem)
 
     def stop(self) -> None:
         self._stop.set()

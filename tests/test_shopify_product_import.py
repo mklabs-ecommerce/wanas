@@ -342,3 +342,106 @@ def test_one_product_that_is_only_a_placeholder_is_skipped(seeded, shopify):
     )
     assert import_product(seeded, gid) is None
     assert seeded.get(Product, "half-made-tee") is None
+
+
+# --------------------------------------------------------------------------
+# The scheduled poll -- the floor under the webhook
+# --------------------------------------------------------------------------
+
+
+def test_a_quiet_catalogue_costs_one_read_not_one_per_product(seeded, shopify, monkeypatch):
+    """What makes polling affordable: a product whose SKUs the list read
+    already recognises never costs a detail call. Without this the poll would
+    be twenty round trips every half hour to learn nothing."""
+    from integrations.shopify import product_import
+
+    calls = []
+    real = product_import.admin.get_product
+    monkeypatch.setattr(
+        product_import.admin,
+        "get_product",
+        lambda gid, *a, **k: (calls.append(gid), real(gid, *a, **k))[1],
+    )
+
+    assert import_missing_products(seeded, apply=True)["imported"] == []
+    assert calls == [], "every seeded product was recognised from the list read alone"
+
+
+def test_a_new_product_still_costs_its_detail_read(seeded, shopify, monkeypatch):
+    """The skip is about what is already known, not about looking less."""
+    from integrations.shopify import product_import
+
+    calls = []
+    real = product_import.admin.get_product
+    monkeypatch.setattr(
+        product_import.admin,
+        "get_product",
+        lambda gid, *a, **k: (calls.append(gid), real(gid, *a, **k))[1],
+    )
+
+    gid = _seed_manual_product(shopify, title="Loose Cargo Pants")
+    assert len(import_missing_products(seeded, apply=True)["imported"]) == 1
+    assert calls == [gid]
+
+
+def test_the_scheduler_tick_imports_a_product_added_in_shopify(seeded, shopify, monkeypatch):
+    """The webhook is refused outright until SHOPIFY_WEBHOOK_SECRET is set, so
+    this tick is what actually gets a product into the bot's catalog on a
+    store where that variable is missing."""
+    from contextlib import contextmanager
+
+    from domain.services import scheduler as scheduler_module
+    from domain.services.catalog import get_products
+    from domain.services.scheduler import Scheduler
+
+    _seed_manual_product(shopify, title="Loose Cargo Pants")
+
+    @contextmanager
+    def test_session():
+        # The tick opens its own session; the test already holds SQLite's
+        # write lock through `seeded`, so it lends that one rather than
+        # deadlocking against itself.
+        yield seeded
+
+    monkeypatch.setattr("domain.services.scheduler.session_scope", test_session)
+    # The suite blanks SHOPIFY_* before importing the app, so the guard that
+    # keeps a half-configured store from polling would skip this outright.
+    monkeypatch.setattr(
+        type(scheduler_module.settings), "shopify_configured", property(lambda self: True)
+    )
+
+    Scheduler()._import_new_products()
+
+    assert [p["name"] for p in get_products(seeded, query="cargo")["products"]] == [
+        "Loose Cargo Pants"
+    ]
+
+
+def test_the_tick_does_nothing_when_shopify_is_not_configured(monkeypatch):
+    """No token means no catalogue read to make -- and certainly not a
+    traceback every half hour on a store still being set up."""
+    from domain.services import scheduler as scheduler_module
+
+    monkeypatch.setattr(
+        type(scheduler_module.settings), "shopify_configured", property(lambda self: False)
+    )
+    monkeypatch.setattr(
+        "integrations.shopify.product_import.import_missing_products",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not read Shopify")),
+    )
+    scheduler_module.Scheduler()._import_new_products()
+
+
+def test_a_failing_catalog_import_does_not_kill_the_scheduler(monkeypatch, caplog):
+    """Every other job on this tick still has to run. A Shopify outage must
+    not stop back-in-stock notifications."""
+    from domain.services.scheduler import Scheduler
+
+    monkeypatch.setattr(
+        Scheduler,
+        "_import_new_products",
+        lambda self: (_ for _ in ()).throw(RuntimeError("shopify is down")),
+    )
+    with caplog.at_level("ERROR"):
+        Scheduler()._tick()
+    assert "catalog import failed" in caplog.text

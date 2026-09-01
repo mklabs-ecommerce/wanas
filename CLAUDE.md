@@ -144,8 +144,16 @@ integrations/            everything that talks to an external vendor over
                             wanas.db and never the live product list. Two
                             doors, one set of rules (`_import_one`): the
                             products/create + products/update webhooks as it
-                            happens, and a catalogue-wide reconcile at boot as
-                            the safety net for a delivery Shopify dropped.
+                            happens, and a catalogue-wide reconcile at boot
+                            *and every scheduler tick*
+                            (`domain/services/scheduler.py`) as the floor
+                            under it -- the webhook is refused outright until
+                            SHOPIFY_WEBHOOK_SECRET is set, and a product staff
+                            added being invisible to every customer is too
+                            expensive to rest on one env var. The poll is
+                            affordable because `_product_summary` carries the
+                            variant SKUs the list query was fetching anyway,
+                            so a product already known costs no detail call.
                             Skips one still wearing only Shopify's own
                             "Default Title" placeholder -- that is a half-made
                             product, and mirroring it writes a phantom "One

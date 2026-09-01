@@ -538,11 +538,22 @@ chart its two siblings share.
 
 ### A product added in Shopify Admin
 
-It reaches the bot on its own. `products/create` and `products/update` are
-registered alongside the order topics, and both run `product_import` for that
-one product, so a product staff add in the afternoon is searchable in the
-conversation minutes later rather than at the next redeploy. The boot-time
-reconcile is still there as the safety net for a delivery Shopify dropped.
+It reaches the bot on its own, by two routes.
+
+The fast one is the webhook: `products/create` and `products/update` are
+registered alongside the order topics and run `product_import` for that one
+product, so the product is searchable seconds later. **This route needs
+`SHOPIFY_WEBHOOK_SECRET`** -- without it the endpoint refuses every delivery
+with a 503, which is correct (an unauthenticated way to write to the catalogue
+is worse than no integration) but means the webhook does nothing.
+
+The floor under it is the scheduler: every tick
+(`REENGAGEMENT_INTERVAL_SECONDS`, 30 minutes by default) imports whatever is
+new, so a product added in Shopify Admin reaches customers within the half
+hour even on a store where the secret was never set. It costs one list read
+when nothing has changed -- a product whose SKUs are already known never costs
+a detail call -- so it is cheap enough to leave on. The boot-time reconcile is
+the third pass, for whatever both of those missed.
 
 Two things it deliberately will not do. It skips a product still wearing only
 Shopify's own "Default Title" placeholder -- that is a half-made product, and

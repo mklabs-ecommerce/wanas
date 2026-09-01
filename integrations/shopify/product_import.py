@@ -254,6 +254,12 @@ def import_missing_products(session: Session, *, apply: bool = False) -> dict:
     problems: list[str] = []
 
     for summary in summaries:
+        if set(summary.get("skus") or []) & known_ids:
+            # Recognised from the list read alone. The detail call below is
+            # the expensive part of this loop, and on a store where nothing
+            # has been added it is the *whole* cost -- skipping it is what
+            # lets `scheduler` run this on a timer rather than only at boot.
+            continue
         detail = admin.get_product(summary["id"])
         if detail is None:
             continue

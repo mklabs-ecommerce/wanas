@@ -462,6 +462,11 @@ class FakeShopify:
             "image_url": p.get("image_url"),
             "variant_count": len(skus),
             "any_in_stock": any(self.shelf.get(sku, {}).get("qty", 0) > 0 for sku in skus),
+            # The real `_product_summary` carries these, because the list
+            # query was already fetching them: it is what lets
+            # `product_import` recognise a known product without a detail
+            # call, and so what makes the scheduled catalogue poll cheap.
+            "skus": [sku for sku in skus if sku],
         }
 
     def list_products(self, *, query=None, cursor=None):
