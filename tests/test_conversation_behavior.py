@@ -548,6 +548,45 @@ def test_a_markdown_heading_is_stripped():
     assert "#" not in cleaned
 
 
+def test_a_markdown_list_marker_becomes_a_bullet_rather_than_being_dropped():
+    """The prompt asks for lists now, and neither WhatsApp nor Instagram
+    renders `-` or `*` into anything -- they arrive as the literal character.
+    Normalising is the guarantee behind the prompt's preference."""
+    cleaned, changed = agent.strip_markdown("عندنا:\n- Boxy WNS Tee\n* Ringer Tee")
+    assert changed is True
+    assert cleaned == "عندنا:\n• Boxy WNS Tee\n• Ringer Tee"
+
+
+def test_a_hyphen_inside_a_sentence_is_still_left_alone():
+    """A price range and a hyphenated word are not lists, and rewriting them
+    would put a bullet in the middle of a sentence."""
+    for text in ("السعر 450-500 جنيه", "t-shirt أسود", "الفرق -5 جنيه"):
+        assert agent.strip_markdown(text) == (text, False)
+
+
+def test_a_bullet_the_model_already_wrote_is_untouched():
+    text = "• Boxy WNS Tee\n• Ringer Tee"
+    assert agent.strip_markdown(text) == (text, False)
+
+
+def test_the_prompt_asks_for_bullets_when_more_than_one_thing_is_listed():
+    """The old rule banned lists outright, which is what made a five-product
+    answer arrive as one unreadable sentence."""
+    section = SYSTEM_PROMPT.split("# انت بتتكلم")[0]
+    assert "لو هتسرد أكتر من حاجة، اكتبها قايمة" in section
+    assert "•" in section, "the bullet character the customer actually sees"
+    assert "من ٢ لـ ٥ عناصر بس" in section, "a list is not a catalog dump"
+
+
+def test_the_prompt_keeps_asking_for_delivery_details_one_at_a_time():
+    """Bullets are for listing, not for merging the checkout questions into
+    one message -- that was a deliberate rule and the list rule must not
+    quietly undo it."""
+    assert "اسأل عن بيانات التوصيل واحدة واحدة" in SYSTEM_PROMPT
+    section = SYSTEM_PROMPT.split("# انت بتتكلم")[0]
+    assert "بيانات التوصيل استثناء" in section
+
+
 def test_the_agent_strips_markdown_the_model_produced(seeded):
     provider = ScriptedProvider([ModelReply(text="عندنا **Ringer Tee** دلوقتي بخصم")])
     reply = agent.run_turn(seeded, CHANNEL, WHO, "وريني تيشيرت", provider=provider)

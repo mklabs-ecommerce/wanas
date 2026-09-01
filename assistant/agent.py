@@ -79,15 +79,28 @@ def strip_tool_leaks(text: str) -> tuple[str, bool]:
 #: `**bold**`, `__bold__` and `#`/`##` headings -- Markdown the model reaches
 #: for out of habit that makes a WhatsApp reply read like a generated
 #: document instead of someone typing. Kept to the handful of forms that are
-#: unambiguous to strip; a bare hyphen or asterisk is left alone; it could be
-#: a real part of the sentence.
+#: unambiguous to strip; a bare hyphen or asterisk *inside* a sentence is left
+#: alone; it could be a real part of it.
 _MD_BOLD = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
 _MD_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE)
+
+#: A Markdown list marker at the *start of a line*, rewritten to the bullet
+#: character rather than deleted. The prompt asks for lists now -- products,
+#: available colours, what is still missing from an order -- because a wall of
+#: names in one sentence is what a customer stops reading. Neither WhatsApp
+#: nor Instagram renders `-` or `*` into anything, though: they arrive as the
+#: literal character, which reads like a typo. So the shape the model reaches
+#: for out of habit is normalised into the one the customer sees correctly,
+#: instead of being forbidden and then leaking through anyway. A `-` mid
+#: sentence is untouched, and so is a line whose marker has no space after it
+#: (a negative number, a franco word) -- only "marker, space, text" is a list.
+_MD_BULLET = re.compile(r"^([ \t]{0,4})[-*][ \t]+(?=\S)", re.MULTILINE)
 
 
 def strip_markdown(text: str) -> tuple[str, bool]:
     cleaned = _MD_BOLD.sub(lambda m: m.group(1) or m.group(2) or "", text or "")
     cleaned = _MD_HEADING.sub("", cleaned)
+    cleaned = _MD_BULLET.sub(r"\1• ", cleaned)
     if cleaned == text:
         return text, False
     return cleaned.strip(), True
