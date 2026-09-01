@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — The bot answers about the shop, and stops when a person takes over
+
+Two bugs, both of them the bot talking when it should not have been.
+
+- **The bot answered questions that have nothing to do with the shop.** Asked
+  for the capital of France it said Paris. Every *number* it says was already
+  required to come from a tool, but that rule was written about prices and
+  sizes — nothing had ever told it that its own general knowledge is off-limits
+  too, and a model asked a question it knows the answer to will answer it.
+  `assistant/prompt.py` now has a scope section: it is a shop assistant, not a
+  general one, and an off-topic question gets one friendly line back to the
+  shop. The section is written to leave no partial-credit option, because the
+  likely failure is not refusing — it is saying "Paris" and *then* offering a
+  hoodie. Two things it deliberately does not do: it is not a handoff (trivia
+  in the staff queue helps nobody, so `# التحويل لموظف` now says so out loud),
+  and it does not catch greetings — a bot that answers "إزيك" with a redirect
+  reads as broken.
+
+  This is the one rule in the prompt with no tool behind it, which is a
+  property of the problem: answering a trivia question is free text, not a tool
+  call, so there is nothing to refuse. The module docstring says so rather than
+  leaving it looking like a violated invariant.
+
+- **A staff takeover ended itself.** `POST .../reply` un-paused the
+  conversation as a side effect of sending, so the bot was live again the
+  instant a staff member hit send — and the customer's next message, the answer
+  to a sentence a *person* had just written, came back from the model. Two
+  voices in one thread, mid-handover.
+
+  Replying no longer releases. `/takeover` pauses, `/release` ("رجّع البوت")
+  un-pauses, and nothing else touches the flag; staff send as many messages as
+  the conversation needs and hand it back when they are done. That reverses an
+  earlier decision, so the reasoning for both halves is written into
+  `dashboard/web.py::reply` — auto-release was there to stop a forgotten pause
+  from silencing a number forever, and that risk is now covered where it
+  belongs: the inbox and thread header both mark a paused conversation, every
+  dropped inbound is logged with how long it has been waiting, and
+  `python manage.py release-conversation` is the escape hatch. The composer note and the
+  send toast no longer promise a handover that is not happening.
+
 ## Unreleased — Every comment gets an answer, in its own words
 
 - **Twelve categories where there were six, and every one of them answers

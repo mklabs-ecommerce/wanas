@@ -256,18 +256,18 @@ def test_a_staff_reply_already_in_history_is_labelled_as_such(logged_in, seeded)
 # --------------------------------------------------------------------------
 
 
-def test_replying_to_a_paused_conversation_sends_appends_and_resumes_the_bot(logged_in, seeded, outbox):
-    """A reply resolves the handoff queue item AND hands control back to the
-    bot. A pause that nothing auto-clears is how a conversation goes
-    permanently silent when staff forget to release it, so answering is the
-    release; staff who want to keep control call `/takeover` again."""
+def test_replying_to_a_paused_conversation_sends_appends_and_keeps_control(logged_in, seeded, outbox):
+    """A reply resolves the handoff queue item and leaves the conversation
+    with the staff member. Replying is not releasing: the bot resuming the
+    instant a person hits send is how the customer's answer to a human
+    sentence ends up answered by the model."""
     make_paused(seeded)
 
     res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً، إزاي أقدر أساعدك؟"})
     assert res.status_code == 200
 
     assert any(m.text == "أهلاً، إزاي أقدر أساعدك؟" and m.to == CUSTOMER for m in outbox)
-    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
     assert queues.open_items(seeded, QueueKind.HANDOFF.value) == []
 
     history = session_store.load(seeded, CHANNEL, CUSTOMER)
@@ -275,25 +275,57 @@ def test_replying_to_a_paused_conversation_sends_appends_and_resumes_the_bot(log
     assert history[-1]["by"] == "staff"
 
 
-def test_a_second_reply_needs_a_fresh_takeover_now_that_replying_resumes_the_bot(logged_in, seeded, outbox):
-    """The cost of auto-unpause: staff who want to send several messages in a
-    row must re-take the conversation between them, because the first reply
-    already handed it back. `/takeover` is idempotent and one click."""
+def test_several_replies_in_a_row_need_no_second_takeover(logged_in, seeded, outbox):
+    """The whole point of a takeover: a staff member answering a customer
+    sends as many messages as the conversation needs, and the bot stays out
+    of it the entire time."""
     make_paused(seeded)
 
     for text in ("لحظة واحدة", "شكلك عايز مقاس L", "تمام، هظبطلك الطلب"):
         res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": text})
         assert res.status_code == 200
-        assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+        assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
         # That read took a write lock (BEGIN IMMEDIATE on every SQLite
         # transaction, see domain/db.py); release it before the next
         # request opens its own session, or the two deadlock.
         seeded.rollback()
 
-        # Without this the next reply is refused with 409 not_paused.
-        logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/takeover")
-
     assert [m.text for m in outbox] == ["لحظة واحدة", "شكلك عايز مقاس L", "تمام، هظبطلك الطلب"]
+
+
+def test_the_customer_gets_no_bot_reply_between_two_staff_messages(logged_in, seeded, outbox):
+    """The reported bug, end to end: staff answers, the customer writes back,
+    and the model must not be what answers them. `handle_message` is what
+    decides, so this goes through it rather than around it."""
+    from assistant import runtime
+
+    make_paused(seeded)
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "ثانية بس"})
+    seeded.rollback()
+
+    reply = runtime.handle_message(CHANNEL, CUSTOMER, "طب تمام، والمقاس؟")
+    assert reply.paused is True
+    assert reply.text is None
+    assert [m.text for m in outbox] == ["ثانية بس"], "the bot answered over the staff member"
+
+    # The customer's message is still in the thread -- dropped from the bot,
+    # not from the transcript the staff member is reading.
+    history = session_store.load(seeded, CHANNEL, CUSTOMER)
+    assert history[-1]["content"] == "طب تمام، والمقاس؟"
+
+
+def test_the_bot_answers_again_only_after_the_conversation_is_handed_back(logged_in, seeded, outbox):
+    from assistant import runtime
+
+    make_paused(seeded)
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "ثانية بس"})
+    seeded.rollback()
+    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
+    seeded.rollback()
+
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+    seeded.rollback()
+    assert runtime.handle_message(CHANNEL, CUSTOMER, "تمام").paused is False
 
 
 def test_the_reply_is_attributed_to_the_staff_member_who_sent_it(logged_in, seeded, staff):
@@ -399,24 +431,22 @@ def test_releasing_a_conversation_that_was_never_paused_is_refused(logged_in, se
     assert res.status_code == 409
 
 
-def test_takeover_between_replies_is_the_full_multi_message_flow(logged_in, seeded, outbox):
-    """The multi-message flow now runs takeover -> reply -> takeover -> reply,
-    and needs no closing `/release`: the last reply already resumed the bot."""
+def test_the_full_multi_message_flow_is_takeover_reply_reply_release(logged_in, seeded, outbox):
+    """One takeover at the start, one release at the end, and everything in
+    between belongs to the person typing."""
     make_paused(seeded)
     logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً"})
     seeded.rollback()
-
-    logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/takeover")
     logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "تمام كده"})
     seeded.rollback()
 
-    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
     assert [m.text for m in outbox] == ["أهلاً", "تمام كده"]
     seeded.rollback()
 
-    # Nothing left to release -- the bot is already back in control.
     res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
-    assert res.status_code == 409
+    assert res.status_code == 200
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
 
 
 # --------------------------------------------------------------------------

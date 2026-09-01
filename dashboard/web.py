@@ -476,15 +476,25 @@ def reply(
             # item's job is done.
             queues.resolve(db, handoff.queue_id, staff.staff_id)
 
-        # Hand control straight back to the bot. The pause used to outlive
-        # the reply so staff could send several messages before calling
-        # `/release`, but a pause nothing auto-clears is exactly how a
-        # conversation goes permanently silent when someone forgets that
-        # last step -- see the WhatsApp silence investigation in
-        # OPENCODE_PROGRESS.md. Answering IS the release now; staff who
-        # want to keep control take the conversation over again
-        # (`/takeover`), which is idempotent and one click away.
-        identities.unpause(db, channel, external_id)
+        # The conversation stays paused. Replying is NOT releasing.
+        #
+        # This flipped back and forth once, so both halves are written down.
+        # Auto-releasing on reply was meant to stop a forgotten pause from
+        # silencing a number forever (the WhatsApp silence investigation in
+        # OPENCODE_PROGRESS.md). What it actually produced is worse and much
+        # harder to see: a staff member types an answer, the bot is live again
+        # the instant they hit send, and the customer's next message -- the
+        # reply to the sentence a *person* just wrote -- is answered by the
+        # model, mid-handover, in the same thread. Two voices, one
+        # conversation. A takeover that ends on its own is not a takeover.
+        #
+        # So control is now held until it is handed back explicitly, by
+        # `/release` ("رجّع البوت" in the UI). The forgotten-pause risk is
+        # covered where it belongs instead: the thread header and the inbox
+        # both show a paused conversation as paused, `handle_message` logs
+        # every dropped inbound with how long it has been waiting
+        # (`_paused_note`), and `python manage.py release-conversation` is
+        # the escape hatch of last resort.
 
     return JSONResponse({"ok": True})
 

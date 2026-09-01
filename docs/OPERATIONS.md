@@ -436,10 +436,18 @@ silence, not as an error.
 by design. Beyond that, look at the provider timeout and whether the Shopify
 snapshot is timing out at eight seconds per turn.
 
-**A conversation has gone silent.** It is probably paused on a handoff — check
-`/dashboard` (see "The staff dashboard" above); it lists exactly these, oldest
-wait first. Reply there, or resolve without a reply if it turns out to be a
-false alarm. Only reach for the database directly
+**A conversation has gone silent.** It is probably paused — either on a
+handoff or because a staff member took it over — and a paused conversation
+stays paused until someone presses **رجّع البوت** (`/release`). Sending a
+reply does *not* hand it back; that is deliberate, so the bot cannot answer
+over a person mid-conversation. Check `/dashboard` (see "The staff dashboard"
+above); it lists exactly these, oldest wait first. Reply there, hand it back
+when the exchange is finished, or resolve without a reply if it turns out to be
+a false alarm.
+
+If nobody is available to work the dashboard, `python manage.py release-conversation
+<external_id> [--channel]` clears the flag and resolves the open handoff items.
+Only reach for the database directly
 (`channel_identities.paused_until_staff_reply`) if the dashboard itself is the
 thing not working.
 

@@ -440,10 +440,23 @@ stuck until someone edited the database by hand. `dashboard/` is the
 other half: `GET /dashboard` lists conversations (waiting-on-staff ones first,
 oldest wait first), shows one in full, and lets a logged-in staff member
 either reply to a **paused** one — which sends the customer a real WhatsApp
-message through the same `OutboundSender` port the bot's own replies use, then
-resolves the queue item and un-pauses the conversation in one transaction —
-or resolve it without a reply (a false alarm, or a customer already handled by
-phone).
+message through the same `OutboundSender` port the bot's own replies use and
+resolves the queue item — or resolve it without a reply (a false alarm, or a
+customer already handled by phone).
+
+**Control is held until it is handed back, and replying does not hand it
+back.** `/takeover` pauses, `/release` ("رجّع البوت") un-pauses, and nothing
+else moves the flag. Replying used to un-pause as a side effect, on the
+argument that a pause nobody clears is how a number goes silent forever. It
+bought that at a price nobody could see: the bot went live again the instant a
+staff member hit send, so the customer's answer — to a sentence a *person* had
+just written — came back from the model, mid-handover, in the same thread. Two
+voices in one conversation is a worse failure than a stalled one, and it is the
+one the customer actually notices. The forgotten-pause risk is covered where it
+belongs instead: the thread header and the inbox both mark a paused
+conversation, `handle_message` logs every dropped inbound with how long it has
+been waiting (`runtime._paused_note`), and `python manage.py release-conversation` is
+the escape hatch.
 
 It is authenticated, unlike the harness: `Staff` accounts already existed
 (`domain/services/auth.py`, `python manage.py create-staff`) with

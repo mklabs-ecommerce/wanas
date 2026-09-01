@@ -1120,7 +1120,7 @@ const EN = {
   "أول طلب هيظهر هنا": "The first order will show up here",
   "أول ظهور": "First seen",
   "أول ظهور على أي قناة": "First seen on any channel",
-  "أول ما تبعت، المحادثة بترجع للبوت تلقائيًا.": "As soon as you send, the conversation goes back to the bot automatically.",
+  "المحادثة معاك — البوت مش هيرد لحد ما تدوس «رجّع البوت».": "The conversation is yours — the bot will not reply until you press Hand back to the bot.",
   "أونلاين": "Online",
   "أيوة، اتسلمت": "Yes, it was collected",
   "أيوة، استلمه": "Yes, they received it",
@@ -1310,7 +1310,7 @@ const EN = {
   "المحادثات المستنية رد": "Conversations awaiting a reply",
   "المحادثة": "Conversation",
   "المحادثة بقت معاك": "The conversation is yours now",
-  "المحادثة رجعت للبوت — استلمها تاني وابعت": "The conversation went back to the bot — take it over again and send",
+  "المحادثة مش معاك — استلمها الأول وابعت": "The conversation is not yours — take it over first, then send",
   "المحادثة رجعت من الأول": "The conversation was reset",
   "المحادثة فاضية": "The conversation is empty",
   "المحافظة": "Governorate",
@@ -1697,7 +1697,7 @@ const EN = {
   "واتساب وانستجرام في مكان واحد": "WhatsApp and Instagram in one place",
   "واتسجل مدفوع": "and recorded as paid",
   "وافق على التبديل": "Approve the swap",
-  "والمحادثة رجعت للبوت": "and the conversation went back to the bot",
+  "المحادثة لسه معاك — دوس «رجّع البوت» لما تخلص": "The conversation is still yours — press Hand back to the bot when you are done",
   "وسائط مش مدعومة": "Unsupported media",
   "وسيط زمن الإغلاق": "Median time to close",
   "وصف قصير يظهر في شوبيفاي": "A short description shown in Shopify",
@@ -3286,7 +3286,7 @@ function renderThread(data) {
     box.focus();
   }));
   $("#composerNote").innerHTML = data.paused
-    ? TR`${icon("check", 13)} أول ما تبعت، المحادثة بترجع للبوت تلقائيًا.`
+    ? TR`${icon("check", 13)} المحادثة معاك — البوت مش هيرد لحد ما تدوس «رجّع البوت».`
     : TR`${icon("bot", 13)} البوت ماسك المحادثة دلوقتي — استلمها الأول عشان ترد بنفسك.`;
 
   renderContext(data, summary);
@@ -3331,7 +3331,7 @@ async function sendReply() {
     // 409 here means the bot took the conversation back between load and
     // send; saying so is the difference between "try again" and "why".
     const REASONS = {
-      not_paused: tr("المحادثة رجعت للبوت — استلمها تاني وابعت"),
+      not_paused: tr("المحادثة مش معاك — استلمها الأول وابعت"),
       // Meta's 24-hour rule. Nothing typed here can get through it, so the
       // only honest next step is a phone call.
       outside_window: tr("عدى أكتر من ٢٤ ساعة على آخر رسالة من العميل — واتساب مش هيوصّل رسالة مكتوبة. كلّمه بالتليفون"),
@@ -3341,7 +3341,7 @@ async function sendReply() {
   }
   box.value = "";
   box.style.height = "auto";
-  toast(tr("الرسالة اتبعتت"), tr("والمحادثة رجعت للبوت"));
+  toast(tr("الرسالة اتبعتت"), tr("المحادثة لسه معاك — دوس «رجّع البوت» لما تخلص"));
   await VIEWS.inbox.load(false);
   openConversation(channel, externalId);
 }
