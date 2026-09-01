@@ -251,7 +251,15 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     # never reaches the model as data to explain.
     more_images = bool(result.pop("_more_images", False))
     color = result.pop("_image_color", None)
+    chart_image = result.pop("_size_chart_image", None)
     _collect_images(ctx, result, more_images=more_images, color=color)
+    # After the product photo, and deliberately *not* forced: a chart is the
+    # same picture every time, so the cross-conversation `sent_images` check
+    # is exactly the rule wanted here -- it rides along the first time a
+    # product's sizes come up and never again. An explicit get_size_chart
+    # still forces it, because asking for it again is asking to see it again.
+    if isinstance(chart_image, str) and chart_image:
+        ctx.attach(chart_image)
     return result
 
 

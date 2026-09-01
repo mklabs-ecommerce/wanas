@@ -33,6 +33,22 @@ def call(ctx, name, **arguments):
     return call_tool(ctx, name, arguments)
 
 
+#: Where every seeded size chart lives. `get_variants` now attaches a
+#: product's chart alongside its photo, the first time that product's sizes
+#: come up -- so the tests below, which are all about the *product photo*
+#: budget the chart is deliberately not part of, filter it back out.
+CHART_DIR = "data/size-charts/"
+
+
+def photos(ctx):
+    """Just the product photos out of this turn's attachments."""
+    return [p for p in ctx.attachments if not p.startswith(CHART_DIR)]
+
+
+def charts(ctx):
+    return [p for p in ctx.attachments if p.startswith(CHART_DIR)]
+
+
 @pytest.fixture()
 def ctx(seeded):
     return ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
@@ -50,15 +66,15 @@ def test_product_photos_are_attached_not_just_described(ctx):
     none."""
     result = call(ctx, "get_variants", product_id="wanas-hoodie")
     assert result["images"], "fixture check: this product has photos"
-    assert ctx.attachments, "get_variants returned photos but attached nothing"
-    assert all(p.startswith("data/images/") for p in ctx.attachments)
+    assert photos(ctx), "get_variants returned photos but attached nothing"
+    assert all(p.startswith("data/images/") for p in photos(ctx))
 
 
 def test_a_plain_request_sends_exactly_one_photo(ctx):
     """Showing the product is not a gallery: the default is one photo, full
     stop -- credit waste is the whole point of this rule."""
     call(ctx, "get_variants", product_id="wanas-hoodie")
-    assert len(ctx.attachments) == 1
+    assert len(photos(ctx)) == 1
 
 
 def test_more_images_prefers_colour_variety_and_is_capped(ctx):
@@ -83,7 +99,7 @@ def test_more_images_prefers_colour_variety_and_is_capped(ctx):
 
 def test_product_photos_are_capped(ctx):
     call(ctx, "get_variants", product_id="wanas-hoodie")
-    assert 0 < len(ctx.attachments) <= MAX_PRODUCT_IMAGES
+    assert 0 < len(photos(ctx)) <= MAX_PRODUCT_IMAGES
 
 
 def test_a_product_the_store_never_split_by_colour_still_gets_photos(ctx):
@@ -92,8 +108,8 @@ def test_a_product_the_store_never_split_by_colour_still_gets_photos(ctx):
     payload = call(ctx, "get_variants", product_id="feelin-fine-top")
     if payload["color_images"]:
         pytest.skip("this product is colour-split; covered by the test above")
-    assert ctx.attachments
-    assert ctx.attachments == payload["images"][:MAX_PRODUCT_IMAGES]
+    assert photos(ctx)
+    assert photos(ctx) == payload["images"][:MAX_PRODUCT_IMAGES]
 
 
 def test_the_photo_sent_is_the_colour_that_was_asked_for(ctx):
@@ -101,12 +117,12 @@ def test_the_photo_sent_is_the_colour_that_was_asked_for(ctx):
     the first colourway's photo. Asking for the olive hoodie and being shown
     the black one is the shop answering a question nobody asked."""
     payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
-    assert ctx.attachments == [payload["color_images"]["Olive"][0]]
+    assert photos(ctx) == [payload["color_images"]["Olive"][0]]
 
 
 def test_the_colour_is_matched_however_the_model_typed_it(ctx):
     payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="olive")
-    assert ctx.attachments == [payload["color_images"]["Olive"][0]]
+    assert photos(ctx) == [payload["color_images"]["Olive"][0]]
 
 
 def test_switching_colour_sends_the_new_colours_photo(ctx):
@@ -114,12 +130,12 @@ def test_switching_colour_sends_the_new_colours_photo(ctx):
     "already shown this product" guard used to swallow it, so the reply that
     should have carried the olive photo carried none at all."""
     payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Black")
-    assert ctx.attachments == [payload["color_images"]["Black"][0]]
+    assert photos(ctx) == [payload["color_images"]["Black"][0]]
 
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
     call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
-    assert ctx.attachments == [payload["color_images"]["Olive"][0]]
+    assert photos(ctx) == [payload["color_images"]["Olive"][0]]
 
 
 def test_the_same_colour_asked_for_twice_is_not_sent_twice(ctx):
@@ -134,7 +150,86 @@ def test_the_same_colour_asked_for_twice_is_not_sent_twice(ctx):
 def test_a_colour_the_product_does_not_come_in_falls_back_to_the_default(ctx):
     """A colour that matches nothing must not cost the customer their photo."""
     call(ctx, "get_variants", product_id="wanas-hoodie", color="Turquoise")
-    assert len(ctx.attachments) == 1
+    assert len(photos(ctx)) == 1
+
+
+def test_the_size_chart_rides_along_with_the_sizes(ctx):
+    """The reported failure: the bot described a size chart -- "you can look at
+    this chart" -- and sent no picture, because it never called
+    get_size_chart. Every product has a chart and every chart file exists, so
+    nothing was missing except the call. The sizes come out of get_variants,
+    so the chart comes with them and the model has nothing to remember."""
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
+    assert photos(ctx), "and the product photo is still there"
+
+
+def test_the_chart_is_not_sent_again_later_in_the_conversation(ctx):
+    """A chart is the same picture every time. It rides along once; after
+    that the customer already has it."""
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+
+    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    assert charts(ctx) == []
+    assert photos(ctx), "the new colour's photo is a different question"
+
+
+def test_asking_for_the_chart_outright_still_re_sends_it(ctx):
+    """`get_size_chart` forces the attachment. Asking to see it again is
+    asking to see it again, and the once-per-conversation rule above is about
+    a chart nobody asked for."""
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+
+    call(ctx, "get_size_chart", product_id="wanas-hoodie")
+    assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
+
+
+def test_a_product_with_no_chart_rides_along_with_nothing(ctx):
+    from domain.models import Product
+
+    product = ctx.session.get(Product, "wanas-hoodie")
+    product.size_chart = None
+    product.size_chart_image = None
+    ctx.session.flush()
+
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert payload["has_size_chart"] is False
+    assert charts(ctx) == []
+    assert "_size_chart_image" not in payload
+
+
+def test_the_chart_marker_never_reaches_the_model(ctx):
+    """Internal, like `_image_color`: the runtime sends the picture, the
+    model is not handed a path to read back."""
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert not any(key.startswith("_") for key in payload)
+
+
+def test_a_chart_picture_with_no_measurements_still_rides_along(ctx):
+    """What the dashboard's "upload a size chart" produces before anyone fills
+    the grid in: `Product.size_chart_image` and no chart row. It is still the
+    chart as far as the customer is concerned."""
+    from domain.models import Product
+
+    product = ctx.session.get(Product, "wanas-hoodie")
+    product.size_chart = None
+    product.size_chart_image = "data/size-charts/uploaded.png"
+    ctx.session.flush()
+
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert "data/size-charts/uploaded.png" in ctx.attachments
+
+
+def test_the_prompt_forbids_describing_a_chart_that_was_never_fetched():
+    """The exact sentence the customer got: a chart referred to in words, with
+    no picture behind it."""
+    section = SYSTEM_PROMPT.split("# المقاسات")[1]
+    assert "get_variants" in section, "the chart rides along with the sizes"
+    assert "ممنوع تقول «الجدول ده»" in section
 
 
 def test_size_charts_are_still_attached_alongside_product_photos(ctx):
@@ -162,7 +257,8 @@ def test_attachments_reach_the_agent_reply(seeded):
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "وريني الهودي", provider=provider)
     assert reply.attachments
-    assert all(p.startswith("data/images/") for p in reply.attachments)
+    assert any(p.startswith("data/images/") for p in reply.attachments)
+    assert all(p.startswith(("data/images/", CHART_DIR)) for p in reply.attachments)
 
 
 def test_a_product_with_no_photos_attaches_nothing(ctx, monkeypatch):
@@ -176,7 +272,7 @@ def test_a_product_with_no_photos_attaches_nothing(ctx, monkeypatch):
     ctx.session.flush()
 
     call(ctx, "get_variants", product_id="wanas-hoodie")
-    assert ctx.attachments == []
+    assert photos(ctx) == []
 
 
 def test_the_prompt_forbids_claiming_an_image_that_was_not_sent():

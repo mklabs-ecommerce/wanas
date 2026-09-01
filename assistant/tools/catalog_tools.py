@@ -66,6 +66,25 @@ def get_products(
     )
 
 
+def _chart_image(session, product_id: str) -> str | None:
+    """The size chart picture for one product, or None.
+
+    Same precedence `get_size_chart` reads with -- a `size_charts` row over
+    the file, both over `Product.size_chart_image`, which is the picture the
+    dashboard uploaded when nobody filled the measurements in. A chart with
+    numbers but no picture is normal and returns None; the numbers are still
+    there to be quoted.
+    """
+    product = session.get(Product, product_id)
+    if product is None:
+        return None
+    chart = get_chart(product.size_chart, session)
+    image = chart.get("image") if chart else None
+    if isinstance(image, str) and image:
+        return image
+    return product.size_chart_image or None
+
+
 @tool(
     "get_variants",
     "Every variant of one product with its variant_id, price and availability. You must call this "
@@ -75,8 +94,13 @@ def get_products(
     "conversation, its answer is still valid -- re-read it from what was already said instead of "
     "calling again, unless the customer is asking about a different product, or a different colour "
     "of it. Calling this attaches "
-    "one product photo to your reply automatically (never more, and never one already sent), so "
-    "describe the product in words and never mention a file path or a link. Always pass `color` "
+    "one product photo to your reply automatically (never more, and never one already sent), and "
+    "the first time in a conversation that a product with `has_size_chart` comes up it attaches "
+    "that product's size chart picture too -- so an answer listing sizes always arrives with the "
+    "chart beside it. Both are attached for you: "
+    "describe the product in words and never mention a file path or a link. Call get_size_chart "
+    "as well when you need the measurements themselves, to quote a number rather than to show a "
+    "picture. Always pass `color` "
     "when the customer has named or picked one -- it decides which colourway's photo gets sent, "
     "and without it they get whichever colour happens to come first. Only pass "
     "more_images=true when the customer explicitly asks to see more photos of this exact product; "
@@ -104,6 +128,14 @@ def get_variants(
     payload = catalog.get_variants(ctx.session, product_id)
     if payload is None:
         return {"error": "product_not_found", "product_id": product_id}
+    if payload.get("has_size_chart"):
+        # Internal, popped before the model sees it: the runtime sends the
+        # chart, the model does not get to decide to. This is the tool that
+        # produces the size list, so coupling the picture to it is what makes
+        # "the sizes are S/M/L" and "here is the chart" one message instead of
+        # two -- the second of which the model kept describing without ever
+        # calling get_size_chart, so no picture was ever sent.
+        payload["_size_chart_image"] = _chart_image(ctx.session, product_id)
     if more_images:
         payload["_more_images"] = True
     if color:
