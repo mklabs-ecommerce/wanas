@@ -586,6 +586,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 
 .chart { width: 100%; display: block; direction: ltr; overflow: visible; }
 .chart .axis text { font-family: var(--font-num); font-size: 10px; fill: var(--ink-3); }
+.chart .axis text.cap { font-size: 11px; fill: var(--ink-2); font-weight: 600; }
 .chart .grid line { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
 .chart .line { fill: none; stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
 .chart .dot { stroke: var(--surface); stroke-width: 2; }
@@ -1176,8 +1177,6 @@ const EN = {
   "الإنشاء والتعديل بيروح لشوبيفاي الأول، وبعدين بيتسجل محليًا": "Create and edit go to Shopify first, then mirror locally",
   "الإيراد": "Revenue",
   "الإيرادات": "Revenue",
-  "الإيرادات يوم بيوم": "Revenue day by day",
-  "الإيرادات يوميًا": "Daily revenue",
   "الإيميل": "Email",
   "الاتصال بالسيرفر اتقطع": "The connection to the server dropped",
   "الاسم": "Name",
@@ -2154,11 +2153,49 @@ const chartTip = {
   hide() { $("#chartTip").style.opacity = "0"; },
 };
 
+/* A smooth curve through evenly-spaced points, the shape Shopify's own
+   analytics draws.
+
+   Monotone cubic -- Fritsch-Carlson tangents -- rather than a plain
+   Catmull-Rom, which overshoots: a spline drawn between a big day and a quiet
+   one dips below the axis on the way, and this chart's fill would then shade
+   in a day of negative sales that never happened. Flattening the tangent
+   wherever the slope changes sign is what keeps the curve inside the numbers
+   it was drawn from.
+*/
+function splinePath(px, py) {
+  const n = px.length;
+  if (n < 3) return px.map((x, i) => `${i ? "L" : "M"}${x.toFixed(1)},${py[i].toFixed(1)}`).join(" ");
+  const slope = [], tangent = [];
+  for (let i = 0; i < n - 1; i++) slope.push((py[i + 1] - py[i]) / (px[i + 1] - px[i]));
+  tangent.push(slope[0]);
+  for (let i = 1; i < n - 1; i++) {
+    if (slope[i - 1] * slope[i] <= 0) { tangent.push(0); continue; }
+    const t = (slope[i - 1] + slope[i]) / 2;
+    const limit = 3 * Math.min(Math.abs(slope[i - 1]), Math.abs(slope[i]));
+    tangent.push(Math.sign(t) * Math.min(Math.abs(t), limit));
+  }
+  tangent.push(slope[n - 2]);
+
+  let d = `M${px[0].toFixed(1)},${py[0].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const dx = (px[i + 1] - px[i]) / 3;
+    d += ` C${(px[i] + dx).toFixed(1)},${(py[i] + tangent[i] * dx).toFixed(1)}`
+      + ` ${(px[i + 1] - dx).toFixed(1)},${(py[i + 1] - tangent[i + 1] * dx).toFixed(1)}`
+      + ` ${px[i + 1].toFixed(1)},${py[i + 1].toFixed(1)}`;
+  }
+  return d;
+}
+
 /* An area+line series. `points` is [{label, value}] already in display order;
    the axis stays LTR because it is time, and mirroring a time axis is how a
-   chart starts lying about direction. */
-function lineChart(points, { height = 190, tone = "clay", fmt = num, label = "" } = {}) {
-  const W = 720, H = height, padL = 44, padR = 12, padT = 14, padB = 26;
+   chart starts lying about direction.
+
+   `caption` is the window the series covers, printed once under the axis --
+   the tick labels say which day, and only the caption says which stretch of
+   days they were taken from. */
+function lineChart(points, { height = 190, tone = "clay", fmt = num, label = "", caption = "" } = {}) {
+  const W = 720, H = height, padL = 44, padR = 12, padT = 14, padB = caption ? 44 : 26;
   const svg = svgEl("svg", {
     class: "chart", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none",
     role: "img", "aria-label": label || tr("رسم بياني زمني"), height,
@@ -2191,7 +2228,7 @@ function lineChart(points, { height = 190, tone = "clay", fmt = num, label = "" 
   defs.append(gradient);
   svg.append(defs);
 
-  const line = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(Number(p.value) || 0).toFixed(1)}`).join(" ");
+  const line = splinePath(points.map((_, i) => x(i)), points.map((p) => y(Number(p.value) || 0)));
   svg.append(svgEl("path", {
     d: `${line} L${x(points.length - 1).toFixed(1)},${H - padB} L${padL},${H - padB} Z`,
     fill: `url(#${gradientId})`, stroke: "none",
@@ -2204,13 +2241,24 @@ function lineChart(points, { height = 190, tone = "clay", fmt = num, label = "" 
   }));
 
   const axis = svgEl("g", { class: "axis" });
-  const step = Math.max(1, Math.ceil(points.length / 7));
+  // "16 Aug", not "16". A bare day number is unreadable the moment the window
+  // crosses a month, which every window longer than a few weeks does -- and
+  // the two ends of a 30-day range printed as "16" and "15" say nothing at
+  // all. Wider labels mean fewer of them fit, hence the sparser step.
+  const labelled = caption ? 6 : 7;
+  const step = Math.max(1, Math.ceil(points.length / labelled));
+  const labelY = caption ? H - 26 : H - 8;
   points.forEach((p, i) => {
     if (i % step && i !== points.length - 1) return;
-    const text = svgEl("text", { x: x(i), y: H - 8, "text-anchor": "middle" });
-    text.textContent = p.short || p.label;
+    const text = svgEl("text", { x: x(i), y: labelY, "text-anchor": "middle" });
+    text.textContent = p.label || p.short;
     axis.append(text);
   });
+  if (caption) {
+    const cap = svgEl("text", { x: padL + (W - padL - padR) / 2, y: H - 7, "text-anchor": "middle", class: "cap" });
+    cap.textContent = caption;
+    axis.append(cap);
+  }
   svg.append(axis);
 
   const cursor = svgEl("line", { class: "cursor", y1: padT, y2: H - padB });
@@ -5218,12 +5266,8 @@ VIEWS.analytics = {
       </div>
       ${this.conversionNote()}
 
-      ${card(tr("الإيرادات يوم بيوم"), this.rangeLabel(), `<div id="anRevenue"></div>`)}
-
-      <div class="grid g-2">
-        ${card(tr("إجمالي المبيعات يوم بيوم"), this.rangeLabel(), `<div id="anTotalSales"></div>`)}
-        ${card(tr("صافي المبيعات يوم بيوم"), this.rangeLabel(), `<div id="anNetSales"></div>`)}
-      </div>
+      ${card(tr("إجمالي المبيعات يوم بيوم"), this.rangeLabel(), `<div id="anTotalSales"></div>`)}
+      ${card(tr("صافي المبيعات يوم بيوم"), this.rangeLabel(), `<div id="anNetSales"></div>`)}
       ${card(tr("تفصيل المبيعات"), this.rangeLabel(), this.salesBreakdown())}
 
       <div class="grid g-2">
@@ -5275,6 +5319,19 @@ VIEWS.analytics = {
   /* What the cards say they are showing. A custom window has to name its own
      dates -- "30 days" over a chart of five is exactly the mislabelling the
      preset allow-list exists to prevent. */
+  /* The window itself, both ends dated, for printing under a chart's axis.
+     `rangeLabel` says "30 days" for a preset, which is the right thing on a
+     card's subtitle and the wrong thing under an axis: the ticks there are
+     dates, so what they need beside them is the two dates they run between.
+     Read off the payload rather than off the series -- a stretch with no
+     orders at either end would otherwise caption a chart with a window
+     narrower than the one that was asked for. */
+  rangeCaption() {
+    const stats = this.stats || {};
+    if (!stats.start || !stats.end) return this.rangeLabel();
+    return `${shortDate(stats.start)} — ${shortDate(stats.end)}`;
+  },
+
   rangeLabel() {
     if (this.start && this.end) {
       return this.start === this.end
@@ -5338,27 +5395,21 @@ VIEWS.analytics = {
     const stats = this.stats;
     if (stats.__error) return;
     const days = stats.revenue_by_day;
-    const points = days.map((d) => ({ label: shortDate(d.date), short: d.date.slice(8), value: Number(d.revenue) }));
     const orderPoints = days.map((d) => ({ label: shortDate(d.date), short: d.date.slice(8), value: d.orders }));
 
     const spark = $("#anSpark");
     if (spark) spark.append(sparkline(days.map((d) => Number(d.revenue)), "clay"));
 
-    const revenue = $("#anRevenue");
-    if (revenue) {
-      revenue.innerHTML = "";
-      revenue.append(points.length ? lineChart(points, { tone: "clay", fmt: money, height: 230, label: tr("الإيرادات يوميًا") })
-        : emptyState(tr("مفيش بيانات"), tr("مفيش طلبات في الفترة دي"), "chart"));
-    }
+    const caption = this.rangeCaption();
     const salesChart = (slot, key, tone, label) => {
       const node = $(slot);
       if (!node) return;
-      const pts = days.map((d) => ({ label: shortDate(d.date), short: d.date.slice(8), value: Number(d[key]) }));
+      const pts = days.map((d) => ({ label: shortDate(d.date), value: Number(d[key]) }));
       node.innerHTML = "";
-      node.append(pts.length ? lineChart(pts, { tone, fmt: money, height: 230, label })
+      node.append(pts.length ? lineChart(pts, { tone, fmt: money, height: 250, label, caption })
         : emptyState(tr("مفيش بيانات"), tr("مفيش طلبات في الفترة دي"), "chart"));
     };
-    salesChart("#anTotalSales", "total_sales", "rose", tr("إجمالي المبيعات يوميًا"));
+    salesChart("#anTotalSales", "total_sales", "clay", tr("إجمالي المبيعات يوميًا"));
     salesChart("#anNetSales", "net_sales", "amber", tr("صافي المبيعات يوميًا"));
 
     const orders = $("#anOrders");
