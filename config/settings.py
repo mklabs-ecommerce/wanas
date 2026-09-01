@@ -219,6 +219,17 @@ class Settings:
     #: `status_*` / `feedback_request` are tracked as not yet approved either.
     whatsapp_template_back_in_stock: str
     whatsapp_template_abandoned_cart: str
+    #: ...and the same for the messages that follow an order rather than a
+    #: cart. These are the ones that most often fall outside the window: a
+    #: customer orders, stops writing, and the fulfilment happens a day or
+    #: two later. `order_update` covers every status push (packed, shipped,
+    #: delivered, cancelled), `feedback_request` the rating ask after
+    #: delivery, and `order_confirmation` exists for completeness -- the
+    #: confirmation is always sent seconds after the customer's own message,
+    #: so it is inside the window by construction.
+    whatsapp_template_order_update: str
+    whatsapp_template_feedback_request: str
+    whatsapp_template_order_confirmation: str
     whatsapp_template_language: str
 
     @property
@@ -338,6 +349,11 @@ def load_settings() -> Settings:
         abandoned_cart_max_age_hours=_float("ABANDONED_CART_MAX_AGE_HOURS", 48.0),
         whatsapp_template_back_in_stock=os.getenv("WHATSAPP_TEMPLATE_BACK_IN_STOCK", "").strip(),
         whatsapp_template_abandoned_cart=os.getenv("WHATSAPP_TEMPLATE_ABANDONED_CART", "").strip(),
+        whatsapp_template_order_update=os.getenv("WHATSAPP_TEMPLATE_ORDER_UPDATE", "").strip(),
+        whatsapp_template_feedback_request=os.getenv("WHATSAPP_TEMPLATE_FEEDBACK_REQUEST", "").strip(),
+        whatsapp_template_order_confirmation=os.getenv(
+            "WHATSAPP_TEMPLATE_ORDER_CONFIRMATION", ""
+        ).strip(),
         whatsapp_template_language=os.getenv("WHATSAPP_TEMPLATE_LANGUAGE", "ar").strip() or "ar",
     )
 

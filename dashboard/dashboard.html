@@ -542,6 +542,25 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 .bubble.staff { align-self: flex-end; background: var(--clay-tint); border-color: var(--clay-soft); border-start-end-radius: var(--r-xs); }
 .bubble.system { align-self: flex-end; background: var(--surface); border-style: dashed; border-start-end-radius: var(--r-xs); }
 .bubble.system .by { color: var(--ink-3); }
+/* A message that was composed but never reached the phone. It stays in the
+   thread -- a staff member following it up needs to read what the shop meant
+   to say -- but it must never look like one the customer received. */
+.bubble.undelivered { border-color: var(--rose); border-style: dashed; opacity: .85; }
+.bubble .undelivered-note { display: block; margin-top: 6px; font-size: 11px; color: var(--rose); }
+/* The time, and (outbound only) how far the message got on the customer's
+   side. One muted footer line so a thread still reads as a conversation
+   rather than a log table. */
+.bubble .meta {
+  display: flex; align-items: center; gap: 5px; justify-content: flex-end;
+  margin-top: 4px; font-size: 10.5px; color: var(--ink-3); line-height: 1;
+}
+.bubble.user .meta { justify-content: flex-start; }
+.bubble .meta .ticks { display: inline-flex; align-items: center; }
+/* Read is the one state that gets a colour: the whole point of the indicator
+   is that "seen" is findable at a glance down a long thread. */
+.bubble .meta .ticks[data-state="read"] { color: var(--teal); }
+.bubble .meta .ticks svg { display: block; }
+.bubble .meta .ticks svg + svg { margin-inline-start: -5px; }
 .bubble .by { font-size: 10.5px; font-weight: 700; color: var(--ink-3); margin-bottom: 3px; display: block; }
 .bubble.staff .by { color: var(--clay); }
 .bubble.bot .by { color: var(--teal); }
@@ -1221,7 +1240,7 @@ const EN = {
   "الرسالة الخاصة": "Private message",
   "الرسالة مابعتتش": "The message was not sent",
   "الرسايل": "Messages",
-  "الرسايل المحفوظة مالهاش توقيت لكل رسالة، فالرسوم اليومية بتعدّ": "Stored messages carry no per-message timestamp, so the daily charts count",
+  "الرسايل بقى ليها توقيت لكل واحدة، بس اللي اتسجّل قبل كده مالوش، فالرسوم اليومية لسه بتعدّ": "Messages carry their own time now, but those stored earlier do not, so the daily charts still count",
   "الرقم اتشال": "Number removed",
   "الرقم اتضاف": "Number added",
   "الستايل": "Style",
@@ -1421,6 +1440,12 @@ const EN = {
   "رد عام": "Public reply",
   "ردود عامة": "Public replies",
   "رسالة تلقائية": "Automatic message",
+  "اتبعتت": "Sent",
+  "وصلت للعميل": "Delivered",
+  "العميل شافها": "Seen by the customer",
+  "رسالة قديمة من قبل ما نسجّل التوقيت": "An older message, from before times were recorded",
+  "عدى أكتر من ٢٤ ساعة على آخر رسالة من العميل — واتساب مش هيوصّل رسالة مكتوبة. كلّمه بالتليفون": "The customer last wrote over 24 hours ago \u2014 WhatsApp will not deliver a typed message. Call them",
+  "مـا وصلتش للعميل — محتاجة متابعة بالتليفون": "Not delivered to the customer \u2014 needs a phone follow-up",
   "رسالة خاصة": "Private message",
   "رسالة من الفريق": "message from staff",
   "رسايل خاصة": "Private messages",
@@ -1813,6 +1838,21 @@ function dateTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   return d.toLocaleString(DATE_LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+/* One message's own time, in a thread. Clock alone for today -- the common
+   case, and a date on every line of a live conversation is noise -- and the
+   day in front of it for anything older, because "14:32" with no date on a
+   message from last week is worse than no time at all. */
+function bubbleTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const clock = d.toLocaleTimeString(DATE_LOCALE, { hour: "2-digit", minute: "2-digit" });
+  const today = new Date();
+  const sameDay = d.getFullYear() === today.getFullYear()
+    && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+  return sameDay ? clock : `${shortDate(iso)} ${clock}`;
 }
 
 function ago(iso) {
@@ -3090,6 +3130,41 @@ VIEWS.inbox = {
 
 /* --- one conversation ------------------------------------------------------ */
 
+/* How far one outbound message got on the customer's side, as WhatsApp's own
+   ticks: one for accepted, two for delivered to the handset, two coloured for
+   opened. `null` is deliberately not a state -- a message with no receipt is
+   one nothing has been reported about (sent before receipts were recorded, or
+   a channel that has none), and drawing an "unread" mark for it would be
+   inventing a fact. "Delivered" is what genuinely means not-read-yet. */
+const RECEIPT_STATES = {
+  sent:      { ticks: 1, label: tr("اتبعتت") },
+  delivered: { ticks: 2, label: tr("وصلت للعميل") },
+  read:      { ticks: 2, label: tr("العميل شافها") },
+};
+
+function receiptHTML(state) {
+  const spec = RECEIPT_STATES[state];
+  if (!spec) return "";
+  const ticks = icon("check", 11).repeat(spec.ticks);
+  return `<span class="ticks" data-state="${esc(state)}" title="${esc(spec.label)}"
+    role="img" aria-label="${esc(spec.label)}">${ticks}</span>`;
+}
+
+/* The footer line under a bubble: its own time, and for an outbound message
+   on a channel that reports them, its receipt. `receipts` is the caller's
+   decision, not this function's -- a customer's own message and an Instagram
+   thread both pass false, for different reasons. */
+function appendMeta(bubble, item, { receipts }) {
+  const stamp = bubbleTime(item.at);
+  const ticks = receipts ? receiptHTML(item.receipt) : "";
+  if (!stamp && !ticks) return;
+  // Messages stored before per-message timestamps existed have no `at`. They
+  // show the rest of the line and no time, rather than a made-up one.
+  const title = item.at ? dateTime(item.at) : tr("رسالة قديمة من قبل ما نسجّل التوقيت");
+  bubble.insertAdjacentHTML("beforeend",
+    `<span class="meta" title="${esc(title)}"><span>${esc(stamp)}</span>${ticks}</span>`);
+}
+
 async function openConversation(channel, externalId) {
   state.inbox.selected = { channel, external_id: externalId };
   $("#view-inbox").classList.add("reading");
@@ -3157,6 +3232,10 @@ function renderThread(data) {
         TR`<img class="att" loading="lazy" alt="صورة من العميل" src="${mediaURL(src)}">`));
       (item.audio || []).forEach((src) => bubble.insertAdjacentHTML("beforeend",
         `<audio controls preload="none" src="${mediaURL(src)}"></audio>`));
+      // Time only. A customer's own message has no "seen" state to show --
+      // that is about what *they* have read, and the only thing the shop can
+      // know is the other direction.
+      appendMeta(bubble, item, { receipts: false });
       log.append(bubble);
     } else if (item.kind === "bot") {
       // Three voices, not two: the model, a staff member, and the automated
@@ -3166,10 +3245,23 @@ function renderThread(data) {
       const who = item.by === "staff" ? "staff" : item.by === "system" ? "system" : "bot";
       const LABEL = { staff: tr("الفريق"), system: tr("رسالة تلقائية"), bot: tr("البوت") };
       const GLYPH = { staff: "user", system: "spark", bot: "bot" };
-      const bubble = el("div", { class: `bubble ${who}` });
+      // ...and a fourth thing the transcript has to say: whether it arrived.
+      // Outside Meta's 24-hour window an automated push is refused outright,
+      // and a thread that showed those exactly like delivered messages is how
+      // an order update nobody received went unnoticed for days.
+      const failed = item.delivery === "failed";
+      const bubble = el("div", { class: `bubble ${who}${failed ? " undelivered" : ""}` });
       bubble.innerHTML = `<span class="by">${icon(GLYPH[who], 11)} ${LABEL[who]}</span>${esc(item.text || "")}`;
+      if (failed) {
+        bubble.insertAdjacentHTML("beforeend",
+          TR`<span class="undelivered-note">${icon("alert", 11)} مـا وصلتش للعميل — محتاجة متابعة بالتليفون</span>`);
+      }
       (item.attachments || []).forEach((src) => bubble.insertAdjacentHTML("beforeend",
         TR`<img class="att" loading="lazy" alt="صورة اتبعتت للعميل" src="${mediaURL(src)}">`));
+      // Outbound: the time, and how far it got on the customer's side. A
+      // message that never left has no receipt worth showing -- the red note
+      // above already says what happened to it.
+      appendMeta(bubble, item, { receipts: data.receipts && !failed });
       log.append(bubble);
     } else if (item.kind === "tools") {
       log.append(el("div", { class: "sysline", html: `${icon("spark", 12)} ${esc((item.names || []).join(tr("، ")))}` }));
@@ -3236,9 +3328,13 @@ async function sendReply() {
   if (result.__error) {
     // 409 here means the bot took the conversation back between load and
     // send; saying so is the difference between "try again" and "why".
-    const message = result.__error.code === "not_paused"
-      ? tr("المحادثة رجعت للبوت — استلمها تاني وابعت")
-      : result.__error.message;
+    const REASONS = {
+      not_paused: tr("المحادثة رجعت للبوت — استلمها تاني وابعت"),
+      // Meta's 24-hour rule. Nothing typed here can get through it, so the
+      // only honest next step is a phone call.
+      outside_window: tr("عدى أكتر من ٢٤ ساعة على آخر رسالة من العميل — واتساب مش هيوصّل رسالة مكتوبة. كلّمه بالتليفون"),
+    };
+    const message = REASONS[result.__error.code] || result.__error.message;
     return toast(tr("الرسالة مابعتتش"), message, "bad", 6000);
   }
   box.value = "";
@@ -5495,7 +5591,7 @@ VIEWS.analytics = {
       </div>
 
       <div class="banner" data-tone="info">${icon("alert", 15)}
-        <div>الرسايل المحفوظة مالهاش توقيت لكل رسالة، فالرسوم اليومية بتعدّ <strong>نشاط المحادثات</strong> مش عدد الرسايل.
+        <div>الرسايل بقى ليها توقيت لكل واحدة، بس اللي اتسجّل قبل كده مالوش، فالرسوم اليومية لسه بتعدّ <strong>نشاط المحادثات</strong> مش عدد الرسايل.
         إجمالي الرسايل تحت رقم حقيقي — بس مش موزّع على الأيام.</div></div>
 
       ${card(tr("نشاط المحادثات يوميًا"), this.rangeLabel(), `<div id="inActive"></div>`)}

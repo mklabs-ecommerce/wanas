@@ -48,6 +48,14 @@ class ToolContext:
     #: reply. Set by a tool, never by the model: the options have to come from
     #: the database for the same reason a price does.
     interactive: dict | None = None
+    #: Set by a tool that has already said everything this turn needs to say,
+    #: on its own and in words the shop wrote rather than words a model chose.
+    #: The agent stops the loop there and sends nothing further: the value is
+    #: the reason, for the log. `confirm_order` is the case that put it here
+    #: -- the order confirmation is composed and delivered by
+    #: `domain/services/notifications.py`, so a model reply after it is a
+    #: second message about the same order landing on the customer's phone.
+    end_turn: str | None = None
 
     def offer(self, payload: dict) -> bool:
         """Attach a picker to this reply. First one wins.

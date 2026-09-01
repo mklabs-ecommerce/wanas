@@ -44,7 +44,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from sqlalchemy import and_, or_, select
 
 from assistant import messages as msg, session as session_store
-from assistant.display import display_history
+from assistant.display import display_history, supports_receipts
 from assistant.media_serving import resolve_servable_path
 from common.identifiers import is_phone_number
 from config.settings import settings
@@ -406,6 +406,11 @@ def conversation_detail(
                 "channel": channel,
                 "external_id": external_id,
                 "history": display_history(history),
+                # Whether a "seen by the customer" state means anything on
+                # this channel at all. False hides the indicator rather than
+                # showing every message as unread -- see
+                # `assistant/display.py::RECEIPT_CHANNELS`.
+                "receipts": supports_receipts(channel),
                 "paused": paused,
                 "reason": handoff.reason if handoff else ("manual" if paused else None),
                 "summary": handoff.summary if handoff else None,
@@ -452,6 +457,14 @@ def reply(
             # running, which is exactly the two-writers race the debounce
             # lock exists to prevent.
             return JSONResponse({"error": "not_paused"}, status_code=409)
+
+        if not notifications.window_open(db, channel, external_id):
+            # Meta refuses free-form business-initiated text more than 24
+            # hours after the customer's last message, and a template is not
+            # something a staff member can type here. Said plainly, before
+            # the send: the alternative is a 502 with a Meta error code in
+            # it, and a staff member who believes the customer was answered.
+            return JSONResponse({"error": "outside_window"}, status_code=409)
 
         sent = notifications.get_sender(channel).send_text(external_id, text)
         if not sent.delivered:

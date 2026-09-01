@@ -23,9 +23,10 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from assistant.messages import ASSISTANT, USER
+from assistant.messages import ASSISTANT, RECEIPT_ORDER, USER
 from common.timeutil import as_aware
 from config.settings import settings
 from domain.models import UNREADABLE_HISTORY, SessionRow, utcnow
@@ -145,13 +146,68 @@ def load(session: Session, channel: str, external_id: str) -> list[dict]:
     return list(stored[_start(row, stored) :])
 
 
-def save(session: Session, channel: str, external_id: str, history: list[dict]) -> list[dict]:
+def stored_length(session: Session, channel: str, external_id: str) -> int:
+    """How many messages the stored transcript holds right now.
+
+    The bookmark a turn takes before it starts working from an in-memory copy
+    of the history, so `save(..., merge_since=...)` can tell what was written
+    to the row while the turn was running. See `save`.
+    """
+    row = session.get(SessionRow, (channel, external_id))
+    return len(_stored(row)) if row is not None else 0
+
+
+def _merge_interleaved(history: list[dict], stored: list[dict], since: int) -> list[dict]:
+    """Fold back the messages someone else wrote to the row mid-turn.
+
+    An agent turn reads the history once, keeps it in memory for the whole
+    tool loop, and writes it back at the end. Anything appended to the *row*
+    in between -- and the order confirmation is exactly that: `place_order`
+    records it through `notifications._record` on the turn's own session while
+    the model is still composing its reply -- was therefore overwritten by the
+    turn's stale copy. The customer had the message on their phone and the
+    dashboard did not have it at all, which is precisely the mismatch
+    `record_outbound` exists to prevent.
+
+    Chronology, not position: those messages left the shop before the reply
+    the turn is about to store, so they go in ahead of it.
+    """
+    extra = [m for m in stored[since:] if m not in history]
+    if not extra:
+        return history
+    log.info(
+        "folding %d message(s) written mid-turn back into the transcript", len(extra)
+    )
+    tail = 0
+    if history and history[-1].get("role") == ASSISTANT and not history[-1].get("tool_calls"):
+        tail = 1
+    cut = len(history) - tail
+    return history[:cut] + extra + history[cut:]
+
+
+def save(
+    session: Session,
+    channel: str,
+    external_id: str,
+    history: list[dict],
+    *,
+    merge_since: int | None = None,
+) -> list[dict]:
     """Store `history` as the live conversation, keeping what came before it.
 
     `trim` caps what the model is sent; the messages it drops move into the
     archive rather than off the end of the world. Only `SESSION_ARCHIVE_CAP`
     bounds the row, and it says so when it bites.
+
+    `merge_since` is the `stored_length` the caller's copy of the history was
+    read at. Given one, anything written to the row since then is folded back
+    in rather than overwritten -- see `_merge_interleaved`.
     """
+    if merge_since is not None:
+        row = session.get(SessionRow, (channel, external_id))
+        if row is not None:
+            history = _merge_interleaved(history, _stored(row), merge_since)
+
     trimmed = trim(history)
     dropped = history[: len(history) - len(trimmed)]
 
@@ -186,6 +242,195 @@ def save(session: Session, channel: str, external_id: str, history: list[dict]) 
     row.updated_at = utcnow()
     session.flush()
     return trimmed
+
+
+def _rewrite(
+    session: Session,
+    row: SessionRow,
+    stored: list[dict],
+    index: int,
+    changes: dict,
+    *,
+    touch: bool = True,
+) -> None:
+    """Replace one stored message with an annotated copy of itself.
+
+    A brand-new list, and the loaded one left untouched. Mutating it in place
+    and then reassigning writes nothing: the column compares the new value
+    against the loaded one by equality, and an in-place edit has already
+    changed both.
+
+    `touch=False` leaves `updated_at` alone, and it matters more than it
+    looks: that column is both the inbox's sort key and the clock the
+    six-hour conversation expiry runs on (`_expired`). Something that happens
+    *to* an old message rather than being a new one -- a read receipt -- must
+    not move either. Bumping it would quietly extend the bot's context window
+    every time a customer opened the chat without saying anything, and float
+    a silent conversation to the top of the inbox as though it had spoken.
+    """
+    row.history = [
+        {**message, **changes} if i == index else message
+        for i, message in enumerate(stored)
+    ]
+    if touch:
+        row.updated_at = utcnow()
+    session.flush()
+
+
+def mark_undelivered(session: Session, channel: str, external_id: str, text: str) -> bool:
+    """Flag the newest copy of `text` as a message that never arrived.
+
+    An update to the line already written, not a second line: the transcript
+    must read as one message the customer did not get, never as the same
+    sentence said twice. Used when the send failure is only learned about
+    after the line was recorded -- which is every send, since the message is
+    written inside the transaction that decided it and only leaves once that
+    transaction has committed.
+
+    False means there was nothing to correct (no recorder wired, a different
+    wording), and the caller writes a fresh flagged line instead.
+    """
+    row = session.get(SessionRow, (channel, external_id))
+    if row is None:
+        return False
+    stored = _stored(row)
+    for index in range(len(stored) - 1, -1, -1):
+        message = stored[index]
+        if message.get("role") == ASSISTANT and message.get("content") == text:
+            if message.get("delivery") == "failed":
+                return True
+            _rewrite(session, row, stored, index, {"delivery": "failed"})
+            return True
+    return False
+
+
+def attach_ids_to_text(
+    session: Session, channel: str, external_id: str, text: str, message_ids: list[str]
+) -> bool:
+    """Stamp the platform ids a *proactive* message went out as onto its line.
+
+    `attach_outbound_ids` below does this for an agent reply, where "the
+    newest assistant message" is unambiguous. A proactive push cannot use
+    that: the order confirmation is written inside the order's transaction and
+    sent after the commit, and by then the customer may already have written
+    again. So it is matched by its own text instead -- the same handle
+    `mark_undelivered` uses, and the only one that survives the gap between
+    deciding a message and learning what Meta called it.
+
+    Without this, an order confirmation could never be matched to a read
+    receipt and would read as permanently unseen -- which is exactly the
+    message the shop most wants to know landed.
+    """
+    ids = [m for m in (message_ids or []) if m]
+    if not ids:
+        return False
+    row = session.get(SessionRow, (channel, external_id))
+    if row is None:
+        return False
+    stored = _stored(row)
+    for index in range(len(stored) - 1, -1, -1):
+        message = stored[index]
+        if message.get("role") == ASSISTANT and message.get("content") == text:
+            merged = list(dict.fromkeys([*(message.get("mids") or []), *ids]))
+            if merged == list(message.get("mids") or []):
+                return True
+            _rewrite(session, row, stored, index, {"mids": merged})
+            return True
+    return False
+
+
+def locate_mid(session: Session, channel: str, message_id: str) -> str | None:
+    """Which conversation on `channel` holds the message with this platform id.
+
+    A fallback, not the main road: a receipt names the customer it is about
+    (`statuses[].recipient_id`), and that is normally the very `external_id`
+    the conversation is keyed on. It stops being so the moment Meta reports a
+    recipient under one of its two identifier schemes while the thread was
+    opened under the other -- a phone number against a business-scoped user id
+    (`common/identifiers.py`) -- and a receipt that cannot find its message is
+    an outbound message that reads as never seen forever.
+
+    A platform message id is globally unique, so a scan cannot match the wrong
+    conversation; it can only be slow, and it runs only when the direct
+    lookup has already missed.
+    """
+    if not message_id:
+        return None
+    rows = session.scalars(select(SessionRow).where(SessionRow.channel == channel)).all()
+    for row in rows:
+        for message in _stored(row):
+            if message.get("role") == ASSISTANT and message_id in (message.get("mids") or []):
+                return row.external_id
+    return None
+
+
+def record_receipt(
+    session: Session,
+    channel: str,
+    external_id: str,
+    message_id: str,
+    status: str,
+    at: str | None = None,
+) -> bool:
+    """Record what the platform says happened to one message we sent.
+
+    Matched to a stored message through `mids` -- the same ids
+    `assistant/quoting.py` resolves a customer's "reply to this" against, and
+    the only link there is between an event on Meta's side and a row in
+    `SessionRow.history`.
+
+    One stored message can have gone out as several sends (the words, then a
+    picker, then a photo), so a receipt arrives per part. The message keeps
+    the furthest state any of its parts reached: a customer whose phone
+    confirmed reading any part of a reply has had that reply on screen, and
+    tracking each part separately would put a half-read tick on something the
+    customer plainly saw.
+
+    Receipts never move backwards (`RECEIPT_ORDER`) -- Meta can deliver `read`
+    before `delivered`, and retries arrive out of order. `failed` is not a
+    receipt at all: it is Meta telling us, after accepting the send, that the
+    message never landed, so it sets the same `delivery` flag a refused send
+    does and the dashboard stops showing it as received.
+
+    False means no stored message carries that id -- an ordinary outcome for
+    a receipt about something sent before this existed.
+    """
+    if not message_id or not status:
+        return False
+    row = session.get(SessionRow, (channel, external_id))
+    if row is None:
+        return False
+    stored = _stored(row)
+    for index in range(len(stored) - 1, -1, -1):
+        message = stored[index]
+        if message.get("role") != ASSISTANT or message_id not in (message.get("mids") or []):
+            continue
+
+        if status == "failed":
+            if message.get("delivery") == "failed":
+                return True
+            _rewrite(session, row, stored, index, {"delivery": "failed"}, touch=False)
+            return True
+
+        if status not in RECEIPT_ORDER:
+            # An unknown status is not something to guess at. Named, so a new
+            # one Meta starts sending is visible rather than silently dropped.
+            log.info("ignoring unknown whatsapp status %r for %s", status, message_id)
+            return False
+
+        current = (message.get("receipt") or {}).get("status")
+        if current in RECEIPT_ORDER and RECEIPT_ORDER.index(current) >= RECEIPT_ORDER.index(status):
+            return True
+        _rewrite(
+            session,
+            row,
+            stored,
+            index,
+            {"receipt": {"status": status, "at": at or utcnow().isoformat()}},
+            touch=False,
+        )
+        return True
+    return False
 
 
 def drop_provisional(history: list[dict], recorded_ids: set[str] | None) -> list[dict]:

@@ -217,6 +217,12 @@ class AgentReply:
     #: the chat harness read.
     tool_calls: list[str] = field(default_factory=list)
     error: str | None = None
+    #: True when the turn deliberately produced no text because the customer
+    #: has already been answered by another path -- today only the order
+    #: confirmation, which `domain/services/notifications.py` composes and
+    #: sends itself. Silence with a reason, so the adapters do not log it as
+    #: a customer left sitting in the dark.
+    silent: bool = False
 
 
 def run_turn(
@@ -244,6 +250,12 @@ def run_turn(
     # had said anything (`assistant/runtime.py::record_inbound`). Drop those
     # provisional copies: the canonical message appended below is the one that
     # carries the photo context and the reply-to annotations the model reads.
+    # Where the stored transcript stood before this turn touched anything.
+    # `history` below is an in-memory copy; a tool can write to the row while
+    # the loop is still running (the order confirmation does), and without
+    # this bookmark the save at the end of the turn would overwrite it. See
+    # `assistant/session.py::save`.
+    base = session_store.stored_length(db, channel, external_id)
     history = session_store.drop_provisional(
         session_store.load(db, channel, external_id), recorded_ids
     )
@@ -294,7 +306,7 @@ def run_turn(
             text_out = RATE_LIMITED if exc.kind == "rate_limit" else GENERIC_FAILURE
             if settings.chatbot_debug:
                 text_out = f"{text_out}\n[debug] {exc.kind}: {exc}"
-            session_store.save(db, channel, external_id, history)
+            session_store.save(db, channel, external_id, history, merge_since=base)
             return AgentReply(text=text_out, error=exc.kind, tool_calls=called)
         except Exception as exc:
             # Anything the provider did not classify -- a bug in translation, a
@@ -307,7 +319,7 @@ def run_turn(
             text_out = GENERIC_FAILURE
             if settings.chatbot_debug:
                 text_out = f"{text_out}\n[debug] {type(exc).__name__}: {exc}"
-            session_store.save(db, channel, external_id, history)
+            session_store.save(db, channel, external_id, history, merge_since=base)
             return AgentReply(text=text_out, error="provider_crash", tool_calls=called)
 
         if not reply.tool_calls:
@@ -362,7 +374,7 @@ def run_turn(
                 )
                 text_out = PROMISE_FALLBACK
                 history.append(msg.assistant(text_out, attachments=ctx.attachments))
-                session_store.save(db, channel, external_id, history)
+                session_store.save(db, channel, external_id, history, merge_since=base)
                 return AgentReply(
                     text=text_out,
                     attachments=ctx.attachments,
@@ -383,7 +395,7 @@ def run_turn(
                     external_id,
                 )
             history.append(msg.assistant(text_out, signature=reply.signature, attachments=ctx.attachments))
-            session_store.save(db, channel, external_id, history)
+            session_store.save(db, channel, external_id, history, merge_since=base)
             return AgentReply(
                 text=text_out or GENERIC_FAILURE,
                 attachments=ctx.attachments,
@@ -407,11 +419,31 @@ def run_turn(
             results.append(msg.tool_result(call.get("id", name), name, content))
         history.append(msg.tool_results(results))
 
+        if ctx.end_turn:
+            # A tool has already sent the customer the message this turn is
+            # about. Anything the model added on top would be a second one --
+            # see `ToolContext.end_turn`.
+            log.info(
+                "ending the turn for %s/%s after %s: the customer has already been "
+                "answered by the tool itself",
+                channel,
+                external_id,
+                ctx.end_turn,
+            )
+            session_store.save(db, channel, external_id, history, merge_since=base)
+            return AgentReply(
+                text="",
+                attachments=ctx.attachments,
+                interactive=ctx.interactive,
+                tool_calls=called,
+                silent=True,
+            )
+
     # A model stuck calling tools without ever replying must hit a ceiling and
     # return something graceful, not spin.
     log.warning("tool loop cap hit for %s/%s after %s calls", channel, external_id, len(called))
     history.append(msg.assistant(LOOP_EXHAUSTED, attachments=ctx.attachments))
-    session_store.save(db, channel, external_id, history)
+    session_store.save(db, channel, external_id, history, merge_since=base)
     return AgentReply(
         text=LOOP_EXHAUSTED,
         attachments=ctx.attachments,

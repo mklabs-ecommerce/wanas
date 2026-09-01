@@ -122,6 +122,7 @@ HANDOFF_REASONS = (
 #: dropped rather than DMed.
 ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancelled", "swap_requested",
                  "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed",
+                 "status_push_undelivered",
                  "instagram_reply_delivery_failed", "instagram_token_refresh_failed", "comment_flood",
                  "negative_comment", "customer_complaint", "spam_comment", "classifier_unavailable")
 

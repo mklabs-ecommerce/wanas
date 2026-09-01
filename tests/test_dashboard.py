@@ -572,3 +572,26 @@ def test_the_logo_is_public_like_the_login_page_that_shows_it(client):
 def test_a_missing_logo_is_a_404_not_a_traceback(client, monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard, "LOGO_FILE", tmp_path / "gone.webp")
     assert client.get("/dashboard/logo.webp").status_code == 404
+
+
+def test_a_reply_is_refused_when_the_24h_window_has_closed(logged_in, seeded, outbox):
+    """Meta will not deliver free-form text more than 24 hours after the
+    customer's last message. Refusing here, by name, is the difference between
+    a staff member calling the customer and a staff member believing the
+    message they typed was read."""
+    from datetime import timedelta
+
+    from domain.models import utcnow
+
+    make_paused(seeded)
+    identity = identities.get(seeded, CHANNEL, CUSTOMER)
+    identity.last_seen_at = utcnow() - timedelta(hours=30)
+    seeded.commit()
+
+    res = logged_in.post(
+        f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply", json={"text": "أهلاً"}
+    )
+    assert res.status_code == 409
+    assert res.json()["error"] == "outside_window"
+    assert outbox == [], "nothing may be sent, and nothing may be written down"
+    assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True

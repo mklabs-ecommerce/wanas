@@ -14,6 +14,7 @@ from config.settings import settings
 from domain.models import ChannelIdentity, Order, QueueKind, SessionRow, ShippingRate, utcnow
 from domain.services import (
     identities,
+    notifications,
     queues,
 )
 
@@ -297,9 +298,11 @@ def test_paused_conversation_is_stored_not_answered(seeded):
     assert reply.text is None
     assert provider.calls == []  # the model was not called at all
 
-    # ...but staff can see what was said.
+    # ...but staff can see what was said, and when.
     stored = session_store.load(seeded, CHANNEL, WHO)
-    assert stored[-1] == {"role": "user", "content": "في حد؟"}
+    assert stored[-1]["role"] == "user"
+    assert stored[-1]["content"] == "في حد؟"
+    assert stored[-1]["at"]
 
 
 def test_only_a_staff_action_un_pauses(seeded):
@@ -391,8 +394,12 @@ def test_full_order_through_the_harness_entry_point(seeded):
     assert "60" in say("ship القاهرة").text
 
     reply = say("order Omar Ali | Cairo | 12 Test Street, Apt 4 | 01000000000")
-    assert "WNS-1001" in reply.text
-    assert "1360" in reply.text  # 2 x 650 + 60
+    # The turn itself says nothing: the confirmation the customer reads is the
+    # one `notifications.order_confirmed` composed and sent. A model reply on
+    # top of it would be a second confirmation for the same order.
+    assert reply.silent and not reply.text
+    confirmation = notifications.get_sender(CHANNEL).sent[-1].text
+    assert "1360" in confirmation  # 2 x 650 + 60
 
     order = seeded.get(Order, "WNS-1001")
     assert order.status == "Confirmed"

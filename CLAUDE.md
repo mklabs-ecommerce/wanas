@@ -285,6 +285,39 @@ tests/                   pytest suite (flat, one test_<module>.py per
   summarise here — compaction removes whole messages only, so every sentence
   the model reads is the exact sentence that was said, and the verbatim
   window must never open on a `tool_results` whose call was compacted away.
+- **A turn is not the only writer.** `agent.run_turn` reads the history once
+  and keeps it in memory for the whole tool loop, but a tool can write to the
+  same row while it runs -- `confirm_order` does, through
+  `notifications.order_confirmed`. The turn's end-of-turn `save` therefore
+  passes `merge_since` (the `stored_length` it started from) and folds those
+  messages back in; without it the confirmation the customer had on their
+  phone was overwritten and the dashboard showed a shorter conversation than
+  the customer's own. For the same reason `confirm_order` **ends the turn**
+  (`ToolContext.end_turn`): the confirmation is composed and sent by
+  `domain/services/notifications.py`, so a model reply after it is a second
+  confirmation for one order.
+- **A stored message is not proof it arrived.** Meta refuses free-form
+  business-initiated text more than 24 hours after the customer's last
+  message (`notifications.CUSTOMER_SERVICE_WINDOW`), which is routine for a
+  status push on a parcel that ships the next day. Every automated message
+  now decides deliverability *inside the transaction that writes it*
+  (`window_open` -> an approved template, or nothing), records the line with
+  `delivered=False` when it cannot arrive, and raises a staff alert. Never
+  write an outbound line as delivered on the strength of having composed it.
+- **Every message carries its own time, and an outbound one carries what
+  became of it.** `assistant/messages.py` stamps `at` (ISO-8601 UTC) on every
+  stored message, and `receipt` (`sent`/`delivered`/`read`, plus when) is
+  written onto outbound ones by `session.record_receipt` when Meta's
+  `statuses[]` callback arrives -- matched to the message through the same
+  `mids` a quoted reply is resolved by. Both are storage-only keys: no
+  provider ever sees them, because every translation layer rebuilds its
+  request from `role`/`content`/`tool_calls`. Receipts deliberately do **not**
+  touch `SessionRow.updated_at` -- that column is the inbox sort key and the
+  six-hour expiry clock, and a customer reading a message is not a new one.
+  Messages stored before this shipped have no `at` and no `receipt`; they show
+  no time and no tick rather than a guessed one. WhatsApp only: Instagram's
+  read event is a watermark on an unsubscribed field, so
+  `display.RECEIPT_CHANNELS` leaves it out and the indicator is absent there.
 - **A quoted reply is resolved, never guessed.** Every stored message carries
   the platform ids it was sent or received as (`mids`); outbound ids come
   from the send's response body and are stamped on by

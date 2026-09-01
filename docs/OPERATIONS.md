@@ -61,11 +61,35 @@ something looks wrong.
       `python scripts/shopify_check_live.py` reports no disagreement
 - [ ] Meta templates approved for the proactive messages (order confirmation,
       status pushes, feedback request, back-in-stock, abandoned-cart nudge).
-      Until then they go out as free-form text, which only works for verified
-      test recipients and inside the 24-hour window; outside it,
-      `WHATSAPP_TEMPLATE_BACK_IN_STOCK` / `WHATSAPP_TEMPLATE_ABANDONED_CART`
-      unset means that message queues a staff alert instead of going out
-      automatically (`domain/services/notifications.py::send_proactive`)
+      **Approval happens in Meta Business Manager, by hand — there is nothing
+      in this repository that can do it.** Submit one template per name below,
+      in Arabic, with no body variables (the client sends templates with none,
+      so the approved copy has to stand on its own: "there's an update on your
+      order, open the chat"), then put the approved names in the environment:
+
+      | Env var | Message |
+      | --- | --- |
+      | `WHATSAPP_TEMPLATE_ORDER_UPDATE` | packed / shipped / delivered / cancelled |
+      | `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST` | the rating ask after delivery |
+      | `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION` | the confirmation, if the send is ever refused |
+      | `WHATSAPP_TEMPLATE_BACK_IN_STOCK` | a waitlisted item is available again |
+      | `WHATSAPP_TEMPLATE_ABANDONED_CART` | the idle-cart nudge |
+
+      Until a name is set, the corresponding message can only reach a customer
+      **inside** Meta's 24-hour customer service window (measured from their
+      last inbound message). Outside it, nothing is sent: the line is written
+      into the conversation marked as *not delivered* — the dashboard shows it
+      dashed and red — and a `status_push_undelivered` /
+      `proactive_outreach_failed` alert is raised for a person to phone the
+      customer. That is the safety net, not the plan: order status is the one
+      thing this shop cannot afford to communicate by accident, and a shipped
+      parcel is routinely more than a day after the customer last wrote.
+      (`domain/services/notifications.py`: `record_status_push`,
+      `deliver_status_push`, `send_proactive`.)
+- [ ] Staff replying from the dashboard are subject to the same rule: a
+      conversation whose customer last wrote over 24 hours ago refuses the
+      reply with `outside_window` and says to phone them, rather than sending
+      something WhatsApp will drop
 - [ ] `DASHBOARD_SESSION_SECRET` set (a long random string) **and** at least
       one staff account exists (`python manage.py create-staff`) — without
       the secret, `/dashboard` cannot log anyone in, and a conversation that

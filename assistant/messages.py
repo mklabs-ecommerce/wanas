@@ -17,13 +17,41 @@ having one.
 
 The agent only ever speaks this. Adding a provider means writing one class and
 changing one config value; no other file changes.
+
+Several keys are **storage-only**: `mids`, `images`, `audio`, `attachments`,
+`by`, `delivery`, `at` and `receipt`. They are written into history and read
+back by the dashboard and the harness, and no provider ever sees them --
+every translation layer builds its request from `role`/`content`/`tool_calls`
+and ignores what it does not recognise. That is the discipline to follow when
+something new has to be *remembered* about a message rather than *said* to the
+model: add a key here, document why at its site, and never widen what
+`assistant/context.py` sends.
 """
 
 from __future__ import annotations
 
+from common.timeutil import utcnow
+
 USER = "user"
 ASSISTANT = "assistant"
 TOOL_RESULTS = "tool_results"
+
+#: Meta's delivery receipts for one outbound message, weakest to strongest.
+#: A receipt only ever moves forward: WhatsApp can deliver `read` before
+#: `delivered` on a fast connection, and out-of-order retries are ordinary, so
+#: the stored state is the furthest one reached rather than the last one seen.
+RECEIPT_ORDER = ("sent", "delivered", "read")
+
+
+def now_stamp() -> str:
+    """The timestamp put on a message as it is stored.
+
+    ISO-8601, UTC, from the one clock (`common/timeutil.py`). A string rather
+    than a datetime because history is a JSON column: whatever goes in has to
+    survive a round trip through `json.dumps` unchanged, and an ISO string
+    both does that and sorts correctly as text.
+    """
+    return utcnow().isoformat()
 
 
 def user(
@@ -33,8 +61,14 @@ def user(
     audio: list[str] | None = None,
     provisional: str | None = None,
     mids: list[str] | None = None,
+    at: str | None = None,
 ) -> dict:
-    message: dict = {"role": USER, "content": text}
+    # `at` is when this message was stored -- for an inbound one, when it
+    # reached the process. Not Meta's own `messages[].timestamp`: that is the
+    # customer's handset clock, and a phone an hour out would put messages in
+    # an order the conversation never happened in. Overridable so a caller
+    # that genuinely knows better can say so; nothing does today.
+    message: dict = {"role": USER, "content": text, "at": at or now_stamp()}
     if mids:
         # Every platform message id this one message was assembled from -- a
         # debounced batch is several WhatsApp messages joined into one. Stored
@@ -72,8 +106,30 @@ def assistant(
     attachments: list[str] | None = None,
     by: str | None = None,
     mids: list[str] | None = None,
+    delivered: bool = True,
+    at: str | None = None,
 ) -> dict:
-    message: dict = {"role": ASSISTANT, "content": text or ""}
+    # When the shop said this. Written at store time, which for an agent reply
+    # is a moment before the send and for a proactive push is the transaction
+    # that decided it -- close enough to "when it happened" for a transcript,
+    # and the only clock this process controls.
+    #
+    # Whether the customer has *read* it is a separate key, `receipt`, and it
+    # is never set here: it cannot be known until Meta says so, minutes or
+    # hours later. `assistant/session.py::record_receipt` is what writes it,
+    # matching Meta's status callback back to this message through `mids`.
+    message: dict = {"role": ASSISTANT, "content": text or "", "at": at or now_stamp()}
+    if not delivered:
+        # This message was composed and stored but never reached the
+        # customer's phone -- Meta refused it, or it fell outside the
+        # 24-hour customer service window with no approved template to
+        # reopen the conversation (`domain/services/notifications.py`).
+        # Kept in the transcript rather than dropped, because what the shop
+        # meant to say is exactly what the staff member following it up
+        # needs to read; flagged, because a dashboard that shows it like any
+        # other sent message is how an order update nobody received goes
+        # unnoticed. Never sent to the provider, same as `attachments`.
+        message["delivery"] = "failed"
     if mids:
         # The ids the *platform* gave the messages this reply went out as
         # (WhatsApp assigns one per send, and one reply can be text plus a

@@ -22,7 +22,7 @@ from assistant.providers.base import ModelReply
 from assistant.providers.fake import RehearsalProvider, ScriptedProvider
 from config.settings import settings
 from domain.models import Order, QueueKind, ShippingRate
-from domain.services import queues
+from domain.services import notifications, queues
 
 APP_SECRET = "test-app-secret"
 VERIFY_TOKEN = "test-verify-token"
@@ -184,9 +184,13 @@ def test_a_retried_delivery_does_not_answer_twice(client, configured, sent):
     assert len(sent) == 1
 
 
-def test_an_order_can_be_placed_over_the_webhook(client, configured, sent, seeded):
+def test_an_order_can_be_placed_over_the_webhook(client, configured, sent, seeded, monkeypatch):
     seeded.get(ShippingRate, "Cairo").fee = 60
     seeded.commit()
+    # Production wiring: the proactive confirmation leaves through the same
+    # client the turn's own reply would, so `sent` is everything the customer's
+    # phone actually receives.
+    monkeypatch.setitem(notifications._senders, "whatsapp", adapter.WhatsAppClient())
 
     for index, text in enumerate(
         [
@@ -201,7 +205,13 @@ def test_an_order_can_be_placed_over_the_webhook(client, configured, sent, seede
     assert order is not None
     assert order.source_channel == "whatsapp"
     assert float(order.total) == 710
-    assert "WNS-1001" in sent[-1]["text"]["body"]
+    # Exactly one confirmation reaches the phone: the one the shop composed.
+    # The turn itself sends nothing more -- a second, model-written "your
+    # order is confirmed" for the same order is what this asserts against.
+    bodies = [m.get("text", {}).get("body", "") for m in sent if m.get("type") == "text"]
+    confirmations = [b for b in bodies if "تم تأكيد طلبك" in b or "WNS-1001" in b]
+    assert len(confirmations) == 1, bodies
+    assert "تم تأكيد طلبك" in confirmations[0]
 
 
 def test_a_sizing_question_sends_the_chart_as_an_image_message(client, configured, sent):

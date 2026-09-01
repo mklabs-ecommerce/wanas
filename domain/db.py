@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
+from common.events import run_after_close
 from config.settings import settings
 
 log = logging.getLogger("wanas.db")
@@ -141,3 +142,7 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
+        # Anything an after-commit hook could not do itself, now that the
+        # connection -- and with it SQLite's write lock -- is back in the
+        # pool. See `common/events.py::after_close`.
+        run_after_close(session)

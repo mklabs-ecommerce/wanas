@@ -877,6 +877,11 @@ def _deliver(external_id: str, pending: Pending) -> None:
     if reply.duplicate:
         return
     if not (reply.text or reply.interactive):
+        if reply.silent:
+            # Deliberate: a tool already sent the customer this turn's
+            # message (the order confirmation). Not dead air.
+            log.info("turn for %s answered by a tool; nothing further to send", external_id)
+            return
         log.warning(
             "turn for %s produced no reply to send (paused=%s error=%s)",
             external_id,

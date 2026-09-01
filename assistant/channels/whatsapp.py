@@ -16,6 +16,7 @@ length of a model call.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, Response
 
@@ -97,18 +98,139 @@ async def inbound(request: Request) -> Response:
             release_claims([message.get("id")])
             log.exception("failed to accept inbound message %s", message.get("id"))
 
+    # Delivery receipts for what *we* sent -- the other half of the same
+    # webhook, and the only thing that can say whether the customer has read
+    # a message. Counted alongside the inbound ones so a receipts-only
+    # delivery is no longer indistinguishable from a payload this adapter
+    # could not parse (see the warning below).
+    seen += _accept_statuses(payload)
+
     if not seen:
-        # A delivery this adapter took nothing out of. Usually a `statuses`
-        # callback (sent/delivered/read receipts for our own outbound), which
-        # is normal and uninteresting -- but it is *also* what a payload we
-        # fail to parse looks like, and the two were indistinguishable: an
-        # accepted 200 with no other trace anywhere. That is the shape a
-        # customer who "never gets a reply" leaves behind, so it gets named.
+        # A delivery this adapter took nothing out of at all. That is the
+        # shape a customer who "never gets a reply" leaves behind -- an
+        # accepted 200 with no other trace anywhere -- so it gets named.
         log.warning("no inbound message extracted from a whatsapp delivery: %s", _shape(payload))
 
     # Always 200: Meta retries anything else, and the idempotency claim taken
     # in `_accept` is what makes a retry safe rather than a duplicate order.
     return Response("ok", status_code=200)
+
+
+def _iter_statuses(payload: dict):
+    """Every delivery receipt in this webhook delivery.
+
+    `statuses[]` is Meta's report on messages **the shop sent**: `sent` when
+    it left, `delivered` when it reached the handset, `read` when the customer
+    opened the chat, `failed` when it never landed at all. Each entry names
+    the message by the same id the send returned, which is what
+    `assistant/session.py::record_receipt` matches it back to the transcript
+    with.
+
+    Not to be confused with `WhatsAppClient.mark_as_read`, which is the
+    opposite direction: the bot putting blue ticks on the *customer's* message
+    on the customer's own screen.
+    """
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            yield from (change.get("value") or {}).get("statuses") or []
+
+
+def _receipt_time(status: dict) -> str | None:
+    """Meta's own timestamp for the receipt, as an ISO-8601 string.
+
+    Seconds since the epoch, as a string, in every payload seen so far --
+    which is worth converting rather than storing raw, because this one *is*
+    trustworthy: it is Meta's clock reporting when their servers saw the read,
+    not a handset's idea of the time. Anything unparseable gives None and the
+    caller stamps its own arrival time instead of inventing a reading.
+    """
+    raw = status.get("timestamp")
+    if raw in (None, ""):
+        return None
+    try:
+        return datetime.fromtimestamp(int(raw), UTC).isoformat()
+    except (TypeError, ValueError, OSError, OverflowError):
+        log.info("unparseable whatsapp status timestamp %r", raw)
+        return None
+
+
+def _accept_statuses(payload: dict) -> int:
+    """Record every receipt in this delivery. Returns how many were handled.
+
+    One transaction for the whole batch: Meta sends these in groups, and a
+    session per receipt would be a dozen connections for a dozen short
+    updates.
+
+    Done in the request rather than on a worker, unlike the agent turn. This
+    is the same trade `record_inbound` already makes -- a couple of short
+    reads and an update, against the cost of the fact arriving late -- and a
+    "seen" tick that shows up a debounce window later is a tick staff cannot
+    trust.
+
+    Never raises: a receipt is an annotation on a conversation that already
+    happened, and failing to write one must not turn into a 500 that makes
+    Meta retry the whole delivery.
+    """
+    statuses = [s for s in _iter_statuses(payload) if s.get("id")]
+    if not statuses:
+        return 0
+
+    handled = 0
+    try:
+        with session_scope() as db:
+            for status in statuses:
+                message_id = status.get("id")
+                state = status.get("status")
+                recipient = status.get("recipient_id")
+                at = _receipt_time(status)
+
+                recorded = bool(recipient) and session_store.record_receipt(
+                    db, CHANNEL, recipient, message_id, state, at
+                )
+                if not recorded:
+                    # The recipient Meta names is not the key this
+                    # conversation is stored under -- the two identifier
+                    # schemes (`common/identifiers.py`) are the way that
+                    # happens. Find the message by its id instead.
+                    owner = session_store.locate_mid(db, CHANNEL, message_id)
+                    if owner is not None and owner != recipient:
+                        log.info(
+                            "whatsapp receipt for %s named recipient %s but the message "
+                            "is stored under %s; recording it there",
+                            message_id,
+                            "a different id" if recipient else "nobody",
+                            owner,
+                        )
+                        recorded = session_store.record_receipt(
+                            db, CHANNEL, owner, message_id, state, at
+                        )
+                if recorded:
+                    handled += 1
+                    if state == "failed":
+                        log.warning(
+                            "whatsapp reported message %s as failed: %s",
+                            message_id,
+                            (status.get("errors") or [{}])[0].get("title") or "no detail",
+                        )
+    except Exception:
+        # Recognised but not written down. Still counted as understood below:
+        # the caller's warning is about a payload shape this adapter cannot
+        # read at all, and calling a database failure that would send whoever
+        # is debugging it looking in entirely the wrong place.
+        log.exception("could not record %d whatsapp delivery receipt(s)", len(statuses))
+        return len(statuses)
+
+    if handled < len(statuses):
+        # Ordinary for anything sent before receipts were recorded at all, and
+        # for a message whose ids were never stamped. Counted, not warned.
+        log.info(
+            "matched %d of %d whatsapp delivery receipt(s) to a stored message",
+            handled,
+            len(statuses),
+        )
+    # Every receipt in the delivery counts as handled work, matched or not:
+    # the payload *was* understood, which is what the caller's warning is for.
+    return len(statuses)
 
 
 def _shape(payload: dict) -> str:
@@ -421,6 +543,11 @@ def _deliver(external_id: str, pending: Pending) -> None:
     if reply.duplicate:
         return
     if not (reply.text or reply.interactive):
+        if reply.silent:
+            # Deliberate: a tool already sent the customer this turn's
+            # message (the order confirmation). Not dead air.
+            log.info("turn for %s answered by a tool; nothing further to send", external_id)
+            return
         # The turn ran and produced nothing to send. Legitimate when the
         # conversation is paused for a staff member; a bug otherwise, and
         # either way the customer is sitting in silence. Say so with the

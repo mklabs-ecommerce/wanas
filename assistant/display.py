@@ -10,6 +10,24 @@ has something to render.
 
 from __future__ import annotations
 
+#: Channels that tell the shop whether the customer has actually read a
+#: message, in a form that can be pinned to one specific message.
+#:
+#: WhatsApp does: `statuses[]` names the message by the same id the send
+#: returned (`assistant/channels/whatsapp.py::_accept_statuses`).
+#:
+#: Instagram does **not**, and is deliberately absent rather than pending.
+#: Its read event is a *watermark* -- "everything up to this timestamp has
+#: been read" -- carried on a webhook field the app does not subscribe to, so
+#: there is nothing to match against a message and nothing arriving to match.
+#: A channel not in here shows no seen state at all, which is the honest
+#: reading: "we do not know", never "not seen yet".
+RECEIPT_CHANNELS = frozenset({"whatsapp"})
+
+
+def supports_receipts(channel: str | None) -> bool:
+    return channel in RECEIPT_CHANNELS
+
 
 def turn_detail(history: list[dict]) -> list[dict]:
     """The tool calls and results of the most recent turn.
@@ -58,6 +76,10 @@ def display_history(history: list[dict]) -> list[dict]:
                 {
                     "kind": "user",
                     "text": message.get("content", ""),
+                    # When this message was stored. None for anything written
+                    # before messages carried a time at all -- shown as no
+                    # time rather than a guessed one.
+                    "at": message.get("at"),
                     "images": list(message.get("images") or []),
                     "audio": list(message.get("audio") or []),
                 }
@@ -69,6 +91,22 @@ def display_history(history: list[dict]) -> list[dict]:
                         "kind": "bot",
                         "text": message["content"],
                         "by": message.get("by") or "bot",
+                        "at": message.get("at"),
+                        # "failed" for a message that was composed and stored
+                        # but never reached the customer's phone. The UI has
+                        # to say so: a staff member reading a thread must not
+                        # believe a shipping update landed when Meta refused
+                        # it. See `assistant/messages.py::assistant`.
+                        "delivery": message.get("delivery"),
+                        # How far this message got on the customer's side, as
+                        # the platform reported it: sent / delivered / read,
+                        # or None when nothing has come back (yet, or ever --
+                        # a channel with no receipts, or a message sent before
+                        # they were recorded). Only outbound messages carry
+                        # one; a customer's own message has no such thing to
+                        # know, which is why this key is on this branch only.
+                        "receipt": (message.get("receipt") or {}).get("status"),
+                        "seen_at": (message.get("receipt") or {}).get("at"),
                         "attachments": list(message.get("attachments") or []),
                     }
                 )

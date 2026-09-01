@@ -57,6 +57,10 @@ class RuntimeReply:
     paused: bool = False
     #: True when this message had already been processed (a platform retry).
     duplicate: bool = False
+    #: True when the turn produced no text on purpose: the customer was
+    #: already answered by the tool that ran (the order confirmation). Not
+    #: silence to warn about -- see `assistant/agent.py::AgentReply.silent`.
+    silent: bool = False
     tool_calls: list[str] = field(default_factory=list)
     error: str | None = None
     #: What the customer actually said, after a voice note was transcribed.
@@ -169,7 +173,13 @@ def record_inbound(
 
 
 def record_outbound(
-    channel: str, external_id: str, text: str, *, db: Session | None = None
+    channel: str,
+    external_id: str,
+    text: str,
+    *,
+    db: Session | None = None,
+    delivered: bool = True,
+    message_ids: list[str] | None = None,
 ) -> None:
     """Store a message the shop started, so the dashboard shows it too.
 
@@ -198,16 +208,53 @@ def record_outbound(
     that cannot tell those apart is how someone ends up answering for a
     sentence nobody chose.
 
+    `delivered=False` says the customer never got this one: outside Meta's
+    24-hour customer service window with no approved template, or refused
+    outright. Called with the same text as a line already stored, it marks
+    *that* line rather than writing a second copy -- the failure is usually
+    only learned about after the message was recorded, because the record is
+    written inside the transaction that decided it and the send waits for the
+    commit. A transcript that showed those as delivered is what let a shipped
+    order's tracking update go missing with nobody the wiser.
+
+    `message_ids` are the ids the platform gave this message once it was
+    actually sent, and they arrive on a *second* call for a line already
+    stored -- the send happens after the transaction that recorded it. They
+    are what a later read receipt is matched against
+    (`session.record_receipt`), so without them an order confirmation or a
+    shipping update could never be shown as seen. Attaching them is best
+    effort: a message with no ids simply has no receipt to show.
+
     Never raises -- see the caller's `_record`.
     """
     if not (text or "").strip():
         return
-    message = msg.assistant(text, by="system")
     if db is not None:
-        session_store.append(db, channel, external_id, message)
+        _write_outbound(db, channel, external_id, text, delivered, message_ids)
         return
     with session_scope() as own:
-        session_store.append(own, channel, external_id, message)
+        _write_outbound(own, channel, external_id, text, delivered, message_ids)
+
+
+def _write_outbound(
+    db: Session,
+    channel: str,
+    external_id: str,
+    text: str,
+    delivered: bool,
+    message_ids: list[str] | None = None,
+) -> None:
+    if message_ids:
+        # An annotation on a line that already exists, never a new one. If the
+        # line has gone (an archive cap, a purge) there is nothing to stamp
+        # and nothing to say -- the message was still delivered.
+        session_store.attach_ids_to_text(db, channel, external_id, text, message_ids)
+        return
+    if not delivered and session_store.mark_undelivered(db, channel, external_id, text):
+        return
+    session_store.append(
+        db, channel, external_id, msg.assistant(text, by="system", delivered=delivered)
+    )
 
 
 def _paused_note(db: Session, channel: str, external_id: str) -> str:
@@ -489,6 +536,7 @@ def _handle(
         interactive=reply.interactive,
         tool_calls=reply.tool_calls,
         error=reply.error,
+        silent=reply.silent,
         transcript=transcript,
     )
 

@@ -393,9 +393,12 @@ def test_an_abandoned_cart_nudge_reaches_the_transcript_too(seeded, shopify):
     assert [m["content"] for m in history] == [notifications.ABANDONED_CART_TEXT]
 
 
-def test_a_message_that_did_not_land_is_not_written_down(seeded, shopify):
-    """An undelivered message is not something the customer was told, and a
-    transcript claiming otherwise is how staff answer a question nobody asked."""
+def test_a_message_that_did_not_land_is_written_down_as_undelivered(seeded, shopify):
+    """An undelivered message is not something the customer was told.
+
+    It is still kept -- the staff member picking up the alert needs to read
+    what the shop meant to say -- but flagged, so nothing downstream can show
+    it as a message the customer received."""
     _seen(seeded, hours_ago=1)
     waitlist.join(seeded, SOLD_OUT, CHANNEL, CUSTOMER, observed_stock=0)
     seeded.commit()
@@ -417,4 +420,8 @@ def test_a_message_that_did_not_land_is_not_written_down(seeded, shopify):
         notifications.register_sender(notifications.LogSender())
 
     with SessionLocal() as session:
-        assert session_store.transcript(session, CHANNEL, CUSTOMER) == []
+        history = session_store.transcript(session, CHANNEL, CUSTOMER)
+    assert [m["content"] for m in history] == [
+        notifications.BACK_IN_STOCK_TEXT.format(product_name="WANAS Hoodie")
+    ]
+    assert history[0]["delivery"] == "failed"

@@ -201,7 +201,7 @@ def test_a_full_conversation_ends_with_a_live_shopify_order(priced, shopify):
         CHANNEL, WHO, "order Nour | Cairo | 5 Test Street | 01055500022", db=priced, provider=provider
     )
 
-    assert "WNS-1001" in reply.text, reply.text
+    assert reply.silent and not reply.text, reply.text
     priced.commit()  # the turn's own session write, which the adapter commits
     with SessionLocal() as fresh:
         order = fresh.get(Order, "WNS-1001")

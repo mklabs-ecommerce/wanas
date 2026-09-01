@@ -502,6 +502,9 @@ def test_confirm_order_success_shape(ctx):
         contact_phone="01000000000",
     )
     assert set(result) == {
+        # The tool has already had the confirmation sent, and says so: the
+        # agent ends the turn there rather than writing a second one.
+        "confirmation_sent",
         "order_id",
         # Shopify's own "#1001" -- what the bot says out loud. `order_id` stays
         # the internal reference the other tools take.

@@ -1074,8 +1074,13 @@ def advance_status(session: Session, order: Order, new_status: str) -> dict:
     # inside one transaction, and a callback that reads `order.status` at
     # commit time would send "shipped" twice and never send "packed".
     stage = new_status
-    notifications.record_status_push(session, order, stage)
-    after_commit(session, lambda: notifications.order_status_changed(session, order, stage))
+    # The plan carries the one thing the hook cannot look up for itself:
+    # whether Meta's 24-hour window is still open for this customer. Reading
+    # `ChannelIdentity.last_seen_at` after the commit means a second query on
+    # a session that has already committed, from inside the hook holding the
+    # write lock -- so it is answered here and travels with the plan.
+    plan = notifications.record_status_push(session, order, stage)
+    after_commit(session, lambda: notifications.deliver_status_push(plan, unit=session))
     return {"order_id": order.order_id, "status": order.status}
 
 

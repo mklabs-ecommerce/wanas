@@ -45,7 +45,12 @@ def test_the_next_conversation_appends_to_the_old_one(seeded):
         "صباح الخير",
         "مساء الخير",
     ]
-    assert session_store.load(seeded, CHANNEL, WHO) == [msg.user("مساء الخير")]
+    # The live slice is the new message alone. Compared by content rather than
+    # whole-message equality: every message carries its own `at` now, so a
+    # freshly built copy differs from the stored one by however long the test
+    # took to get here.
+    live = session_store.load(seeded, CHANNEL, WHO)
+    assert [m["content"] for m in live] == ["مساء الخير"]
 
 
 def test_reading_a_conversation_never_changes_it(seeded):

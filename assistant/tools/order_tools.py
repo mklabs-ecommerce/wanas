@@ -50,7 +50,7 @@ def confirm_order(
     contact_phone: str,
     email: str | None = None,
 ) -> dict:
-    return orders.place_order(
+    result = orders.place_order(
         ctx.session,
         channel=ctx.channel,
         external_id=ctx.external_id,
@@ -60,6 +60,16 @@ def confirm_order(
         contact_phone=contact_phone,
         email=email,
     )
+    if result.get("order_id"):
+        # The confirmation itself has already been composed and queued for
+        # delivery by `notifications.order_confirmed` -- with the order
+        # number, the lines, the shipping fee and the total, none of which a
+        # model should be restating from memory. So the turn ends here. It
+        # used to run on, and the model's own "تمام، اتأكد الأوردر..." reached
+        # the customer as a *second* confirmation for the same order.
+        ctx.end_turn = "order_confirmed"
+        result["confirmation_sent"] = True
+    return result
 
 
 @tool(

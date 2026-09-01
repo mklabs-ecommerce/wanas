@@ -156,7 +156,8 @@ def test_an_order_surfaces_its_proactive_confirmation(client, seeded):
     send(client, f"add {VARIANT} 1")
     reply = send(client, "order Omar | Cairo | 5 Test Street | 01000000000")
 
-    assert "WNS-1001" in reply["text"]
+    # No reply of its own: the confirmation below is the whole message.
+    assert not reply["text"]
     templates = [n["template"] for n in reply["notifications"]]
     assert "order_confirmation" in templates
     body = next(n for n in reply["notifications"] if n["template"] == "order_confirmation")["text"]
