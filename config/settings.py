@@ -102,6 +102,11 @@ class Settings:
     instagram_verify_token: str    # INSTAGRAM_VERIFY_TOKEN
     instagram_api_version: str     # INSTAGRAM_API_VERSION, default "v23.0"
     instagram_username: str        # INSTAGRAM_USERNAME -- only ever used in customer-facing copy
+    #: The *app-scoped* id of the same account (`GET /me?fields=id` on
+    #: graph.instagram.com), which is a different number from
+    #: `instagram_account_id` (`?fields=user_id`). Optional, and only ever
+    #: used to recognise ourselves -- see `instagram_self_ids`.
+    instagram_app_scoped_id: str   # INSTAGRAM_APP_SCOPED_ID
 
     #: Comments are a public surface. Off by default so the DM half can ship
     #: and be watched for a week before anything the bot writes is visible to
@@ -270,6 +275,26 @@ class Settings:
         """
         return bool(self.instagram_account_id and self.instagram_access_token)
 
+    @property
+    def instagram_self_ids(self) -> frozenset[str]:
+        """Every id that means "this is us" in an Instagram webhook.
+
+        Instagram Login hands the same account out under two different
+        numbers: `GET /me?fields=user_id` is the professional-account id that
+        goes in `INSTAGRAM_ACCOUNT_ID` and addresses the Graph endpoints,
+        while `GET /me?fields=id` is an app-scoped id -- and which of the two
+        turns up as `sender.id` on an echo, or `from.id` on the shop's own
+        comment, is Meta's choice, not ours. Matching only one of them is how
+        the bot ends up answering itself in public.
+
+        So the check is a *set*, and both ids belong in it. Widening it cannot
+        silence a customer -- no customer holds either number -- while
+        narrowing it re-opens the one failure this channel cannot survive.
+        """
+        return frozenset(
+            value for value in (self.instagram_account_id, self.instagram_app_scoped_id) if value
+        )
+
 
 def load_settings() -> Settings:
     return Settings(
@@ -301,6 +326,7 @@ def load_settings() -> Settings:
         instagram_verify_token=os.getenv("INSTAGRAM_VERIFY_TOKEN", ""),
         instagram_api_version=os.getenv("INSTAGRAM_API_VERSION", "v23.0"),
         instagram_username=os.getenv("INSTAGRAM_USERNAME", ""),
+        instagram_app_scoped_id=os.getenv("INSTAGRAM_APP_SCOPED_ID", ""),
         instagram_comments_enabled=_bool("INSTAGRAM_COMMENTS_ENABLED", False),
         instagram_public_reply_enabled=_bool("INSTAGRAM_PUBLIC_REPLY_ENABLED", True),
         instagram_comment_max_age_hours=_float("INSTAGRAM_COMMENT_MAX_AGE_HOURS", 48.0),

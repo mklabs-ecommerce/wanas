@@ -161,8 +161,13 @@ def _is_own_account(sender_id: str | None) -> bool:
     event -- is the bot talking to itself forever, publicly. It is the single
     worst failure available on this channel, so it is checked before the
     claim, before everything.
+
+    Checked against `settings.instagram_self_ids` rather than one id: Instagram
+    Login hands the same account out as both a professional-account id and an
+    app-scoped id, and comparing against only the first left the shop's own
+    comments looking like a stranger's.
     """
-    return bool(sender_id) and sender_id == settings.instagram_account_id
+    return bool(sender_id) and sender_id in settings.instagram_self_ids
 
 
 def _accept_message(messaging: dict) -> None:
@@ -524,7 +529,7 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     # 2. THE SHOP'S OWN COMMENT OR ITS OWN REPLY. Without this the bot replies
     #    to itself, forever, publicly, on a live post -- the worst available
     #    failure on this surface. Stays first, ahead of the thread rule below.
-    if commenter == settings.instagram_account_id:
+    if commenter and commenter in settings.instagram_self_ids:
         log.info("dropping the shop's own comment/reply (%s)", comment_id)
         return
 

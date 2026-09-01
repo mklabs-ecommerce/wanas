@@ -193,6 +193,36 @@ check the key, the quota, and `COMMENT_CLASSIFIER_MODEL` if one is pinned.
 Silence is the intended failure here; the alerts are what stop it meaning
 lost customers.
 
+**Comments never arrive at all — check the subscription first.** Turning
+`INSTAGRAM_COMMENTS_ENABLED=1` on does nothing if Meta is not sending comment
+events, and the two failures look identical from here: silence. Ask Meta what
+it is actually subscribed to before touching anything in this repo:
+
+```bash
+curl -s "https://graph.instagram.com/v23.0/me/subscribed_apps?access_token=$INSTAGRAM_ACCESS_TOKEN"
+```
+
+`subscribed_fields` must contain `comments`. A field list of just
+`["messages"]` is the DM half working perfectly and the comment half never
+having been switched on at Meta's end — no webhook call is made, so no log
+line in this app records the comment, and nothing in the codebase can be at
+fault. Subscribe with:
+
+```bash
+curl -s -X POST "https://graph.instagram.com/v23.0/me/subscribed_apps"   -d "subscribed_fields=messages,messaging_postbacks,messaging_seen,comments"   -d "access_token=$INSTAGRAM_ACCESS_TOKEN"
+```
+
+Still **not** `message_echoes`. Subscribing is separate from, and additional
+to, the field list ticked in the Meta app dashboard; the call above is what
+the account actually honours.
+
+**One account, two ids.** `GET /me?fields=id,user_id` returns both: `user_id`
+is `INSTAGRAM_ACCOUNT_ID` (what addresses the Graph endpoints) and `id` is
+`INSTAGRAM_APP_SCOPED_ID`. Set both. Which one Meta stamps on the shop's own
+comment or an echo is Meta's choice, and the "never answer yourself" check
+tests membership of the pair — with only one set, the shop's own comment can
+arrive wearing the other number and read as a stranger's.
+
 **Turning comments off in a hurry:** set `INSTAGRAM_COMMENTS_ENABLED=0` and
 redeploy. The DM half keeps working; only the public surface goes dark.
 `INSTAGRAM_PUBLIC_REPLY_ENABLED=0` is the softer version — the bot stops

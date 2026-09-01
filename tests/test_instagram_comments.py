@@ -29,6 +29,8 @@ from domain.services import queues
 APP_SECRET = "ig-test-app-secret"
 VERIFY_TOKEN = "ig-verify-token"
 IG_ID = "17841400000000000"
+#: The same account's *app-scoped* id -- a different number for one account.
+APP_SCOPED_ID = "28440000000000000"
 COMMENTER = "555000111222333"
 COMMENT_ID = "17900000000000001"
 MEDIA_ID = "media-1"
@@ -186,6 +188,46 @@ def test_the_shop_s_own_comment_is_never_answered(client, comments_on, fake_grap
     assert private_replies(fake_graph) == []
     with SessionLocal() as db:
         assert db.query(InstagramCommentReply).count() == 0
+
+
+def test_the_shop_s_own_app_scoped_comment_is_never_answered(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """The same failure, wearing Instagram's *other* id for the same account.
+
+    Instagram Login hands one account out under two numbers -- the
+    professional-account id (`?fields=user_id`, what INSTAGRAM_ACCOUNT_ID
+    holds) and an app-scoped id (`?fields=id`) -- and which one arrives as
+    `from.id` is Meta's choice. Matching only the first let the shop's own
+    comment through as a stranger's, which is the self-reply loop with an
+    extra step.
+    """
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(comments_on, instagram_app_scoped_id=APP_SCOPED_ID),
+    )
+    body = comment_body("شكراً للكل", commenter=APP_SCOPED_ID)
+    assert post_comment(client, body).status_code == 200
+
+    assert public_replies(fake_graph) == []
+    assert private_replies(fake_graph) == []
+    with SessionLocal() as db:
+        assert db.query(InstagramCommentReply).count() == 0
+
+
+def test_a_real_commenter_is_not_mistaken_for_the_shop(client, comments_on, fake_graph, monkeypatch):
+    """The widened check must not swallow customers: an ordinary commenter
+    shares neither id, so the chain runs exactly as before."""
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(comments_on, instagram_app_scoped_id=APP_SCOPED_ID),
+    )
+    assert post_comment(client, comment_body("الهودي ده بكام؟")).status_code == 200
+
+    with SessionLocal() as db:
+        assert db.query(InstagramCommentReply).count() == 1
 
 
 # --- the flag ---------------------------------------------------------------
