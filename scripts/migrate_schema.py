@@ -22,12 +22,22 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from sqlalchemy import create_engine, text
 
-from domain.db import normalise_database_url
-from domain.models import Base
-from domain.schema_drift import add_column_sql, addable, detect
+# `python scripts/migrate_schema.py` puts *scripts/* on sys.path, not the repo
+# root, so every `domain.*` import below raised ModuleNotFoundError -- and this
+# is the command `app.py` and docs/OPERATIONS.md hand an operator when a
+# production database is missing a column the models declare. The recovery
+# step for the outage that cost four days of orders did not itself run. Every
+# other script here already does this; this one was written without it.
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from domain.db import normalise_database_url  # noqa: E402
+from domain.models import Base  # noqa: E402
+from domain.schema_drift import add_column_sql, addable, detect  # noqa: E402
 
 
 def main() -> int:

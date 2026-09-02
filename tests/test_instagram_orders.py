@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from config.settings import settings
-from domain.db import engine, session_scope
+from domain.db import session_scope
 from domain.models import Channel, Client, Order
 from domain.services import (
     carts,
@@ -31,23 +31,13 @@ IGSID = "98765432109876543"
 PHONE = "01000000123"
 VARIANT = "wanas-hoodie-s-olive"
 
-MIGRATION = (
-    Path(__file__).resolve().parent.parent
-    / "scripts"
-    / "migrate_add_order_source_external_id.py"
-)
-
-#: The re-engagement checks compare DB-read datetimes against an aware
-#: `utcnow()`, which fails on this suite's throwaway SQLite (it hands back
-#: naive datetimes) -- the same documented, PRE-EXISTING limitation behind
-#: the seven standing failures in tests/test_reengagement.py, deliberately
-#: left alone. The channel logic these tests pin is identical on either
-#: database; run them against PostgreSQL via WANAS_TEST_DATABASE_URL.
-needs_real_datetime_db = pytest.mark.skipif(
-    engine.url.drivername.startswith("sqlite"),
-    reason="pre-existing SQLite naive/aware datetime limitation (see OPENCODE_PROGRESS.md)",
-)
-
+#: The general schema migrator. There used to be a second, single-column,
+#: SQLite-only script beside it (`migrate_add_order_source_external_id.py`,
+#: and a third for the Shopify order columns); they did a strict subset of
+#: this one's job and were deleted. The guarantee the deleted script's test
+#: pinned -- dry run by default, idempotent, additive-only -- is pinned here,
+#: at the entry point that survived.
+MIGRATION = Path(__file__).resolve().parent.parent / "scripts" / "migrate_schema.py"
 
 def settings_idle_hours() -> float:
     return settings.abandoned_cart_hours
@@ -152,7 +142,6 @@ def test_status_and_feedback_pushes_follow_the_order_channel_too(seeded, cairo_r
 # --- re-engagement ----------------------------------------------------------
 
 
-@needs_real_datetime_db
 def test_an_abandoned_instagram_cart_is_nudged(seeded, cairo_rate, senders):
     from domain.models import CartItem, utcnow
 
@@ -173,7 +162,6 @@ def test_an_abandoned_instagram_cart_is_nudged(seeded, cairo_rate, senders):
     assert any(m.to == IGSID for m in ig.sent)
 
 
-@needs_real_datetime_db
 def test_check_back_in_stock_reads_the_channel_off_the_waitlist_row(seeded, senders):
     """Plan: 'check_back_in_stock already reads the channel off the waitlist
     row -- verify with a test, change nothing.'
@@ -227,30 +215,72 @@ def test_checkout_on_instagram_still_offers_a_pending_link_for_a_known_phone(
 
 
 def _create_legacy_db(path: Path) -> None:
+    """A database in exactly the shape production was in: the full schema, one
+    order in it, and `orders.source_external_id` missing.
+
+    Built by creating the real schema and dropping the column, rather than by
+    hand-writing a stub `orders` table -- a stub is *also* missing a dozen
+    NOT NULL columns, which the migrator correctly refuses to guess at, and
+    the refusal would be all this test ever exercised.
+    """
     import sqlite3
 
+    from sqlalchemy import create_engine
+
+    from domain.models import Base
+
+    legacy_engine = create_engine(f"sqlite:///{path}", future=True)
+    Base.metadata.create_all(legacy_engine)
+    legacy_engine.dispose()
+
     con = sqlite3.connect(path)
-    con.execute("CREATE TABLE orders (order_id VARCHAR(20) PRIMARY KEY, source_channel VARCHAR(20))")
-    con.execute("INSERT INTO orders VALUES ('WNS-1001', 'whatsapp')")
+    con.execute("ALTER TABLE orders DROP COLUMN source_external_id")
+    # One real row, so the migration is exercised against a *populated* table
+    # -- that is the whole reason it may only add nullable columns. Every
+    # NOT NULL column is filled with a placeholder; which values they carry
+    # does not matter here, only that the row survives untouched.
+    info = list(con.execute("PRAGMA table_info(orders)"))
+    required = {
+        row[1]: ("WNS-1001" if row[1] == "order_id" else 0 if "INT" in (row[2] or "").upper() else "x")
+        for row in info
+        if row[3] and row[4] is None
+    }
+    required["order_id"] = "WNS-1001"
+    required["source_channel"] = "whatsapp"
+    columns = ", ".join(required)
+    placeholders = ", ".join("?" for _ in required)
+    con.execute(f"INSERT INTO orders ({columns}) VALUES ({placeholders})", list(required.values()))
     con.commit()
     con.close()
 
 
 def _run_migration(db_path: Path, *flags: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, str(MIGRATION), "--db", str(db_path), *flags],
+        [sys.executable, str(MIGRATION), "--database-url", f"sqlite:///{db_path}", *flags],
         capture_output=True,
         text=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
     )
 
 
 def test_the_migration_is_a_dry_run_by_default_and_idempotent(tmp_path):
+    """`source_external_id` is the column whose absence made every order
+    create itself on Shopify and then cancel again, for four days. The
+    migrator must report it without writing anything, add it on --apply, and
+    say there is nothing to do on the run after that.
+
+    It also has to *run at all*: invoked as `python scripts/migrate_schema.py`
+    it put scripts/ on sys.path instead of the repo root and died on
+    `import domain`, so the documented recovery step for that outage was
+    itself broken.
+    """
     db = tmp_path / "legacy.db"
     _create_legacy_db(db)
 
     dry = _run_migration(db)
-    assert dry.returncode == 0
+    assert dry.returncode == 0, dry.stdout + dry.stderr
     assert "Would add" in dry.stdout
+    assert "ALTER TABLE orders ADD COLUMN source_external_id" in dry.stdout
     # Dry run wrote nothing.
     import sqlite3
 
@@ -259,13 +289,16 @@ def test_the_migration_is_a_dry_run_by_default_and_idempotent(tmp_path):
     assert "source_external_id" not in columns
 
     applied = _run_migration(db, "--apply")
-    assert applied.returncode == 0
+    assert applied.returncode == 0, applied.stdout + applied.stderr
     assert "added orders.source_external_id" in applied.stdout
 
     again = _run_migration(db, "--apply")
     assert again.returncode == 0
     assert "Nothing to do" in again.stdout
 
+    # The existing order kept its data and reads NULL for the new column,
+    # which is correct: it was placed before the bot recorded which identity
+    # placed it.
     with sqlite3.connect(db) as con:
         rows = con.execute("SELECT order_id, source_external_id FROM orders").fetchall()
     assert rows == [("WNS-1001", None)]
