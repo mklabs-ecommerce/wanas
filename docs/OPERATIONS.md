@@ -403,12 +403,19 @@ cannot wait for that, so they are also emailed to the owner:
 - **every `request_human` handoff**, whatever its reason. A handoff *pauses*
   the conversation: the bot will not answer that customer again until a person
   replies or resolves it, so an unread handoff is a customer sitting in
-  silence.
+  silence;
+- **an order changing after it was placed** -- `order_modified`,
+  `order_cancelled`, and every `item_swap` request. Each one is stock or money
+  moving, and a swap is a customer waiting on a decision only a person can
+  make: the order does not move until somebody makes it;
+- **stock running out** (`low_stock`), the one alert that is cheaper to act on
+  early than late.
 
-Nothing else is mailed, on purpose. `order_confirmed` and `low_stock` arrive
-by the dozen on a good day, and an address that carries those is an address
-that gets filtered -- which would cost exactly the three above. The list lives
-in `domain/services/alert_email.py`; adding to it is a decision about the
+One reason is deliberately left out, and it is the loud one:
+**`order_confirmed`**. It fires on every successful sale -- the outcome the
+whole system exists to produce. An address that carries it is an address that
+gets filtered, and filtering it would cost every alert above. The list lives
+in `domain/services/alert_email.py`; moving that line is a decision about the
 owner's attention, not a formatting change.
 
 ### Setting it up (Gmail)
@@ -439,6 +446,12 @@ The two limits exist because a crash loop or a comment flood raises one queue
 item **per event** by design. One email per event would be the log file in the
 owner's inbox, and a suppressed mail is only ever a duplicate of one already
 sent -- the queue item is always written either way.
+
+The cooldown keys on *what the alert is about*, not on the customer: the
+order and stock reasons carry no `external_id` at all (they are raised about
+an order or a variant, not about whoever happened to be typing), so it falls
+back to the order id and then the variant id. Two different products running
+low inside the same window are two emails; the same product twice is one.
 
 Sending happens on a daemon thread, hung off the transaction's commit. That is
 deliberate on both counts: an email about an order that later rolled back is a

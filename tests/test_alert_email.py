@@ -70,27 +70,34 @@ def _mail_inline(monkeypatch):
         (QueueKind.ALERT.value, "turn_crashed"),
         (QueueKind.ALERT.value, "reply_delivery_failed"),
         (QueueKind.ALERT.value, "instagram_token_refresh_failed"),
-    ],
-)
-def test_the_three_things_the_owner_asked_about_are_mailed(kind, reason):
-    assert alert_email.should_mail(kind, reason) is True
-
-
-@pytest.mark.parametrize(
-    "kind,reason",
-    [
-        # Routine, and frequent. An inbox carrying these is an inbox nobody
-        # reads, which costs exactly the alerts above.
-        (QueueKind.ALERT.value, "order_confirmed"),
-        (QueueKind.ALERT.value, "low_stock"),
+        # An order or the shelf changing after the fact. Not the bot going
+        # wrong -- ordinary business events, but every one of them is stock
+        # or money moving, which is why the owner asked for them.
         (QueueKind.ALERT.value, "order_modified"),
         (QueueKind.ALERT.value, "order_cancelled"),
-        # A swap is a decision for staff to make, not an emergency.
+        (QueueKind.ALERT.value, "low_stock"),
         (QueueKind.ITEM_SWAP.value, "swap_requested"),
     ],
 )
-def test_the_routine_queue_items_stay_in_the_dashboard(kind, reason):
-    assert alert_email.should_mail(kind, reason) is False
+def test_what_the_owner_asked_to_be_interrupted_for_is_mailed(kind, reason):
+    assert alert_email.should_mail(kind, reason) is True
+
+
+def test_a_confirmed_order_stays_in_the_dashboard():
+    """The one deliberately silent reason, and it is the loud one.
+
+    `order_confirmed` fires on every successful sale -- the outcome the whole
+    system exists to produce. An address carrying it is an address that gets
+    filtered, and filtering it costs every alert above.
+    """
+    assert alert_email.should_mail(QueueKind.ALERT.value, "order_confirmed") is False
+
+
+def test_an_unknown_alert_reason_is_not_mailed():
+    """The list is an allow-list, so a reason added elsewhere later does not
+    start mailing the owner by accident -- it has to be put here on purpose."""
+    assert alert_email.should_mail(QueueKind.ALERT.value, "some_new_reason") is False
+    assert alert_email.should_mail(QueueKind.ALERT.value, None) is False
 
 
 def test_a_handoff_is_mailed_whatever_its_reason():
@@ -144,7 +151,7 @@ def test_a_negative_instagram_comment_emails_the_owner(db, mailbox, monkeypatch)
     assert "c1" in body
 
 
-def test_a_routine_alert_sends_no_email(db, mailbox, monkeypatch):
+def test_a_confirmed_order_sends_no_email(db, mailbox, monkeypatch):
     _mail_inline(monkeypatch)
     queues.enqueue(
         db,
@@ -200,6 +207,25 @@ def test_the_queue_item_is_written_even_when_the_mailer_raises(db, monkeypatch):
     assert queues.open_items(db, QueueKind.HANDOFF.value)[0].queue_id == item.queue_id
 
 
+def test_an_item_swap_emails_the_owner(db, mailbox, monkeypatch):
+    """A swap is a customer waiting on a decision only a person can make --
+    the order does not move until somebody makes it."""
+    _mail_inline(monkeypatch)
+    queues.enqueue(
+        db,
+        kind=QueueKind.ITEM_SWAP.value,
+        reason="swap_requested",
+        summary="W-7: swap the black hoodie for the grey one",
+        channel="whatsapp",
+        external_id="201234567890",
+    )
+    _drain(db)
+
+    (subject, body), = mailbox
+    assert subject.startswith("[Wanas] Item swap")
+    assert "does not happen until" in body
+
+
 # --------------------------------------------------------------------------
 # Rate limiting: one queue item per event is right, one email per event is not.
 # --------------------------------------------------------------------------
@@ -215,6 +241,42 @@ def test_the_same_reason_about_the_same_customer_is_mailed_once(db, mailbox, mon
             summary=f"crash {i}",
             channel="whatsapp",
             external_id="201234567890",
+        )
+        _drain(db)
+    assert len(mailbox) == 1
+
+
+def test_two_different_products_going_low_are_two_emails(db, mailbox, monkeypatch):
+    """The cooldown keys on *what the alert is about*, not on `external_id`.
+
+    `low_stock`, `order_modified` and `order_cancelled` carry no external_id
+    at all -- they are raised about a variant or an order, not about whoever
+    happened to be typing. Keying on external_id alone collapsed every one of
+    them onto a single empty key, so the second product to run low inside the
+    window was never mailed.
+    """
+    _mail_inline(monkeypatch)
+    for variant_id in ("V-1", "V-2"):
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason="low_stock",
+            summary=f"Low stock: {variant_id}",
+            payload={"variant_id": variant_id, "stock_qty": 1},
+        )
+        _drain(db)
+    assert len(mailbox) == 2
+
+
+def test_the_same_product_going_low_twice_is_one_email(db, mailbox, monkeypatch):
+    _mail_inline(monkeypatch)
+    for _ in range(4):
+        queues.enqueue(
+            db,
+            kind=QueueKind.ALERT.value,
+            reason="low_stock",
+            summary="Low stock: V-1",
+            payload={"variant_id": "V-1", "stock_qty": 1},
         )
         _drain(db)
     assert len(mailbox) == 1
@@ -252,6 +314,7 @@ def test_the_hourly_ceiling_holds(mailbox):
                 summary="crash",
                 channel="whatsapp",
                 external_id=f"2011111111{i:02d}",
+                order_id="",
                 payload={},
             ),
             cooldown=0.0,

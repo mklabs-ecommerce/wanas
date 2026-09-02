@@ -102,17 +102,22 @@ domain/                  persistence + business rules; no vendor HTTP calls,
                             services, alert_email.py (which staff-queue
                             items are worth emailing the owner about: a
                             negative or complaining Instagram comment, a
-                            crashed or undeliverable turn, and every
+                            crashed or undeliverable turn, an order
+                            modified/cancelled/swapped, low stock, and every
                             `request_human` handoff -- a handoff *pauses*
                             the conversation, so nobody is answering that
                             customer until a person opens the dashboard.
-                            Never the routine ones: an address that also
-                            carries `order_confirmed` is an address that
-                            gets filtered, which costs exactly the three
-                            above. Sends through a registered port like
-                            the transcript recorder, off an after-commit
-                            hook, on a daemon thread, rate-limited per
-                            reason+customer), search_terms.py (Arabic +
+                            One reason is left out and it is the loud one:
+                            `order_confirmed` fires on every sale, and an
+                            address carrying it is an address that gets
+                            filtered, which would cost all of the above.
+                            Sends through a registered port like the
+                            transcript recorder, off an after-commit hook,
+                            on a daemon thread, rate-limited per reason +
+                            *what the alert is about* -- external_id, else
+                            order, else variant, since the stock and order
+                            reasons carry no customer at all),
+                            search_terms.py (Arabic +
                             franco catalog-search vocabulary), conversation_reset.py
                             (calls back into the assistant layer via a
                             registered callback, never a direct import --

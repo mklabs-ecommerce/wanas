@@ -9,13 +9,21 @@ open it. Three things the owner asked to hear about the moment they happen:
   a token that stopped working;
 * the **bot handing a conversation to a person** (`request_human`), which
   *pauses* that conversation: nobody is answering that customer until a staff
-  member opens the dashboard.
+  member opens the dashboard;
+* an **order changing after it was placed** -- modified, cancelled, or an item
+  the customer wants swapped -- because each of those is money and stock
+  moving without anyone having decided it should;
+* **stock running out**, which is the one alert that is cheaper to act on
+  early than late.
 
-Everything else the queue holds is deliberately silent. `order_confirmed` and
-`low_stock` arrive by the dozen on a good day, and an address that also
-carries them is an address the owner filters -- which costs exactly the three
-above. `MAILED_ALERT_REASONS` is that line, and adding to it is a decision
-about the owner's attention, not a formatting change.
+One thing the queue holds is deliberately silent, and it is the loud one:
+`order_confirmed`. It fires on every successful sale, which is the outcome
+this whole system exists to produce -- an address carrying it is an address
+the owner filters, and filtering it costs every alert above. That is the line
+`MAILED_ALERT_REASONS` draws. Moving it is a decision about the owner's
+attention, not a formatting change: the test that a reason belongs here is
+"would the owner want to be interrupted for this?", and for a confirmed order
+the answer is no precisely because there will be so many of them.
 
 **Domain does not send.** Like `notifications.register_transcript_recorder`,
 the mailer arrives as a registered port (`app.py` wires
@@ -59,6 +67,13 @@ MAILED_ALERT_REASONS = frozenset(
         "confirmation_delivery_failed",
         "status_push_undelivered",
         "proactive_outreach_failed",
+        # -- an order changing after the fact, and the shelf running out ---
+        # Not "the bot went wrong" like the two groups above; these are the
+        # ordinary business events the owner asked to see anyway, because
+        # each one is stock or money moving.
+        "order_modified",
+        "order_cancelled",
+        "low_stock",
     }
 )
 
@@ -76,6 +91,10 @@ _SUBJECT_PREFIX = {
     "confirmation_delivery_failed": "Undelivered confirmation",
     "status_push_undelivered": "Undelivered order update",
     "proactive_outreach_failed": "Undelivered notice",
+    "order_modified": "Order changed",
+    "order_cancelled": "Order cancelled",
+    "low_stock": "Low stock",
+    "swap_requested": "Item swap requested",
 }
 
 _Mailer = Callable[[str, str], bool]
@@ -102,14 +121,40 @@ class _Snapshot:
     summary: str
     channel: str
     external_id: str
+    order_id: str
     payload: dict
+
+    @property
+    def subject_key(self) -> str:
+        """*What* this alert is about, for the cooldown to key on.
+
+        A conversation-shaped alert carries an `external_id` and nothing else
+        is needed. But the three order/stock reasons carry none -- they are
+        raised about an order or a variant, not about whoever happened to be
+        typing -- so keying the cooldown on `external_id` alone collapsed
+        them all onto one empty key, and two different products going low
+        inside the window meant the second one was never mailed. Falling back
+        to the order and then the variant is what keeps "the same thing again"
+        apart from "a second thing".
+        """
+        return (
+            self.external_id
+            or self.order_id
+            or str(self.payload.get("variant_id") or "")
+            or self.queue_id
+        )
 
 
 def should_mail(kind: str, reason: str | None) -> bool:
-    """A handoff always -- it pauses a conversation, so a customer is sitting
-    there unanswered until someone picks it up. An alert only if it is on the
-    list above. An item swap never: it is a decision, not an emergency."""
-    if kind == QueueKind.HANDOFF.value:
+    """Two of the three kinds are mailed whole, and one is filtered.
+
+    A **handoff** always: it pauses a conversation, so a customer is sitting
+    there unanswered until someone picks it up. An **item swap** always too --
+    it is a customer waiting on a decision only a person can make, and the
+    order does not move until someone makes it. An **alert** only if its
+    reason is on the list above, which is where `order_confirmed` is kept out.
+    """
+    if kind in (QueueKind.HANDOFF.value, QueueKind.ITEM_SWAP.value):
         return True
     if kind == QueueKind.ALERT.value:
         return (reason or "") in MAILED_ALERT_REASONS
@@ -123,7 +168,7 @@ def should_mail(kind: str, reason: str | None) -> bool:
 # --------------------------------------------------------------------------
 
 _lock = threading.Lock()
-#: (reason, external_id) -> when it was last mailed.
+#: (reason, subject) -> when it was last mailed.
 _last_sent: dict[tuple[str, str], float] = {}
 #: The timestamps of every mail in the last hour, for the hard ceiling.
 _recent: list[float] = []
@@ -131,7 +176,7 @@ _recent: list[float] = []
 
 def _allowed(snapshot: _Snapshot, *, cooldown: float, max_per_hour: int) -> bool:
     now = time.monotonic()
-    key = (snapshot.reason, snapshot.external_id)
+    key = (snapshot.reason, snapshot.subject_key)
     with _lock:
         _recent[:] = [t for t in _recent if now - t < 3600]
         if max_per_hour > 0 and len(_recent) >= max_per_hour:
@@ -147,7 +192,7 @@ def _allowed(snapshot: _Snapshot, *, cooldown: float, max_per_hour: int) -> bool
                 "alert email for %s suppressed: %r about %s was mailed %.0fs ago",
                 snapshot.queue_id,
                 snapshot.reason,
-                snapshot.external_id or "-",
+                snapshot.subject_key or "-",
                 now - previous,
             )
             return False
@@ -168,6 +213,8 @@ def _compose(snapshot: _Snapshot) -> tuple[str, str]:
 
     if snapshot.kind == QueueKind.HANDOFF.value:
         prefix = "Bot handed over"
+    elif snapshot.kind == QueueKind.ITEM_SWAP.value:
+        prefix = "Item swap"
     else:
         prefix = _SUBJECT_PREFIX.get(snapshot.reason, "Alert")
     where = f" ({snapshot.channel})" if snapshot.channel else ""
@@ -180,6 +227,7 @@ def _compose(snapshot: _Snapshot) -> tuple[str, str]:
         f"Reason     : {snapshot.reason or '-'}",
         f"Channel    : {snapshot.channel or '-'}",
         f"Customer   : {snapshot.external_id or '-'}",
+        f"Order      : {snapshot.order_id or '-'}",
     ]
     if snapshot.kind == QueueKind.HANDOFF.value:
         lines += [
@@ -187,6 +235,12 @@ def _compose(snapshot: _Snapshot) -> tuple[str, str]:
             "This conversation is PAUSED -- the bot will not answer this "
             "customer again until a staff member replies to it or resolves "
             "it in the dashboard.",
+        ]
+    elif snapshot.kind == QueueKind.ITEM_SWAP.value:
+        lines += [
+            "",
+            "A customer is waiting on this: the swap does not happen until "
+            "somebody approves or refuses it in the review queue.",
         ]
     for key, value in sorted((snapshot.payload or {}).items()):
         lines.append(f"{key:<11}: {str(value)[:500]}")
@@ -246,6 +300,7 @@ def notify(session, item) -> None:
         summary=item.summary or "",
         channel=item.channel or "",
         external_id=item.external_id or "",
+        order_id=item.order_id or "",
         payload=dict(item.payload or {}),
     )
     cooldown = settings.alert_email_cooldown_seconds
