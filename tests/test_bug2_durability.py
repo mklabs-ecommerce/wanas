@@ -68,8 +68,15 @@ def test_the_drop_guard_rejects_anything_but_the_suite_s_own_database(tmp_path, 
         assert_safe_to_drop(postgres)
 
 
-def test_the_drop_guard_accepts_the_suite_s_own_engine(monkeypatch):
-    monkeypatch.delenv("WANAS_TEST_DATABASE_URL", raising=False)
+def test_the_drop_guard_accepts_the_suite_s_own_engine():
+    """Whatever the suite is itself running on, the guard has to say yes to it.
+
+    Deliberately without clearing WANAS_TEST_DATABASE_URL: under the
+    PostgreSQL job that variable *is* the reason `suite_engine` is droppable
+    at all, so deleting it made the guard correctly refuse the one engine this
+    test exists to accept. On a default SQLite run the variable is unset
+    anyway and the sqlite-file branch is what answers.
+    """
     assert_safe_to_drop(suite_engine)
 
 

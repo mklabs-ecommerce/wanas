@@ -25,13 +25,26 @@ from assistant.providers.fake import RehearsalProvider
 from assistant.runtime import RuntimeReply, claim_message, handle_message, release_claims
 from assistant.tools.support_tools import raise_handoff
 from config.settings import settings
-from domain.db import SessionLocal
+from domain.db import SessionLocal, engine
 from domain.models import ChannelIdentity, SessionRow, StaffQueueItem, WebhookEvent
 from domain.services import identities
 
 CHANNEL = "whatsapp"
 WHO = "201066976593"
 APP_SECRET = "wa-test-app-secret"
+
+#: The two poisoned-history tests below write a malformed value straight into
+#: `sessions.history`, bypassing the JSON type the way an out-of-app write
+#: does. PostgreSQL's `json` column refuses that at the wire -- the row simply
+#: cannot exist there -- so under the `WANAS_TEST_DATABASE_URL` PostgreSQL job
+#: the test fails on its own fixture rather than on the behaviour it pins. The
+#: guard it defends is backend-independent and still runs on every SQLite run;
+#: only the way of producing the poison is SQLite-shaped, which is exactly the
+#: backend the docstring names (a manual edit, a restore, the SQLite fallback).
+sqlite_only = pytest.mark.skipif(
+    engine.dialect.name != "sqlite",
+    reason="unreadable history is only representable where JSON is stored as text",
+)
 
 
 @contextmanager
@@ -219,6 +232,7 @@ def test_a_successful_turn_keeps_the_claim(seeded, monkeypatch):
 # --- (c) poisoned history cannot kill a turn -------------------------------
 
 
+@sqlite_only
 def test_malformed_history_does_not_raise_and_the_turn_still_replies(seeded, caplog):
     """A row written outside the app (manual edit, restore, SQLite fallback)
     used to raise on every load and silence the customer forever."""
@@ -245,6 +259,7 @@ def test_malformed_history_does_not_raise_and_the_turn_still_replies(seeded, cap
     assert any(m.get("role") == "user" for m in row.history)
 
 
+@sqlite_only
 def test_load_leaves_the_poisoned_value_in_place(seeded, caplog):
     """The fallback must not silently delete the stored row."""
     seeded.execute(
