@@ -745,6 +745,11 @@ def _shaped(client: Client) -> dict:
         "email": client.email,
         "phone": client.phone,
         "governorate": client.governorate,
+        # Same key the Shopify side fills, so one list row renders both. On
+        # this side it is the address the customer gave the bot; on that side
+        # it is Shopify's defaultAddress joined into one line
+        # (`admin_customers.format_address`).
+        "address": client.address or None,
         "created_at": client.created_at.isoformat() if client.created_at else None,
         "source": "bot",
     }
@@ -824,6 +829,13 @@ def list_customers(
             # filled one on another is the bug that was reported.
             if local is not None and not customer.get("governorate"):
                 customer["governorate"] = local.governorate
+            # ...and the same for the address, for the same reason and more
+            # often: a Shopify record the backfill created from bot orders has
+            # no `defaultAddress` at all, so without this the one address the
+            # shop actually holds -- the one the customer gave the bot -- is
+            # blank on the very row it belongs to.
+            if local is not None and not customer.get("address"):
+                customer["address"] = local.address or None
             stats = ledger.get(customer["id"]) or (ledger.get(key) if key else None)
             if stats is not None and first_seen[id(stats)] != customer["id"]:
                 continue

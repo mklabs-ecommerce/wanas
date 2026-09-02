@@ -33,7 +33,7 @@ query($cursor: String, $query: String) {
       phone
       numberOfOrders
       amountSpent { amount currencyCode }
-      defaultAddress { city province }
+      defaultAddress { address1 address2 city province zip country phone }
     }
   }
 }
@@ -54,7 +54,7 @@ query($id: ID!) {
     phone
     numberOfOrders
     amountSpent { amount currencyCode }
-    defaultAddress { address1 city province }
+    defaultAddress { address1 address2 city province zip country phone }
     orders(first: 50, sortKey: CREATED_AT, reverse: true) {
       nodes {%FIELDS%}
     }
@@ -82,6 +82,36 @@ def _order_count(node: dict) -> int:
         return 0
 
 
+def format_address(address: dict | None) -> str:
+    """One line a courier could actually use, out of Shopify's parts.
+
+    The screen used to show `address1` alone, which on this shop's data is a
+    street and a building number and nothing else -- no flat, no city, no
+    governorate. That is not an address anybody can deliver to, and it read
+    as if it were the whole one.
+
+    Joined in delivery order, and empty parts are dropped rather than turned
+    into a run of commas: an address with no `address2` must not come back as
+    "15 شارع ...,, القاهرة". Returns "" when Shopify has nothing at all,
+    which the caller shows as an em dash -- never a partial address dressed
+    up as a complete one.
+    """
+    if not address:
+        return ""
+    parts = [
+        address.get("address1"),
+        address.get("address2"),
+        address.get("city"),
+        # `province` is the governorate on Egyptian addresses. Skipped when it
+        # repeats the city, which Shopify does return for the two governorates
+        # that are also cities.
+        address.get("province") if address.get("province") != address.get("city") else None,
+        address.get("zip"),
+        address.get("country"),
+    ]
+    return "، ".join(p.strip() for p in parts if p and p.strip())
+
+
 def _summary(node: dict) -> dict:
     address = node.get("defaultAddress") or {}
     return {
@@ -92,6 +122,14 @@ def _summary(node: dict) -> dict:
         "order_count": _order_count(node),
         "amount_spent": ((node.get("amountSpent") or {}).get("amount")) or "0.00",
         "governorate": address.get("province") or address.get("city"),
+        # The whole thing, on the list row as well as in the drawer: finding
+        # the customer in Cairo is one question, and knowing where in Cairo is
+        # the one a person actually opens the row to answer.
+        "address": format_address(address),
+        # A second phone number lives on the address on Shopify, and it is
+        # often the only one that answers -- the account phone is frequently
+        # blank on a customer the checkout created.
+        "address_phone": address.get("phone") or None,
     }
 
 
@@ -143,8 +181,6 @@ def get_customer(shopify_gid: str) -> dict | None:
     if node is None:
         return None
     out = _summary(node)
-    address = node.get("defaultAddress") or {}
-    out["address"] = address.get("address1")
     out["orders"] = [
         admin_orders.order_summary(o) for o in (node.get("orders") or {}).get("nodes") or []
     ]

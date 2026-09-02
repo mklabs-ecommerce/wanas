@@ -149,6 +149,10 @@ def merge_into(customer: dict, stats: dict | None) -> dict:
     The customer's own `governorate` wins when it has one -- a Shopify record
     with a default address is stating where that person is, while the ledger's
     is inferred from where they last had something shipped.
+
+    Also guarantees the address keys exist. It does not *fill* them: an
+    address is a fact about the customer, and the ledger only knows about
+    orders.
     """
     stats = stats or _finish(blank())
     customer["order_count"] = stats["order_count"]
@@ -159,6 +163,14 @@ def merge_into(customer: dict, stats: dict | None) -> dict:
     customer["last_order_at"] = stats["last_order_at"]
     if not customer.get("governorate"):
         customer["governorate"] = stats["governorate"]
+    # Always present, even as None -- the same rule `client_id` follows in
+    # `shopify_api.list_customers`. One renderer draws all three tabs, so a
+    # key that appears on only some rows is a column that appears on only
+    # some tabs, and `tests/test_dashboard_customers.py` fails on exactly
+    # that. Whether a customer *has* an address is a different question from
+    # whether the row is shaped to carry one.
+    customer.setdefault("address", None)
+    customer.setdefault("address_phone", None)
     return customer
 
 

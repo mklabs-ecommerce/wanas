@@ -1271,6 +1271,8 @@ const EN = {
   "العميل ده": "This customer",
   "العميل هيوصله التتبع": "The customer gets the tracking",
   "العنوان": "Address",
+  "تليفون العنوان": "Address phone",
+  "عنوان التوصيل": "Delivery address",
   "الفترة دي فيها طلبات أكتر من اللي بنقراه في نداء واحد — الأرقام حد أدنى.": "This period has more orders than one call can read — the figures are a floor.",
   "الفريق": "Team",
   "الفريق استلم المحادثة": "Staff took the conversation",
@@ -5046,7 +5048,8 @@ VIEWS.customers = {
     const rowsHTML = rows.map((c) => `
       <tr data-clickable ${c.source === "bot" ? `data-cid="${esc(c.client_id)}"` : `data-gid="${esc(c.id)}"`}>
         <td><div class="cellmain">${esc(c.name || "—")}</div><div class="cellsub num">${esc(c.phone || c.email || "")}</div></td>
-        <td>${esc(c.governorate || "—")}</td>
+        <td><div class="cellmain">${esc(c.governorate || "—")}</div>
+            ${c.address ? `<div class="cellsub" title="${esc(c.address)}">${esc(clip(c.address, 46))}</div>` : ""}</td>
         <td>${channelChips(c.channels)}</td>
         <td class="num">${num(c.order_count)}</td>
         <td class="num">${c.amount_spent === null ? "—" : esc(money(c.amount_spent))}</td>
@@ -5063,7 +5066,7 @@ VIEWS.customers = {
     $("#customersBody").innerHTML = this.toolbar() + truncated + card(
       label, `${rows.length}`,
       rows.length ? tableHTML(
-        [tr("العميل"), tr("المحافظة"), tr("القنوات"), { label: tr("طلبات"), num: true },
+        [tr("العميل"), tr("العنوان"), tr("القنوات"), { label: tr("طلبات"), num: true },
          { label: tr("أنفق"), num: true }, { label: tr("ملغي"), num: true },
          { label: tr("قيمة الملغي"), num: true }],
         rowsHTML, { minWidth: 780 }) : "", "", { flush: true });
@@ -5091,7 +5094,9 @@ function customerDrawerHTML(customer, extraRows) {
       <td>${statusChip(o.fulfillment_status, o.cancelled)}</td>
       <td>${paymentChip(o.payment_method)}</td>
       <td>${chipHTML(channelLabel(o.channel), o.channel === "web" ? "sky" : "teal")}</td>
-      <td>${esc(o.governorate || "—")}</td>
+      <td><div class="cellmain">${esc(o.governorate || "—")}</div>
+          ${o.shipping_address ? `<div class="cellsub" title="${esc(o.shipping_address)}">${
+            esc(clip(o.shipping_address, 40))}</div>` : ""}</td>
       <td class="num">${esc(money(o.total))}</td>
     </tr>`).join("");
 
@@ -5108,10 +5113,16 @@ function customerDrawerHTML(customer, extraRows) {
       <div class="kv"><span class="k">التليفون</span><span class="v num">${esc(customer.phone || "—")}</span></div>
       <div class="kv"><span class="k">الإيميل</span><span class="v" dir="ltr">${esc(customer.email || "—")}</span></div>
       <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(customer.governorate || "—")}</span></div>
+      <div class="kv"><span class="k">العنوان</span>
+        <span class="v" data-copy="${esc(customer.address || "")}" data-copy-what="العنوان"
+          style="white-space:pre-wrap;line-height:1.7;cursor:pointer">${esc(customer.address || "—")}</span></div>
+      ${customer.address_phone && customer.address_phone !== customer.phone
+        ? TR`<div class="kv"><span class="k">تليفون العنوان</span>
+            <span class="v num">${esc(customer.address_phone)}</span></div>` : ""}
       ${extraRows || ""}`)}
     <div style="height:var(--s-4)"></div>
     ${card(tr("الطلبات"), `${(customer.orders || []).length}`,
-      orders ? tableHTML([tr("الطلب"), tr("الشحن"), tr("الدفع"), tr("القناة"), tr("المحافظة"),
+      orders ? tableHTML([tr("الطلب"), tr("الشحن"), tr("الدفع"), tr("القناة"), tr("عنوان التوصيل"),
                           { label: tr("الإجمالي"), num: true }], orders, { minWidth: 620 })
              : TR`<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
 }
@@ -5130,8 +5141,7 @@ async function openShopifyCustomer(gid) {
   const customer = await api(`/dashboard/api/shopify/customers/${encodeURIComponent(gid)}`, { quiet: true });
   if (customer.__error) { body.innerHTML = errorBanner(customer.__error, tr("العميل")); return; }
   $("#drawerTitle").textContent = customer.name || tr("عميل");
-  body.innerHTML = customerDrawerHTML(customer,
-    TR`<div class="kv"><span class="k">العنوان</span><span class="v">${esc(customer.address || "—")}</span></div>`);
+  body.innerHTML = customerDrawerHTML(customer);
   wireDrawerOrders(body);
 }
 
@@ -5141,8 +5151,7 @@ async function openLocalCustomer(clientId) {
   if (customer.__error) { body.innerHTML = errorBanner(customer.__error, tr("العميل")); return; }
   $("#drawerTitle").textContent = customer.full_name;
   body.innerHTML = customerDrawerHTML({ ...customer, name: customer.full_name },
-    TR`<div class="kv"><span class="k">العنوان</span><span class="v">${esc(customer.address || "—")}</span></div>
-       <div class="kv"><span class="k">أول ظهور</span><span class="v">${esc(dateTime(customer.created_at))}</span></div>`);
+    TR`<div class="kv"><span class="k">أول ظهور</span><span class="v">${esc(dateTime(customer.created_at))}</span></div>`);
   wireDrawerOrders(body);
 }
 

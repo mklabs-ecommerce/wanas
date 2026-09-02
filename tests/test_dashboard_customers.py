@@ -676,3 +676,101 @@ def test_one_person_holding_two_shopify_records_is_one_row(logged_in, monkeypatc
     assert rows[0]["id"] == "gid://shopify/Customer/1"
     assert rows[0]["order_count"] == 2
     assert rows[0]["channels"] == ["whatsapp", "web"]
+
+
+# --------------------------------------------------------------------------
+# The address -- the whole one
+# --------------------------------------------------------------------------
+#
+# The list showed a governorate and the drawer showed Shopify's `address1`
+# alone, which on this shop's data is a street and a building number: no
+# flat, no city, no governorate. That is not an address anybody can deliver
+# to, and it was presented as if it were the complete one.
+
+
+def test_a_bot_customer_carries_their_address_on_the_list_row(logged_in, bot_order):
+    """On the row, not only in the drawer: the governorate answers "which
+    city" and never "where", which is the question a person opens a customer
+    to answer."""
+    rows = logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+    hazem = next(c for c in rows if c["name"] == "Hazem")
+    assert hazem["address"] == "1 Test Street"
+
+
+def test_the_local_detail_carries_the_address_and_the_order_it_shipped_to(
+    logged_in, bot_order, seeded
+):
+    """Two different addresses, and both matter.
+
+    `Client.address` is where the customer is now; the order keeps the one it
+    was placed with. A customer who moved, or who sent one order to work,
+    reads correctly only if both are shown.
+    """
+    rows = logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+    client_id = next(c["client_id"] for c in rows if c["name"] == "Hazem")
+
+    detail = logged_in.get(f"/dashboard/api/customers/{client_id}").json()
+    assert detail["address"] == "1 Test Street"
+    (order,) = detail["orders"]
+    assert order["shipping_address"] == "1 Test Street"
+    assert order["contact_phone"] == "01055566677"
+
+
+def test_an_order_that_shipped_elsewhere_says_so(logged_in, bot_order, seeded):
+    """The case the client-level address cannot express."""
+    row = seeded.query(Order).one()
+    row.shipping_address = "12 Work Road, Maadi"
+    seeded.commit()
+
+    rows = logged_in.get("/dashboard/api/shopify/customers").json()["customers"]
+    client_id = next(c["client_id"] for c in rows if c["name"] == "Hazem")
+    detail = logged_in.get(f"/dashboard/api/customers/{client_id}").json()
+
+    assert detail["address"] == "1 Test Street"
+    assert detail["orders"][0]["shipping_address"] == "12 Work Road, Maadi"
+
+
+# -- the Shopify side's formatting ------------------------------------------
+
+
+def test_the_shopify_address_is_joined_in_delivery_order():
+    from integrations.shopify.admin_customers import format_address
+
+    assert format_address(
+        {
+            "address1": "15 شارع الجمهورية",
+            "address2": "شقة 3",
+            "city": "المعادي",
+            "province": "القاهرة",
+            "zip": "11431",
+            "country": "Egypt",
+        }
+    ) == "15 شارع الجمهورية، شقة 3، المعادي، القاهرة، 11431، Egypt"
+
+
+def test_missing_parts_are_dropped_not_turned_into_commas():
+    """An address with no `address2` must not come back with a gap in it --
+    that reads as a missing line rather than a line that never existed."""
+    from integrations.shopify.admin_customers import format_address
+
+    assert format_address({"address1": "15 شارع الجمهورية", "city": "المعادي"}) == (
+        "15 شارع الجمهورية، المعادي"
+    )
+
+
+def test_a_governorate_that_repeats_the_city_is_not_said_twice():
+    """Shopify returns province == city for the governorates that are also
+    cities, and "القاهرة، القاهرة" reads like a data error."""
+    from integrations.shopify.admin_customers import format_address
+
+    assert format_address(
+        {"address1": "15 شارع الجمهورية", "city": "القاهرة", "province": "القاهرة"}
+    ) == "15 شارع الجمهورية، القاهرة"
+
+
+def test_no_address_at_all_is_empty_never_a_partial_one():
+    from integrations.shopify.admin_customers import format_address
+
+    assert format_address(None) == ""
+    assert format_address({}) == ""
+    assert format_address({"address1": "  ", "city": None}) == ""

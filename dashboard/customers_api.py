@@ -49,6 +49,10 @@ def _summary(client: Client, order_count: int = 0) -> dict:
         "phone": client.phone,
         "email": client.email,
         "governorate": client.governorate,
+        # The whole address on the list row too, not only in the drawer. It is
+        # the field a person opens a customer to read, and the governorate on
+        # its own answers "which city" but never "where".
+        "address": client.address or None,
         "status": client.status,
         "created_at": client.created_at.isoformat() if client.created_at else None,
         # Named to match the store tab's field so one filter helper reads
@@ -160,6 +164,13 @@ def _order(order: Order) -> dict:
         "status": order.status,
         "channel": order.source_channel,
         "governorate": order.governorate,
+        # Where this parcel actually went. `Client.address` is the customer's
+        # current one; an order keeps the address it was placed with, and a
+        # one-time delivery address has nowhere else to live -- so a customer
+        # who moved, or who sent one order to work, reads correctly here and
+        # nowhere else.
+        "shipping_address": order.shipping_address or None,
+        "contact_phone": order.contact_phone or None,
         "payment_method": "cod" if order.payment_method == "cash_on_delivery" else "online",
         "total": money(order.total),
         # Kept for anything still reading the older names.
@@ -186,7 +197,6 @@ def local_customer_detail(client_id: int, wanas_staff: str | None = Cookie(defau
         shaped = [_order(o) for o in orders]
         result = {
             **_summary(client),
-            "address": client.address,
             # The same four numbers the list row carries, folded out of the
             # orders below rather than counted a second way -- a drawer whose
             # KPIs disagree with its own table is worse than no KPIs.
