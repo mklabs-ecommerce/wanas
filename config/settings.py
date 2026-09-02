@@ -281,6 +281,29 @@ class Settings:
         return bool(self.instagram_account_id and self.instagram_access_token)
 
     @property
+    def whatsapp_webhooks_configured(self) -> bool:
+        """Whether inbound WhatsApp can be *authenticated*, which is a
+        stricter question than whether outbound can be sent.
+
+        Deliberately separate from `whatsapp_configured`: the access token is
+        what sends a reply, the app secret is what proves a request came from
+        Meta. An operator who sets the first pair and forgets `APP_SECRET`
+        used to get a webhook that skipped signature verification entirely --
+        `if app_secret and not verify(...)` -- so anyone who found the URL
+        could inject a customer message and drive a real Shopify order. Same
+        contract as `shopify_webhooks_configured`: no secret means refuse,
+        never fall back to trusting the caller.
+        """
+        return bool(self.whatsapp_configured and self.whatsapp_app_secret)
+
+    @property
+    def instagram_webhooks_configured(self) -> bool:
+        """The Instagram twin of `whatsapp_webhooks_configured`, keyed on the
+        *Instagram* app secret -- a different string from the WhatsApp one
+        even inside the same Meta app."""
+        return bool(self.instagram_configured and self.instagram_app_secret)
+
+    @property
     def instagram_self_ids(self) -> frozenset[str]:
         """Every id that means "this is us" in an Instagram webhook.
 

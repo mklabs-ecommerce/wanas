@@ -132,6 +132,34 @@ def test_webhook_is_inert_without_credentials(client):
     assert post(client, webhook_body("hi")).status_code == 503
 
 
+def test_webhook_refuses_when_the_app_secret_is_missing(client, monkeypatch, seeded):
+    """Sending credentials without WHATSAPP_APP_SECRET must not leave an
+    unauthenticated public endpoint.
+
+    This was real: the gate asked `whatsapp_configured` (phone id + token) and
+    then verified only `if settings.whatsapp_app_secret`, so a deployment that
+    set the sending pair and forgot the secret accepted *any* POST as a
+    customer message -- and a customer message can place a real Shopify order.
+    No secret means refuse, the same contract the Shopify webhook has always
+    had.
+    """
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(
+            settings,
+            whatsapp_phone_number_id="123456",
+            whatsapp_access_token="test-token",
+            whatsapp_app_secret="",  # the one thing missing
+            whatsapp_verify_token=VERIFY_TOKEN,
+        ),
+    )
+    # Unsigned, and signed with a secret of the attacker's choosing: both are
+    # refused before the body is even parsed.
+    assert post(client, webhook_body("hi"), secret=None).status_code == 503
+    assert post(client, webhook_body("hi"), secret="anything").status_code == 503
+
+
 # --- handshake and signature ---------------------------------------------
 
 

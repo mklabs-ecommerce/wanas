@@ -11,6 +11,13 @@ only true as long as it matches `assistant/providers/openrouter.py`,
 `assistant/providers/gemini.py`, `integrations/shopify/client.py` and
 `domain/models.py`. When one of those changes, this changes in the same
 commit.
+
+It lives in /api/ and not /domain/ because it is a route. `domain/` is
+persistence and business rules and holds no FastAPI routes -- this module was
+the single exception, which made the rule unenforceable by inspection. /api/
+is where the app's public, unauthenticated HTTP surface already lives
+(`api/public_media.py`), and this page has exactly that shape: no credential,
+no signature check, no database access.
 """
 
 from __future__ import annotations

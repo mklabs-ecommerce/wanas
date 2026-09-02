@@ -21,6 +21,7 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
+from api.legal import router as legal_router
 from api.public_media import router as public_media_router
 from assistant import runtime as assistant_runtime, session as assistant_session
 from assistant.channels import instagram as instagram_channel
@@ -43,7 +44,6 @@ from dashboard.staff_api import router as dashboard_staff_router
 from dashboard.stats_api import router as dashboard_stats_router
 from dashboard.web import router as dashboard_router
 from domain.db import engine, session_scope
-from domain.legal import router as legal_router
 from domain.models import Base, Product, ShippingRate, Variant
 from domain.services import conversation_reset, notifications
 from domain.services.scheduler import scheduler
@@ -338,6 +338,34 @@ async def lifespan(_app: FastAPI):
         # Unauthenticated by design -- it is a local testing surface, and
         # anyone who can reach it can converse as any customer identity.
         log.warning("local chat harness mounted at /harness (unauthenticated). HARNESS_ENABLED=0 removes it.")
+    for _channel, _configured, _webhooks_ok, _var in (
+        (
+            "WhatsApp",
+            settings.whatsapp_configured,
+            settings.whatsapp_webhooks_configured,
+            "WHATSAPP_APP_SECRET",
+        ),
+        (
+            "Instagram",
+            settings.instagram_configured,
+            settings.instagram_webhooks_configured,
+            "INSTAGRAM_APP_SECRET",
+        ),
+    ):
+        if _configured and not _webhooks_ok:
+            # Outbound works, inbound cannot be authenticated -- so inbound
+            # refuses. Loud, because from the outside it looks exactly like
+            # "customers stopped messaging".
+            log.error(
+                "%s is configured for sending but %s is not set: /webhooks/%s "
+                "refuses every delivery with 503, because a webhook whose "
+                "signature cannot be checked must never be trusted. No "
+                "customer message on this channel will be answered until it "
+                "is set.",
+                _channel,
+                _var,
+                _channel.lower(),
+            )
     if not settings.shopify_webhooks_configured:
         # Without it the shop's own fulfilments never reach the customer, and
         # that failure is silent: orders simply stay `Confirmed` forever.
@@ -401,7 +429,11 @@ def health() -> dict:
         "llm_provider": settings.llm_provider,
         "llm_key_set": bool(settings.llm_api_key),
         "whatsapp_configured": settings.whatsapp_configured,
+        # Whether inbound can be *authenticated*, which is the stricter of the
+        # two questions and the one that decides if a customer gets answered.
+        "whatsapp_webhooks_configured": settings.whatsapp_webhooks_configured,
         "instagram_configured": settings.instagram_configured,
+        "instagram_webhooks_configured": settings.instagram_webhooks_configured,
         "instagram_comments": settings.instagram_comments_enabled,
         # The 60-day token's remaining life, so a broken refresh job is
         # visible weeks before the channel goes quiet.

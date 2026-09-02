@@ -136,6 +136,25 @@ def test_webhook_is_inert_without_credentials(client):
     assert client.post("/webhooks/instagram", content=b"{}").status_code == 503
 
 
+def test_webhook_refuses_when_the_app_secret_is_missing(client, monkeypatch, seeded):
+    """The Instagram twin of the WhatsApp case: sending credentials without
+    INSTAGRAM_APP_SECRET must not leave an unauthenticated public endpoint.
+    See tests/test_whatsapp_channel.py for the full reasoning."""
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(
+            settings,
+            instagram_account_id=IG_ID,
+            instagram_access_token="test-token",
+            instagram_app_secret="",  # the one thing missing
+            instagram_verify_token=VERIFY_TOKEN,
+        ),
+    )
+    assert post(client, webhook_body("hi"), secret=None).status_code == 503
+    assert post(client, webhook_body("hi"), secret="anything").status_code == 503
+
+
 # --- handshake and signature ---------------------------------------------
 
 

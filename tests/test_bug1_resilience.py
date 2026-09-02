@@ -8,6 +8,8 @@ release a stuck conversation by hand. Each test pins one of those.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
+import hmac
 import json
 from contextlib import contextmanager
 
@@ -29,6 +31,7 @@ from domain.services import identities
 
 CHANNEL = "whatsapp"
 WHO = "201066976593"
+APP_SECRET = "wa-test-app-secret"
 
 
 @contextmanager
@@ -43,6 +46,17 @@ def fresh_db():
         session.close()
 
 
+def post_signed(client, body: dict):
+    """A delivery signed the way Meta signs one."""
+    raw = json.dumps(body).encode()
+    digest = hmac.new(APP_SECRET.encode(), raw, hashlib.sha256).hexdigest()
+    return client.post(
+        "/webhooks/whatsapp",
+        content=raw,
+        headers={"content-type": "application/json", "x-hub-signature-256": f"sha256={digest}"},
+    )
+
+
 @pytest.fixture()
 def wa_client(seeded, monkeypatch):
     """The WhatsApp router with credentials on and Meta mocked out."""
@@ -53,6 +67,9 @@ def wa_client(seeded, monkeypatch):
             settings,
             whatsapp_phone_number_id="123456",
             whatsapp_access_token="test-token",
+            # The webhook refuses without it: an endpoint whose signature
+            # cannot be checked is not a webhook, it is an open door.
+            whatsapp_app_secret=APP_SECRET,
         ),
     )
     monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None, "sent.1"))
@@ -166,7 +183,7 @@ def test_a_crashed_ingest_releases_the_claim_so_the_retry_is_processed(wa_client
     )
 
     # First delivery: claimed, then crashed inside `_accept`.
-    assert wa_client.post("/webhooks/whatsapp", json=wa_body("wamid.retry", message_type="audio")).status_code == 200
+    assert post_signed(wa_client, wa_body("wamid.retry", message_type="audio")).status_code == 200
     with fresh_db() as check:
         assert check.get(WebhookEvent, "wamid.retry") is None  # released, not eaten
 
@@ -178,7 +195,7 @@ def test_a_crashed_ingest_releases_the_claim_so_the_retry_is_processed(wa_client
     )
     captured = []
     monkeypatch.setattr(adapter.dispatcher, "submit", lambda key, item: captured.append(item))
-    assert wa_client.post("/webhooks/whatsapp", json=wa_body("wamid.retry", message_type="audio")).status_code == 200
+    assert post_signed(wa_client, wa_body("wamid.retry", message_type="audio")).status_code == 200
 
     assert len(captured) == 1
     assert captured[0].audio_paths == ["data/inbound/audio-9.ogg"]

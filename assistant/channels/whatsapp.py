@@ -70,12 +70,18 @@ def verify(request: Request) -> Response:
 
 @router.post("")
 async def inbound(request: Request) -> Response:
-    if not settings.whatsapp_configured:
-        # Inert until Meta credentials exist, rather than half-working.
+    if not settings.whatsapp_webhooks_configured:
+        # Inert until Meta credentials exist, rather than half-working -- and
+        # that now includes WHATSAPP_APP_SECRET. This used to gate on
+        # `whatsapp_configured` (phone id + token) and then verify only
+        # `if settings.whatsapp_app_secret`, so a deployment missing the app
+        # secret served an unauthenticated public endpoint: any POST became a
+        # customer message, and a customer message can place a real order.
+        # No secret means refuse, exactly as the Shopify webhook does.
         return Response("whatsapp not configured", status_code=503)
 
     raw = await request.body()
-    if settings.whatsapp_app_secret and not verify_signature(
+    if not verify_signature(
         settings.whatsapp_app_secret, raw, request.headers.get("x-hub-signature-256")
     ):
         log.warning("rejected a webhook with a bad signature")

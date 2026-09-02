@@ -91,14 +91,18 @@ def verify(request: Request) -> Response:
 
 @router.post("")
 async def inbound(request: Request) -> Response:
-    if not settings.instagram_configured:
-        # Inert until Meta credentials exist, rather than half-working.
+    if not settings.instagram_webhooks_configured:
+        # Inert until Meta credentials exist, rather than half-working -- and
+        # that includes INSTAGRAM_APP_SECRET, for the reason spelled out on
+        # `assistant/channels/whatsapp.py::inbound`: gating on the token pair
+        # alone left the signature check behind an `if app_secret`, i.e. an
+        # unauthenticated public endpoint whenever the secret was unset.
         return Response("instagram not configured", status_code=503)
 
     raw = await request.body()
     # Signed with the *Instagram* app secret -- a different string from
     # WHATSAPP_APP_SECRET even inside the same Meta app.
-    if settings.instagram_app_secret and not verify_signature(
+    if not verify_signature(
         settings.instagram_app_secret, raw, request.headers.get("x-hub-signature-256")
     ):
         log.warning("rejected a webhook with a bad signature")
