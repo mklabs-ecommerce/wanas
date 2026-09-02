@@ -93,8 +93,12 @@ def _chart_image(session, product_id: str) -> str | None:
     "list you may offer from. If you already called this for the same product earlier in this "
     "conversation, its answer is still valid -- re-read it from what was already said instead of "
     "calling again, unless the customer is asking about a different product, or a different colour "
-    "of it. Calling this attaches "
-    "one product photo to your reply automatically (never more, and never one already sent), and "
+    "of it. That is about *facts*, never about photos: a request to see pictures is answered only "
+    "by calling this again, because the photos are attached by the call and nothing else in this "
+    "system can send one afterwards. Never say you are sending photos in a reply that did not "
+    "call this. Calling this attaches "
+    "one product photo to your reply automatically (one by default, and never one already sent -- "
+    "`more_images` below is the only way past that), and "
     "the first time in a conversation that a product with `has_size_chart` comes up it attaches "
     "that product's size chart picture too -- so an answer listing sizes always arrives with the "
     "chart beside it. Both are attached for you: "
@@ -103,9 +107,10 @@ def _chart_image(session, product_id: str) -> str | None:
     "picture. Always pass `color` "
     "when the customer has named or picked one -- it decides which colourway's photo gets sent, "
     "and without it they get whichever colour happens to come first. Only pass "
-    "more_images=true when the customer explicitly asks to see more photos of this exact product; "
-    "it then sends up to two more, still never repeating a photo already sent unless there is "
-    "nothing else left to show.",
+    "more_images=true when the customer explicitly asks to see more photos of this exact product -- "
+    "including 'send me all the colours', which is the case it exists for. It then sends one photo "
+    "per colourway (two extra angles for a product with no colour split), unseen photos first and "
+    "never repeating one already sent unless there is nothing else left to show.",
     properties={
         "product_id": {"type": "string", "description": "From get_products."},
         "color": {
@@ -116,8 +121,9 @@ def _chart_image(session, product_id: str) -> str | None:
         },
         "more_images": {
             "type": "boolean",
-            "description": "true only for an explicit 'show me more photos / other colours / other "
-            "angles' request about a product already shown. Defaults to false.",
+            "description": "true for an explicit 'show me more photos / all the colours / other "
+            "angles' request. The product having been shown already is what makes this the right "
+            "call, not a reason to skip it. Defaults to false.",
         },
     },
     required=("product_id",),
@@ -152,11 +158,30 @@ def get_variants(
     "to your reply automatically. If it returns has_chart false there is no chart for that product: "
     "say so. If it returns image_only the picture is the whole chart -- send it and let the customer "
     "read it; there are no measurements to quote. Never estimate a measurement and never quote "
-    "another product's chart.",
-    properties={"product_id": {"type": "string"}},
-    required=("product_id",),
+    "another product's chart. This is the tool for a customer who does not know their size: call it "
+    "instead of asking them to work it out or promising to come back to them. `product_id` may be "
+    "omitted when they mean the product already being discussed -- it then resolves to the last one "
+    "looked up in this conversation, so 'مش عارف مقاسي' right after you named a product is "
+    "answerable without asking them which product they meant. Omit it rather than guessing an id: a "
+    "wrong id is refused, never resolved, because another product's chart is confident, precise, "
+    "wrong numbers. no_product_in_context means nothing has come up yet -- that is the one case "
+    "where asking which product is the right move.",
+    properties={
+        "product_id": {
+            "type": "string",
+            "description": "From get_products. Leave it out to mean the product already under "
+            "discussion; never invent one.",
+        }
+    },
 )
-def get_size_chart(ctx: ToolContext, product_id: str) -> dict:
+def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
+    if not (isinstance(product_id, str) and product_id.strip()):
+        # `_resolve_implicit_product` fills this in before the call gets here,
+        # so arriving with it still empty means the conversation has genuinely
+        # not settled on a product yet. A distinct code, because the answer is
+        # a question to the customer rather than "there is no chart".
+        return {"error": "no_product_in_context"}
+
     product = ctx.session.get(Product, product_id)
     if product is None:
         return {"error": "product_not_found", "product_id": product_id}

@@ -1,5 +1,79 @@
 # Changelog
 
+## Unreleased — "Tell me the exact product" about the product it just named
+
+A customer discussing a product the bot itself had named two messages earlier
+said they did not know their size, and got a rigid line back asking them to
+state the product, colour and size from scratch. It read as amnesia in a
+conversation under ten messages old, which is well inside the verbatim
+context window -- and it was not amnesia at all. The model's reply was
+generated, judged a stalling promise, retried twice and then replaced by a
+constant. A constant carries no context by construction.
+
+- **The sizing question had no tool wired to it.** Nothing connected "مش عارف
+  مقاسي" to `get_size_chart`, so the model did the natural conversational
+  thing and offered to help -- promise-shaped, no tool call, straight into the
+  guard. The prompt now names the tool for that exact question, and both
+  promise nudges name it too, so a retry has somewhere to go instead of
+  re-phrasing the same stall.
+
+- **And the tool could not be called without an id the model may not have.**
+  `product_id` was required, and a wrong guess returns `product_not_found` --
+  a dead end that sends the model back to stalling. It may now be omitted to
+  mean the product already under discussion, resolved from the stored history
+  by `tools.base.last_product`. Deliberately from the *stored* history rather
+  than the compacted view the model is sent: compaction drops tool results,
+  which is exactly where the product id is written down. Only an absent id
+  resolves -- a wrong one is still refused, because a neighbouring product's
+  chart is confident, precise, wrong numbers. The resolution happens before
+  the argument cache reads the call, so an implicit chart request follows the
+  product being discussed instead of returning the first one ever asked for.
+
+- **The last resort stopped forgetting.** When the model will not stop
+  stalling the fallback still ships -- dead air is the worse failure -- but it
+  now asks only for what is genuinely missing, naming the product and colour
+  the conversation already settled. Same deterministic history read, no second
+  model call: this runs at the point where the model has already failed twice,
+  so trusting it once more is the one thing that cannot be part of the answer.
+  A conversation that never named a product still gets the context-free
+  wording, because being told what it was about would be an invention.
+
+## Unreleased — "Sending the colour photos now", with no photos behind it
+
+Asked to see a product's colours, the bot sent one picture instead of four.
+Asked again for all of them, it confirmed it was sending them and sent
+nothing at all. Two separate faults that happened to line up into one bad
+conversation.
+
+- **The extra-photo budget knew nothing about colours.** `more_images` exists
+  precisely to reach for colour variety, but it was capped at a flat two, so a
+  four-colour product could not answer "show me all the colours" however the
+  request was phrased. The budget now follows the product: one photo per
+  colourway up to `MAX_COLOR_IMAGES`, with the old flat two kept for a product
+  the catalogue never split by colour, where "more" can only mean another angle
+  of the one garment.
+
+- **Nothing let the model ask again.** The tool description and the prompt both
+  said, correctly, that a product already looked up does not need looking up
+  again — and neither carved photos out of that rule. So the second request was
+  answered from what was already on screen, in words, and the picture is
+  attached by the *call*: no call, no picture. Both now say that a customer
+  asking to see something is always a fresh call, and that the photo comes from
+  the tool rather than from the sentence announcing it.
+
+- **And a confirmation is no longer sent with nothing behind it.** A reply that
+  says photos are coming while `attachments` is empty is now caught the same
+  way «ثواني هشوفلك» already was, and for the same reason: no second message is
+  ever produced for a turn, so that sentence is the last thing the customer
+  hears. It is a separate check because the signal is structural rather than
+  verbal — the attachment list, not the wording — and because the model has to
+  be told something different to fix it. Three exemptions, all cases where the
+  reply is doing its job: a question about photos (the customer has something
+  to answer), an honest "this product has no photos", and a turn where the
+  *customer* sent the picture — "وصلتني الصورة" is an answer about theirs, and
+  guarding on the word alone would have retried the one reply the media path
+  exists to produce.
+
 ## Unreleased — A negative comment stops promising a DM that never comes
 
 `negative` is answered in public and deliberately never DMed — chasing a

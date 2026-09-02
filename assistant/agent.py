@@ -23,7 +23,14 @@ from sqlalchemy.orm import Session
 from assistant import context, messages as msg, quoting, session as session_store
 from assistant.prompt import build_system_prompt
 from assistant.providers import LLMProvider, ProviderError, get_provider
-from assistant.tools.base import REGISTRY, ToolContext, call_tool, load_all, tool_specs
+from assistant.tools.base import (
+    REGISTRY,
+    ToolContext,
+    call_tool,
+    last_product,
+    load_all,
+    tool_specs,
+)
 from config.settings import settings
 
 log = logging.getLogger("wanas.agent")
@@ -154,6 +161,40 @@ PROMISE_FALLBACK = (
     "معلش، قولي اسم المنتج واللون والمقاس اللي عايزه بالظبط وأقولك المتاح منه فورًا."
 )
 
+#: The same last resort for a conversation that already established what it is
+#: about. Asking a customer to restate a product the bot itself named two
+#: messages ago is the part that reads as amnesia -- and it is the fallback
+#: doing it, not the model, because a constant carries no context by
+#: construction. These ask only for what is genuinely still missing.
+PROMISE_FALLBACK_WITH_PRODUCT = (
+    "معلش، بالنسبة لـ {product} — قوللي اللون والمقاس اللي عايزهم وأقولك المتاح منه فورًا."
+)
+PROMISE_FALLBACK_WITH_COLOR = (
+    "معلش، بالنسبة لـ {product} {color} — قوللي المقاس اللي عايزه وأقولك المتاح منه فورًا."
+)
+
+
+def promise_fallback(history: list[dict]) -> str:
+    """The last-resort question, narrowed by what the conversation settled.
+
+    Deterministic: one read of the stored history through
+    `tools.base.last_product`, no second model call and nothing summarised --
+    this runs at the point where the model has already failed twice, so
+    trusting it once more is the one thing that cannot be part of the answer.
+    The product name is interpolated straight from the database row, never
+    from a sentence a model wrote.
+
+    Falls back to the context-free wording whenever no product has actually
+    been looked up, which keeps the honest case honest: a conversation that
+    never named a product must not be told what it was about.
+    """
+    recent = last_product(history)
+    if recent is None or not recent.get("name"):
+        return PROMISE_FALLBACK
+    if recent.get("color"):
+        return PROMISE_FALLBACK_WITH_COLOR.format(product=recent["name"], color=recent["color"])
+    return PROMISE_FALLBACK_WITH_PRODUCT.format(product=recent["name"])
+
 
 def _is_dangling_promise(text: str, *, tools_called: bool) -> bool:
     """A final reply that promises a follow-up which will never come.
@@ -183,6 +224,48 @@ def _is_dangling_promise(text: str, *, tools_called: bool) -> bool:
     return not tools_called and words <= 12
 
 
+#: The word "photo", in the forms the model actually writes it. Deliberately
+#: not paired with a sending verb: Arabic has too many ways to say it
+#: («هبعتلك», «اتفضل», «دي», «جاية»), and every previous attempt to enumerate
+#: a phrase list is what let the next phrasing through.
+_IMAGE_WORD = re.compile(r"صور|صوره|صورة|\bphotos?\b|\bpictures?\b|\bimages?\b")
+
+#: The one sanctioned reason to mention photos while sending none: the product
+#: has none. The prompt asks for exactly this sentence, so it must not be
+#: retried -- nudging the model off it is nudging it towards inventing a
+#: picture.
+_NO_IMAGES = re.compile(
+    r"(?:مفيش|ما فيش|معندناش|معنديش|ملقيتش|مش متاح|مش موجود|no|don'?t have|do not have)"
+    r"[^\n]{0,20}?(?:صور|صوره|صورة|photo|picture|image)"
+)
+
+
+def _promises_images(text: str) -> bool:
+    """A reply that talks about photos in a turn that attached none.
+
+    The caller checks the attachments; this only decides whether the sentence
+    claims a picture is coming. Same invariant as `_is_dangling_promise` and
+    the same reason behind it: no second message is ever produced for a turn,
+    so "حاضر، هبعتلك صور كل الألوان" with an empty `attachments` list is not a
+    slow reply, it is the last thing the customer hears. It happened twice in
+    one conversation, both times after the model had been told the product was
+    already shown and answered in words alone.
+
+    Two exemptions, and both are cases where the reply is doing its job:
+    a **question** about photos ("تحب تشوف أنهي لون؟") leaves the customer
+    something to answer, which is never dead air; and telling them a product
+    has no photos is the honest answer the prompt asks for.
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    if not _IMAGE_WORD.search(lowered):
+        return False
+    if "؟" in text or "?" in text:
+        return False
+    return not _NO_IMAGES.search(lowered)
+
+
 #: Appended to the system prompt when a dangling promise is caught -- never
 #: stored in history, since the point is the model should not see its own bad
 #: reply and repeat the pattern, only be told to actually act.
@@ -191,7 +274,8 @@ _PROMISE_NUDGE = (
     "دلوقتي') من غير ما تقول المعلومة الحقيقية. مفيش رسالة تانية هتتبعت بعد "
     "ردك -- الرد ده هو آخر حاجة العميل هيشوفها في الدور ده، فالوعد معناه سكوت "
     "تام. نادي الأداة المناسبة دلوقتي (get_products أو get_variants للمتاح "
-    "والمقاسات والألوان) وجاوب بالمعلومة نفسها في نفس الرد."
+    "والمقاسات والألوان، أو get_size_chart لو الزبون مش عارف مقاسه) وجاوب "
+    "بالمعلومة نفسها في نفس الرد."
 )
 
 #: The second, blunter attempt. Same content, no room left for a polite
@@ -199,7 +283,29 @@ _PROMISE_NUDGE = (
 _PROMISE_NUDGE_FINAL = (
     "\n\nتنبيه أخير: ممنوع تمامًا أي جملة انتظار أو وعد ('ثواني'، 'هشوفلك'، "
     "'هقولك'، 'لحظة'). لازم ردك الجاي يبدأ بالمعلومة نفسها بعد ما تنادي "
-    "get_variants/get_products، أو يسأل العميل سؤال محدد لو ناقصك بيانات."
+    "get_variants/get_products/get_size_chart، أو يسأل العميل سؤال محدد لو "
+    "ناقصك بيانات."
+)
+
+#: The photo version of the nudge. The failure it answers is specific enough
+#: to name: the model had been told that a product it already showed does not
+#: need fetching again, concluded that saying "here are the colours" was the
+#: whole job, and sent a sentence with nothing attached to it. So this says
+#: the one thing that fixes it -- a picture exists only if the call is made in
+#: *this* reply -- and names the argument that sends all of them.
+_IMAGE_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات قال إنك بتبعت صور، بس مفيش ولا صورة "
+    "اتبعتت. الصور بتتبعت بس لما تنادي get_variants في نفس الرد ده، ومفيش "
+    "رسالة تانية هتتبعت بعده. لو العميل طالب صور الألوان، نادي get_variants "
+    "بـ more_images: true دلوقتي -- ده مسموح حتى لو المنتج اتعرض قبل كده. "
+    "ولو المنتج ملوش صور، قول كده بصراحة بدل ما تقول إنك بعتها."
+)
+
+#: Sent instead of an image promise the model will not honour. Asks for the
+#: one thing that lets the next turn send a real photo and, unlike the
+#: promise, makes sense with nothing following it.
+IMAGE_PROMISE_FALLBACK = (
+    "معلش، قولي اسم المنتج واللون اللي عايز تشوفه وأبعتلك صورته على طول."
 )
 
 
@@ -302,6 +408,14 @@ def run_turn(
     )
     called: list[str] = []
     promise_retries = 0
+    # The customer sent a picture of their own this turn, so every mention of
+    # a photo in the reply is about *theirs* -- "وصلتني الصورة، دي أقرب حاجة
+    # عندنا" is an answer, not an undelivered promise. Without this the
+    # image-promise guard below would retry the one reply the media path
+    # exists to produce. `images` is the raw attachment list; the automated
+    # reading `media.py` folds into the text is the same signal seen from the
+    # other side.
+    customer_sent_a_photo = bool(images) or "قراءة آلية للصورة" in (text or "")
 
     for _turn in range(settings.tool_loop_cap):
         try:
@@ -349,7 +463,19 @@ def run_turn(
             text_out, tool_leaked = strip_tool_leaks(text_out)
             text_out, _ = strip_markdown(text_out)
 
-            if _is_dangling_promise(text_out, tools_called=bool(called)):
+            # Saying a photo is on its way while attaching none is the same
+            # failure as promising to go and check: the turn ends there, so
+            # the sentence *is* the last thing the customer gets. It is
+            # checked separately because the signal is structural rather than
+            # verbal -- the attachments list, not the wording -- and because
+            # what the model has to be told to fix it is different.
+            image_promise = (
+                not ctx.attachments
+                and not customer_sent_a_photo
+                and _promises_images(text_out)
+            )
+
+            if image_promise or _is_dangling_promise(text_out, tools_called=bool(called)):
                 # A promise is never sent. Nothing in this system produces a
                 # second message for a turn that already answered, so a
                 # promise reaching the customer *is* the dead air. Retry with
@@ -357,8 +483,9 @@ def run_turn(
                 # send the deterministic question instead of the promise.
                 if promise_retries < _PROMISE_RETRY_LIMIT:
                     log.warning(
-                        "dangling promise from provider %s for %s/%s "
+                        "%s from provider %s for %s/%s "
                         "(tools this turn: %s), retry %d/%d",
+                        "photos promised but none attached" if image_promise else "dangling promise",
                         provider.name,
                         channel,
                         external_id,
@@ -368,7 +495,9 @@ def run_turn(
                     )
                     promise_retries += 1
                     nudge = (
-                        _PROMISE_NUDGE
+                        _IMAGE_NUDGE
+                        if image_promise
+                        else _PROMISE_NUDGE
                         if promise_retries == 1
                         else _PROMISE_NUDGE_FINAL
                     )
@@ -385,7 +514,9 @@ def run_turn(
                     external_id,
                     _PROMISE_RETRY_LIMIT,
                 )
-                text_out = PROMISE_FALLBACK
+                text_out = (
+                    IMAGE_PROMISE_FALLBACK if image_promise else promise_fallback(history)
+                )
                 history.append(msg.assistant(text_out, attachments=ctx.attachments))
                 session_store.save(db, channel, external_id, history, merge_since=base)
                 return AgentReply(
@@ -393,7 +524,7 @@ def run_turn(
                     attachments=ctx.attachments,
                     interactive=ctx.interactive,
                     tool_calls=called,
-                    error="dangling_promise",
+                    error="image_promise" if image_promise else "dangling_promise",
                 )
 
             if path_leaked or tool_leaked:

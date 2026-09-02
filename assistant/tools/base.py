@@ -220,6 +220,89 @@ def _cached_result(ctx: ToolContext, name: str, arguments: dict) -> dict | None:
     return None
 
 
+#: Catalog calls that name exactly one product. `get_products` is deliberately
+#: absent: it answers with a *list*, so "which of these" is an ambiguity to
+#: keep rather than one to resolve.
+_PRODUCT_CALLS = {"get_variants", "get_size_chart"}
+
+
+def last_product(history: list[dict]) -> dict | None:
+    """The one product a conversation is currently about, or None.
+
+    The newest `get_variants`/`get_size_chart` that named a product and got a
+    real answer back, as `{"product_id", "name", "color"}`. Deterministic and
+    read-only -- the same history walk `_cached_result` does, from the other
+    end, with no model call and nothing summarised.
+
+    It reads the **stored** history rather than the compacted view the model
+    is sent (`assistant/context.py`), and that is the point: compaction drops
+    tool results, which is exactly where the product id is written down. So
+    this can still name the product in a turn where the model itself has lost
+    track of it -- which is the situation both callers exist for.
+    """
+    for index in range(len(history) - 1, -1, -1):
+        message = history[index]
+        if message.get("role") != "assistant":
+            continue
+        for call in reversed(message.get("tool_calls") or []):
+            if call.get("name") not in _PRODUCT_CALLS:
+                continue
+            arguments = call.get("arguments") or {}
+            product_id = arguments.get("product_id")
+            if not (isinstance(product_id, str) and product_id.strip()):
+                continue
+            following = history[index + 1] if index + 1 < len(history) else None
+            if not following or following.get("role") != "tool_results":
+                continue
+            for result in following.get("results") or []:
+                if result.get("id") != call.get("id"):
+                    continue
+                content = result.get("content")
+                if not isinstance(content, dict) or "error" in content:
+                    continue
+                # `title` is what get_size_chart calls it; either way the name
+                # comes from the database, never from a model's sentence.
+                name = content.get("name") or content.get("title")
+                color = arguments.get("color")
+                return {
+                    "product_id": product_id,
+                    "name": name if isinstance(name, str) and name else None,
+                    "color": color if isinstance(color, str) and color else None,
+                }
+    return None
+
+
+#: Tools whose `product_id` may be left out to mean "the one we are already
+#: talking about". Only get_size_chart: it is the tool a customer reaches
+#: through a question ("مش عارف مقاسي") rather than through a product id, so
+#: requiring the id is what turned a sizing question into a stall.
+_IMPLICIT_PRODUCT_TOOLS = {"get_size_chart"}
+
+
+def _resolve_implicit_product(ctx: ToolContext, name: str, arguments: dict) -> None:
+    """Fill in an omitted `product_id` from the conversation, in place.
+
+    Done here, before anything else looks at the call, so the arguments a
+    handler runs on and the arguments `_cached_result` keys on are the same
+    concrete ones. Resolving inside the handler instead would leave the cache
+    keyed on `{}` -- "whatever we were talking about" -- and hand product A's
+    chart to a customer now asking about product B.
+
+    Only an *absent* id is resolved. A wrong one is left to be refused,
+    because quoting a neighbouring product's chart is confident, precise,
+    wrong numbers, and sizing wrong causes a return.
+    """
+    if name not in _IMPLICIT_PRODUCT_TOOLS:
+        return
+    given = arguments.get("product_id")
+    if isinstance(given, str) and given.strip():
+        return
+    recent = last_product(ctx.history)
+    if recent is not None:
+        arguments["product_id"] = recent["product_id"]
+        log.info("%s called with no product_id, resolved to %s", name, recent["product_id"])
+
+
 def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     """Dispatch. Never raises: an unexpected exception becomes an error dict."""
     spec = REGISTRY.get(name)
@@ -227,6 +310,7 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
         return {"error": "unknown_tool", "tool": name}
 
     arguments = dict(arguments or {})
+    _resolve_implicit_product(ctx, name, arguments)
     invalid = validate_arguments(spec, arguments)
     if invalid is not None:
         return invalid
@@ -269,9 +353,33 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
 #: get past this.
 MAX_PRODUCT_IMAGES = 1
 
-#: How many extra photos an explicit "show me more" may add, on top of
-#: whatever the conversation has already sent.
+#: How many extra photos an explicit "show me more" may add for a product the
+#: catalogue never split by colour -- where "more" can only mean another angle
+#: of the one garment, and two of those is already everything worth sending.
 MAX_EXTRA_IMAGES = 2
+
+#: The ceiling for a colour-split product, where "ابعتلي صور كل الألوان" has a
+#: right answer and it is **one photo per colourway**. A flat two used to apply
+#: here as well, so a four-colour product answered a request for all four with
+#: two -- and the customer, reasonably, asked again for the rest. That second
+#: ask is the one that produced no photo at all, because by then the model had
+#: been told the product was already shown. The budget follows the product now
+#: rather than a constant that knows nothing about it. Six is where a gallery
+#: stops being an answer and starts being a screenful of notifications.
+MAX_COLOR_IMAGES = 6
+
+
+def _extra_budget(result: dict, candidates: list[str]) -> int:
+    """How many photos one explicit "show me more" may send.
+
+    Colour-split: as many as it has colourways, because that is the question
+    -- `_candidate_images` already returns exactly one photo per colour, so
+    the length of the list *is* the colour count. Not split: two more angles.
+    """
+    color_images = result.get("color_images")
+    if isinstance(color_images, dict) and color_images:
+        return min(len(candidates), MAX_COLOR_IMAGES)
+    return MAX_EXTRA_IMAGES
 
 
 def _candidate_images(result: dict, color: str | None = None) -> list[str]:
@@ -350,9 +458,10 @@ def _collect_images(
         ranked = [p for p in candidates if p not in ctx.sent_images] + [
             p for p in candidates if p in ctx.sent_images
         ]
+        budget = _extra_budget(result, candidates)
         added = 0
         for path in ranked:
-            if added >= MAX_EXTRA_IMAGES:
+            if added >= budget:
                 break
             if ctx.attach(path, force=True):
                 added += 1

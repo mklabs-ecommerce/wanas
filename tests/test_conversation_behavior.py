@@ -22,7 +22,13 @@ from assistant import agent, session as session_store
 from assistant.prompt import SYSTEM_PROMPT
 from assistant.providers.base import ModelReply
 from assistant.providers.fake import ScriptedProvider
-from assistant.tools.base import MAX_EXTRA_IMAGES, MAX_PRODUCT_IMAGES, ToolContext, call_tool
+from assistant.tools.base import (
+    MAX_COLOR_IMAGES,
+    MAX_EXTRA_IMAGES,
+    MAX_PRODUCT_IMAGES,
+    ToolContext,
+    call_tool,
+)
 
 CHANNEL = "whatsapp"
 WHO = "201000000001"
@@ -79,12 +85,12 @@ def test_a_plain_request_sends_exactly_one_photo(ctx):
 
 def test_more_images_prefers_colour_variety_and_is_capped(ctx):
     """An explicit "show me more" is the only way past the one-photo default,
-    and even then it is capped -- two more, not the whole catalogue photo."""
+    and it is still capped -- one photo per colourway, not the whole gallery."""
     call(ctx, "get_variants", product_id="wanas-hoodie")
     first = list(ctx.attachments)
-    call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
     added = [p for p in ctx.attachments if p not in first]
-    assert 0 < len(added) <= MAX_EXTRA_IMAGES
+    assert 0 < len(added) <= MAX_COLOR_IMAGES
 
     colours = {
         colour
@@ -95,6 +101,66 @@ def test_more_images_prefers_colour_variety_and_is_capped(ctx):
         if path in ctx.attachments
     }
     assert len(colours) > 1
+    assert len(added) <= len(payload["color_images"])
+
+
+def test_all_the_colours_means_a_photo_of_each_one(ctx):
+    """The bug, exactly as reported: a four-colour product answered "ابعتلي
+    صور كل الألوان" with one photo, because the extra-photo budget was a flat
+    two that knew nothing about how many colours the product came in. The
+    customer then asked again for the rest, which is the request that produced
+    no photo at all.
+    """
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    colourways = payload["color_images"]
+    assert 1 < len(colourways) <= MAX_COLOR_IMAGES, "fixture check: several colours, under the cap"
+
+    sent = set(photos(ctx))
+    for colour, paths in colourways.items():
+        assert sent & set(paths), f"no photo sent for {colour}"
+
+
+def test_the_ringer_tee_sends_all_four_of_its_colours(ctx):
+    """The product from the report, by name. It comes in Beige, Brown,
+    Burgundy and Navy, and "send the colour photos" answered with one."""
+    payload = call(ctx, "get_variants", product_id="ringer-tee", more_images=True)
+    assert len(payload["color_images"]) == 4, "fixture check: four colourways"
+    assert len(photos(ctx)) == 4
+
+
+def test_a_colour_photo_each_beats_two_angles_of_one(ctx):
+    """One per colourway, not several of the same colour: the customer asked
+    which colours exist, and two photos of the black one does not answer it."""
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    for colour, paths in payload["color_images"].items():
+        assert len([p for p in photos(ctx) if p in paths]) <= 1, colour
+
+
+def test_a_product_with_no_colour_split_still_gets_only_two_extra(ctx):
+    """The per-colour budget is a rule about colours. Where there are none to
+    show, "more" can only mean another angle, and two is still the limit."""
+    payload = call(ctx, "get_variants", product_id="feelin-fine-top", more_images=True)
+    if payload["color_images"]:
+        pytest.skip("this product is colour-split; covered by the tests above")
+    assert 0 < len(photos(ctx)) <= MAX_EXTRA_IMAGES
+
+
+def test_asking_again_sends_the_colours_that_were_not_sent_yet(ctx):
+    """The second half of the report: after one photo, "all the colours" has
+    to send the *rest*, not repeat the one already seen."""
+    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Black")
+    black = photos(ctx)
+    assert len(black) == 1
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+
+    call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    later = set(photos(ctx))
+    assert later, "asked for every colour and got nothing"
+    for colour, paths in payload["color_images"].items():
+        if colour == "Black":
+            continue
+        assert later & set(paths), f"asked for every colour and {colour} was skipped"
 
 
 def test_product_photos_are_capped(ctx):
@@ -276,8 +342,25 @@ def test_a_product_with_no_photos_attaches_nothing(ctx, monkeypatch):
 
 
 def test_the_prompt_forbids_claiming_an_image_that_was_not_sent():
-    assert "متقولش «بعتلك الصور» غير لو انت فعلاً عرضت منتج" in SYSTEM_PROMPT
+    assert "متقولش «بعتلك الصور» غير لو فعلاً عرضت منتج" in SYSTEM_PROMPT
     assert "لو مفيش صور للمنتج، قول كده بصراحة" in SYSTEM_PROMPT
+
+
+def test_the_prompt_says_where_a_photo_actually_comes_from():
+    """Forbidding the false claim was not enough on its own: the model has to
+    know *why* the sentence is false. It read "photos are attached
+    automatically", concluded that announcing them was the whole job, and sent
+    "sending the colours now" with an empty attachment list."""
+    assert "الصورة بتتبعت من نداء الأداة، مش من كلامك" in SYSTEM_PROMPT
+    assert "مفيش رسالة بعد ردك" in SYSTEM_PROMPT
+
+
+def test_a_customers_request_for_photos_is_never_a_repeat_call_to_skip():
+    """The rule against re-fetching a product is about facts. Applied to
+    photos it is what made the second "send all the colours" answer with
+    words and nothing else."""
+    assert "طلب صور من الزبون، = طلب جديد دايمًا" in SYSTEM_PROMPT
+    assert "more_images: true" in SYSTEM_PROMPT
 
 
 # --------------------------------------------------------------------------
@@ -499,11 +582,14 @@ def test_the_prompt_did_not_become_a_wall_of_text():
     """A prompt nobody can hold in their head is one the model stops
     following. Kept in the range where the instructions still read as rules.
 
-    The ceiling has moved twice, both times for something a model would
-    otherwise answer from memory: the exchange/cancellation terms (numbers
-    charged in cash at the door), and the scope section (general knowledge,
-    which the model holds all of)."""
-    assert 3000 < len(SYSTEM_PROMPT) < 12000
+    The ceiling has moved three times, each for something a model gets wrong
+    from its own assumptions rather than from a gap it can look up: the
+    exchange/cancellation terms (numbers charged in cash at the door), the
+    scope section (general knowledge, which the model holds all of), and the
+    line saying a photo comes from the tool call and not from the sentence
+    announcing it -- which every model assumes the other way round, and which
+    cost two silent replies in one real conversation."""
+    assert 3000 < len(SYSTEM_PROMPT) < 12600
 
 
 # --------------------------------------------------------------------------

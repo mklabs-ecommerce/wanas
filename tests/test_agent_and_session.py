@@ -275,6 +275,87 @@ def test_a_promise_after_a_tool_call_is_still_caught(seeded):
     assert reply.text == "عندنا Joggers & Sweatpants متاحة دلوقتي"
 
 
+def test_promising_photos_and_attaching_none_is_retried(seeded):
+    """The reported bug, in its exact shape: asked for every colour, the model
+    replied that it was sending them and called nothing, so the turn ended
+    with a confirmation and no picture. Twice in one conversation.
+
+    The signal is structural, not verbal -- an empty attachment list -- because
+    the sentence itself is perfectly well-formed and reads as success.
+    """
+    provider = ScriptedProvider(
+        [
+            ModelReply(text="تمام، هبعتلك صور كل الألوان دلوقتي"),
+            reply_with("get_variants", {"product_id": "wanas-hoodie", "more_images": True}),
+            ModelReply(text="دي كل الألوان المتاحة"),
+        ]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "ابعتلي صور كل الألوان", provider=provider)
+    assert reply.attachments, "the retry was supposed to produce real photos"
+    assert reply.tool_calls == ["get_variants"]
+    roles = [m["role"] for m in session_store.load(seeded, CHANNEL, WHO)]
+    assert roles == ["user", "assistant", "tool_results", "assistant"]
+
+
+def test_a_model_that_keeps_promising_photos_gets_a_question_not_a_lie(seeded):
+    provider = ScriptedProvider(
+        [
+            ModelReply(text="حاضر، هبعتلك الصور"),
+            ModelReply(text="الصور جاية حالًا"),
+            ModelReply(text="اتفضل الصور"),
+        ]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "ابعتلي صور", provider=provider)
+    assert reply.text == agent.IMAGE_PROMISE_FALLBACK
+    assert reply.error == "image_promise"
+    assert reply.attachments == []
+
+
+def test_a_reply_that_really_attached_photos_is_not_touched(seeded):
+    """The guard reads the attachments, so a reply that says it is sending
+    pictures *while sending them* is the normal, correct case."""
+    provider = ScriptedProvider(
+        [
+            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            ModelReply(text="اتفضل صورة الهودي"),
+        ]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "ابعتلي صورة", provider=provider)
+    assert reply.text == "اتفضل صورة الهودي"
+    assert reply.attachments
+
+
+def test_saying_a_product_has_no_photos_is_not_a_broken_promise(seeded):
+    """The prompt asks for exactly this sentence when a product has none.
+    Retrying it would push the model towards inventing a picture instead."""
+    assert not agent._promises_images("معلش، مفيش صور للمنتج ده عندنا دلوقتي")
+    assert not agent._promises_images("للأسف مفيش صور متاحة")
+
+
+def test_answering_a_customers_own_photo_is_not_a_broken_promise(seeded):
+    """The reply the media path exists to produce mentions the photo, because
+    the photo is what the customer just sent. Guarding on the word alone would
+    have retried it and then replaced it with an unrelated question."""
+    answer = "وصلتني الصورة، وأقرب حاجة عندنا ليها هي الهودي الأسود"
+    provider = ScriptedProvider([ModelReply(text=answer)])
+    reply = agent.run_turn(
+        seeded,
+        CHANNEL,
+        WHO,
+        "قراءة آلية للصورة: أقرب منتج عندنا هو WANAS HOODIE.",
+        provider=provider,
+        images=["data/inbound/whatsapp/x.jpg"],
+    )
+    assert reply.text == answer
+    assert len(provider.calls) == 1
+
+
+def test_asking_which_photos_they_want_is_not_a_broken_promise(seeded):
+    """A question leaves the customer something to answer, which is never dead
+    air -- the same line the dangling-promise fallback is built on."""
+    assert not agent._promises_images("تحب أبعتلك صور أنهي لون؟")
+
+
 def test_a_real_answer_that_mentions_a_promise_word_is_sent_untouched(seeded):
     """The guard must not eat an actual answer. This one delivers the numbers
     and only then offers to follow up."""
@@ -417,3 +498,168 @@ def test_sizing_question_sends_the_chart_image(seeded):
     )
     assert reply.attachments == ["data/size-charts/worker-jacket.png"]
     assert "مفرودة" in reply.text or "flat" in reply.text.lower()
+
+
+# --- not knowing your size ------------------------------------------------
+
+
+def _tool_results(db, name: str) -> list[dict]:
+    """Every result stored for one tool, in order, straight from the session."""
+    return [
+        result["content"]
+        for message in session_store.load(db, CHANNEL, WHO)
+        if message["role"] == "tool_results"
+        for result in message["results"]
+        if result["name"] == name
+    ]
+
+
+def test_not_knowing_your_size_gets_the_chart_not_the_fallback(seeded):
+    """The reported bug, end to end.
+
+    The bot names a product, the customer says two messages later that they do
+    not know their size, and the reply used to be the hardcoded fallback
+    asking them to state the product they had just been told about. It read as
+    amnesia; it was really the promise guard discarding a stalled reply and
+    substituting a constant. The fix is upstream of the guard: the sizing
+    question now has a tool that answers it, callable without a product_id the
+    model may no longer have.
+    """
+    provider = ScriptedProvider(
+        [
+            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            ModelReply(text="WANAS Hoodie موجود، قولي اللون"),
+            # No product_id: the customer's question never named one.
+            reply_with("get_size_chart"),
+            ModelReply(text="مقاس M عرضه 56 سم والطول 70 سم، قيسها على هدومك"),
+        ]
+    )
+    agent.run_turn(seeded, CHANNEL, WHO, "عايز أشوف الهودي", provider=provider)
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "مش عارف مقاسي، تقدر تساعدني؟", provider=provider)
+
+    assert "get_size_chart" in reply.tool_calls
+    assert reply.error is None
+    assert reply.text != agent.PROMISE_FALLBACK
+    # And the call resolved to the product under discussion rather than
+    # erroring, which is what would have sent the model back to stalling.
+    charts = _tool_results(seeded, "get_size_chart")
+    assert charts and charts[-1].get("has_chart") is True
+
+
+def test_a_size_chart_with_no_product_yet_asks_instead_of_guessing(seeded):
+    """Nothing has been looked up, so there is nothing to resolve to. A
+    distinct code, because the honest answer here is a question -- picking
+    some product would be the wrong-chart failure this tool refuses."""
+    provider = ScriptedProvider(
+        [
+            reply_with("get_size_chart"),
+            ModelReply(text="تحب أشوفلك مقاسات أنهي منتج؟"),
+        ]
+    )
+    agent.run_turn(seeded, CHANNEL, WHO, "مش عارف مقاسي", provider=provider)
+    assert _tool_results(seeded, "get_size_chart") == [{"error": "no_product_in_context"}]
+
+
+def test_a_wrong_product_id_is_refused_never_resolved(seeded):
+    """Only an *absent* id resolves. A wrong one is a different product the
+    model meant, and answering it from context would quote a neighbouring
+    garment's measurements -- confident, precise and wrong."""
+    provider = ScriptedProvider(
+        [
+            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            ModelReply(text="WANAS Hoodie موجود"),
+            reply_with("get_size_chart", {"product_id": "no-such-product"}),
+            ModelReply(text="معلش مش لاقي المنتج ده"),
+        ]
+    )
+    agent.run_turn(seeded, CHANNEL, WHO, "عايز الهودي", provider=provider)
+    agent.run_turn(seeded, CHANNEL, WHO, "المقاسات؟", provider=provider)
+    assert _tool_results(seeded, "get_size_chart")[-1]["error"] == "product_not_found"
+
+
+def test_an_implicit_chart_follows_the_product_not_the_first_one_asked(seeded):
+    """`get_size_chart` is cached on its arguments, so an implicit call has to
+    be made concrete *before* the cache sees it. Otherwise both of these are
+    the call `{}` and the second customer question is answered with the first
+    product's chart."""
+    provider = ScriptedProvider(
+        [
+            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            ModelReply(text="WANAS Hoodie"),
+            reply_with("get_size_chart"),
+            ModelReply(text="أهو الجدول"),
+            reply_with("get_variants", {"product_id": "ringer-tee"}),
+            ModelReply(text="Ringer Tee"),
+            reply_with("get_size_chart"),
+            ModelReply(text="أهو جدول التيشيرت"),
+        ]
+    )
+    for text in ("الهودي", "مقاساته؟", "طب الـ Ringer Tee", "ومقاساته؟"):
+        agent.run_turn(seeded, CHANNEL, WHO, text, provider=provider)
+
+    first, second = _tool_results(seeded, "get_size_chart")
+    assert first["chart_id"] != second["chart_id"]
+
+
+def test_the_last_resort_names_the_product_instead_of_forgetting_it(seeded):
+    """When the model will not stop stalling the fallback still ships -- but
+    asking a customer to restate a product the bot itself just named is the
+    half that read as amnesia. It asks only for what is still missing."""
+    provider = ScriptedProvider(
+        [
+            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            ModelReply(text="WANAS Hoodie موجود"),
+            ModelReply(text="ثواني هشوفلك"),
+            ModelReply(text="هقولك دلوقتي"),
+            ModelReply(text="لحظة هتأكدلك"),
+        ]
+    )
+    agent.run_turn(seeded, CHANNEL, WHO, "عايز الهودي", provider=provider)
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "مقاس L متاح؟", provider=provider)
+
+    assert reply.error == "dangling_promise"
+    assert reply.text != agent.PROMISE_FALLBACK
+    assert "WANAS Hoodie" in reply.text
+
+
+def test_the_last_resort_stays_context_free_when_nothing_was_established(seeded):
+    """A conversation that never named a product must not be told what it was
+    about. No product looked up, no product in the sentence."""
+    provider = ScriptedProvider(
+        [
+            ModelReply(text="ثواني هشوفلك"),
+            ModelReply(text="هقولك دلوقتي"),
+            ModelReply(text="لحظة هتأكدلك"),
+        ]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "ايه المتاح", provider=provider)
+    assert reply.text == agent.PROMISE_FALLBACK
+
+
+def test_the_fallback_carries_the_colour_when_one_was_picked(seeded):
+    """The colour is on the call, not in the result, so it survives the same
+    read. Nothing left to ask for but the size."""
+    history = [
+        msg.user("عايز الهودي الزيتي"),
+        msg.assistant(
+            "",
+            [{"id": "c1", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie", "color": "Olive"}}],
+        ),
+        msg.tool_results(
+            [{"id": "c1", "name": "get_variants", "content": {"product_id": "wanas-hoodie", "name": "WANAS Hoodie"}}]
+        ),
+    ]
+    assert agent.promise_fallback(history) == agent.PROMISE_FALLBACK_WITH_COLOR.format(
+        product="WANAS Hoodie", color="Olive"
+    )
+
+
+def test_a_failed_lookup_is_not_what_the_conversation_is_about(seeded):
+    """An errored tool result names a product that does not exist. Reading it
+    back to the customer would be the fallback inventing context."""
+    history = [
+        msg.user("عايز حاجة"),
+        msg.assistant("", [{"id": "c1", "name": "get_variants", "arguments": {"product_id": "ghost"}}]),
+        msg.tool_results([{"id": "c1", "name": "get_variants", "content": {"error": "product_not_found"}}]),
+    ]
+    assert agent.promise_fallback(history) == agent.PROMISE_FALLBACK

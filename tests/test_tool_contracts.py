@@ -92,7 +92,19 @@ def test_the_model_cannot_supply_the_channel_identity(ctx):
 
 def test_missing_required_argument(ctx):
     assert call(ctx, "get_variants")["error"] == "bad_arguments"
-    assert call(ctx, "get_size_chart", product_id="")["error"] == "bad_arguments"
+    # Blank counts as missing, not as a value: whitespace is not a product id.
+    assert call(ctx, "get_variants", product_id="")["error"] == "bad_arguments"
+
+
+def test_an_omitted_product_with_nothing_to_resolve_to_is_its_own_answer(ctx):
+    """`get_size_chart` no longer requires `product_id` -- it may be left out
+    to mean the product under discussion. With an empty history there is
+    nothing to resolve to, and the answer is a distinct code rather than
+    `bad_arguments`: the model has not malformed the call, the conversation
+    simply has not settled on a product, and what that needs is a question to
+    the customer."""
+    assert call(ctx, "get_size_chart")["error"] == "no_product_in_context"
+    assert call(ctx, "get_size_chart", product_id="  ")["error"] == "no_product_in_context"
 
 
 def test_wrong_type_is_rejected(ctx):
