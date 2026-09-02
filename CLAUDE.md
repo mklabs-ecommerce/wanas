@@ -198,6 +198,15 @@ integrations/            everything that talks to an external vendor over
     client.py                Instagram Graph client (chunked text, no
                             templates, image-by-public-URL)
     token.py                 60-day token refresh
+                             client.get_user_profile reads a customer's
+                             @handle: a DM's external_id is an IGSID, so a
+                             dashboard full of them is a dashboard full of
+                             numbers. Stored on ChannelIdentity.username,
+                             read once per customer (not per message, it sits
+                             in the webhook path), and None on every failure
+                             -- a wrong handle on a conversation is staff
+                             answering somebody while reading somebody
+                             else's name
   mail/client.py            SMTP over the standard library (Gmail App
                             Password), the only socket to a mail server.
                             *What* is worth an email is decided in

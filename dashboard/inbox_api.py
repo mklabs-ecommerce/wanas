@@ -34,6 +34,7 @@ from dashboard.web import (
     _open_handoffs,
     _paused_identity_keys,
     client_directory,
+    handle_directory,
 )
 from domain.db import session_scope
 from domain.models import InstagramCommentReply, SessionRow
@@ -129,6 +130,7 @@ def inbox(
         # `web.customer_labels`, the one place that answers it, so this list
         # and the thread it opens cannot disagree.
         directory = client_directory(db)
+        handles = handle_directory(db)
 
         needle = (q or "").strip().lower()
         items: list[dict] = []
@@ -136,10 +138,15 @@ def inbox(
             key = (row.channel, row.external_id)
             history = row.history or []
             client = directory.get(key)
+            handle = handles.get(key)
 
             if needle:
                 hit = (
                     needle in row.external_id.lower()
+                    # An Instagram customer is searched for by the only name
+                    # anybody knows them by. Without this the search box could
+                    # find them only by an IGSID nobody has memorised.
+                    or (handle is not None and needle.lstrip("@") in handle.lower())
                     or (client is not None and needle in (client.full_name or "").lower())
                     or (client is not None and needle in (client.phone or "").lower())
                     or _searchable(history, needle)
@@ -148,7 +155,11 @@ def inbox(
                     continue
 
             summary = _conversation_summary(
-                row, paused=key in paused_keys, handoff=handoffs.get(key), client=client
+                row,
+                paused=key in paused_keys,
+                handoff=handoffs.get(key),
+                client=client,
+                handle=handle,
             )
             summary["last_role"] = _last_role(history)
             summary["message_count"] = _message_count(history)

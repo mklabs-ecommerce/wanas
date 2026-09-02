@@ -248,8 +248,42 @@ def _accept_message(messaging: dict) -> None:
     # WhatsApp's blue ticks.
     client.mark_seen(sender_id)
     client.typing_on(sender_id)
+    _ensure_platform_profile(client, sender_id)
 
     dispatcher.submit(sender_id, pending)
+
+
+def _ensure_platform_profile(client: InstagramClient, igsid: str) -> None:
+    """Learn this customer's @handle, once, the first time they write.
+
+    An IGSID is seventeen digits that mean something to Meta and nothing to
+    the person reading the dashboard, so without this a staff member scanning
+    the inbox sees a column of numbers -- they cannot tell two conversations
+    apart, and they certainly cannot recognise somebody who wrote last week.
+
+    Guarded on the identity already having one, so this is one extra round
+    trip per *customer*, ever, not per message: it sits in the webhook path,
+    beside `mark_seen` and `typing_on`, and that path has to return fast.
+    Every failure is swallowed -- a handle is a nicety, and a customer whose
+    profile Meta will not share must still get an answer.
+    """
+    try:
+        with session_scope() as db:
+            if not identities.needs_platform_profile(db, CHANNEL, igsid):
+                return
+        profile = client.get_user_profile(igsid)
+        if not profile:
+            return
+        with session_scope() as db:
+            identities.set_platform_profile(
+                db,
+                CHANNEL,
+                igsid,
+                username=profile.get("username"),
+                name=profile.get("name"),
+            )
+    except Exception:
+        log.exception("could not record the instagram profile for %s", igsid)
 
 
 def _claim_id(mid: str) -> str:

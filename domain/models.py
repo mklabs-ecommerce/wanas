@@ -365,6 +365,17 @@ class ChannelIdentity(Base):
     # An unconfirmed phone/email match waiting for an "is this you?" answer.
     # Surfaced by get_my_profile; only link_client acts on it.
     pending_link: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    #: What the *platform* calls this person, as opposed to what an order
+    #: form does. On Instagram the `external_id` is an IGSID -- seventeen
+    #: digits that mean nothing to anybody -- so a screenful of conversations
+    #: was a screenful of numbers until this was stored. Filled from Meta's
+    #: user-profile endpoint the first time someone writes, and left null
+    #: whenever it cannot be read: a customer who has not messaged us, a
+    #: permission not yet granted, a deleted account. Never invented, and
+    #: never a substitute for `Client.full_name`, which is a real name a
+    #: person typed and outranks a handle everywhere it exists.
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    profile_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

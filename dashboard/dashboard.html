@@ -1199,6 +1199,7 @@ const EN = {
   "الإيميل": "Email",
   "الاتصال بالسيرفر اتقطع": "The connection to the server dropped",
   "الاسم": "Name",
+  "الحساب": "Handle",
   "الاسم *": "Name *",
   "الاسم مطلوب": "A name is required",
   "الاسم والتصنيف والقسم ومقاس واحد على الأقل مطلوبين": "Name, category, department and at least one size are required",
@@ -3356,6 +3357,7 @@ function renderContext(data, summary) {
     <h3>الحالة</h3>
     <div class="kv"><span class="k">القناة</span><span class="v">${esc(channelInfo(data.channel).label)}</span></div>
     ${data.customer_name ? TR`<div class="kv"><span class="k">الاسم</span><span class="v">${esc(data.customer_name)}</span></div>` : ""}
+    ${data.customer_handle ? TR`<div class="kv"><span class="k">الحساب</span><span class="v">${esc(data.customer_handle)}</span></div>` : ""}
     ${data.customer_phone && data.customer_phone !== data.external_id
       ? TR`<div class="kv"><span class="k">التليفون</span><span class="v num">${esc(data.customer_phone)}</span></div>` : ""}
     <div class="kv"><span class="k">المعرّف</span><span class="v num">${esc(data.external_id)}</span></div>

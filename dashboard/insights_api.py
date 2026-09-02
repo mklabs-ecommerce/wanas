@@ -29,7 +29,7 @@ from sqlalchemy import select
 from common.timeutil import as_aware
 from dashboard import ranges
 from dashboard.guard import require_permission
-from dashboard.web import client_directory, customer_labels
+from dashboard.web import client_directory, customer_labels, handle_directory
 from domain.db import session_scope
 from domain.models import (
     ChannelIdentity,
@@ -147,6 +147,7 @@ def insights(
         # Named the same way the inbox names them -- a table of raw ids is a
         # table nobody can act on.
         directory = client_directory(db)
+        handles = handle_directory(db)
 
         for row in rows:
             updated = as_aware(row.updated_at)
@@ -170,6 +171,7 @@ def insights(
                         directory.get((row.channel, row.external_id)),
                         row.channel,
                         row.external_id,
+                        handles.get((row.channel, row.external_id)),
                     ),
                     "channel": row.channel,
                     "external_id": row.external_id,

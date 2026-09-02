@@ -179,6 +179,27 @@ def client_directory(db) -> dict[tuple[str, str], Client]:
     return {key: clients[cid] for key, cid in links.items() if cid in clients}
 
 
+#: Stands in for a conversation that has no identity row yet, so the label
+#: helpers can ask for `.username` without a branch at every call site.
+_NO_IDENTITY = ChannelIdentity(channel="", external_id="")
+
+
+def handle_directory(db) -> dict[tuple[str, str], str]:
+    """Every conversation whose platform handle we know, keyed the same way.
+
+    Separate from `client_directory` because it answers a different question
+    and is populated by a different thing: a `Client` exists once somebody
+    has ordered or confirmed a link, while a handle is read off Meta the
+    first time a person writes. Most Instagram conversations have the second
+    and not the first, which is exactly the case this exists for.
+    """
+    return {
+        (i.channel, i.external_id): i.username
+        for i in db.scalars(select(ChannelIdentity)).all()
+        if i.username
+    }
+
+
 #: The one channel whose `external_id` can itself be a phone number. On
 #: Instagram it is an IGSID -- all digits, and `is_phone_number` says yes to
 #: it, which is the whole reason this is decided by channel rather than by
@@ -186,16 +207,26 @@ def client_directory(db) -> dict[tuple[str, str], Client]:
 PHONE_CHANNELS = ("whatsapp",)
 
 
-def customer_labels(client: Client | None, channel: str, external_id: str) -> dict:
+def customer_labels(
+    client: Client | None,
+    channel: str,
+    external_id: str,
+    handle: str | None = None,
+) -> dict:
     """What to call a conversation, decided once and server-side.
 
-    The customer's name, else their phone number, else the id the channel
-    handed us. The phone matters because `external_id` is not always one: a
-    WhatsApp customer using a username arrives as a business-scoped id
-    (`EG.1754797805572316`) and an Instagram customer as an IGSID, and a
-    screenful of those is a screenful of nothing anybody can act on. Where the
-    customer *is* known, their real number is on the client record whatever
-    the channel calls them.
+    In order: the customer's own name, then their platform handle, then their
+    phone number, then the id the channel handed us.
+
+    The handle sits above the phone and below the name on purpose.
+    `Client.full_name` is a name a person typed onto an order, so it wins
+    everywhere it exists; an Instagram @handle is what that person calls
+    themselves in public and is the only human-readable thing most Instagram
+    conversations have, since the `external_id` there is an IGSID --
+    seventeen digits, and `is_phone_number` says yes to them, which is why
+    `PHONE_CHANNELS` decides that question by channel and not by looking at
+    the string. Before this, a screenful of Instagram conversations was a
+    screenful of numbers nobody could act on.
 
     `display_name` is the one the UI titles with, so the inbox list, the open
     thread, the dashboard's attention card and the busiest-conversations table
@@ -207,16 +238,22 @@ def customer_labels(client: Client | None, channel: str, external_id: str) -> di
     phone = ((client.phone if client else "") or "").strip()
     if not phone and channel in PHONE_CHANNELS and is_phone_number(external_id):
         phone = external_id
+    at = (handle or "").strip().lstrip("@")
+    # Shown with the "@" the customer would recognise, stored without it.
+    at_label = f"@{at}" if at else ""
     return {
         "customer_name": name or None,
         "customer_phone": phone or None,
-        "display_name": name or phone or external_id,
+        "customer_handle": at_label or None,
+        "display_name": name or at_label or phone or external_id,
     }
 
 
-def _conversation_summary(row: SessionRow, *, paused: bool, handoff, client: Client | None = None) -> dict:
+def _conversation_summary(
+    row: SessionRow, *, paused: bool, handoff, client: Client | None = None, handle: str | None = None
+) -> dict:
     return {
-        **customer_labels(client, row.channel, row.external_id),
+        **customer_labels(client, row.channel, row.external_id, handle),
         "channel": row.channel,
         "external_id": row.external_id,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -364,12 +401,14 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
             rows.extend(db.scalars(select(SessionRow).where(or_(*conditions))).all())
 
         directory = client_directory(db)
+        handles = handle_directory(db)
         items = [
             _conversation_summary(
                 row,
                 paused=(row.channel, row.external_id) in paused_keys,
                 handoff=handoffs.get((row.channel, row.external_id)),
                 client=directory.get((row.channel, row.external_id)),
+                handle=handles.get((row.channel, row.external_id)),
             )
             for row in rows
         ]
@@ -401,7 +440,13 @@ def conversation_detail(
         return JSONResponse(
             {
                 **customer_labels(
-                    identities.client_for(db, channel, external_id), channel, external_id
+                    identities.client_for(db, channel, external_id),
+                    channel,
+                    external_id,
+                    # Read off the identity rather than the list this thread
+                    # was opened from, so a conversation reached by URL is
+                    # titled the same as one clicked in the inbox.
+                    (identities.get(db, channel, external_id) or _NO_IDENTITY).username,
                 ),
                 "channel": channel,
                 "external_id": external_id,

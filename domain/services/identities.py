@@ -32,6 +32,44 @@ def get(session: Session, channel: str, external_id: str) -> ChannelIdentity | N
     return session.get(ChannelIdentity, (channel, external_id))
 
 
+def set_platform_profile(
+    session: Session,
+    channel: str,
+    external_id: str,
+    *,
+    username: str | None = None,
+    name: str | None = None,
+) -> ChannelIdentity:
+    """Record what the platform calls this person.
+
+    Only ever writes something it was actually given: a blank username must
+    not erase one that was read successfully last week, because the usual
+    reason for a blank is a call that failed rather than a handle that
+    changed. Deliberately does **not** touch `Client.full_name` -- that is a
+    name a person typed on an order and a handle is not a substitute for it.
+    """
+    identity = get_or_create(session, channel, external_id)
+    handle = (username or "").strip().lstrip("@")
+    display = (name or "").strip()
+    if handle:
+        identity.username = handle[:120]
+    if display:
+        identity.profile_name = display[:200]
+    return identity
+
+
+def needs_platform_profile(session: Session, channel: str, external_id: str) -> bool:
+    """Whether it is worth spending a call on this customer's handle.
+
+    One call per person, ever -- not one per message. The endpoint is only
+    readable for someone who has messaged the account, so it is cheap and it
+    is stable, and re-asking on every inbound message would put an extra
+    round trip to Meta inside a webhook that has to return fast.
+    """
+    identity = get(session, channel, external_id)
+    return identity is None or not identity.username
+
+
 def client_for(session: Session, channel: str, external_id: str) -> Client | None:
     identity = get(session, channel, external_id)
     if identity is None or identity.client_id is None:

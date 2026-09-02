@@ -548,6 +548,55 @@ class InstagramClient:
         recipient_id = str(body.get("recipient_id") or "")
         return OutboundMessage(to=recipient_id, text=text, delivered=ok, error=error)
 
+    def get_user_profile(self, igsid: str) -> dict | None:
+        """What Instagram calls this person: `{"username", "name"}`.
+
+        The `external_id` a DM arrives under is an IGSID -- seventeen digits
+        that identify the customer to Meta and to nobody else -- so without
+        this the dashboard lists a column of numbers and staff cannot tell
+        one conversation from another, let alone recognise a returning
+        customer.
+
+        Readable only for someone who has actually messaged the account, and
+        only with the messaging permissions granted; `name` in particular is
+        often absent even when `username` is there. None for every failure --
+        not configured, not permitted, the account deleted, the call refused
+        -- because a missing handle falls back to the id, and a *wrong* handle
+        on a conversation is worse than no handle at all.
+        """
+        if not self._configured:
+            return None
+        url = f"{GRAPH}/{self.api_version}/{igsid}"
+        try:
+            response = httpx.get(
+                url,
+                params={"fields": "username,name"},
+                headers=self._headers,
+                timeout=self.timeout,
+            )
+        except httpx.HTTPError as exc:
+            log.warning("could not fetch the instagram profile for %s: %s", igsid, exc)
+            return None
+        if response.status_code >= 400:
+            log.info(
+                "instagram profile %s not readable (%s): %s",
+                igsid,
+                response.status_code,
+                response.text[:200],
+            )
+            return None
+        try:
+            payload = response.json()
+        except ValueError:
+            return None
+        if not isinstance(payload, dict):
+            return None
+        username = str(payload.get("username") or "").strip()
+        name = str(payload.get("name") or "").strip()
+        if not username and not name:
+            return None
+        return {"username": username, "name": name}
+
     def get_media(self, media_id: str) -> dict | None:
         """A post/reel's own caption, fetched fresh, right when it is needed.
 
