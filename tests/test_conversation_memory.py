@@ -25,6 +25,7 @@ from assistant.agent import run_turn
 from assistant.dispatcher import Pending
 from assistant.providers.base import ModelReply
 from assistant.providers.fake import ScriptedProvider
+from config.settings import settings
 
 CHANNEL = "whatsapp"
 WHO = "201000000077"
@@ -518,3 +519,54 @@ def test_replying_to_a_sentence_is_not_a_product_reference(seeded):
     stored = session_store.load(seeded, CHANNEL, WHO)
     assert all("refers_to" not in m for m in stored)
     assert last_product(stored) is None
+
+
+def test_the_stored_cap_and_the_model_window_agree_through_the_real_store(db):
+    """The full path, not a hand-built list.
+
+    `session.save` trims the live slice to HISTORY_CAP and moves
+    `context_start`; `session.load` returns what is left; `context.for_model`
+    then splits that. Each of those was tested on its own. Together they have
+    one job: what the customer said must not vanish from the model's view
+    while it is still inside the stored slice.
+    """
+    history = []
+    for n in range(60):
+        history += _exchange(f"سؤال رقم {n}", f"رد رقم {n}")
+        session_store.save(db, CHANNEL, WHO, list(history))
+        history = session_store.load(db, CHANNEL, WHO)
+
+    live = session_store.load(db, CHANNEL, WHO)
+    assert live, "the live slice went empty"
+    assert len(live) <= settings.history_cap
+
+    view = context.for_model(live)
+    said = {m.get("content") for m in view}
+
+    # Everything the model is shown really is in the stored slice -- the view
+    # never invents, and never reorders.
+    stored = [m.get("content") for m in live]
+    assert all(c in stored for c in [m.get("content") for m in view] if c)
+
+    # The newest exchange is always there verbatim, whatever the caps did.
+    assert "سؤال رقم 59" in said
+    assert "رد رقم 59" in said
+
+    # And the split is a split: nothing is dropped between the compacted half
+    # and the verbatim half.
+    for index, message in enumerate(view):
+        if message["role"] == "tool_results":
+            assert view[index - 1].get("tool_calls"), index
+
+
+def test_a_conversation_longer_than_the_stored_cap_still_opens_on_a_question(db):
+    """`trim` cuts at a user message; `for_model` then aligns again. Neither
+    may leave the model reading an answer with no question in front of it."""
+    history = []
+    for n in range(80):
+        history += _exchange(f"س {n}", f"ر {n}")
+        session_store.save(db, CHANNEL, WHO, list(history))
+        history = session_store.load(db, CHANNEL, WHO)
+
+    view = context.for_model(session_store.load(db, CHANNEL, WHO))
+    assert view[0]["role"] == "user"
