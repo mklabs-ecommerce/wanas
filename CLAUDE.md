@@ -97,7 +97,6 @@ domain/                  persistence + business rules; no vendor HTTP calls,
   db.py                    SQLAlchemy engine/session
   models.py                ORM models (Client, Product, Variant, Order, ...,
                             Staff, StaffQueueItem, ShippingRate)
-  legal.py                 privacy-policy text and vendor table
   seed/                    seed importers (products, governorates)
   services/                Order/Inventory/Notification/Catalog/Auth/Queue
                             services, search_terms.py (Arabic + franco
@@ -210,11 +209,28 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                                delivery time, payment) as a lookup, never a
                                model call -- the public surface must never
                                display a sentence a model chose
+  comment_replies.py          the *other* public comment wording, and a
+                               different job from comment_faq: one bank of
+                               interchangeable lines per comment category,
+                               picked deterministically from the comment id so
+                               the same comment always gets the same reply and
+                               a post does not fill up with one repeated
+                               sentence. comment_faq answers a question that
+                               has one correct answer; this one acknowledges a
+                               comment that has none. Both are lookups --
+                               neither ever calls a model
   harness/                    local dev-only chat UI (web + terminal), unauthenticated
                               by design and OFF unless HARNESS_ENABLED=1
-api/
+api/                     the public, unauthenticated HTTP surface -- the
+                          routes that answer someone with no cookie, no
+                          session and no signature
   public_media.py           GET /public/media/{token}/... -- HMAC-gated public
                             URL for catalog files Meta must fetch itself
+  legal.py                  GET /privacy -- the privacy-policy page Meta
+                            requires, plus the vendor table. It lives here and
+                            not in domain/ because it is a route: domain/ holds
+                            no FastAPI routes, and this module was the one
+                            exception that made the rule unenforceable
 dashboard/                 staff dashboard, its own top-level package:
                             conversations, Shopify (products/
                             orders/customers), statistics, the review queue,
@@ -290,10 +306,11 @@ scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
                           that ever sold; refuses an empty or mostly-empty
                           live read),
                           migrate_schema.py (add every column the models
-                          declare and the database lacks — the general form),
-                          migrate_add_shopify_order_columns.py (the earlier
-                          one-time, SQLite-only version) — all dry-run by
-                          default, idempotent, need --apply
+                          declare and the database lacks — the general form,
+                          and the only one: the two earlier single-column,
+                          SQLite-only scripts did a strict subset of its job
+                          and were deleted) — all dry-run by default,
+                          idempotent, need --apply
 theme/                   Liquid the Shopify theme uses, kept in the repo but
                           pasted in by hand: size-chart.liquid renders the
                           bilingual size guide from the metafields
@@ -540,8 +557,20 @@ tracking message ever fires — is in `docs/OPERATIONS.md`.
   by anyone other than a developer — it is unauthenticated by design, and it
   now ships off precisely so that forgetting a variable is not what exposes it.
 - Never accept a webhook without verifying its signature. Meta signs with hex
-  HMAC-SHA256, Shopify with base64; with no secret configured the Shopify
-  endpoint refuses everything, and that is the correct behaviour.
+  HMAC-SHA256, Shopify with base64; with no secret configured **every** one of
+  the three endpoints refuses everything, and that is the correct behaviour.
+  The Meta pair used to be the exception: they gated on
+  `whatsapp_configured` / `instagram_configured` (the *sending* credentials)
+  and then verified only `if app_secret`, so a deployment with a token and no
+  `*_APP_SECRET` served an unauthenticated public endpoint — any POST became a
+  customer message, and a customer message can place a real cash-on-delivery
+  order. Inbound is now gated on `whatsapp_webhooks_configured` /
+  `instagram_webhooks_configured`, which include the app secret.
+  **Never write `if secret and not verify_signature(...)`** — that reads as a
+  convenience for local development and is in fact the check turning itself
+  off. `*_configured` (outbound) and `*_webhooks_configured` (inbound) are
+  deliberately different questions; do not merge them, and do not gate inbound
+  on the weaker one.
 - Never expose `DASHBOARD_SESSION_SECRET`, and never weaken
   `dashboard/web.py`'s login so it signs a session without one —
   same shape as the Shopify webhook rule above: no secret means refuse, not

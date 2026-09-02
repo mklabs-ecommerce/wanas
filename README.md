@@ -37,6 +37,7 @@ Business rules (variant/pricing maths, shipping, sizing) are in
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it fits together and the five decisions behind it |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Deploying, webhooks, tuning, reading the logs |
 | [docs/MEDIA.md](docs/MEDIA.md) | Voice notes and photos |
+| [docs/FEATURES.md](docs/FEATURES.md) | What the bot does today, and what is deliberately not built |
 | [CHANGELOG.md](CHANGELOG.md) | What changed and why |
 
 ## Quick start

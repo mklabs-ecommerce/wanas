@@ -1,7 +1,7 @@
 # Exchange, Refund & Cancellation Policy
 
-The shop's own wording, kept here because `FEATURES.md` §1.9 describes what the
-bot is allowed to say about it and had nothing in the repo to point at. This
+The shop's own wording, kept here because `docs/FEATURES.md` §1.9 describes what
+the bot is allowed to say about it and had nothing in the repo to point at. This
 file is the source of truth for the terms; nothing loads it at runtime.
 
 ## Refunds & Returns

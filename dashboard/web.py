@@ -480,8 +480,8 @@ def reply(
         #
         # This flipped back and forth once, so both halves are written down.
         # Auto-releasing on reply was meant to stop a forgotten pause from
-        # silencing a number forever (the WhatsApp silence investigation in
-        # OPENCODE_PROGRESS.md). What it actually produced is worse and much
+        # silencing a number forever (the WhatsApp silence investigation).
+        # What it actually produced is worse and much
         # harder to see: a staff member types an answer, the bot is live again
         # the instant they hit send, and the customer's next message -- the
         # reply to the sentence a *person* just wrote -- is answered by the

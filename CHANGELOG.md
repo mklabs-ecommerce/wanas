@@ -1011,8 +1011,8 @@ assistant" rule. Replaced with a registration callback (the same shape
 `notifications.py` already used for outbound senders) instead of just
 relocating the violation under a new name.
 
-Full test suite and `ruff check .` verified clean after every step; see
-`OPENCODE_PROGRESS.md` for the complete file-by-file move log.
+Full test suite and `ruff check .` verified clean after every step; the
+file-by-file move log lives in the git history of this change.
 
 ## 1.1.0 — Instagram, a second first-class channel
 
