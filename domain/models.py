@@ -753,6 +753,33 @@ class InstagramCommentReply(Base):
     #: and costs no model call, so it must not spend the budget that exists
     #: to stop a flood of DMs.
     faq_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+    #: What was actually said, and what was actually said back. None of this
+    #: existed while the row was purely an idempotency latch, which meant the
+    #: only record of a public comment was an alert summary truncated to 200
+    #: characters -- and only for the two categories that raise one. A
+    #: compliment, a size question, an FAQ answer left no trace at all, so
+    #: nobody could see what the shop had published under its own posts.
+    #:
+    #: Stored, not fetched on demand: a comment can be edited or deleted on
+    #: Instagram, and the reply bank picks its line per comment id, so going
+    #: back to Meta would answer "what is there now", never "what did we
+    #: say". Both are written *after* delivery, so a line here is a line that
+    #: went out.
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    commenter_username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    public_reply_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    private_reply_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    #: The classifier's own answer (one of `COMMENT_CATEGORIES`), and the
+    #: coarse grouping the dashboard files it under. Both, because they
+    #: answer different questions: `category` is why a particular reply was
+    #: chosen, `sentiment` is how a person scanning a list decides what to
+    #: read first. Null on a row written before this shipped, and on an FAQ
+    #: answer -- which is classified by lookup and never sees the model.
+    category: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    sentiment: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 

@@ -1554,7 +1554,7 @@ const EN = {
   "كل المخزون": "All inventory",
   "كل المنتجات": "All products",
   "كل تحويل هو سؤال البوت مقدرش عليه": "Each handoff is a question the bot could not answer",
-  "كل تعليق بياخد رسالة خاصة واحدة بس، مرة واحدة للأبد — القيد ده متسجّل في قاعدة البيانات قبل ما الرسالة تتبعت،\n        عشان أي كراش ما يسمحش برسالة تانية. التعليق اللي مالوش أي رد اتشاف واتقرر إن الرد عليه مش مناسب.": "Each comment gets exactly one private message, once and for all — that limit is written to the database before the message is sent,\n        so no crash can permit a second one. A comment with no reply at all was seen and judged not worth answering.",
+  "كل تعليق بياخد رسالة خاصة واحدة بس، مرة واحدة للأبد — القيد ده متسجّل في قاعدة البيانات قبل ما الرسالة تتبعت،\n        عشان أي كراش ما يسمحش برسالة تانية. التعليق اللي مالوش أي رد اتشاف واتقرر إن الرد عليه مش مناسب.\n        الردود كلها من نصوص ثابتة، مفيش موديل بيكتب حاجة على الملأ.": "Each comment gets exactly one private message, once and for all — that limit is written to the database before the message is sent,\n        so no crash can permit a second one. A comment with no reply at all was seen and judged not worth answering.\n        Every reply comes from fixed text — no model writes anything in public.",
   "كل حاجة تمام": "Everything is fine",
   "كل سطر بيبقى SKU لوحده في شوبيفاي. المقاس مطلوب واللون اختياري. الصورة بتتربط باللون بتاع السطر، وأول صورة للون هي صورته.": "Each row becomes its own SKU in Shopify. Size is required, colour is optional. A photo belongs to its row's colour, and the first photo for a colour is that colour's photo.",
   "كل مقاس ولون، الأقل أولاً": "Every size and colour, lowest first",
@@ -1632,7 +1632,28 @@ const EN = {
   "مفيش بيانات": "No data",
   "مفيش بيانات للتصدير": "Nothing to export",
   "مفيش تحويلات في الفترة دي": "No handoffs in this period",
-  "مفيش تعليقات متسجلة": "No comments recorded",
+  "مفيش تعليقات هنا": "No comments here",
+  "إيجابي": "Positive",
+  "سلبي": "Negative",
+  "سؤال": "Question",
+  "غير مصنّف": "Unclassified",
+  "بدون رد": "No reply",
+  "النوع": "Type",
+  "البوست": "Post",
+  "مفيش": "None",
+  "دور في التعليقات والردود": "Search comments and replies",
+  "التعليق مش متسجل": "(comment not recorded)",
+  "التعليق مش متسجل — تعليق قديم": "(comment not recorded — an older comment)",
+  "اتبعت، بس النص مش متسجل — تعليق قديم": "(sent, but the wording was not recorded — an older comment)",
+  "سعر": "Price",
+  "توفر": "Availability",
+  "لون/نوع": "Colour / variant",
+  "استفسار عن منتج": "Product question",
+  "حالة طلب": "Order status",
+  "مدح": "Compliment",
+  "منشن صاحب": "Tagged a friend",
+  "سبام": "Spam",
+  "سؤال متكرر": "FAQ",
   "مفيش حاجة مستنية منك دلوقتي": "Nothing is waiting on you right now",
   "مفيش صلاحيات لسه": "No permissions yet",
   "مفيش طلب تبديل ولا تنبيه مستني مراجعة": "No swap request or alert awaiting review",
@@ -1778,6 +1799,13 @@ function el(tag, attrs = {}, ...kids) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
 ));
+
+/* One line of a longer text, for a table cell. Collapses whitespace first, so
+   a comment written across five lines does not become a five-line-tall row. */
+const clip = (s, max = 90) => {
+  const flat = String(s ?? "").split(/\s+/).join(" ").trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max)}…`;
+};
 
 /* Icons are inline SVG, one family, one stroke width — never emoji, which
    render differently per platform and cannot be themed. */
@@ -5122,8 +5150,37 @@ async function openLocalCustomer(clientId) {
    view: تعليقات انستجرام / comments
    ========================================================================== */
 
+/* The four buckets the server files a comment under (`COMMENT_SENTIMENT` in
+   assistant/providers/base.py), plus the one cut that is not a sentiment at
+   all: "answered with nothing". That last tab is the one worth opening --
+   everything in it was seen, classified, and then met with silence. */
+const COMMENT_TABS = [
+  { id: "all",        label: tr("الكل"),      tone: "sky" },
+  { id: "negative",   label: tr("سلبي"),      tone: "rose" },
+  { id: "question",   label: tr("سؤال"),      tone: "sky" },
+  { id: "positive",   label: tr("إيجابي"),    tone: "teal" },
+  { id: "other",      label: tr("غير مصنّف"), tone: "clay" },
+  { id: "unanswered", label: tr("بدون رد"),   tone: "amber" },
+];
+
+/* The fine category, for the detail panel. The list sorts by sentiment; this
+   is what says *why* a particular reply was chosen. `faq` is not one of the
+   classifier's answers -- it is what an FAQ match records instead, since that
+   path never calls the model. */
+const COMMENT_CATEGORY_LABELS = {
+  price: tr("سعر"), availability: tr("توفر"), size: tr("مقاس"), variant: tr("لون/نوع"),
+  product_info: tr("استفسار عن منتج"), order_status: tr("حالة طلب"), complaint: tr("شكوى"),
+  positive: tr("مدح"), negative: tr("تعليق سلبي"), tag_friend: tr("منشن صاحب"),
+  spam: tr("سبام"), other: tr("غير محدد"), faq: tr("سؤال متكرر"),
+};
+
+const COMMENT_SENTIMENT_TONES = { negative: "rose", question: "sky", positive: "teal", other: "clay" };
+
 VIEWS.comments = {
   data: null,
+  tab: "all",
+  q: "",
+
   async mount(force) {
     $("#pageActions").append(
       el("button", { class: "btn sm", type: "button", html: TR`${icon("refresh", 15)} تحديث`, onclick: () => this.load() }),
@@ -5134,18 +5191,33 @@ VIEWS.comments = {
 
   async load() {
     $("#commentsBody").innerHTML = skeletonTiles(3) + skeletonTable(6);
-    const data = await api("/dashboard/api/inbox/comments?days=30", { quiet: true });
+    // Filtering server-side rather than in the browser, so the counts on the
+    // tabs and the rows under them are decided in one place -- and so a shop
+    // with a year of comments is not asked to ship all of them to render
+    // twenty.
+    const params = new URLSearchParams({ days: "30" });
+    if (this.tab !== "all") params.set("sentiment", this.tab);
+    if (this.q.trim()) params.set("q", this.q.trim());
+    const data = await api(`/dashboard/api/inbox/comments?${params}`, { quiet: true });
     if (data.__error) { $("#commentsBody").innerHTML = errorBanner(data.__error, tr("التعليقات")); return; }
     this.data = data;
     this.render();
   },
 
   render() {
-    const { comments, public_replies: pub, private_replies: priv } = this.data;
+    const { comments, counts, public_replies: pub, private_replies: priv } = this.data;
+    const totals = counts || {};
+
     const rowsHTML = comments.map((c) => `
-      <tr>
-        <td class="num cellsub" dir="ltr">${esc(c.comment_id)}</td>
-        <td class="num cellsub" dir="ltr">${esc(c.commenter_igsid || "—")}</td>
+      <tr data-clickable data-comment="${esc(c.comment_id)}" tabindex="0" role="button">
+        <td>
+          <div class="cellmain">${esc(clip(c.text || tr("(التعليق مش متسجل)"), 90))}</div>
+          <div class="cellsub num" dir="ltr">${esc(c.commenter_handle || c.commenter_igsid || "—")}</div>
+        </td>
+        <td>${chipHTML(
+            COMMENT_TABS.find((t) => t.id === c.sentiment)?.label || tr("غير مصنّف"),
+            COMMENT_SENTIMENT_TONES[c.sentiment] || "clay", "dot")}</td>
+        <td class="cellsub">${esc(COMMENT_CATEGORY_LABELS[c.category] || tr("—"))}</td>
         <td>${c.public_replied ? chipHTML(tr("رد عام"), "teal", "dot") : chipHTML(tr("بدون رد عام"), "sky", "bar")}</td>
         <td>${c.private_replied ? chipHTML(tr("رسالة خاصة"), "lilac", "dot") : chipHTML(tr("بدون خاصة"), "sky", "bar")}</td>
         <td class="cellsub">${esc(dateTime(c.created_at))}</td>
@@ -5154,21 +5226,89 @@ VIEWS.comments = {
     $("#commentsBody").innerHTML = TR`
       <div class="banner" data-tone="info">${icon("alert", 15)}
         <div>كل تعليق بياخد رسالة خاصة واحدة بس، مرة واحدة للأبد — القيد ده متسجّل في قاعدة البيانات قبل ما الرسالة تتبعت،
-        عشان أي كراش ما يسمحش برسالة تانية. التعليق اللي مالوش أي رد اتشاف واتقرر إن الرد عليه مش مناسب.</div></div>
+        عشان أي كراش ما يسمحش برسالة تانية. التعليق اللي مالوش أي رد اتشاف واتقرر إن الرد عليه مش مناسب.
+        الردود كلها من نصوص ثابتة، مفيش موديل بيكتب حاجة على الملأ.</div></div>
       <div class="grid g-kpi">
-        ${[[tr("تعليقات آخر ٣٠ يوم"), num(comments.length), "lilac", "comment"],
+        ${[[tr("تعليقات آخر ٣٠ يوم"), num(totals.all || 0), "lilac", "comment"],
+           [tr("سلبي"), num(totals.negative || 0), "rose", "alert"],
            [tr("ردود عامة"), num(pub), "teal", "check"],
            [tr("رسايل خاصة"), num(priv), "clay", "inbox"]]
           .map(([l, v, t, ic]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
             <div class="kpi-label">${icon(ic, 14)}${esc(l)}</div><div class="kpi-value">${esc(v)}</div></div>`).join("")}
       </div>
+      <div class="row" style="flex-wrap:wrap">
+        <div class="row" id="cmTabs" style="flex-wrap:wrap">
+          ${COMMENT_TABS.map((t) => `<button class="fchip" type="button" data-cmtab="${t.id}"
+            aria-pressed="${t.id === this.tab}">${esc(t.label)}<span class="n">${
+              esc(num(totals[t.id] || 0))}</span></button>`).join("")}
+        </div>
+        <input class="inp" id="cmSearch" type="search" style="max-width:260px"
+          placeholder="${tr("دور في التعليقات والردود")}" value="${esc(this.q)}">
+      </div>
       ${card(tr("سجل التعليقات"), "", comments.length
-        ? tableHTML([tr("التعليق"), tr("الحساب"), tr("الرد العام"), tr("الرسالة الخاصة"), tr("الوقت")], rowsHTML, { minWidth: 700 })
+        ? tableHTML([tr("التعليق"), tr("التصنيف"), tr("النوع"), tr("الرد العام"), tr("الرسالة الخاصة"), tr("الوقت")],
+                    rowsHTML, { minWidth: 820 })
         : "", "", { flush: true })}`;
+
     if (!comments.length) {
       $("#commentsBody .card:last-child .card-body").append(
-        emptyState(tr("مفيش تعليقات متسجلة"), tr("لو ميزة التعليقات مقفولة، ده الوضع الطبيعي"), "comment"));
+        emptyState(tr("مفيش تعليقات هنا"), tr("لو ميزة التعليقات مقفولة، ده الوضع الطبيعي"), "comment"));
     }
+
+    $$("#cmTabs .fchip").forEach((b) => b.addEventListener("click", () => {
+      this.tab = b.dataset.cmtab;
+      this.load();
+    }));
+    const search = $("#cmSearch");
+    if (search) {
+      search.addEventListener("change", () => { this.q = search.value; this.load(); });
+      search.addEventListener("keydown", (e) => { if (e.key === "Enter") { this.q = search.value; this.load(); } });
+    }
+    // Opened from the row that is already loaded rather than re-fetched: the
+    // list payload carries everything the panel shows, so the two can never
+    // disagree about what was said.
+    $$("#commentsBody tr[data-comment]").forEach((row) => {
+      const open = () => this.openComment(comments.find((c) => c.comment_id === row.dataset.comment));
+      row.addEventListener("click", open);
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
+  },
+
+  openComment(c) {
+    if (!c) return;
+    const quote = (label, body, tone) => TR`
+      <div class="kv" style="display:block">
+        <div class="k" style="margin-bottom:6px">${label}</div>
+        <div class="v" style="white-space:pre-wrap;line-height:1.7;border-inline-start:3px solid ${toneVar(tone)};
+             padding-inline-start:10px">${esc(body)}</div>
+      </div>`;
+    // "Not sent" and "sent, but we have no record of the wording" are
+    // different facts and are shown as different lines: the second is only
+    // ever a row written before the reply text was stored, and calling it
+    // "no reply" would be a lie about a live post.
+    const replyBlock = (sent, text, label, tone) =>
+      sent
+        ? quote(label, text || tr("(اتبعت، بس النص مش متسجل — تعليق قديم)"), tone)
+        : TR`<div class="kv"><span class="k">${label}</span><span class="v">${tr("مفيش")}</span></div>`;
+
+    overlay.drawer(tr("تعليق انستجرام"), TR`
+      <div class="stack">
+        ${quote(tr("التعليق"), c.text || tr("(التعليق مش متسجل — تعليق قديم)"), COMMENT_SENTIMENT_TONES[c.sentiment] || "clay")}
+        <div class="row" style="flex-wrap:wrap">
+          ${chipHTML(COMMENT_TABS.find((t) => t.id === c.sentiment)?.label || tr("غير مصنّف"),
+                     COMMENT_SENTIMENT_TONES[c.sentiment] || "clay", "dot")}
+          ${c.category ? chipHTML(COMMENT_CATEGORY_LABELS[c.category] || c.category, "sky") : ""}
+          ${c.unanswered ? chipHTML(tr("بدون رد"), "amber", "bar") : ""}
+        </div>
+        ${replyBlock(c.public_replied, c.public_reply, tr("الرد العام"), "teal")}
+        ${replyBlock(c.private_replied, c.private_reply, tr("الرسالة الخاصة"), "lilac")}
+        <div class="kv"><span class="k">${tr("الحساب")}</span>
+          <span class="v num" dir="ltr">${esc(c.commenter_handle || c.commenter_igsid || "—")}</span></div>
+        <div class="kv"><span class="k">${tr("البوست")}</span>
+          <span class="v num" dir="ltr">${esc(c.media_id || "—")}</span></div>
+        <div class="kv"><span class="k">${tr("الوقت")}</span>
+          <span class="v">${esc(dateTime(c.created_at))}</span></div>
+      </div>`);
   },
 };
 

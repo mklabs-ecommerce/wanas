@@ -1162,3 +1162,115 @@ def test_no_public_line_ever_promises_a_price_it_does_not_send():
             line = comment_replies.public_reply(category, f"c-{i}")
             assert "بعتلك السعر" not in line
             assert "بعتلك كل التفاصيل" not in line
+
+
+# --------------------------------------------------------------------------
+# What the ledger row remembers, for the dashboard to show
+# --------------------------------------------------------------------------
+#
+# The row was an idempotency latch and nothing more, so the only record of a
+# public comment was an alert summary clipped to 200 characters -- and only
+# for the categories that raise one. What the shop had actually published
+# under its own posts was written down nowhere.
+
+
+def test_the_row_records_the_comment_its_class_and_both_replies(
+    client, comments_on, fake_graph, monkeypatch
+):
+    _push_classification(monkeypatch, "price")
+    assert post_comment(client, comment_body("بكام الهودي ده؟")).status_code == 200
+
+    with session_scope() as session:
+        row = session.get(InstagramCommentReply, COMMENT_ID)
+        assert row.text == "بكام الهودي ده؟"
+        assert row.category == "price"
+        # The coarse bucket the dashboard sorts by, stored beside the fine
+        # category rather than derived at read time -- so a later change to
+        # the grouping cannot silently re-file comments already answered.
+        assert row.sentiment == "question"
+        assert row.public_reply_text == comment_replies.public_reply("price", COMMENT_ID)
+        assert row.private_reply_text
+        assert row.private_replied is True
+
+
+def test_a_negative_comment_records_the_line_that_went_out(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """The category where the public line is the *end* of what the shop says
+    -- no DM opens behind it -- so the recorded wording is the whole record."""
+    _push_classification(monkeypatch, "negative")
+    assert post_comment(client, comment_body("الخدمة وحشة قوي")).status_code == 200
+
+    with session_scope() as session:
+        row = session.get(InstagramCommentReply, COMMENT_ID)
+        assert row.sentiment == "negative"
+        assert row.public_reply_text == comment_replies.public_reply("negative", COMMENT_ID)
+        assert row.private_reply_text is None
+
+
+def test_an_faq_answer_is_recorded_as_a_question_not_as_unclassified(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """The FAQ path never reaches the classifier -- it is a lookup, which is
+    the saving. Leaving its category null would file every FAQ answer under
+    "unclassified" on a screen built to sort by category."""
+    assert post_comment(client, comment_body("بتشحنوا لأسوان؟ وبكام الشحن؟")).status_code == 200
+
+    with session_scope() as session:
+        row = session.get(InstagramCommentReply, COMMENT_ID)
+        assert row.faq_key
+        assert row.category == "faq"
+        assert row.sentiment == "question"
+        assert row.public_reply_text
+
+
+def test_a_classified_comment_is_recorded_even_when_nothing_is_sent(
+    client, comments_on, fake_graph, monkeypatch
+):
+    """Written before the routing, not after.
+
+    A comment that is classified and then answered with nothing is exactly
+    the one worth finding on that screen; showing it as unclassified would
+    hide it in the bucket nobody opens.
+    """
+    monkeypatch.setattr(
+        adapter,
+        "settings",
+        dataclasses.replace(comments_on, instagram_public_reply_enabled=False),
+    )
+    _push_classification(monkeypatch, "positive")
+    assert post_comment(client, comment_body("حلو جداً 🖤")).status_code == 200
+
+    assert public_replies(fake_graph) == []
+    with session_scope() as session:
+        row = session.get(InstagramCommentReply, COMMENT_ID)
+        assert row.category == "positive"
+        assert row.sentiment == "positive"
+        assert row.public_reply_text is None
+        assert row.public_replied is False
+
+
+def test_every_category_files_under_a_sentiment(client):
+    """The dashboard's four tabs have to cover the twelve categories, or a
+    comment lands in a bucket with no tab and is invisible on the screen
+    built to show it."""
+    from assistant.providers.base import COMMENT_CATEGORIES, COMMENT_SENTIMENTS, comment_sentiment
+
+    for category in COMMENT_CATEGORIES:
+        assert comment_sentiment(category) in COMMENT_SENTIMENTS, category
+
+
+def test_a_complaint_is_filed_as_negative_not_as_a_question(client):
+    """It opens a DM like a question does, but it is a paying customer with a
+    problem said in public -- the thing to read before anything else."""
+    from assistant.providers.base import comment_sentiment
+
+    assert comment_sentiment("complaint") == "negative"
+    assert comment_sentiment("order_status") == "question"
+
+
+def test_an_unknown_category_falls_into_other_rather_than_vanishing(client):
+    from assistant.providers.base import comment_sentiment
+
+    assert comment_sentiment("a_category_nobody_has_written_yet") == "other"
+    assert comment_sentiment(None) == "other"

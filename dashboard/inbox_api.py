@@ -17,6 +17,13 @@ Comments are a separate stream on purpose. A comment is not a conversation:
 private reply is sent (see its model docstring -- that ordering is what makes
 "one private reply per comment, ever" survive a crash), so what it can show
 is which comments were seen and how they were answered, never a thread.
+
+What it *can* show now is the whole of that: the comment's own words, the
+classifier's category, the coarse sentiment it files under, and the exact
+lines that went out in public and in the DM. Before those columns existed the
+screen listed comment ids and two ticks -- a person could see that something
+had been answered, but not what was said or what it was about, which on a
+public surface is the only question that matters.
 """
 
 from __future__ import annotations
@@ -27,6 +34,7 @@ from fastapi import APIRouter, Cookie, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from assistant.providers.base import COMMENT_SENTIMENTS
 from common.timeutil import as_aware
 from dashboard.guard import require_permission
 from dashboard.web import (
@@ -204,11 +212,51 @@ def inbox(
     )
 
 
+def _comment_payload(row: InstagramCommentReply) -> dict:
+    """One comment and everything the shop did about it.
+
+    The same shape for the list and for the detail panel, deliberately: the
+    list already carries what the panel shows, so opening a comment is
+    instant and the panel can never disagree with the row that was clicked.
+    """
+    return {
+        "comment_id": row.comment_id,
+        "media_id": row.media_id,
+        "commenter_igsid": row.commenter_igsid,
+        # The @handle only when this commenter has *also* DMed the shop.
+        # Meta's profile endpoint answers for people who have messaged the
+        # account and a commenter usually has not, so this is a bonus where
+        # it exists -- never a call made per comment.
+        "commenter_handle": f"@{row.commenter_username}" if row.commenter_username else None,
+        "text": row.text,
+        # `category` is the classifier's own answer, and says *why* a
+        # particular reply was chosen; `sentiment` is the coarse bucket a
+        # person sorts the list by. Rows written before these columns existed
+        # have neither, and read as unclassified rather than being guessed at.
+        "category": row.category,
+        "sentiment": row.sentiment or "other",
+        "faq_key": row.faq_key,
+        "public_reply": row.public_reply_text,
+        "private_reply": row.private_reply_text,
+        "public_replied": row.public_replied,
+        "private_replied": row.private_replied,
+        # The one worth finding: seen, classified, and answered with nothing.
+        # Either the DM budget was spent, a send failed, or the category has
+        # no customer-visible action at all (`spam`). Computed here so the
+        # filter and the badge cannot drift apart.
+        "unanswered": not (row.public_replied or row.private_replied),
+        "created_at": (as_aware(row.created_at).isoformat() if row.created_at else None),
+    }
+
+
 @router.get("/comments")
 def comments(
-    days: int = Query(default=30, ge=1, le=365), wanas_staff: str | None = Cookie(default=None)
+    days: int = Query(default=30, ge=1, le=365),
+    sentiment: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    wanas_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
-    """The Instagram comment ledger: what was handled, and how.
+    """The Instagram comment ledger: what was said, and what was said back.
 
     `public_replied` and `private_replied` are both False for a comment that
     was seen and deliberately not engaged with -- a negative comment raises a
@@ -228,21 +276,35 @@ def comments(
             .limit(MAX_RESULTS)
         ).all()
 
+        items = [_comment_payload(row) for row in rows]
+
+    # Counted over the whole window before either filter narrows it, so the
+    # tab badges keep describing the window while one tab is open. Counting
+    # afterwards would make every tab but the open one read zero.
+    counts = {"all": len(items), "unanswered": sum(1 for i in items if i["unanswered"])}
+    for name in COMMENT_SENTIMENTS:
+        counts[name] = sum(1 for i in items if i["sentiment"] == name)
+
+    needle = (q or "").strip().lower()
+    if needle:
         items = [
-            {
-                "comment_id": row.comment_id,
-                "media_id": row.media_id,
-                "commenter_igsid": row.commenter_igsid,
-                "public_replied": row.public_replied,
-                "private_replied": row.private_replied,
-                "created_at": (as_aware(row.created_at).isoformat() if row.created_at else None),
-            }
-            for row in rows
+            i
+            for i in items
+            if needle in (i["text"] or "").lower()
+            or needle in (i["commenter_handle"] or "").lower()
+            or needle in (i["commenter_igsid"] or "").lower()
+            or needle in (i["public_reply"] or "").lower()
+            or needle in (i["private_reply"] or "").lower()
         ]
+    if sentiment == "unanswered":
+        items = [i for i in items if i["unanswered"]]
+    elif sentiment in COMMENT_SENTIMENTS:
+        items = [i for i in items if i["sentiment"] == sentiment]
 
     return JSONResponse(
         {
             "comments": items,
+            "counts": counts,
             "range_days": days,
             "public_replies": sum(1 for i in items if i["public_replied"]),
             "private_replies": sum(1 for i in items if i["private_replied"]),

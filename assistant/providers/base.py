@@ -214,6 +214,45 @@ COMMENT_CATEGORIES = (
 #: becoming a no-op.
 LEGACY_COMMENT_CATEGORIES = {"important": "other", "neither": "other"}
 
+#: The twelve categories above, grouped into the four buckets a person
+#: scanning a list actually sorts by. The fine category is why a particular
+#: reply was chosen; this is how someone decides what to read first, and the
+#: dashboard files comments under it.
+#:
+#: `complaint` sits with `negative` rather than with the questions even though
+#: it opens a DM like one: a paying customer with a problem, said in public,
+#: is the thing to read before anything else on the list. `tag_friend` sits
+#: with `positive` because that is what it is -- somebody bringing a friend to
+#: the post. `spam` and `other` are neither, and lumping them into any of the
+#: three would quietly inflate whichever one they landed in.
+COMMENT_SENTIMENTS = ("question", "positive", "negative", "other")
+
+COMMENT_SENTIMENT = {
+    "price": "question",
+    "availability": "question",
+    "size": "question",
+    "variant": "question",
+    "product_info": "question",
+    "order_status": "question",
+    "complaint": "negative",
+    "negative": "negative",
+    "positive": "positive",
+    "tag_friend": "positive",
+    "spam": "other",
+    "other": "other",
+}
+
+
+def comment_sentiment(category: str | None) -> str:
+    """The bucket a category belongs to, defaulting to `other`.
+
+    Never raises and never invents a fifth bucket: an unknown category is a
+    classifier answer nobody has taught this map about yet, and filing it
+    under `other` shows it in the list rather than dropping it from every
+    filter at once.
+    """
+    return COMMENT_SENTIMENT.get(category or "", "other")
+
 
 @dataclass
 class CommentClassification:

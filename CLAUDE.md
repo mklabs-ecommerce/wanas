@@ -302,6 +302,18 @@ dashboard/                 staff dashboard, its own top-level package:
                             tests/test_dashboard_i18n.py fails otherwise.
                             QUICK_REPLIES is excluded on purpose: it is sent
                             to customers, not shown to staff.
+                            The Instagram comments screen files every
+                            comment under one of four buckets (negative /
+                            question / positive / other -- `COMMENT_SENTIMENT`
+                            in assistant/providers/base.py maps the twelve
+                            classifier categories onto them) and opens one to
+                            show the comment beside the exact lines that went
+                            out in public and in the DM. That record lives on
+                            `InstagramCommentReply`, which used to be an
+                            idempotency latch and nothing else: the only trace
+                            of a public comment was an alert summary clipped
+                            to 200 characters, and only for the categories
+                            that raise one.
                             inbox_api.py is read-only on purpose: every
                             outbound action still goes through web.py, so
                             there is one place a message can leave here. To

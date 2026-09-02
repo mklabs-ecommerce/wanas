@@ -46,6 +46,7 @@ from assistant.providers.base import (
     COMMENT_CATEGORIES,
     LEGACY_COMMENT_CATEGORIES,
     ProviderError,
+    comment_sentiment,
 )
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
@@ -810,6 +811,17 @@ def _accept_comment(value: dict, entry_time=None) -> None:
                 public_replied=False,
                 private_replied=False,
                 faq_key=faq_key,
+                # What was said, kept here and now. A comment can be edited or
+                # deleted on Instagram, so asking Meta later answers "what is
+                # there now" and never "what did we reply to".
+                text=text,
+                commenter_username=_commenter_handle(db, commenter),
+                # An FAQ answer never reaches the classifier -- it is matched
+                # by lookup -- so its category is recorded here rather than
+                # left null, which would file every one of them under
+                # "unclassified" in a screen built to sort by category.
+                category="faq" if faq_key else None,
+                sentiment="question" if faq_key else None,
             )
         )
         db.flush()
@@ -822,9 +834,10 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     #    DM, no seeded session, and the classifier is never called, which is
     #    the saving.
     if faq_key:
-        result = client.reply_to_comment(comment_id, comment_faq.reply_for(faq_key))
+        answer = comment_faq.reply_for(faq_key)
+        result = client.reply_to_comment(comment_id, answer)
         if result.delivered:
-            _mark_comment(comment_id, public_replied=True)
+            _mark_comment(comment_id, public_replied=True, public_reply_text=answer)
         else:
             log.error("public FAQ reply to comment %s failed: %s", comment_id, result.error)
         return
@@ -840,6 +853,10 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     #     one line, because two people asking the same question used to get
     #     byte-identical text back.
     category = _classify(text, comment_id=comment_id, media_id=media_id, commenter=commenter)
+    # Written before the routing, not after: a classified comment that then
+    # fails to send is still a classified comment, and the dashboard showing
+    # it as unclassified would hide exactly the one worth looking at.
+    _mark_comment(comment_id, category=category, sentiment=comment_sentiment(category))
     action = _ACTIONS.get(category)
     if action is None:
         # Only CLASSIFIER_UNAVAILABLE reaches here -- `_normalise_category`
@@ -885,7 +902,7 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     if public is not None:
         result = client.reply_to_comment(comment_id, public)
         if result.delivered:
-            _mark_comment(comment_id, public_replied=True)
+            _mark_comment(comment_id, public_replied=True, public_reply_text=public)
         else:
             log.error("public reply to comment %s failed: %s", comment_id, result.error)
         return
@@ -976,7 +993,7 @@ def _dm_handoff(
     if public_reply is not None:
         result = client.reply_to_comment(comment_id, public_reply)
         if result.delivered:
-            _mark_comment(comment_id, public_replied=True)
+            _mark_comment(comment_id, public_replied=True, public_reply_text=public_reply)
         else:
             log.error("public reply to comment %s failed: %s", comment_id, result.error)
 
@@ -991,7 +1008,7 @@ def _dm_handoff(
         log.error("private reply to comment %s failed: %s", comment_id, private.error)
         return
 
-    _mark_comment(comment_id, private_replied=True)
+    _mark_comment(comment_id, private_replied=True, private_reply_text=opener)
     igsid = private.to
     if not igsid:
         log.error("private reply to %s returned no recipient id; session not seeded", comment_id)
@@ -1019,14 +1036,34 @@ def _dm_handoff(
         )
 
 
-def _mark_comment(comment_id: str, **flags: bool) -> None:
+def _mark_comment(comment_id: str, **fields) -> None:
+    """Update the latch row in place.
+
+    Takes the recorded wording as well as the delivery flags: the two are
+    written at the same moment on purpose, so `public_replied=True` and the
+    sentence it went out as can never disagree.
+    """
     from domain.models import InstagramCommentReply
 
     with session_scope() as db:
         row = db.get(InstagramCommentReply, comment_id)
         if row is not None:
-            for field, value in flags.items():
+            for field, value in fields.items():
                 setattr(row, field, value)
+
+
+def _commenter_handle(db, commenter) -> str | None:
+    """The commenter's @handle if this shop has already seen them in a DM.
+
+    Read from `channel_identities`, never fetched: the profile endpoint
+    answers for people who have *messaged* the account, and a commenter
+    usually has not. A handle we happen to know is a bonus on this screen,
+    not something worth a call and a failure path per comment.
+    """
+    if not commenter:
+        return None
+    identity = identities.get(db, CHANNEL, str(commenter))
+    return identity.username if identity else None
 
 
 # --------------------------------------------------------------------------
