@@ -76,6 +76,13 @@ for _name in (
     "OPENROUTER_API_KEY",
     "LLM_MODEL",
     "GEMINI_MODEL",
+    # Same rule as LLM_MODEL, and it was missing for the same reason the
+    # Instagram half below was: nothing read this setting until the media
+    # calls started honouring it, and the moment they did, a developer with
+    # LLM_MEDIA_MODEL in .env graded the provider's media tests against
+    # whatever model they happen to run locally.
+    "LLM_MEDIA_MODEL",
+    "GEMINI_MEDIA_MODEL",
     "CHATBOT_DEBUG",
     "LLM_DEBUG_PAYLOAD",
     "WHATSAPP_PHONE_NUMBER_ID",

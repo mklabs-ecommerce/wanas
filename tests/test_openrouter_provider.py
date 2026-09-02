@@ -520,9 +520,16 @@ def test_transcription_network_failure_is_a_provider_error(provider, monkeypatch
     assert "network error" in str(excinfo.value)
 
 
-def test_vision_runs_on_the_same_shared_model_as_chat(captured, provider, monkeypatch):
-    """No separate vision model exists any more: LLM_MEDIA_MODEL must not
-    split the paths, and both calls name exactly what chat names."""
+def test_vision_runs_on_the_media_model_when_one_is_configured(captured, provider, monkeypatch):
+    """LLM_MEDIA_MODEL splits the *model id* and nothing else.
+
+    This file used to assert the opposite -- that media must run on whatever
+    chat runs on. That held only while one model was good at both. The model
+    best at reading Egyptian Arabic off a voice note is not the one best at
+    the tool loop, and pinning both to one id meant picking a chat model with
+    no audio endpoint silently turned every voice note into a handoff. The
+    key, the transport and the error mapping are still chat's.
+    """
     monkeypatch.setattr(
         openrouter_module,
         "settings",
@@ -545,14 +552,102 @@ def test_vision_runs_on_the_same_shared_model_as_chat(captured, provider, monkey
     assert reading.is_garment is True
 
     sent = captured["sent"][0]
+    # Same endpoint, same key, same call shape -- only the model id differs.
     assert sent["url"] == f"{openrouter_module.BASE_URL}/chat/completions"
-    assert sent["body"]["model"] == provider.model == DEFAULT_MODEL
+    assert sent["body"]["model"] == "openai/gpt-4o"
+    assert provider.model == DEFAULT_MODEL
     content = sent["body"]["messages"][0]["content"]
     assert content[0]["type"] == "text"
     assert "wanas-hoodie" in content[0]["text"]
     image_part = content[1]
     assert image_part["type"] == "image_url"
     assert image_part["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+
+def test_media_falls_back_to_the_chat_model_when_no_media_model_is_set(captured, monkeypatch):
+    """Unset means "same as chat", so an existing deployment changes nothing."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, openrouter_api_key=KEY, llm_media_model=""),
+    )
+    provider = OpenRouterProvider(model="z-ai/glm-5.3-flash")
+    assert provider._media_model() == "z-ai/glm-5.3-flash"
+
+    captured["queue"].append(text_reply("مرحبا"))
+    provider.transcribe(b"ogg-bytes", "audio/ogg")
+    assert captured["sent"][0]["body"]["model"] == "z-ai/glm-5.3-flash"
+
+
+def test_transcription_uses_the_media_model_not_the_chat_model(captured, monkeypatch):
+    """The bug this setting exists for: a chat model with no audio endpoint."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(
+            settings, openrouter_api_key=KEY, llm_media_model="google/gemini-3.1-flash-lite"
+        ),
+    )
+    provider = OpenRouterProvider(model="z-ai/glm-5.3-flash")
+
+    captured["queue"].append(text_reply("عايز الهودي الأسود"))
+    assert provider.transcribe(b"ogg-bytes", "audio/ogg") == "عايز الهودي الأسود"
+
+    body = captured["sent"][0]["body"]
+    assert body["model"] == "google/gemini-3.1-flash-lite"
+    assert body["messages"][0]["content"][1]["type"] == "input_audio"
+    # Chat is untouched by the media setting.
+    assert provider.model == "z-ai/glm-5.3-flash"
+
+
+def test_a_model_with_no_audio_endpoint_says_so_by_kind(captured, monkeypatch):
+    """404 "no endpoints support input audio" is a configuration mistake, and
+    naming it `unsupported` is what tells a reader why every voice note
+    suddenly became a handoff."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, openrouter_api_key=KEY, llm_media_model="z-ai/glm-5.3-flash"),
+    )
+    provider = OpenRouterProvider(model="z-ai/glm-5.3-flash")
+    captured["queue"].append(
+        FakeResponse(
+            {"error": {"message": "No endpoints found that support input audio"}}, status_code=404
+        )
+    )
+
+    with pytest.raises(ProviderError) as excinfo:
+        provider.transcribe(b"ogg-bytes", "audio/ogg")
+    assert excinfo.value.kind == "unsupported"
+
+
+def test_the_size_chart_reader_follows_the_media_model_too(captured, monkeypatch):
+    """It is a vision call like the others; two pictures must not be read by
+    two different models."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(
+            settings, openrouter_api_key=KEY, llm_media_model="google/gemini-3.1-flash-lite"
+        ),
+    )
+    provider = OpenRouterProvider(model="z-ai/glm-5.3-flash")
+    captured["queue"].append(
+        text_reply(
+            json.dumps(
+                {
+                    "measurements": [{"key": "width", "label_en": "Width", "label_ar": "العرض"}],
+                    "sizes": {"S": {"width": 54}},
+                    "unit": "cm",
+                    "confidence": 0.9,
+                    "notes": "",
+                }
+            )
+        )
+    )
+
+    provider.read_size_chart(b"png-bytes", "image/png", sizes=["S"])
+    assert captured["sent"][0]["body"]["model"] == "google/gemini-3.1-flash-lite"
 
 
 def test_inspect_image_discards_a_product_id_the_shop_does_not_have(captured, provider):

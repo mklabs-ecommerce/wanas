@@ -19,10 +19,17 @@ Quirks absorbed here, none of which leak upward:
   history from another provider's stored session is dropped on the way out --
   it means nothing here.
 
-**One model for everything.** Chat, voice-note transcription and photo
-reading all run on the *same* model through the *same*
+**One key, one vendor, one call shape -- but not always one model.** Chat,
+voice-note transcription and photo reading all run through the *same*
 ``chat/completions`` call, keyed by ``OPENROUTER_API_KEY`` alone -- no second
-key and no separate media model anywhere in this file.
+key, no second provider, no vendor SDK. What ``LLM_MEDIA_MODEL`` adds is a
+*model id* for the media calls, because the cheapest model good enough to run
+a whole conversation is not necessarily the one you want reading Egyptian
+Arabic off a voice note, and vice versa. ``gemini.py`` has had this setting
+since it was written (``_media_model``); this file simply ignored it, which
+is how a chat model with no audio endpoint at all came to be asked to
+transcribe. Unset, it falls back to the conversation model and nothing
+changes.
 
 * ``transcribe()`` (voice notes) sends an ``input_audio`` content part (the
   OpenAI-compatible shape: base64 payload plus a short format string) with an
@@ -34,7 +41,11 @@ key and no separate media model anywhere in this file.
 ``supports_audio`` / ``supports_vision`` are unconditionally True, declared at
 construction per the "decide before spending a call" contract every provider
 follows: both media paths need nothing beyond the OpenRouter key the provider
-already refused to construct without.
+already refused to construct without. They stay declared rather than
+discovered even now -- what they promise is that *this provider* can reach a
+media call, not that whichever model id is configured has an audio endpoint.
+A model that has none answers 404 and `media.py` falls back to a person, which
+is the same handoff it would have done anyway.
 """
 
 from __future__ import annotations
@@ -285,7 +296,17 @@ class OpenRouterProvider(LLMProvider):
 
         return ModelReply(text=text, tool_calls=tool_calls, finish_reason=finish_reason)
 
-    # -- media: voice notes (same model, input_audio part) ------------------
+    def _media_model(self) -> str:
+        """Which model reads a voice note or a photo.
+
+        Same setting `gemini.py::_media_model` reads, and the same fallback:
+        unset means the conversation model, so nothing has to be configured
+        for this to work. It is a model id only -- the key, the transport and
+        the error mapping are the ones chat already uses.
+        """
+        return (settings.llm_media_model or "").strip() or self.model
+
+    # -- media: voice notes (media model, input_audio part) -----------------
 
     #: Asked for a verbatim transcript and nothing else -- no summary, no
     #: translation, no answer to whatever was said. Egyptian Arabic stays in
@@ -325,8 +346,9 @@ class OpenRouterProvider(LLMProvider):
             # spelling nudge), never an instruction to act on.
             instruction = f"{instruction}\n- سياق المحادثة: {hint}"
 
+        model = self._media_model()
         payload = {
-            "model": self.model,
+            "model": model,
             # Deterministic: a transcript is not a place for creativity.
             "temperature": 0.0,
             "max_tokens": 1024,
@@ -350,7 +372,7 @@ class OpenRouterProvider(LLMProvider):
         response = self._post(payload, timeout=self.media_timeout)
         if response.status_code == 429:
             raise ProviderError(
-                f"rate limited on model {self.model!r}: {response.text[:300]}",
+                f"rate limited on model {model!r}: {response.text[:300]}",
                 kind="rate_limit",
             )
         if response.status_code in (401, 403):
@@ -360,9 +382,19 @@ class OpenRouterProvider(LLMProvider):
                 kind="auth",
             )
         if response.status_code >= 400:
+            # A model with no audio endpoint answers 404 here, which used to
+            # read as a generic provider error -- so "every voice note became
+            # a handoff" looked like flakiness rather than the one-line
+            # configuration mistake it is. Name it.
+            kind = (
+                "unsupported"
+                if response.status_code == 404 and "input audio" in response.text.lower()
+                else "provider_error"
+            )
             raise ProviderError(
-                f"openrouter transcription error {response.status_code} on model {self.model!r}: "
-                f"{response.text[:500]}"
+                f"openrouter transcription error {response.status_code} on model {model!r}: "
+                f"{response.text[:500]}",
+                kind=kind,
             )
 
         body = response.json()
@@ -401,8 +433,9 @@ class OpenRouterProvider(LLMProvider):
         instruction = self._IMAGE_INSTRUCTION_TEMPLATE.format(listing=listing)
         data_uri = f"data:{mime_type or 'image/jpeg'};base64,{base64.b64encode(image).decode('ascii')}"
 
+        model = self._media_model()
         payload = {
-            "model": self.model,
+            "model": model,
             "temperature": 0.0,
             "max_tokens": 512,
             "response_format": {"type": "json_object"},
@@ -420,7 +453,7 @@ class OpenRouterProvider(LLMProvider):
         response = self._post(payload)
         if response.status_code == 429:
             raise ProviderError(
-                f"rate limited on vision model {self.model!r}: {response.text[:300]}",
+                f"rate limited on vision model {model!r}: {response.text[:300]}",
                 kind="rate_limit",
             )
         if response.status_code in (401, 403):
@@ -431,7 +464,7 @@ class OpenRouterProvider(LLMProvider):
             )
         if response.status_code >= 400:
             raise ProviderError(
-                f"openrouter vision error {response.status_code} on model {self.model!r}: "
+                f"openrouter vision error {response.status_code} on model {model!r}: "
                 f"{response.text[:500]}"
             )
 
@@ -495,8 +528,12 @@ class OpenRouterProvider(LLMProvider):
             sizes=", ".join(sizes) or "(unknown -- report whatever the chart shows)"
         )
         data_uri = f"data:{mime_type or 'image/png'};base64,{base64.b64encode(image).decode('ascii')}"
+        # The dashboard's chart reading is a vision call like any other, so it
+        # follows the media model too: leaving it on the conversation model
+        # would mean two different models reading two different pictures.
+        model = self._media_model()
         payload = {
-            "model": self.model,
+            "model": model,
             "temperature": 0.0,
             "max_tokens": 1500,
             "response_format": {"type": "json_object"},
@@ -514,13 +551,13 @@ class OpenRouterProvider(LLMProvider):
         response = self._post(payload)
         if response.status_code == 429:
             raise ProviderError(
-                f"rate limited on vision model {self.model!r}: {response.text[:300]}",
+                f"rate limited on vision model {model!r}: {response.text[:300]}",
                 kind="rate_limit",
             )
         if response.status_code >= 400:
             raise ProviderError(
                 f"openrouter size-chart error {response.status_code} on model "
-                f"{self.model!r}: {response.text[:500]}"
+                f"{model!r}: {response.text[:500]}"
             )
 
         body = response.json()
