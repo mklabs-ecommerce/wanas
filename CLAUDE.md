@@ -18,8 +18,8 @@ Shopify    -> product/store source of truth (orders, live inventory, live price)
 FastAPI    -> the API, app.py is the composition root (uvicorn app:app)
 Assistant  -> agent/runtime/tools/LLM (assistant/)
 OpenRouter -> default LLM provider, behind a provider abstraction (Gemini and
-              a scripted fake are the alternates); Whisper/a vision model
-              handle voice notes and photos
+              a scripted fake are the alternates); the same model also reads
+              voice notes and photos -- one model, one key, no second vendor
 PostgreSQL -> chat/session history, carts, shipping rates, staff,
               human-handoff queue, plus catalog metadata Shopify can't hold
               (style, department, collection, size charts, per-colour photos)
@@ -452,8 +452,11 @@ tests/                   pytest suite (flat, one test_<module>.py per
   new class + one config value (`LLM_PROVIDER`).
 - Config: `LLM_PROVIDER`, `LLM_API_KEY` (or `GEMINI_API_KEY`/`OPENROUTER_API_KEY`),
   `LLM_MODEL` (or `GEMINI_MODEL`, blank lets the provider pick a working
-  model). Voice notes transcribe via OpenAI Whisper (`OPENAI_API_KEY`);
-  photos go through an OpenRouter vision model.
+  model). **No separate media credential.** On OpenRouter, voice-note
+  transcription and photo reading run on the *same* model through the *same*
+  `chat/completions` call as chat, keyed by `OPENROUTER_API_KEY` alone --
+  audio rides as an `input_audio` part, a photo as a base64 `image_url`.
+  There is no Whisper call and no `OPENAI_API_KEY` anywhere in the codebase.
 - `LLM_PROVIDER=fake` runs the scripted provider used by tests and by the
   harness when no key is set.
 - The provider also owns media: `transcribe()` for voice notes and
