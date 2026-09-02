@@ -222,6 +222,25 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "زيب اب": ("zipup",),
     "زيباب": ("zipup",),
     "زيب هودي": ("zip-through", "zipup"),
+    # --- the model's own English ------------------------------------------
+    # The entries above assume the Arabic reaches this table. Often it does
+    # not: the model translates the customer's words before it calls
+    # `get_products`, and then *its* spelling is what has to match. Measured
+    # against the live model on all eighteen products, three of ten names did
+    # not survive that translation, in two distinct ways.
+    #
+    # It mis-hears a name that is nearly an ordinary English word --
+    # «الرينجر تيشيرت» went out as `Ranger T-shirt`, which is what a customer
+    # asking about a tee that is on the shelf was told we did not have
+    # (production log, `tool get_products({'query': 'Ranger T-shirt'})`).
+    "ranger": ("ringer",),
+    # And it splits the compound names the catalog writes as one word. `zip`
+    # still matches `Zipup` because a prefix is allowed, but `up` and `neck`
+    # can only match at a word start, so the all-tokens rule vetoes the whole
+    # query. A product named as two words here needs the pair spelled out.
+    "crew neck": ("crewneck",),
+    "zip up": ("zipup",),
+    "zip through": ("zip-through",),
 }
 
 #: Padding. Every one of these appears in a real request and none of them is

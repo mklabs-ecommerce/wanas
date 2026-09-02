@@ -158,3 +158,42 @@ def test_a_product_name_does_not_widen_into_the_whole_category(seeded):
 
     kind = catalog.get_products(seeded, query="تيشيرت")
     assert kind["count"] > named["count"]
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        # Observed in the production log: the model translated «الرينجر
+        # تيشيرت» to `Ranger T-shirt` and the customer was told the shop has
+        # no such thing.
+        ("Ranger T-shirt", "Ringer Tee"),
+        ("Ranger", "Ringer Tee"),
+        # The catalog writes these as one word and the model writes them as
+        # two. `zip` matches `Zipup` on the prefix rule, but `up` and `neck`
+        # can only match at a word start, so the all-tokens rule vetoed both.
+        ("crew neck", "WANAS Crewneck"),
+        ("crew neck Wanas", "WANAS Crewneck"),
+        ("zip up", "Zipup"),
+    ],
+)
+def test_the_english_the_model_sends_finds_the_product(seeded, query, expected):
+    """The Arabic entries only help when the Arabic reaches the tool.
+
+    Usually it does not -- the model translates before calling
+    `get_products`, so its spelling is the one that has to match.
+    """
+    found = catalog.get_products(seeded, query=query)
+    assert found["count"] > 0, f"{query!r} found nothing"
+    assert expected in [product["name"] for product in found["products"]]
+
+
+def test_the_model_spellings_do_not_widen_a_search(seeded):
+    """A misspelling maps to one product, not to a category."""
+    assert [p["name"] for p in catalog.get_products(seeded, query="Ranger")["products"]] == [
+        "Ringer Tee"
+    ]
+    assert [p["name"] for p in catalog.get_products(seeded, query="crew neck")["products"]] == [
+        "WANAS Crewneck"
+    ]
+    # `zip` on its own is still the whole zip family, not just Zipup.
+    assert catalog.get_products(seeded, query="zip")["count"] >= 3
