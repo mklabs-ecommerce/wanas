@@ -582,14 +582,20 @@ def test_the_prompt_did_not_become_a_wall_of_text():
     """A prompt nobody can hold in their head is one the model stops
     following. Kept in the range where the instructions still read as rules.
 
-    The ceiling has moved three times, each for something a model gets wrong
+    The ceiling has moved four times, each for something a model gets wrong
     from its own assumptions rather than from a gap it can look up: the
     exchange/cancellation terms (numbers charged in cash at the door), the
-    scope section (general knowledge, which the model holds all of), and the
+    scope section (general knowledge, which the model holds all of), the
     line saying a photo comes from the tool call and not from the sentence
     announcing it -- which every model assumes the other way round, and which
-    cost two silent replies in one real conversation."""
-    assert 3000 < len(SYSTEM_PROMPT) < 12600
+    cost two silent replies in one real conversation -- and the two rules
+    about a lookup that failed: that `product_not_found` leaves it holding
+    nothing rather than licence to recall colours, and that a reply landing on
+    one of four colour photos has already chosen the colour. Both were one
+    real conversation, in which the bot named four colours correctly, was
+    replied to with a photo of one of them, and then told the same customer a
+    different product's colours as if the first answer had never happened."""
+    assert 3000 < len(SYSTEM_PROMPT) < 13200
 
 
 # --------------------------------------------------------------------------

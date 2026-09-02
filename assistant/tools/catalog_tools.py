@@ -4,7 +4,7 @@ get_size_chart, get_shipping_fee, ask_governorate."""
 from __future__ import annotations
 
 from assistant import interactive
-from assistant.tools.base import ToolContext, tool
+from assistant.tools.base import ToolContext, last_product, tool
 from common.money import money
 from config.settings import settings
 from domain.models import Product
@@ -85,6 +85,40 @@ def _chart_image(session, product_id: str) -> str | None:
     return product.size_chart_image or None
 
 
+def _not_found(ctx: ToolContext, product_id: str) -> dict:
+    """`product_not_found`, plus the product this conversation is actually about.
+
+    A product id lives in exactly one place: the arguments of a tool call.
+    `assistant/context.py` compacts older messages by dropping the tool
+    machinery, so once the conversation is long enough the model can no
+    longer see the id it used ten messages ago -- and rather than say so it
+    reconstructs one, which is how a conversation about the Ringer tee asked
+    for a product that does not exist.
+
+    Refusing was right; refusing with an empty hand was not. The bare error
+    told the model only that its guess failed, and it filled the gap with
+    colours nobody had ever looked up -- confident, precise, wrong, and
+    contradicting what it had correctly said to the same customer minutes
+    earlier.
+
+    So the refusal now carries the way back: the product the conversation
+    already settled on, read deterministically from the **stored** history by
+    `tools.base.last_product`, which sees the tool results compaction hides.
+    It is a fact to call the tool again with, never a substitution -- swapping
+    a made-up id for a real one behind the model's back is the wrong-product
+    answer this codebase refuses everywhere else, and the customer may
+    genuinely have moved on to something new.
+    """
+    payload = {"error": "product_not_found", "product_id": product_id}
+    recent = last_product(ctx.history)
+    if recent and recent.get("product_id") != product_id:
+        payload["product_in_conversation"] = {
+            "product_id": recent["product_id"],
+            "name": recent.get("name"),
+        }
+    return payload
+
+
 @tool(
     "get_variants",
     "Every variant of one product with its variant_id, price and availability. You must call this "
@@ -110,7 +144,11 @@ def _chart_image(session, product_id: str) -> str | None:
     "more_images=true when the customer explicitly asks to see more photos of this exact product -- "
     "including 'send me all the colours', which is the case it exists for. It then sends one photo "
     "per colourway (two extra angles for a product with no colour split), unseen photos first and "
-    "never repeating one already sent unless there is nothing else left to show.",
+    "never repeating one already sent unless there is nothing else left to show. "
+    "product_not_found means the id does not exist -- never a product that sold out, and "
+    "never a reason to say anything about colours, sizes or prices, because you now have "
+    "none. Retry with `product_in_conversation.product_id` when that is the product meant, "
+    "otherwise call get_products; never repeat a guessed id.",
     properties={
         "product_id": {"type": "string", "description": "From get_products."},
         "color": {
@@ -133,7 +171,7 @@ def get_variants(
 ) -> dict:
     payload = catalog.get_variants(ctx.session, product_id)
     if payload is None:
-        return {"error": "product_not_found", "product_id": product_id}
+        return _not_found(ctx, product_id)
     if payload.get("has_size_chart"):
         # Internal, popped before the model sees it: the runtime sends the
         # chart, the model does not get to decide to. This is the tool that
@@ -184,7 +222,7 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
 
     product = ctx.session.get(Product, product_id)
     if product is None:
-        return {"error": "product_not_found", "product_id": product_id}
+        return _not_found(ctx, product_id)
 
     chart = get_chart(product.size_chart, ctx.session)
     if chart is None:

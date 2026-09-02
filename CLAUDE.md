@@ -394,6 +394,19 @@ tests/                   pytest suite (flat, one test_<module>.py per
   `ToolContext.attachment_labels`). A photo with no label -- a product the
   catalogue never split by colour -- falls back to quoting its message, which
   is still better than naming a colourway nobody chose.
+- **A tool refusal must carry the way back.** A product id lives only in a
+  tool call's arguments, and `assistant/context.py` compacts those away, so a
+  long enough conversation leaves the model unable to see the id it used
+  earlier -- and it reconstructs one rather than saying so. Refusing the guess
+  is right; refusing with an empty hand is what made the bot invent a
+  product's colours after `product_not_found`, contradicting what it had
+  correctly told the same customer minutes before. `catalog_tools._not_found`
+  attaches `product_in_conversation`, read deterministically from the stored
+  history by `tools.base.last_product` (which sees the tool results compaction
+  hides). It is a fact to call the tool again with, never a substitution:
+  swapping a made-up id for a real one behind the model's back is the
+  wrong-product answer refused everywhere else here, and the customer may
+  genuinely have moved on.
 - No Alembic — tables are created at startup via `Base.metadata.create_all`
   (`app.py`), which adds missing tables but **not** missing columns on
   existing ones. That gap cost four days of production orders

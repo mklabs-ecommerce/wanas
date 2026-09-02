@@ -830,3 +830,96 @@ def test_link_client_confirmed_and_declined(ctx):
     identity.client_id = None
     assert call(ctx, "link_client", confirmed=False) == {"linked": False}
     assert identity.client_id is None
+
+
+# --- product_not_found is a refusal with a way back -----------------------
+
+
+def test_product_not_found_names_the_product_the_conversation_is_about(ctx):
+    """The bug: `get_variants` refused a made-up id with nothing attached, and
+    the model filled the gap with colours nobody had looked up -- contradicting
+    what it had correctly told the same customer minutes earlier.
+
+    A product id lives only in a tool call's arguments, and `context.py`
+    compacts those away, so a long enough conversation leaves the model unable
+    to see the id it used earlier. Refusing the guess is right; refusing with
+    an empty hand is what produced the fabrication.
+    """
+    ctx.history.extend(
+        [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "c1", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}
+                ],
+            },
+            {
+                "role": "tool_results",
+                "results": [
+                    {"id": "c1", "name": "get_variants", "content": {"name": "Cairokee Hoodie"}}
+                ],
+            },
+        ]
+    )
+
+    result = call(ctx, "get_variants", product_id="ringer-boxy-fit-tshirt")
+
+    assert result["error"] == "product_not_found"
+    assert result["product_id"] == "ringer-boxy-fit-tshirt"
+    assert result["product_in_conversation"] == {
+        "product_id": "wanas-hoodie",
+        "name": "Cairokee Hoodie",
+    }
+
+
+def test_product_not_found_invents_nothing_when_no_product_has_come_up(ctx):
+    """A conversation that never looked a product up must not be told what it
+    was about -- the same rule `promise_fallback` follows."""
+    result = call(ctx, "get_variants", product_id="no-such-product")
+    assert result == {"error": "product_not_found", "product_id": "no-such-product"}
+
+
+def test_product_not_found_never_points_back_at_the_id_that_just_failed(ctx):
+    """Guarding a loop: if the conversation's product *is* the failing id --
+    it was archived between the two calls -- repeating it is an invitation to
+    call the same failing tool again."""
+    ctx.history.extend(
+        [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "c1", "name": "get_variants", "arguments": {"product_id": "gone"}}
+                ],
+            },
+            {
+                "role": "tool_results",
+                "results": [{"id": "c1", "name": "get_variants", "content": {"name": "Gone"}}],
+            },
+        ]
+    )
+    assert "product_in_conversation" not in call(ctx, "get_variants", product_id="gone")
+
+
+def test_get_size_chart_not_found_carries_the_same_way_back(ctx):
+    ctx.history.extend(
+        [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "c1", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}
+                ],
+            },
+            {
+                "role": "tool_results",
+                "results": [
+                    {"id": "c1", "name": "get_variants", "content": {"name": "Cairokee Hoodie"}}
+                ],
+            },
+        ]
+    )
+    result = call(ctx, "get_size_chart", product_id="not-a-product")
+    assert result["error"] == "product_not_found"
+    assert result["product_in_conversation"]["product_id"] == "wanas-hoodie"
