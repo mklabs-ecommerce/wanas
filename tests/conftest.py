@@ -122,6 +122,12 @@ for _name in (
     "SMTP_USER",
     "SMTP_PASS",
     "SMTP_FROM",
+    # ...and the Gmail API trio, which is the transport that actually
+    # delivers from the deploy. Same seatbelt: a green test run must not be
+    # able to post hundreds of alerts to a real inbox.
+    "GMAIL_CLIENT_ID",
+    "GMAIL_CLIENT_SECRET",
+    "GMAIL_REFRESH_TOKEN",
 ):
     os.environ[_name] = ""
 

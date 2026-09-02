@@ -418,29 +418,70 @@ gets filtered, and filtering it would cost every alert above. The list lives
 in `domain/services/alert_email.py`; moving that line is a decision about the
 owner's attention, not a formatting change.
 
-### Setting it up (Gmail)
+### Railway blocks SMTP. This is why there are two transports.
 
-Gmail refuses a normal account password over SMTP, so this needs an **App
-Password**: Google Account -> Security -> 2-Step Verification (must be on) ->
-App passwords -> generate one for "Mail". It is 16 characters. Treat it like
-every other credential here -- `.env` and Railway only, never committed or
-logged.
+Every outbound SMTP port is blocked from inside the container. Tested there:
+
+```
+smtp.gmail.com:587   FAIL after 25.0s  Network is unreachable
+smtp.gmail.com:465   FAIL after 25.0s  Network is unreachable
+:25, :2525           FAIL              Network is unreachable
+example.com:80       OK in 0.0s
+```
+
+General egress is fine -- only SMTP is blocked, as a platform policy against
+spam. So a Gmail **App Password** works from a laptop and cannot deliver a
+single alert from the deploy, however correct it is. That is not a
+misconfiguration to hunt; it is the network.
+
+The **Gmail API** sends as the same mailbox over HTTPS (443), costs nothing,
+and adds no vendor. It is what production uses. SMTP stays for local
+development and for any host that permits it, and `send_email` picks: the
+Gmail API when its three values are set, else SMTP. `GET /health` reports
+which, as `alert_email_transport`, and the boot log says so too -- a deploy
+logging `over SMTP` is a deploy whose alerts will never arrive.
+
+### Setting up the Gmail API (production)
+
+Run `python scripts/gmail_authorise.py` **on your own machine**; the Google
+Cloud steps are written out at the top of that file. It opens a browser once
+and prints a refresh token.
+
+One of those steps matters more than it looks: **publish the OAuth consent
+screen**. While it is left in *Testing*, Google expires every refresh token
+after **seven days**, so the alerts would stop a week after they started with
+nothing to show for it. Published-but-unverified is fine for a single user --
+you will see an "unverified app" warning and can continue past it.
+
+| Variable | Notes |
+| --- | --- |
+| `ALERT_EMAIL_TO` | Where the alerts go. Blank = feature off. |
+| `GMAIL_CLIENT_ID` | From the Desktop-app OAuth client. |
+| `GMAIL_CLIENT_SECRET` | The same. A credential -- never logged or committed. |
+| `GMAIL_REFRESH_TOKEN` | From the script above. Also a credential. |
+| `ALERT_EMAIL_FROM` | Cosmetic: Gmail rewrites it to the authenticated mailbox. |
+| `ALERT_EMAIL_COOLDOWN_SECONDS` | `900`. Same reason + same customer stays quiet this long after one mail. |
+| `ALERT_EMAIL_MAX_PER_HOUR` | `20`. Hard ceiling across everything. |
+
+**If the alerts stop, look here first.** The refresh token is the fragile
+part of this route: it dies on a Google password change, on a revoked grant,
+and after seven days if the consent screen was never published. The failure
+is loud in the log (`Gmail refused the refresh token ... invalid_grant`) and
+silent everywhere else, because the channel that would have warned you *is*
+the one that broke. Mint a new token with the same script.
+
+### The SMTP half (local, or a host that allows it)
 
 | Variable | Example | Notes |
 | --- | --- | --- |
-| `ALERT_EMAIL_TO` | `owner@gmail.com` | Where the alerts go. Blank = feature off. |
 | `ALERT_SMTP_HOST` | `smtp.gmail.com` | Default. |
-| `ALERT_SMTP_PORT` | `587` | STARTTLS. Use `465` for implicit TLS. |
+| `ALERT_SMTP_PORT` | `587` | STARTTLS. `465` for implicit TLS. |
 | `ALERT_SMTP_USERNAME` | `shop@gmail.com` | The sending mailbox. |
-| `ALERT_SMTP_PASSWORD` | *(app password)* | 16 characters, no spaces. |
-| `ALERT_EMAIL_FROM` | | Defaults to the username; Gmail will not let you forge another. |
-| `ALERT_EMAIL_COOLDOWN_SECONDS` | `900` | Same reason + same customer stays quiet this long after one mail. |
-| `ALERT_EMAIL_MAX_PER_HOUR` | `20` | Hard ceiling across everything. |
+| `ALERT_SMTP_PASSWORD` | *(app password)* | 16 characters; Gmail refuses an account password. |
 
-With any of the first four blank nothing is sent and every alert still reaches
-the dashboard queue exactly as before -- the same "not configured is a
-documented off state" shape as Shopify and Instagram. `GET /health` reports
-`alert_email_configured`, and the boot log says which way it went.
+With neither transport configured nothing is sent and every alert still
+reaches the dashboard queue exactly as before -- the same "not configured is a
+documented off state" shape as Shopify and Instagram.
 
 The two limits exist because a crash loop or a comment flood raises one queue
 item **per event** by design. One email per event would be the log file in the

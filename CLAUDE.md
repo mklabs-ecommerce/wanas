@@ -207,10 +207,21 @@ integrations/            everything that talks to an external vendor over
                              -- a wrong handle on a conversation is staff
                              answering somebody while reading somebody
                              else's name
-  mail/client.py            SMTP over the standard library (Gmail App
-                            Password), the only socket to a mail server.
-                            *What* is worth an email is decided in
-                            domain/services/alert_email.py
+  mail/
+    client.py                picks the transport and sends. Two, because
+                             Railway blocks every outbound SMTP port (25,
+                             465, 587, 2525 -> "Network is unreachable" from
+                             the container; plain HTTP connects instantly),
+                             so an app password cannot deliver from the
+                             deploy however correct it is
+    gmail_api.py             Gmail over HTTPS/443 -- what production sends
+                             with. Same mailbox, no new vendor, no cost; the
+                             price is an OAuth refresh token that dies on a
+                             password change, a revoked grant, or after 7
+                             days if the consent screen was left in Testing.
+                             scripts/gmail_authorise.py mints one
+                             *What* is worth an email is decided in
+                             domain/services/alert_email.py
 assistant/               the AI agent runtime, shared byte-for-byte by every
                           channel; never imports dashboard/
   runtime.py                entry point: handle_message(channel, external_id, text)

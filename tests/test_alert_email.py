@@ -334,3 +334,153 @@ def test_the_client_is_inert_without_credentials():
     from integrations.mail.client import send_email
 
     assert send_email("subject", "body") is False
+
+
+# --------------------------------------------------------------------------
+# Choosing a transport
+# --------------------------------------------------------------------------
+#
+# Railway blocks every outbound SMTP port -- 25, 465, 587 and 2525 all answer
+# "Network is unreachable" from inside the container while plain HTTP
+# connects instantly. So the app password that works from a laptop cannot
+# deliver from production, and the Gmail API over 443 is what does.
+
+
+def test_the_gmail_api_wins_when_it_is_configured(monkeypatch):
+    """It is the only transport that can leave a Railway container, so it is
+    not merely preferred -- SMTP there is a send that silently never lands."""
+    import dataclasses
+
+    from config.settings import settings as real
+    from integrations.mail import client as mail_client
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        mail_client,
+        "settings",
+        dataclasses.replace(
+            real,
+            alert_email_to="owner@example.com",
+            gmail_client_id="id",
+            gmail_client_secret="secret",
+            gmail_refresh_token="refresh",
+            alert_smtp_host="smtp.example.com",
+            alert_smtp_username="user",
+            alert_smtp_password="pass",
+        ),
+    )
+    monkeypatch.setattr(
+        mail_client.gmail_api, "send_email", lambda s, b: calls.append("gmail") or True
+    )
+    monkeypatch.setattr(
+        mail_client, "send_over_smtp", lambda s, b: calls.append("smtp") or True
+    )
+
+    assert mail_client.send_email("subject", "body") is True
+    assert calls == ["gmail"]
+
+
+def test_smtp_still_answers_where_there_is_no_gmail_grant(monkeypatch):
+    """SMTP is not dead code: it is what a developer's machine has, and what
+    keeps this portable off Railway."""
+    import dataclasses
+
+    from config.settings import settings as real
+    from integrations.mail import client as mail_client
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        mail_client,
+        "settings",
+        dataclasses.replace(
+            real,
+            alert_email_to="owner@example.com",
+            gmail_client_id="",
+            gmail_client_secret="",
+            gmail_refresh_token="",
+            alert_smtp_host="smtp.example.com",
+            alert_smtp_username="user",
+            alert_smtp_password="pass",
+        ),
+    )
+    monkeypatch.setattr(mail_client, "send_over_smtp", lambda s, b: calls.append("smtp") or True)
+
+    assert mail_client.send_email("subject", "body") is True
+    assert calls == ["smtp"]
+
+
+def test_a_partial_gmail_grant_is_not_configured():
+    """Two of the three values is not a usable credential, and treating it as
+    one would pick a transport that cannot authenticate over the one that
+    can."""
+    import dataclasses
+
+    from config.settings import settings as real
+
+    partial = dataclasses.replace(
+        real, gmail_client_id="id", gmail_client_secret="secret", gmail_refresh_token=""
+    )
+    assert partial.gmail_api_configured is False
+
+
+def test_either_transport_counts_as_configured():
+    import dataclasses
+
+    from config.settings import settings as real
+
+    gmail_only = dataclasses.replace(
+        real,
+        alert_email_to="owner@example.com",
+        gmail_client_id="id",
+        gmail_client_secret="secret",
+        gmail_refresh_token="refresh",
+        alert_smtp_host="",
+        alert_smtp_username="",
+        alert_smtp_password="",
+    )
+    assert gmail_only.alert_email_configured is True
+
+    # ...and no recipient is off, whatever the transport says.
+    assert dataclasses.replace(gmail_only, alert_email_to="").alert_email_configured is False
+
+
+def test_the_gmail_client_is_inert_without_a_grant():
+    from integrations.mail import gmail_api
+
+    assert gmail_api.send_email("subject", "body") is False
+
+
+def test_an_expired_refresh_token_is_reported_not_raised(monkeypatch):
+    """The failure this route is known for. It must be loud in the log and
+    invisible to the code that raised the alert -- there is no second channel
+    to warn through, because the thing that broke is the warning channel.
+    """
+    import dataclasses
+
+    import httpx
+
+    from config.settings import settings as real
+    from integrations.mail import gmail_api
+
+    monkeypatch.setattr(
+        gmail_api,
+        "settings",
+        dataclasses.replace(
+            real,
+            alert_email_to="owner@example.com",
+            gmail_client_id="id",
+            gmail_client_secret="secret",
+            gmail_refresh_token="stale",
+        ),
+    )
+    gmail_api.reset_token_cache()
+
+    class _Refused:
+        status_code = 400
+
+        def json(self):
+            return {"error": "invalid_grant"}
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _Refused())
+    assert gmail_api.send_email("subject", "body") is False
+    gmail_api.reset_token_cache()

@@ -262,21 +262,47 @@ class Settings:
     #: How long the same reason about the same conversation stays quiet after
     #: one mail. A crash loop or a comment flood raises one queue item per
     #: event by design; it must not raise one email per event.
+    #: Gmail over HTTPS, because Railway blocks every outbound SMTP port --
+    #: 25, 465, 587 and 2525 all answer "Network is unreachable" from inside
+    #: the container while plain HTTP connects instantly. That is a platform
+    #: policy against spam, not a setting, so the SMTP fields above cannot
+    #: deliver from production however correct they are. They still work from
+    #: a developer's machine and on a host that permits SMTP, which is why
+    #: they stay.
+    #:
+    #: The Gmail API costs nothing and needs no new vendor: it sends as the
+    #: same mailbox, over 443. What it needs is OAuth -- a client id and
+    #: secret from a Google Cloud project, and a refresh token minted once by
+    #: `scripts/gmail_authorise.py`.
+    gmail_client_id: str
+    gmail_client_secret: str
+    gmail_refresh_token: str
+
     alert_email_cooldown_seconds: float
     #: A hard ceiling per hour across everything, so no bug can turn the
     #: owner's inbox into the log file.
     alert_email_max_per_hour: int
 
     @property
+    def gmail_api_configured(self) -> bool:
+        """All three OAuth values, or none of them is usable."""
+        return bool(self.gmail_client_id and self.gmail_client_secret and self.gmail_refresh_token)
+
+    @property
+    def alert_smtp_configured(self) -> bool:
+        return bool(self.alert_smtp_host and self.alert_smtp_username and self.alert_smtp_password)
+
+    @property
     def alert_email_configured(self) -> bool:
-        """No recipient or no mailbox to send from means no email, and that is
-        a documented off state, not an error -- the staff queue and the
-        dashboard carry every one of these alerts either way."""
-        return bool(
-            self.alert_email_to
-            and self.alert_smtp_host
-            and self.alert_smtp_username
-            and self.alert_smtp_password
+        """No recipient, or no way to send, means no email -- and that is a
+        documented off state, not an error: the staff queue and the dashboard
+        carry every one of these alerts either way.
+
+        Either transport counts. The Gmail API is the one that works from
+        Railway; SMTP is what a developer's machine and most other hosts have.
+        """
+        return bool(self.alert_email_to) and (
+            self.gmail_api_configured or self.alert_smtp_configured
         )
 
     @property
@@ -464,6 +490,9 @@ def load_settings() -> Settings:
         alert_smtp_port=_int("ALERT_SMTP_PORT", _int("SMTP_PORT", 587)),
         alert_smtp_username=_first_env("ALERT_SMTP_USERNAME", "SMTP_USER"),
         alert_smtp_password=_first_env("ALERT_SMTP_PASSWORD", "SMTP_PASS"),
+        gmail_client_id=os.getenv("GMAIL_CLIENT_ID", "").strip(),
+        gmail_client_secret=os.getenv("GMAIL_CLIENT_SECRET", "").strip(),
+        gmail_refresh_token=os.getenv("GMAIL_REFRESH_TOKEN", "").strip(),
         alert_email_cooldown_seconds=_float("ALERT_EMAIL_COOLDOWN_SECONDS", 900.0),
         alert_email_max_per_hour=_int("ALERT_EMAIL_MAX_PER_HOUR", 20),
     )

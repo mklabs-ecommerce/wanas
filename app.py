@@ -307,11 +307,22 @@ async def lifespan(_app: FastAPI):
 
     alert_email.register_mailer(send_email)
     if settings.alert_email_configured:
-        log.info("owner alerts will be emailed to %s", settings.alert_email_to)
+        # Which transport matters enough to log: Railway blocks every SMTP
+        # port, so a deploy that says "over SMTP" is a deploy whose alerts
+        # will never arrive, and that is worth seeing at boot rather than
+        # discovering from a comment nobody was told about.
+        how = "the Gmail API" if settings.gmail_api_configured else "SMTP"
+        log.info("owner alerts will be emailed to %s over %s", settings.alert_email_to, how)
+        if not settings.gmail_api_configured and settings.public_base_url:
+            log.warning(
+                "alert emails are configured for SMTP, which Railway blocks on every "
+                "port -- set GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN "
+                "(scripts/gmail_authorise.py) or the owner will never receive one"
+            )
     else:
         log.info(
-            "owner alert emails are off (ALERT_EMAIL_TO / ALERT_SMTP_* unset); "
-            "handoffs and alerts still reach the dashboard queue"
+            "owner alert emails are off (ALERT_EMAIL_TO, and either the GMAIL_* trio "
+            "or ALERT_SMTP_*, unset); handoffs and alerts still reach the dashboard queue"
         )
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
@@ -459,6 +470,11 @@ def health() -> dict:
         "image_understanding": settings.image_understanding_enabled,
         "dashboard_configured": settings.dashboard_configured,
         "alert_email_configured": settings.alert_email_configured,
+        "alert_email_transport": (
+            "gmail_api"
+            if settings.gmail_api_configured
+            else ("smtp" if settings.alert_smtp_configured else None)
+        ),
         "catalog_products": product_count,
         "catalog_variants": variant_count,
     }
