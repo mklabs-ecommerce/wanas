@@ -547,9 +547,17 @@ _ACTIONS: dict[str, _Action] = {
     # people reading, not for the one who wrote it -- see `_NEGATIVE` in
     # `comment_replies`. No DM: chasing a critic into their inbox is how a
     # bad comment becomes a screenshot.
+    #
+    # High priority for the same reason as `complaint`, and more so: this is
+    # the category where the bot's own answer is the *end* of what the shop
+    # says. A complaint at least has a DM thread open behind it, so a slow
+    # queue still leaves somewhere for the conversation to go. Here the
+    # acknowledgement is all there is, in public, under a live post -- if
+    # nobody works the alert, nobody ever looks at what was said.
     "negative": _Action(
         alert_reason="negative_comment",
         alert_label="Negative comment",
+        alert_priority="high",
     ),
     # The one category with no customer-visible action, deliberately. A public
     # answer to a scam bot republishes it to everyone reading the post, and a

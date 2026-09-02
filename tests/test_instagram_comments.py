@@ -581,6 +581,40 @@ def test_a_negative_comment_gets_a_calm_public_line_and_an_alert(
     alerts = alerts_named("negative_comment")
     assert len(alerts) == 1
     assert alerts[0].payload["comment_id"] == COMMENT_ID
+    # Same urgency as a complaint. The public line is the *end* of what the
+    # shop says here -- no DM opens behind it -- so an alert nobody works is
+    # a bad comment nobody ever read.
+    assert alerts[0].payload["priority"] == "high"
+
+
+def test_the_negative_line_acknowledges_and_promises_nothing(client, comments_on, fake_graph, monkeypatch):
+    """It must not offer the DM, because no DM opens.
+
+    These lines used to end in "تحت أمرك في الدايركت" -- published under a
+    live post, inviting someone into a thread the shop was never going to
+    open. A customer who accepted it landed in an inbox with no alert pointing
+    at it; a hater who accepted it got the private argument the no-DM rule
+    exists to avoid. Acknowledging is the whole job.
+    """
+    _push_classification(monkeypatch, "negative")
+    assert post_comment(client, comment_body("أوحش محل")).status_code == 200
+
+    published = public_replies(fake_graph)[0]["json"]["message"]
+    assert "دايركت" not in published
+    assert private_replies(fake_graph) == []
+
+
+def test_no_negative_variant_mentions_the_dm():
+    """The whole bank, not just the one line this comment id happens to pick.
+
+    A rule enforced on one variant is a rule that holds until the next
+    `crc32`.
+    """
+    from assistant.comment_replies import _NEGATIVE
+
+    for line in _NEGATIVE:
+        assert "دايركت" not in line, line
+        assert "تحت أمرك" not in line, line
 
 
 def test_tagging_a_friend_gets_a_light_public_line_and_no_dm(

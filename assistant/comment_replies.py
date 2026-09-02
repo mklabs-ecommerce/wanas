@@ -120,12 +120,23 @@ _COMPLAINT = (
 #: un-defensive line reads better to the hundred people reading than to the
 #: one person who wrote it -- which is who it is actually for. It never
 #: argues, never justifies, and never matches the tone it is answering.
+#:
+#: And it **never mentions the DM**, because `negative` does not open one
+#: (`_ACTIONS` in
+#: `assistant/channels/instagram.py`: chasing a critic into their inbox is how
+#: a bad comment becomes a screenshot). These lines used to end in
+#: "تحت أمرك في الدايركت", which published an invitation nobody was going to
+#: honour: a customer who accepted it wrote into a thread the shop had not
+#: opened and had no alert pointing at. So the line acknowledges that the
+#: comment was read, and stops there -- what happens next belongs to the
+#: staff member the `negative_comment` alert wakes up, not to a promise made
+#: under the post.
 _NEGATIVE = (
-    "رأيك يهمنا، ولو فيه حاجة نظبطها كلمنا في الدايركت 🖤",
-    "أسف إن ده انطباعك، إحنا تحت أمرك في الدايركت 🤍",
-    "وصلني رأيك، ولو حابب تقولنا أكتر إحنا موجودين 🖤",
-    "شكراً لصراحتك، وأي ملاحظة تحت أمرك في الدايركت 🤍",
-    "نحترم رأيك، ولو فيه مشكلة فعلية يشرفنا نحلها 🖤",
+    "وصلني رأيك، وشكراً إنك قولتهولنا 🖤",
+    "كلامك مسموع، ومقدرين صراحتك 🤍",
+    "وصلنا كلامك، ورأيك يهمنا 🖤",
+    "أخدنا ملاحظتك بجدية 🤍",
+    "شكراً لصراحتك، وإحنا بنتعلم من كل رأي 🖤",
 )
 
 #: A compliment. No DM, no model call -- just the thank-you the old "like"

@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — A negative comment stops promising a DM that never comes
+
+`negative` is answered in public and deliberately never DMed — chasing a
+critic into their inbox is how a bad comment becomes a screenshot. But the
+public lines ended in "تحت أمرك في الدايركت", inviting exactly the DM the
+routing refuses to open. Published under a live post, that is an invitation
+nobody honours: a customer who accepted it wrote into a thread the shop had
+not opened and no alert pointed at, and a hater who accepted it got the
+private argument the no-DM rule exists to avoid. The bank now acknowledges
+that the comment was read and stops there.
+
+That makes the alert the only thing standing behind a negative comment, so it
+is now raised at `high`, like `customer_complaint`. A complaint at least has
+an open DM thread behind it; here a queue item nobody works is a comment
+nobody ever read.
+
+`test_no_negative_variant_mentions_the_dm` holds the rule across the whole
+bank rather than the one variant a given `crc32` happens to pick.
+
 ## Unreleased — The bot answers about the shop, and stops when a person takes over
 
 Two bugs, both of them the bot talking when it should not have been.
