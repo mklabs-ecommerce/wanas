@@ -105,3 +105,56 @@ def test_an_english_query_still_works(seeded):
     """The layer translates *into* the catalog's language; it must not break it."""
     assert catalog.get_products(seeded, query="olive hoodie")["count"] > 0
     assert catalog.get_products(seeded, query="polo")["count"] == 2
+
+
+# --------------------------------------------------------------------------
+# Product names in Arabic letters
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        # The reported one: a tee on the shelf, invisible to the Arabic word
+        # every customer says for it.
+        ("رينجر", "Ringer Tee"),
+        ("الرينجر", "Ringer Tee"),
+        ("الرينجر تيشرت", "Ringer Tee"),
+        ("تيشيرت رينجر بيج", "Ringer Tee"),
+        ("رنجر", "Ringer Tee"),
+        # The same gap, found by scanning every product rather than only the
+        # one that was reported.
+        ("انفي", "Envy T-shirt"),
+        ("تيشيرت انفي", "Envy T-shirt"),
+        ("ووركر", "Worker Jacket"),
+        ("الووركر جاكيت", "Worker Jacket"),
+        ("هارت", "Heart Top"),
+        ("قلب", "Heart Top"),
+        ("فيلين فاين", "Feelin Fine Top"),
+        ("كرو نك", "WANAS Crewneck"),
+        ("كرونيك", "WANAS Crewneck"),
+        ("كوارتر زيب", "WANAS Quarter-Zip"),
+        ("ربع سوسته", "WANAS Quarter-Zip"),
+        ("زيب اب", "Zipup"),
+        ("زيباب", "Zipup"),
+    ],
+)
+def test_a_product_name_written_in_arabic_letters_finds_it(seeded, query, expected):
+    """Names are English and customers type them in Arabic script.
+
+    Every other entry in `search_terms` translates a *description* -- kind,
+    colour, cut. Names were listed only where they doubled as a collection
+    (`cairokee`, `wanas`), so «رينجر» reached nothing at all.
+    """
+    found = catalog.get_products(seeded, query=query)
+    assert found["count"] > 0, f"{query!r} found nothing"
+    assert expected in [product["name"] for product in found["products"]]
+
+
+def test_a_product_name_does_not_widen_into_the_whole_category(seeded):
+    """Naming one product must stay narrower than naming its kind."""
+    named = catalog.get_products(seeded, query="رينجر")
+    assert [p["name"] for p in named["products"]] == ["Ringer Tee"]
+
+    kind = catalog.get_products(seeded, query="تيشيرت")
+    assert kind["count"] > named["count"]

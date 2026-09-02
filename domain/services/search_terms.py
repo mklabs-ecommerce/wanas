@@ -192,6 +192,36 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "كيروكي": ("cairokee",),
     "شتوية": ("winter",),
     "وناس": ("wanas", "wns"),
+    # --- product names ---------------------------------------------------
+    # The class this table was missing. Everything above translates a word
+    # that describes a garment -- its kind, its colour, its cut -- and those
+    # were written down because the catalog holds no Arabic. A product *name*
+    # is English too, and a customer says it in Arabic letters exactly the
+    # same way: «عايز الرينجر تيشيرت». Only the two names that double as
+    # collections (`cairokee`, `wanas`) were ever listed, so every other
+    # product was reachable in Arabic only by its category -- and «رينجر»
+    # returned nothing at all about a tee that is on the shelf, which is the
+    # wrong answer this module exists to prevent. Names, not descriptions,
+    # so a new product with an English name needs a line here.
+    "رينجر": ("ringer",),
+    "رنجر": ("ringer",),
+    "انفي": ("envy",),
+    "اينفي": ("envy",),
+    "ووركر": ("worker",),
+    "وركر": ("worker",),
+    "هارت": ("heart",),
+    "قلب": ("heart",),
+    "فيلين": ("feelin",),
+    "فيلين فاين": ("feelin fine",),
+    "كرو نك": ("crewneck",),
+    "كرونيك": ("crewneck",),
+    "كرونك": ("crewneck",),
+    "كوارتر": ("quarter-zip",),
+    "كوارتر زيب": ("quarter-zip",),
+    "ربع سوسته": ("quarter-zip",),
+    "زيب اب": ("zipup",),
+    "زيباب": ("zipup",),
+    "زيب هودي": ("zip-through", "zipup"),
 }
 
 #: Padding. Every one of these appears in a real request and none of them is
