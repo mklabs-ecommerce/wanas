@@ -35,16 +35,20 @@ class ToolContext:
     #: channel adapter alongside the reply text. The model writes the words;
     #: it never emits a path into the message body.
     attachments: list[str] = field(default_factory=list)
-    #: What each attached photo actually *is*, keyed by path -- "Ringer Boxy
-    #: Fit Tshirt (Beige)" rather than a filename. A reply that sends one
+    #: What each attached photo actually *is*, keyed by path:
+    #: `{"label", "product_id", "name", "color"}`. A reply that sends one
     #: photo per colourway leaves the customer looking at four pictures and
     #: only one way to point at one of them: long-press the photo they want
     #: and reply to it. Resolving that quote back to a colour is only possible
     #: if something wrote down which colour each picture was, and until this
     #: existed nothing did -- the paths were collected as a bare list and the
-    #: colour that chose them was discarded one line later. See
-    #: `assistant/quoting.py`, which is where the label is finally read.
-    attachment_labels: dict[str, str] = field(default_factory=dict)
+    #: colour that chose them was discarded one line later.
+    #:
+    #: `label` is the wording a quote is annotated with; `product_id` is what
+    #: makes the *reply itself* a product reference, so pointing at a photo of
+    #: a product the conversation had moved away from moves it back. See
+    #: `assistant/quoting.py`, which reads both.
+    attachment_labels: dict[str, dict] = field(default_factory=dict)
     #: Images already delivered earlier in this conversation (read from the
     #: session history before the turn starts). The default image policy
     #: never re-sends one of these -- credit waste, not helpfulness.
@@ -79,7 +83,7 @@ class ToolContext:
         self.interactive = payload
         return True
 
-    def attach(self, path: str, *, force: bool = False, label: str | None = None) -> bool:
+    def attach(self, path: str, *, force: bool = False, label: dict | None = None) -> bool:
         """Add an image to this turn's reply, once.
 
         `force` bypasses the cross-turn `sent_images` check but never the
@@ -88,17 +92,17 @@ class ToolContext:
         something already shown is the customer's actual ask, not spam.
 
         `label` says what the picture is of, for `attachment_labels` above.
-        Optional because a product the catalogue never split by colour has
-        nothing to distinguish, and a photo with no label is still a photo --
-        it just cannot be named later if the customer replies to it.
+        Optional because a photo the tool layer could not describe is still a
+        photo -- it just cannot be named, or read as a product reference,
+        if the customer replies to it.
         """
         if not (isinstance(path, str) and path) or path in self.attachments:
             return False
         if not force and path in self.sent_images:
             return False
         self.attachments.append(path)
-        if label:
-            self.attachment_labels[path] = label
+        if label and label.get("label"):
+            self.attachment_labels[path] = dict(label)
         return True
 
 
@@ -237,63 +241,146 @@ def _cached_result(ctx: ToolContext, name: str, arguments: dict) -> dict | None:
     return None
 
 
-#: Catalog calls that name exactly one product. `get_products` is deliberately
-#: absent: it answers with a *list*, so "which of these" is an ambiguity to
-#: keep rather than one to resolve.
+#: Catalog calls whose arguments name exactly one product.
 _PRODUCT_CALLS = {"get_variants", "get_size_chart"}
+
+
+def _reference_from_call(history: list[dict], index: int, call: dict) -> dict | None:
+    """One tool call read as "the conversation is about this product", or None.
+
+    A call only counts once its *result* came back clean: an id the model
+    made up names no product, and treating the attempt as a reference would
+    make a hallucinated id the thing every later question resolves against.
+    """
+    name = call.get("name")
+    if name not in _PRODUCT_CALLS and name != "get_products":
+        return None
+    following = history[index + 1] if index + 1 < len(history) else None
+    if not following or following.get("role") != "tool_results":
+        return None
+    for result in following.get("results") or []:
+        if result.get("id") != call.get("id"):
+            continue
+        content = result.get("content")
+        if not isinstance(content, dict) or "error" in content:
+            return None
+        if name == "get_products":
+            return _sole_search_hit(content)
+        product_id = (call.get("arguments") or {}).get("product_id")
+        if not (isinstance(product_id, str) and product_id.strip()):
+            return None
+        # `title` is what get_size_chart calls it; either way the name comes
+        # from the database, never from a model's sentence.
+        found = content.get("name") or content.get("title")
+        color = (call.get("arguments") or {}).get("color")
+        return {
+            "product_id": product_id,
+            "name": found if isinstance(found, str) and found else None,
+            "color": color if isinstance(color, str) and color else None,
+        }
+    return None
+
+
+def _sole_search_hit(content: dict) -> dict | None:
+    """A `get_products` result that found exactly one product, or None.
+
+    `get_products` answers with a *list*, and "which of these" is an ambiguity
+    to keep rather than one to resolve -- which is why it was excluded from
+    this walk entirely. But a search that matched exactly one product is not
+    ambiguous, it is an answer, and it is the ordinary shape of a customer
+    naming something: "عندكم الجاكيت الوركر؟" searches, finds one, and the
+    conversation has moved. Excluding it meant a follow-up question after the
+    customer switched products still resolved to the product *before* the
+    switch, which is the one wrong answer implicit resolution must not give.
+    """
+    products = content.get("products")
+    if not isinstance(products, list) or len(products) != 1:
+        return None
+    only = products[0]
+    if not isinstance(only, dict):
+        return None
+    product_id = only.get("product_id")
+    if not (isinstance(product_id, str) and product_id.strip()):
+        return None
+    found = only.get("name")
+    return {
+        "product_id": product_id,
+        "name": found if isinstance(found, str) and found else None,
+        "color": None,
+    }
 
 
 def last_product(history: list[dict]) -> dict | None:
     """The one product a conversation is currently about, or None.
 
-    The newest `get_variants`/`get_size_chart` that named a product and got a
-    real answer back, as `{"product_id", "name", "color"}`. Deterministic and
-    read-only -- the same history walk `_cached_result` does, from the other
-    end, with no model call and nothing summarised.
+    The **newest** unambiguous reference, as `{"product_id", "name", "color"}`.
+    Deterministic and read-only -- one backwards walk, no model call, nothing
+    summarised. Three things count as a reference, and the most recent of them
+    wins outright:
+
+    * a `get_variants`/`get_size_chart` call that named a product and got a
+      real answer back;
+    * a `get_products` search that matched exactly **one** product -- the
+      ordinary shape of a customer naming something new. A search with two or
+      more hits is deliberately not a reference: "which of these" is an
+      ambiguity to keep;
+    * a customer message that replied to a **photo**, which carries the
+      product that photo was of (`refers_to`, from
+      `assistant/quoting.py::referenced_product`). Pointing at a picture is
+      how a customer changes the subject without typing a name.
 
     It reads the **stored** history rather than the compacted view the model
     is sent (`assistant/context.py`), and that is the point: compaction drops
     tool results, which is exactly where the product id is written down. So
     this can still name the product in a turn where the model itself has lost
-    track of it -- which is the situation both callers exist for.
+    track of it -- which is the situation every caller exists for.
+
+    Because it is what an omitted `product_id` resolves to, "newest" is not a
+    detail: the whole risk in answering "what sizes?" without asking which
+    product is answering it about the product before last. Every way a
+    customer can move the conversation has to move this with it.
     """
     for index in range(len(history) - 1, -1, -1):
         message = history[index]
-        if message.get("role") != "assistant":
-            continue
-        for call in reversed(message.get("tool_calls") or []):
-            if call.get("name") not in _PRODUCT_CALLS:
-                continue
-            arguments = call.get("arguments") or {}
-            product_id = arguments.get("product_id")
-            if not (isinstance(product_id, str) and product_id.strip()):
-                continue
-            following = history[index + 1] if index + 1 < len(history) else None
-            if not following or following.get("role") != "tool_results":
-                continue
-            for result in following.get("results") or []:
-                if result.get("id") != call.get("id"):
-                    continue
-                content = result.get("content")
-                if not isinstance(content, dict) or "error" in content:
-                    continue
-                # `title` is what get_size_chart calls it; either way the name
-                # comes from the database, never from a model's sentence.
-                name = content.get("name") or content.get("title")
-                color = arguments.get("color")
+        role = message.get("role")
+        if role == "user":
+            refers_to = message.get("refers_to")
+            product_id = (refers_to or {}).get("product_id") if isinstance(refers_to, dict) else None
+            if isinstance(product_id, str) and product_id.strip():
                 return {
                     "product_id": product_id,
-                    "name": name if isinstance(name, str) and name else None,
-                    "color": color if isinstance(color, str) and color else None,
+                    "name": refers_to.get("name"),
+                    "color": refers_to.get("color"),
                 }
+            continue
+        if role != "assistant":
+            continue
+        for call in reversed(message.get("tool_calls") or []):
+            found = _reference_from_call(history, index, call)
+            if found is not None:
+                return found
     return None
 
 
 #: Tools whose `product_id` may be left out to mean "the one we are already
-#: talking about". Only get_size_chart: it is the tool a customer reaches
-#: through a question ("مش عارف مقاسي") rather than through a product id, so
-#: requiring the id is what turned a sizing question into a stall.
-_IMPLICIT_PRODUCT_TOOLS = {"get_size_chart"}
+#: talking about".
+#:
+#: `get_size_chart` is here because it is the tool a customer reaches through
+#: a question ("مش عارف مقاسي") rather than through a product id, so requiring
+#: the id turned a sizing question into a stall.
+#:
+#: `get_variants` is here for the same reason one step earlier: "المقاسات
+#: إيه؟" and "بيجي بألوان إيه؟" are follow-ups to a product already on the
+#: table, and the id for it lives in a tool call `assistant/context.py`
+#: compacted away turns ago. Refusing them made the bot stop and ask which
+#: product -- a question the customer had already answered, which is the
+#: single most obvious way for it to read as not listening.
+#:
+#: The wrong-product risk this widening carries is answered by `last_product`
+#: tracking the *newest* reference rather than by keeping this set small: a
+#: customer who has moved on has moved it on too, by naming the new product,
+#: by looking it up, or by replying to its photo.
+_IMPLICIT_PRODUCT_TOOLS = {"get_size_chart", "get_variants"}
 
 
 def _resolve_implicit_product(ctx: ToolContext, name: str, arguments: dict) -> None:
@@ -353,14 +440,18 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     more_images = bool(result.pop("_more_images", False))
     color = result.pop("_image_color", None)
     chart_image = result.pop("_size_chart_image", None)
-    _collect_images(ctx, result, more_images=more_images, color=color)
+    # The *resolved* id, so a photo attached by an implicitly-resolved call is
+    # labelled with the product it actually came from.
+    _collect_images(
+        ctx, result, more_images=more_images, color=color, product_id=arguments.get("product_id")
+    )
     # After the product photo, and deliberately *not* forced: a chart is the
     # same picture every time, so the cross-conversation `sent_images` check
     # is exactly the rule wanted here -- it rides along the first time a
     # product's sizes come up and never again. An explicit get_size_chart
     # still forces it, because asking for it again is asking to see it again.
     if isinstance(chart_image, str) and chart_image:
-        ctx.attach(chart_image, label=_chart_label(result))
+        ctx.attach(chart_image, label=_chart_label(result, arguments.get("product_id")))
     return result
 
 
@@ -447,7 +538,7 @@ def _matching_color(color_images: dict, color: str | None) -> str | None:
     return None
 
 
-def _image_labels(result: dict) -> dict[str, str]:
+def _image_labels(result: dict, product_id: str | None = None) -> dict[str, dict]:
     """What each photo in a tool result is of, keyed by path.
 
     Built from `color_images`, which is the only place the colourway of a
@@ -455,26 +546,30 @@ def _image_labels(result: dict) -> dict[str, str]:
     a photo and then returns bare paths, so the colour was known and thrown
     away at exactly the moment it became worth keeping.
 
-    The label is the product name and the colourway, both straight out of the
-    database. It is never shown to the customer and never sent to the model
-    as data; it exists so that when they long-press one of four photos and
-    say "I want this one", `assistant/quoting.py` can say which one that was
-    instead of quoting the whole four-photo message and leaving the model to
-    guess. Guessing is how the wrong colour gets added to a cart.
+    Every value carries the product as well as the wording, because a photo
+    is two different facts at once: `label` is what a quote of it is annotated
+    with, and `product_id` is what makes replying to it a *reference to that
+    product*. Both come straight out of the database. Neither is shown to the
+    customer or sent to the model as data.
     """
     name = result.get("name") or result.get("title")
     name = name if isinstance(name, str) and name.strip() else None
-    labels: dict[str, str] = {}
+    product_id = product_id or result.get("product_id")
+    product_id = product_id if isinstance(product_id, str) and product_id.strip() else None
+    labels: dict[str, dict] = {}
+
+    def _entry(label: str, color: str | None) -> dict:
+        return {"label": label, "product_id": product_id, "name": name, "color": color}
 
     color_images = result.get("color_images")
     if isinstance(color_images, dict):
         for key, paths in color_images.items():
             if not (isinstance(key, str) and key.strip()) or not isinstance(paths, list):
                 continue
-            label = f"{name} ({key})" if name else key
+            entry = _entry(f"{name} ({key})" if name else key, key)
             for path in paths:
                 if isinstance(path, str) and path:
-                    labels.setdefault(path, label)
+                    labels.setdefault(path, entry)
 
     if name:
         # A product with no colour split still gets a name, so a reply to one
@@ -483,23 +578,38 @@ def _image_labels(result: dict) -> dict[str, str]:
         if isinstance(images, list):
             for path in images:
                 if isinstance(path, str) and path:
-                    labels.setdefault(path, name)
+                    labels.setdefault(path, _entry(name, None))
     return labels
 
 
-def _chart_label(result: dict) -> str | None:
+def _chart_label(result: dict, product_id: str | None = None) -> dict | None:
     """"<product> size chart", when the result names a product.
 
     A size chart is the one attachment a customer replies to meaning
     something other than "this colour" -- they are asking about the numbers.
-    Saying so is what stops the next turn reading it as a colour choice.
+    Saying so is what stops the next turn reading it as a colour choice. It
+    still names the product: a customer scrolling back to an older chart and
+    asking about it has told you which product they mean.
     """
     name = result.get("title") or result.get("name")
-    return f"{name} size chart" if isinstance(name, str) and name.strip() else None
+    if not (isinstance(name, str) and name.strip()):
+        return None
+    product_id = product_id if isinstance(product_id, str) and product_id.strip() else None
+    return {
+        "label": f"{name} size chart",
+        "product_id": product_id,
+        "name": name,
+        "color": None,
+    }
 
 
 def _collect_images(
-    ctx: ToolContext, result: dict, *, more_images: bool = False, color: str | None = None
+    ctx: ToolContext,
+    result: dict,
+    *,
+    more_images: bool = False,
+    color: str | None = None,
+    product_id: str | None = None,
 ) -> None:
     """Turn image paths in a tool result into real attachments.
 
@@ -510,11 +620,11 @@ def _collect_images(
     are the product's photos, which follow the strict budget below and are
     never repeated unless nothing unseen is left to show.
     """
-    labels = _image_labels(result)
+    labels = _image_labels(result, product_id)
 
     image = result.get("image")
     if isinstance(image, str) and image:
-        ctx.attach(image, force=True, label=labels.get(image) or _chart_label(result))
+        ctx.attach(image, force=True, label=labels.get(image) or _chart_label(result, product_id))
 
     candidates = _candidate_images(result, color)
     if not candidates:

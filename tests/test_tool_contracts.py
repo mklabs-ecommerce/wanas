@@ -91,9 +91,21 @@ def test_the_model_cannot_supply_the_channel_identity(ctx):
 
 
 def test_missing_required_argument(ctx):
-    assert call(ctx, "get_variants")["error"] == "bad_arguments"
-    # Blank counts as missing, not as a value: whitespace is not a product id.
-    assert call(ctx, "get_variants", product_id="")["error"] == "bad_arguments"
+    assert call(ctx, "add_to_cart")["error"] == "bad_arguments"
+    # Blank counts as missing, not as a value: whitespace is not a variant id.
+    assert call(ctx, "add_to_cart", variant_id="")["error"] == "bad_arguments"
+
+
+def test_an_omitted_product_id_is_a_question_not_a_bad_call(ctx):
+    """`get_variants` stopped requiring `product_id`: a follow-up about sizes
+    or colours means the product already on the table, and refusing it made
+    the bot ask which product the customer had just been talking about.
+
+    With nothing to resolve to it says so in its own code, so the model asks
+    rather than reads the refusal as "there are no variants"."""
+    assert call(ctx, "get_variants")["error"] == "no_product_in_context"
+    # Blank counts as omitted, not as a value: whitespace is not a product id.
+    assert call(ctx, "get_variants", product_id=" ")["error"] == "no_product_in_context"
 
 
 def test_an_omitted_product_with_nothing_to_resolve_to_is_its_own_answer(ctx):
@@ -923,3 +935,98 @@ def test_get_size_chart_not_found_carries_the_same_way_back(ctx):
     result = call(ctx, "get_size_chart", product_id="not-a-product")
     assert result["error"] == "product_not_found"
     assert result["product_in_conversation"]["product_id"] == "wanas-hoodie"
+
+
+# --- implicit product memory ----------------------------------------------
+#
+# "المقاسات إيه؟" is a follow-up, not a new question. The id for the product
+# it is about lives in a tool call `assistant/context.py` compacted away turns
+# ago, so refusing the call made the bot stop and ask which product -- a
+# question the customer had already answered, and the most obvious way for it
+# to read as not listening.
+#
+# The risk that buys is answering about the *previous* product, so every one
+# of these is really a test of `last_product` tracking the newest reference.
+
+
+def _turn(ctx, tool, arguments, content, call_id="c"):
+    """One realistic exchange appended to the context's history: the call the
+    model made and the result it got back."""
+    ctx.history.append(
+        {"role": "assistant", "content": "", "tool_calls": [{"id": call_id, "name": tool, "arguments": arguments}]}
+    )
+    ctx.history.append(
+        {"role": "tool_results", "results": [{"id": call_id, "name": tool, "content": content}]}
+    )
+
+
+def test_a_follow_up_resolves_to_the_product_already_on_the_table(ctx):
+    """(1) The ordinary single-product conversation: they asked about the
+    hoodie, then asked what sizes. No id, no question back to them."""
+    first = call(ctx, "get_variants", product_id="wanas-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, first)
+
+    again = call(ctx, "get_variants")
+
+    assert "error" not in again
+    assert again["product_id"] == "wanas-hoodie"
+
+
+def test_a_follow_up_after_a_switch_resolves_to_the_product_switched_to(ctx):
+    """(2) The failure that made widening this risky in the first place.
+
+    The customer moved to the Worker Jacket, and a `get_products` search that
+    matched exactly one product is the ordinary shape of that. Answering
+    "what sizes?" about the hoodie they had stopped talking about is the one
+    wrong answer implicit resolution must not give.
+    """
+    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+
+    found = call(ctx, "get_products", query="worker jacket")
+    assert found["count"] == 1, "the fixture must give this search a single hit"
+    _turn(ctx, "get_products", {"query": "worker jacket"}, found, call_id="c2")
+
+    after = call(ctx, "get_variants")
+
+    assert after["product_id"] == "worker-jacket"
+
+
+def test_a_search_with_several_hits_does_not_move_the_conversation(ctx):
+    """"Which of these" is an ambiguity to keep. A three-hit search is the
+    customer browsing, not choosing, and resolving to one of them would be
+    the bot picking on their behalf."""
+    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+
+    browsing = call(ctx, "get_products", category="T-shirts")
+    assert browsing["count"] > 1
+    _turn(ctx, "get_products", {"category": "T-shirts"}, browsing, call_id="c2")
+
+    assert call(ctx, "get_variants")["product_id"] == "wanas-hoodie"
+
+
+def test_a_lookup_that_failed_never_becomes_what_a_follow_up_resolves_to(ctx):
+    """An id the model made up names no product. Letting the attempt count as
+    a reference would make a hallucination the thing every later question is
+    answered about -- the `product_not_found` bug, one level deeper."""
+    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+
+    missed = call(ctx, "get_variants", product_id="ringer-boxy-fit-tshirt")
+    assert missed["error"] == "product_not_found"
+    _turn(ctx, "get_variants", {"product_id": "ringer-boxy-fit-tshirt"}, missed, call_id="c2")
+
+    assert call(ctx, "get_variants")["product_id"] == "wanas-hoodie"
+
+
+def test_the_size_chart_follows_the_same_switch(ctx):
+    """Both implicit tools read the one walk, so a switch moves both."""
+    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+    found = call(ctx, "get_products", query="ringer")
+    _turn(ctx, "get_products", {"query": "ringer"}, found, call_id="c2")
+
+    chart = call(ctx, "get_size_chart")
+    assert chart.get("error") != "no_product_in_context"
+    assert chart["title"] != "WANAS Hoodie"

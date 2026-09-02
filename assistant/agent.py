@@ -385,6 +385,7 @@ def run_turn(
     )
     sent_images = _sent_images(history)
 
+    refers_to = None
     if reply_to:
         # A long-pressed "reply to this" pointing at something outside this
         # debounce batch -- almost always a message the bot itself sent. The
@@ -392,14 +393,19 @@ def run_turn(
         # the live slice, because a customer may well reply to something said
         # before the current context window opened. Resolved here rather than
         # in the adapter so every channel that can quote gets it for free.
-        text = quoting.annotate(
-            text, session_store.transcript(db, channel, external_id), reply_to
-        )
+        transcript = session_store.transcript(db, channel, external_id)
+        text = quoting.annotate(text, transcript, reply_to)
+        # And, when the quote landed on a photo, which product that photo was
+        # of -- stored on the message so `tools.base.last_product` sees the
+        # customer pointing at a jacket as the conversation moving to the
+        # jacket. The words alone cannot carry that: the id is in a tool call
+        # compaction drops.
+        refers_to = quoting.referenced_product(transcript, reply_to)
     # `images`/`audio` are the customer's own inbound photo(s)/voice note(s)
     # for this turn -- kept on the stored message for the dashboard (see
     # `assistant/messages.py::user`), never sent to the provider itself, so
     # this is not a second copy of what the model already read via `text`.
-    history.append(msg.user(text, images=images, audio=audio, mids=mids))
+    history.append(msg.user(text, images=images, audio=audio, mids=mids, refers_to=refers_to))
 
     # `history` is the same list object the loop below appends to, so the
     # tool layer's duplicate-call cache and image de-dup both see this turn's

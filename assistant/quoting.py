@@ -81,21 +81,73 @@ def find(transcript: list[dict], target_id: str) -> dict | None:
     return None
 
 
-def _photo_label(message: dict, target_id: str) -> str | None:
-    """What the *specific* photo they replied to was of, if it is known.
+def _photo_entry(message: dict, target_id: str) -> dict | None:
+    """What the *specific* photo they replied to was, if it is known.
 
     One assistant message is often several sends: the words, then one picture
     per colourway. They share a stored message and differ only by platform
     id, so resolving the quote to the message is not resolving it at all --
     it hands back all four colours the customer was pointing away from. The
     id-to-photo map is written at send time by
-    `assistant/session.py::photo_mid_labels`; this is the only reader.
+    `assistant/session.py::photo_mid_labels`.
+
+    A bare string is accepted as well as the record: the first version of
+    this stored only the wording, and a conversation that was live across
+    that deploy still has rows in that shape. They resolve to a label and no
+    product, which is exactly what they knew.
     """
     labels = message.get("mid_labels")
     if not isinstance(labels, dict):
         return None
-    label = labels.get(target_id)
-    return label if isinstance(label, str) and label.strip() else None
+    entry = labels.get(target_id)
+    if isinstance(entry, str) and entry.strip():
+        return {"label": entry}
+    if isinstance(entry, dict) and isinstance(entry.get("label"), str) and entry["label"].strip():
+        return entry
+    return None
+
+
+def _photo_label(message: dict, target_id: str) -> str | None:
+    entry = _photo_entry(message, target_id)
+    return entry["label"] if entry else None
+
+
+def referenced_product(transcript: list[dict], target_ids) -> dict | None:
+    """The product a quoted photo belongs to, as `{"product_id","name","color"}`.
+
+    Replying to a picture is how a customer changes the subject without
+    typing a product name -- they scroll up, long-press the jacket from ten
+    messages ago and write "ودي كام؟". Nothing about that reaches the model
+    as a product id: the quote is folded in as *words*, and the id the photo
+    came from lives in a tool call compaction has long since dropped.
+
+    So the reference is resolved here and stamped onto the stored user
+    message (`refers_to`), where `tools.base.last_product` reads it as the
+    newest thing the conversation is about. That is what keeps implicit
+    `product_id` resolution honest: the risk in answering "what sizes?"
+    without asking which product is answering it about the wrong one, and a
+    customer who pointed at a photo has already said which.
+
+    Only a quote that lands on a photo with a product behind it counts.
+    Replying to a sentence is not a product reference -- the sentence may
+    have named three -- and inventing one from it is the guess this module
+    exists to refuse.
+    """
+    for target in dict.fromkeys(target_ids or []):
+        if not target:
+            continue
+        message = find(transcript, target)
+        if message is None:
+            continue
+        entry = _photo_entry(message, target)
+        product_id = (entry or {}).get("product_id")
+        if isinstance(product_id, str) and product_id.strip():
+            return {
+                "product_id": product_id,
+                "name": entry.get("name"),
+                "color": entry.get("color"),
+            }
+    return None
 
 
 def _describe(message: dict, target_id: str = "") -> str | None:

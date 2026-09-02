@@ -279,6 +279,17 @@ def test_a_quote_pointing_outside_the_batch_is_handed_on(seeded):
 # colour they meant, or picked one.
 
 
+def _photo(color, product_id="ringer-boxy-fit-tshirt", name="Ringer Boxy Fit Tshirt"):
+    """One photo as the tool layer records it: the wording a quote of it is
+    annotated with, and the product it is a reference *to*."""
+    return {
+        "label": f"{name} ({color})",
+        "product_id": product_id,
+        "name": name,
+        "color": color,
+    }
+
+
 class _Sent:
     """One accepted send, shaped like `notifications.OutboundMessage`."""
 
@@ -298,8 +309,8 @@ def test_a_photo_carries_the_colourway_it_showed(seeded):
         WHO,
         ["wamid.words", "wamid.beige", "wamid.navy"],
         mid_labels={
-            "wamid.beige": "Ringer Boxy Fit Tshirt (Beige)",
-            "wamid.navy": "Ringer Boxy Fit Tshirt (Navy)",
+            "wamid.beige": _photo("Beige"),
+            "wamid.navy": _photo("Navy"),
         },
     )
 
@@ -323,7 +334,7 @@ def test_replying_to_the_words_still_quotes_the_words(seeded):
         CHANNEL,
         WHO,
         ["wamid.words", "wamid.beige"],
-        mid_labels={"wamid.beige": "Ringer Boxy Fit Tshirt (Beige)"},
+        mid_labels={"wamid.beige": _photo("Beige")},
     )
 
     transcript = session_store.transcript(seeded, CHANNEL, WHO)
@@ -355,16 +366,13 @@ def test_the_id_of_each_photo_is_paired_with_what_it_showed():
             _Sent("wamid.dropped", image_path="data/images/tee-brown.jpg", delivered=False),
         ],
         {
-            "data/images/tee-beige.jpg": "Ringer Boxy Fit Tshirt (Beige)",
-            "data/images/tee-navy.jpg": "Ringer Boxy Fit Tshirt (Navy)",
-            "data/images/tee-brown.jpg": "Ringer Boxy Fit Tshirt (Brown)",
+            "data/images/tee-beige.jpg": _photo("Beige"),
+            "data/images/tee-navy.jpg": _photo("Navy"),
+            "data/images/tee-brown.jpg": _photo("Brown"),
         },
     )
 
-    assert labels == {
-        "wamid.navy": "Ringer Boxy Fit Tshirt (Navy)",
-        "wamid.beige": "Ringer Boxy Fit Tshirt (Beige)",
-    }
+    assert labels == {"wamid.navy": _photo("Navy"), "wamid.beige": _photo("Beige")}
 
 
 def test_the_colour_that_chose_a_photo_is_written_down_at_attach_time(seeded):
@@ -380,4 +388,77 @@ def test_the_colour_that_chose_a_photo_is_written_down_at_attach_time(seeded):
     assert ctx.attachments
     labelled = [p for p in ctx.attachments if p in ctx.attachment_labels]
     assert labelled, "a colour-split product must name every photo it sends"
-    assert len({ctx.attachment_labels[p] for p in labelled}) == len(labelled)
+    entries = [ctx.attachment_labels[p] for p in labelled]
+    assert len({e["color"] for e in entries}) == len(entries)
+    # And every one of them knows which product it belongs to, which is what
+    # makes a reply to it move the conversation.
+    assert {e["product_id"] for e in entries} == {"wanas-hoodie"}
+
+
+def test_replying_to_another_products_photo_moves_the_conversation(seeded):
+    """(3) Pointing at a picture is how a customer changes the subject without
+    typing a name -- they scroll up, long-press the jacket from ten messages
+    ago and write "ودي كام؟".
+
+    Nothing about that reaches the model as a product id: the quote is folded
+    in as words, and the id behind the photo is in a tool call compaction has
+    dropped. So the reference is resolved at quote time and stored on the
+    message, where `last_product` reads it as the newest thing the
+    conversation is about. Without it, the follow-up would be answered about
+    the product they had just scrolled *past*.
+    """
+    from assistant.tools.base import last_product
+
+    provider = ScriptedProvider([ModelReply(text="ده الجاكيت")])
+    run_turn(seeded, CHANNEL, WHO, "وريني الجاكيت", provider=provider)
+    session_store.attach_outbound_ids(
+        seeded,
+        CHANNEL,
+        WHO,
+        ["wamid.jacket.words", "wamid.jacket.photo"],
+        mid_labels={
+            "wamid.jacket.photo": _photo("Beige", "worker-jacket", "Worker Jacket"),
+        },
+    )
+
+    # The conversation moves on to something else entirely.
+    provider.push(ModelReply(text="والهودي ده"))
+    run_turn(seeded, CHANNEL, WHO, "والهودي؟", provider=provider)
+    session_store.attach_outbound_ids(
+        seeded,
+        CHANNEL,
+        WHO,
+        ["wamid.hoodie.words", "wamid.hoodie.photo"],
+        mid_labels={"wamid.hoodie.photo": _photo("Black", "wanas-hoodie", "WANAS Hoodie")},
+    )
+
+    # No tool ran in either turn, so nothing else in this transcript says what
+    # the conversation is about. The photo reply below is the only reference
+    # there is, which is exactly what makes it worth reading.
+    assert last_product(session_store.load(seeded, CHANNEL, WHO)) is None
+
+    # ...and then they scroll back and reply to the *jacket's* photo.
+    provider.push(ModelReply(text="بكام يعني"))
+    run_turn(seeded, CHANNEL, WHO, "ودي بكام؟", provider=provider, reply_to=["wamid.jacket.photo"])
+
+    stored = session_store.load(seeded, CHANNEL, WHO)
+    assert last_product(stored)["product_id"] == "worker-jacket"
+    assert last_product(stored)["color"] == "Beige"
+
+
+def test_replying_to_a_sentence_is_not_a_product_reference(seeded):
+    """A sentence may have named three products. Reading one out of it is the
+    guess this module refuses -- the quote is still folded in as words, and
+    the conversation stays where it was."""
+    from assistant.tools.base import last_product
+
+    provider = ScriptedProvider([ModelReply(text="عندنا الجاكيت والهودي")])
+    run_turn(seeded, CHANNEL, WHO, "عندكم إيه؟", provider=provider)
+    session_store.attach_outbound_ids(seeded, CHANNEL, WHO, ["wamid.words"])
+
+    provider.push(ModelReply(text="تمام"))
+    run_turn(seeded, CHANNEL, WHO, "ده", provider=provider, reply_to=["wamid.words"])
+
+    stored = session_store.load(seeded, CHANNEL, WHO)
+    assert all("refers_to" not in m for m in stored)
+    assert last_product(stored) is None

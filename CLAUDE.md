@@ -391,7 +391,9 @@ tests/                   pytest suite (flat, one test_<module>.py per
   the model back all four colours the customer had just pointed away from.
   Each photo's id is stored against what it showed (`mid_labels`, written by
   `session.photo_mid_labels` from the labels the tool layer collected in
-  `ToolContext.attachment_labels`). A photo with no label -- a product the
+  `ToolContext.attachment_labels`) -- the wording to quote it by *and* the
+  product it belongs to, which is what lets a reply to a photo move the
+  conversation to that product. A photo with no label -- a product the
   catalogue never split by colour -- falls back to quoting its message, which
   is still better than naming a colourway nobody chose.
 - **A tool refusal must carry the way back.** A product id lives only in a
@@ -407,6 +409,22 @@ tests/                   pytest suite (flat, one test_<module>.py per
   swapping a made-up id for a real one behind the model's back is the
   wrong-product answer refused everywhere else here, and the customer may
   genuinely have moved on.
+- **The conversation remembers which product it is about.** `get_variants` and
+  `get_size_chart` may be called with **no** `product_id`, meaning "the one we
+  are already talking about" (`tools.base._IMPLICIT_PRODUCT_TOOLS`) --
+  "المقاسات إيه؟" is a follow-up, and refusing it made the bot stop and ask a
+  question the customer had already answered. `no_product_in_context` is the
+  one case where asking is right. An *omitted* id resolves; a *wrong* one is
+  still refused, never resolved.
+  The wrong-product risk is answered by `last_product` tracking the **newest**
+  reference, not by keeping that set small. Three things move it, most recent
+  winning: a successful `get_variants`/`get_size_chart` call; a `get_products`
+  search that matched exactly **one** product (two or more is browsing, and
+  "which of these" is an ambiguity to keep); and a customer replying to a
+  **photo**, which carries the product it was of (`refers_to`, resolved by
+  `quoting.referenced_product` from the `mid_labels` written at send time). A
+  failed lookup never counts -- letting a made-up id become what later
+  questions resolve against is the `product_not_found` bug one level deeper.
 - No Alembic — tables are created at startup via `Base.metadata.create_all`
   (`app.py`), which adds missing tables but **not** missing columns on
   existing ones. That gap cost four days of production orders

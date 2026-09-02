@@ -470,7 +470,7 @@ def append(
     return save(session, channel, external_id, history + list(messages))
 
 
-def photo_mid_labels(outcomes: list, attachment_labels: dict[str, str]) -> dict[str, str]:
+def photo_mid_labels(outcomes: list, attachment_labels: dict[str, dict]) -> dict[str, dict]:
     """Which id was which photo, for the ids that went out as one.
 
     Each image is its own send with its own id, and `OutboundMessage` carries
@@ -480,12 +480,12 @@ def photo_mid_labels(outcomes: list, attachment_labels: dict[str, str]) -> dict[
     resolves to its message like any other, which is what used to happen to
     all of them.
     """
-    labels: dict[str, str] = {}
+    labels: dict[str, dict] = {}
     for out in outcomes:
         if not out.delivered:
             continue
         label = attachment_labels.get(out.image_path or "")
-        if not label:
+        if not isinstance(label, dict) or not label.get("label"):
             continue
         for mid in out.message_ids:
             labels[mid] = label
@@ -497,7 +497,7 @@ def attach_outbound_ids(
     channel: str,
     external_id: str,
     message_ids: list[str],
-    mid_labels: dict[str, str] | None = None,
+    mid_labels: dict[str, dict] | None = None,
 ) -> bool:
     """Record the platform ids a reply actually went out as.
 
@@ -515,12 +515,12 @@ def attach_outbound_ids(
     stamp -- a paused conversation, or a send that failed outright.
 
     `mid_labels` says what the id at each key *was*, for the ids that went out
-    as a photo: "Ringer Boxy Fit Tshirt (Beige)". Knowing the message is not
-    enough when one message was four photos, one per colourway -- resolving
-    the quote to the message alone hands the next turn the same four colours
-    the customer was trying to choose between, which is a guess wearing the
-    clothes of an answer. Storage-only, like `mids` itself; no provider ever
-    sees it.
+    as a photo: the wording to quote it by and the product it belongs to.
+    Knowing the message is not enough when one message was four photos, one
+    per colourway -- resolving the quote to the message alone hands the next
+    turn the same four colours the customer was trying to choose between,
+    which is a guess wearing the clothes of an answer. Storage-only, like
+    `mids` itself; no provider ever sees it.
     """
     ids = [m for m in (message_ids or []) if m]
     if not ids:
@@ -541,7 +541,7 @@ def attach_outbound_ids(
         labelled = {
             mid: label
             for mid, label in (mid_labels or {}).items()
-            if isinstance(mid, str) and mid and isinstance(label, str) and label
+            if isinstance(mid, str) and mid and isinstance(label, dict) and label.get("label")
         }
         if labelled:
             updated["mid_labels"] = {**(message.get("mid_labels") or {}), **labelled}

@@ -148,9 +148,19 @@ def _not_found(ctx: ToolContext, product_id: str) -> dict:
     "product_not_found means the id does not exist -- never a product that sold out, and "
     "never a reason to say anything about colours, sizes or prices, because you now have "
     "none. Retry with `product_in_conversation.product_id` when that is the product meant, "
-    "otherwise call get_products; never repeat a guessed id.",
+    "otherwise call get_products; never repeat a guessed id. `product_id` may be omitted when "
+    "the customer means the product already being discussed, so a follow-up about sizes or "
+    "colours needs no id and no question back to them; it resolves to the last product actually "
+    "looked up, named or replied to. Omit it rather than guessing: a wrong id is refused, never "
+    "resolved. no_product_in_context means nothing has come up yet -- that is the one case where "
+    "asking which product is right.",
     properties={
-        "product_id": {"type": "string", "description": "From get_products."},
+        "product_id": {
+            "type": "string",
+            "description": "From get_products. Leave it out to mean the product already under "
+            "discussion -- a follow-up about sizes, colours or price does not need it repeated. "
+            "Never invent one: a wrong id is refused, an omitted one resolves.",
+        },
         "color": {
             "type": "string",
             "description": "The colourway the customer is asking about, exactly as it appears in "
@@ -164,11 +174,20 @@ def _not_found(ctx: ToolContext, product_id: str) -> dict:
             "call, not a reason to skip it. Defaults to false.",
         },
     },
-    required=("product_id",),
 )
 def get_variants(
-    ctx: ToolContext, product_id: str, color: str | None = None, more_images: bool = False
+    ctx: ToolContext,
+    product_id: str | None = None,
+    color: str | None = None,
+    more_images: bool = False,
 ) -> dict:
+    if not (isinstance(product_id, str) and product_id.strip()):
+        # `_resolve_implicit_product` fills this in before the call gets here,
+        # so arriving with it still empty means the conversation has genuinely
+        # not settled on a product yet -- the one case where asking which
+        # product is the right move rather than a question already answered.
+        return {"error": "no_product_in_context"}
+
     payload = catalog.get_variants(ctx.session, product_id)
     if payload is None:
         return _not_found(ctx, product_id)

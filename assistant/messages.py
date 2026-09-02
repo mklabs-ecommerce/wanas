@@ -18,8 +18,8 @@ having one.
 The agent only ever speaks this. Adding a provider means writing one class and
 changing one config value; no other file changes.
 
-Several keys are **storage-only**: `mids`, `mid_labels`, `images`, `audio`,
-`attachments`, `by`, `delivery`, `at` and `receipt`. They are written into history and read
+Several keys are **storage-only**: `mids`, `mid_labels`, `refers_to`,
+`images`, `audio`, `attachments`, `by`, `delivery`, `at` and `receipt`. They are written into history and read
 back by the dashboard and the harness, and no provider ever sees them --
 every translation layer builds its request from `role`/`content`/`tool_calls`
 and ignores what it does not recognise. That is the discipline to follow when
@@ -61,6 +61,7 @@ def user(
     audio: list[str] | None = None,
     provisional: str | None = None,
     mids: list[str] | None = None,
+    refers_to: dict | None = None,
     at: str | None = None,
 ) -> dict:
     # `at` is when this message was stored -- for an inbound one, when it
@@ -87,6 +88,20 @@ def user(
         # turn it belongs to actually runs and stores the real message. One
         # left behind is not litter: it is a message nobody ever answered.
         message["provisional"] = provisional
+    if refers_to:
+        # The product this message points at, when it points at one: the
+        # customer replied to a *photo* and the photo knows which product it
+        # was of (`assistant/quoting.py::referenced_product`). Stored, never
+        # sent -- the model reads the quote as words like everything else.
+        #
+        # It is here because `tools.base.last_product` needs it. Replying to
+        # a picture is how a customer changes the subject without typing a
+        # name, and the id behind that picture lives in a tool call
+        # `assistant/context.py` has long since compacted away. Without this
+        # the conversation would still be "about" whatever was last looked
+        # up, and a follow-up question answered implicitly would answer it
+        # about the wrong product.
+        message["refers_to"] = dict(refers_to)
     if images:
         # The actual photo(s) the customer sent, kept in history (not sent to
         # the provider -- same reasoning and the same "unknown keys are
