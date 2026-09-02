@@ -99,8 +99,21 @@ domain/                  persistence + business rules; no vendor HTTP calls,
                             Staff, StaffQueueItem, ShippingRate)
   seed/                    seed importers (products, governorates)
   services/                Order/Inventory/Notification/Catalog/Auth/Queue
-                            services, search_terms.py (Arabic + franco
-                            catalog-search vocabulary), conversation_reset.py
+                            services, alert_email.py (which staff-queue
+                            items are worth emailing the owner about: a
+                            negative or complaining Instagram comment, a
+                            crashed or undeliverable turn, and every
+                            `request_human` handoff -- a handoff *pauses*
+                            the conversation, so nobody is answering that
+                            customer until a person opens the dashboard.
+                            Never the routine ones: an address that also
+                            carries `order_confirmed` is an address that
+                            gets filtered, which costs exactly the three
+                            above. Sends through a registered port like
+                            the transcript recorder, off an after-commit
+                            hook, on a daemon thread, rate-limited per
+                            reason+customer), search_terms.py (Arabic +
+                            franco catalog-search vocabulary), conversation_reset.py
                             (calls back into the assistant layer via a
                             registered callback, never a direct import --
                             see that module's docstring)
@@ -180,6 +193,10 @@ integrations/            everything that talks to an external vendor over
     client.py                Instagram Graph client (chunked text, no
                             templates, image-by-public-URL)
     token.py                 60-day token refresh
+  mail/client.py            SMTP over the standard library (Gmail App
+                            Password), the only socket to a mail server.
+                            *What* is worth an email is decided in
+                            domain/services/alert_email.py
 assistant/               the AI agent runtime, shared byte-for-byte by every
                           channel; never imports dashboard/
   runtime.py                entry point: handle_message(channel, external_id, text)

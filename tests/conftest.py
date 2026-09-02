@@ -105,6 +105,23 @@ for _name in (
     # with `shopify_catalog.prime` instead.
     "SHOPIFY_STORE_DOMAIN",
     "SHOPIFY_ADMIN_TOKEN",
+    # The suite raises staff-queue items by the hundred, and `queues.enqueue`
+    # offers every one of them to the owner-alert mailer. With a developer's
+    # real credentials readable here, a green test run would post that many
+    # emails to a real inbox -- so the run is hermetic in the same way and for
+    # the same reason as the Meta pair above.
+    "ALERT_EMAIL_TO",
+    "ALERT_SMTP_HOST",
+    "ALERT_SMTP_USERNAME",
+    "ALERT_SMTP_PASSWORD",
+    "ALERT_EMAIL_FROM",
+    # ...and the unprefixed aliases config/settings.py also reads, or the
+    # blanking above would be a seatbelt with one strap.
+    "STORE_OWNER_EMAIL",
+    "SMTP_HOST",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "SMTP_FROM",
 ):
     os.environ[_name] = ""
 

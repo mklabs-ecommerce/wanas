@@ -242,6 +242,43 @@ class Settings:
     whatsapp_template_order_confirmation: str
     whatsapp_template_language: str
 
+    #: Email alerts to the owner. The staff queue is the record; this is the
+    #: tap on the shoulder that makes someone open it. Only the queue items a
+    #: person has to act on *now* are mailed -- a complaint, a handoff, a
+    #: crash -- never the routine ones (an order confirmed, a low-stock note),
+    #: which arrive by the dozen and would train the owner to filter the
+    #: address. See `domain/services/alert_email.py`.
+    #:
+    #: Gmail refuses an account password over SMTP; ALERT_SMTP_PASSWORD is a
+    #: 16-character App Password (Google Account -> Security -> 2-Step
+    #: Verification -> App passwords). It is a credential like any other here:
+    #: .env and Railway only, never logged.
+    alert_email_to: str
+    alert_email_from: str
+    alert_smtp_host: str
+    alert_smtp_port: int
+    alert_smtp_username: str
+    alert_smtp_password: str
+    #: How long the same reason about the same conversation stays quiet after
+    #: one mail. A crash loop or a comment flood raises one queue item per
+    #: event by design; it must not raise one email per event.
+    alert_email_cooldown_seconds: float
+    #: A hard ceiling per hour across everything, so no bug can turn the
+    #: owner's inbox into the log file.
+    alert_email_max_per_hour: int
+
+    @property
+    def alert_email_configured(self) -> bool:
+        """No recipient or no mailbox to send from means no email, and that is
+        a documented off state, not an error -- the staff queue and the
+        dashboard carry every one of these alerts either way."""
+        return bool(
+            self.alert_email_to
+            and self.alert_smtp_host
+            and self.alert_smtp_username
+            and self.alert_smtp_password
+        )
+
     @property
     def shopify_configured(self) -> bool:
         """Without credentials the catalog serves wanas.db's own prices and
@@ -410,6 +447,25 @@ def load_settings() -> Settings:
             "WHATSAPP_TEMPLATE_ORDER_CONFIRMATION", ""
         ).strip(),
         whatsapp_template_language=os.getenv("WHATSAPP_TEMPLATE_LANGUAGE", "ar").strip() or "ar",
+        # Each of these accepts a plain SMTP_* / STORE_OWNER_EMAIL alias
+        # alongside the ALERT_-prefixed name. The prefixed name is the
+        # documented one -- it says which feature the variable belongs to,
+        # which matters in a Railway panel holding forty of them -- but the
+        # generic set is what people paste out of a mail provider's own
+        # instructions, and silently ignoring it would look exactly like the
+        # feature not working.
+        alert_email_to=_first_env("ALERT_EMAIL_TO", "STORE_OWNER_EMAIL"),
+        # Gmail will not let you forge the From address, so the sensible
+        # default is the mailbox doing the sending.
+        alert_email_from=_first_env(
+            "ALERT_EMAIL_FROM", "SMTP_FROM", "ALERT_SMTP_USERNAME", "SMTP_USER"
+        ),
+        alert_smtp_host=_first_env("ALERT_SMTP_HOST", "SMTP_HOST", default="smtp.gmail.com"),
+        alert_smtp_port=_int("ALERT_SMTP_PORT", _int("SMTP_PORT", 587)),
+        alert_smtp_username=_first_env("ALERT_SMTP_USERNAME", "SMTP_USER"),
+        alert_smtp_password=_first_env("ALERT_SMTP_PASSWORD", "SMTP_PASS"),
+        alert_email_cooldown_seconds=_float("ALERT_EMAIL_COOLDOWN_SECONDS", 900.0),
+        alert_email_max_per_hour=_int("ALERT_EMAIL_MAX_PER_HOUR", 20),
     )
 
 

@@ -1,8 +1,13 @@
 """The staff queue -- swaps, handoffs and alerts in one table.
 
 Three review queues with one `kind` rather than three tables: they share every
-field that matters and staff work them from one list. There is no email, so
-this inbox is the only place staff see anything.
+field that matters and staff work them from one list.
+
+This inbox is where staff *work* an item, but it is no longer the only place
+they learn one exists: `enqueue` also offers every item to
+`domain/services/alert_email.py`, which mails the owner about the few that
+cannot wait for somebody to open a browser tab. The filter lives there, not
+here -- this function stays the one way a queue item is created.
 """
 
 from __future__ import annotations
@@ -11,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from domain.models import QueueStatus, StaffQueueItem, utcnow
+from domain.services import alert_email
 from domain.services.ids import next_queue_id
 
 
@@ -38,6 +44,10 @@ def enqueue(
     )
     session.add(item)
     session.flush()
+    # After the flush so the item has its id, and inside the transaction so
+    # the email is *queued* with the row -- it is only sent once that
+    # transaction commits, and never from this thread. See alert_email.notify.
+    alert_email.notify(session, item)
     return item
 
 

@@ -45,7 +45,7 @@ from dashboard.stats_api import router as dashboard_stats_router
 from dashboard.web import router as dashboard_router
 from domain.db import engine, session_scope
 from domain.models import Base, Product, ShippingRate, Variant
-from domain.services import conversation_reset, notifications
+from domain.services import alert_email, conversation_reset, notifications
 from domain.services.scheduler import scheduler
 from integrations.shopify.webhooks import router as shopify_router
 
@@ -300,6 +300,19 @@ async def lifespan(_app: FastAPI):
     # status pushes, back-in-stock, cart nudges -- reaches the customer and
     # never the dashboard.
     notifications.register_transcript_recorder(assistant_runtime.record_outbound)
+    # ...and the one place the staff queue learns how to email the owner.
+    # Registered unconditionally: the client itself is a no-op without SMTP
+    # credentials, so "not configured" stays one answer in one place.
+    from integrations.mail.client import send_email
+
+    alert_email.register_mailer(send_email)
+    if settings.alert_email_configured:
+        log.info("owner alerts will be emailed to %s", settings.alert_email_to)
+    else:
+        log.info(
+            "owner alert emails are off (ALERT_EMAIL_TO / ALERT_SMTP_* unset); "
+            "handoffs and alerts still reach the dashboard queue"
+        )
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()
@@ -445,6 +458,7 @@ def health() -> dict:
         "voice_notes": settings.voice_notes_enabled,
         "image_understanding": settings.image_understanding_enabled,
         "dashboard_configured": settings.dashboard_configured,
+        "alert_email_configured": settings.alert_email_configured,
         "catalog_products": product_count,
         "catalog_variants": variant_count,
     }

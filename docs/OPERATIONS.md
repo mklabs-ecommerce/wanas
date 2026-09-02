@@ -386,6 +386,66 @@ redeploy; nothing in the HTML names it twice.
 nobody can reply, which is the situation the checklist above exists to catch
 before a launch rather than after the first stuck customer.
 
+## Emailing the owner
+
+The dashboard queue is the record of everything staff have to act on, but it
+only helps someone who is already looking at it. Three kinds of queue item
+cannot wait for that, so they are also emailed to the owner:
+
+- a **negative or complaining Instagram comment** (`negative_comment`,
+  `customer_complaint`, `comment_flood`) -- public, and getting worse the
+  longer it sits;
+- the **bot failing** -- `turn_crashed`, `reply_delivery_failed`,
+  `instagram_reply_delivery_failed`, `classifier_unavailable`,
+  `instagram_token_refresh_failed`, and the three "composed it but could not
+  deliver it" reasons (`confirmation_delivery_failed`,
+  `status_push_undelivered`, `proactive_outreach_failed`);
+- **every `request_human` handoff**, whatever its reason. A handoff *pauses*
+  the conversation: the bot will not answer that customer again until a person
+  replies or resolves it, so an unread handoff is a customer sitting in
+  silence.
+
+Nothing else is mailed, on purpose. `order_confirmed` and `low_stock` arrive
+by the dozen on a good day, and an address that carries those is an address
+that gets filtered -- which would cost exactly the three above. The list lives
+in `domain/services/alert_email.py`; adding to it is a decision about the
+owner's attention, not a formatting change.
+
+### Setting it up (Gmail)
+
+Gmail refuses a normal account password over SMTP, so this needs an **App
+Password**: Google Account -> Security -> 2-Step Verification (must be on) ->
+App passwords -> generate one for "Mail". It is 16 characters. Treat it like
+every other credential here -- `.env` and Railway only, never committed or
+logged.
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `ALERT_EMAIL_TO` | `owner@gmail.com` | Where the alerts go. Blank = feature off. |
+| `ALERT_SMTP_HOST` | `smtp.gmail.com` | Default. |
+| `ALERT_SMTP_PORT` | `587` | STARTTLS. Use `465` for implicit TLS. |
+| `ALERT_SMTP_USERNAME` | `shop@gmail.com` | The sending mailbox. |
+| `ALERT_SMTP_PASSWORD` | *(app password)* | 16 characters, no spaces. |
+| `ALERT_EMAIL_FROM` | | Defaults to the username; Gmail will not let you forge another. |
+| `ALERT_EMAIL_COOLDOWN_SECONDS` | `900` | Same reason + same customer stays quiet this long after one mail. |
+| `ALERT_EMAIL_MAX_PER_HOUR` | `20` | Hard ceiling across everything. |
+
+With any of the first four blank nothing is sent and every alert still reaches
+the dashboard queue exactly as before -- the same "not configured is a
+documented off state" shape as Shopify and Instagram. `GET /health` reports
+`alert_email_configured`, and the boot log says which way it went.
+
+The two limits exist because a crash loop or a comment flood raises one queue
+item **per event** by design. One email per event would be the log file in the
+owner's inbox, and a suppressed mail is only ever a duplicate of one already
+sent -- the queue item is always written either way.
+
+Sending happens on a daemon thread, hung off the transaction's commit. That is
+deliberate on both counts: an email about an order that later rolled back is a
+person opening the dashboard to look for something that does not exist, and a
+two-second SMTP round trip on the order path is a two-second stall for the
+customer.
+
 ## Tuning inbound handling
 
 | Setting | Default | What it changes |
