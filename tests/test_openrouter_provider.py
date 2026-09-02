@@ -122,6 +122,38 @@ def test_the_default_model_is_pinned_and_an_explicit_one_wins():
     assert OpenRouterProvider(api_key=KEY, model="openai/other").model == "openai/other"
 
 
+def test_a_chat_call_waits_six_minutes_by_default(captured):
+    """Thirty seconds turned the conversation model's tail into failed turns.
+
+    `z-ai/glm-5.3-flash` has a median around six seconds but was measured at
+    115s and 125s on two of eight single-hop calls against this prompt and
+    these tools. Under the old thirty-second ceiling those two raised
+    ReadTimeout, which reaches the customer as the generic apology -- a turn
+    that answers slowly is strictly better than one that does not answer.
+
+    Affordable only because nobody waits on it: the webhook returns 200 and
+    the turn runs afterwards on a dispatcher worker (see
+    test_the_dispatcher_returns_before_the_work_is_done in test_dispatcher.py).
+    """
+    provider = OpenRouterProvider(api_key=KEY)
+    assert provider.timeout == 360.0
+    assert OpenRouterProvider.DEFAULT_TIMEOUT == 360.0
+
+    provider.generate("p", [msg.user("hi")], [])
+    assert captured["sent"][0]["timeout"] == 360.0
+
+
+def test_an_explicit_timeout_still_wins_and_does_not_shorten_media(captured):
+    """A caller pinning a short chat timeout must not silently shorten a
+    transcription too: media keeps its 60s floor."""
+    provider = OpenRouterProvider(api_key=KEY, timeout=5.0)
+    assert provider.timeout == 5.0
+    assert provider.media_timeout == 60.0
+
+    provider.generate("p", [msg.user("hi")], [])
+    assert captured["sent"][0]["timeout"] == 5.0
+
+
 def test_openrouter_is_dispatched_by_build_provider(monkeypatch):
     monkeypatch.setattr(
         openrouter_module,
@@ -415,8 +447,9 @@ def test_transcription_posts_an_input_audio_part_to_the_chat_endpoint(captured, 
     assert audio_part["type"] == "input_audio"
     assert audio_part["input_audio"]["data"] == base64.b64encode(b"ogg-bytes").decode("ascii")
     assert audio_part["input_audio"]["format"] == "ogg"
-    # Media is read outside the customer's turn; it may wait longer than chat.
-    assert sent["timeout"] == provider.media_timeout > provider.timeout
+    # Media is read outside the customer's turn, so it may wait at least as
+    # long as chat -- a floor of 60s, not a raise above whatever chat uses.
+    assert sent["timeout"] == provider.media_timeout >= provider.timeout
 
 
 def test_transcription_without_a_hint_sends_the_instruction_alone(captured, provider):

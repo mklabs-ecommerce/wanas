@@ -116,22 +116,45 @@ _AUDIO_FORMATS = {
 class OpenRouterProvider(LLMProvider):
     name = "openrouter"
 
+    #: How long one chat call may take. Six minutes, not the thirty seconds
+    #: this used to be, because the conversation model's *tail* is what the
+    #: customer feels: `z-ai/glm-5.3-flash` has a median around six seconds
+    #: but was measured at 115s and 125s on two of eight single-hop calls
+    #: against this shop's own prompt and tools. At thirty seconds those two
+    #: became `ReadTimeout` -> ProviderError -> the generic apology, so a
+    #: quarter of turns failed outright rather than answering slowly.
+    #:
+    #: Affordable because nobody is holding the connection open waiting for
+    #: it: the webhook claims the message, records it and returns 200, and the
+    #: turn runs afterwards on a dispatcher worker thread
+    #: (`assistant/dispatcher.py`). Meta's "reply quickly" expectation is
+    #: satisfied by the endpoint, not by the model.
+    #:
+    #: What this does *not* bound is a whole turn: `tool_loop_cap` (8) chat
+    #: calls at six minutes each is a long time to hold the one database
+    #: session `runtime.handle_message` opens around the turn. Eight workers
+    #: against a pool of 5+10 leaves room, but a turn that slow is pathology
+    #: rather than latency, and the ceiling to lower is the loop cap.
+    DEFAULT_TIMEOUT = 360.0
+
     def __init__(
         self,
         api_key: str | None = None,
         model: str | None = None,
-        timeout: float = 30.0,
+        timeout: float | None = None,
     ):
         self.api_key = api_key if api_key is not None else settings.openrouter_api_key
         if not self.api_key:
             raise ProviderError("OPENROUTER_API_KEY is not set", kind="auth")
         self.model = (model or settings.llm_model or "").strip() or DEFAULT_MODEL
-        self.timeout = timeout
+        self.timeout = self.DEFAULT_TIMEOUT if timeout is None else timeout
         #: Media is read outside the customer's turn (the reply is already on
         #: its way to them), so it can afford to wait longer than a chat call
         #: someone is sitting in front of -- same reasoning gemini.py's
-        #: media_timeout follows.
-        self.media_timeout = max(timeout, 60.0)
+        #: media_timeout follows. Now that chat itself waits six minutes this
+        #: is a floor rather than a raise, and it stays so that pinning a
+        #: short chat timeout cannot quietly shorten a transcription too.
+        self.media_timeout = max(self.timeout, 60.0)
 
         # Both declared, not discovered (base.py): the runtime decides between
         # reading a voice note / photo and handing it to a person *before*
