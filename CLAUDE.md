@@ -18,8 +18,10 @@ Shopify    -> product/store source of truth (orders, live inventory, live price)
 FastAPI    -> the API, app.py is the composition root (uvicorn app:app)
 Assistant  -> agent/runtime/tools/LLM (assistant/)
 OpenRouter -> default LLM provider, behind a provider abstraction (Gemini and
-              a scripted fake are the alternates); the same model also reads
-              voice notes and photos -- one model, one key, no second vendor
+              a scripted fake are the alternates). One key and one endpoint,
+              but two models: GLM runs the conversation and the tool loop,
+              Gemini reads the voice notes and photos (LLM_MEDIA_MODEL) --
+              the chat model has no audio endpoint at all
 PostgreSQL -> chat/session history, carts, shipping rates, staff,
               human-handoff queue, plus catalog metadata Shopify can't hold
               (style, department, collection, size charts, per-colour photos)

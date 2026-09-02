@@ -8,9 +8,10 @@ voice/photo support is declared -- not OpenRouter's uptime or its models'.
 The integration test in section 5 drives the real agent loop through this
 provider, which is what proves the tool-call translation actually matches
 what agent.py consumes. Section 6 covers voice and photos -- both ride the
-same chat/completions endpoint and the same single model as chat (an
-input_audio / image_url content part respectively), keyed only by the
-OpenRouter key. There is no Gemini anywhere in this provider; that stays
+same chat/completions endpoint and the same key as chat (an input_audio /
+image_url content part respectively), but on their own model id: the
+conversation model has no audio endpoint, so DEFAULT_MEDIA_MODEL is a
+separate default rather than a fallback to chat. There is no Gemini anywhere in this provider; that stays
 exercised through LLM_PROVIDER=gemini in test_gemini_provider.py.
 """
 
@@ -28,6 +29,7 @@ from assistant import agent, messages as msg
 from assistant.providers import build_provider, openrouter as openrouter_module
 from assistant.providers.base import ProviderError
 from assistant.providers.openrouter import (
+    DEFAULT_MEDIA_MODEL,
     DEFAULT_MODEL,
     OpenRouterProvider,
 )
@@ -401,8 +403,8 @@ def test_transcription_posts_an_input_audio_part_to_the_chat_endpoint(captured, 
     assert sent["url"] == f"{openrouter_module.BASE_URL}/chat/completions"
     assert sent["headers"]["Authorization"] == f"Bearer {KEY}"
     body = sent["body"]
-    # The transcript rides the conversation model itself.
-    assert body["model"] == DEFAULT_MODEL
+    # The transcript rides the media model, not the conversation one.
+    assert body["model"] == DEFAULT_MEDIA_MODEL
     assert body["temperature"] == 0.0
     content = body["messages"][0]["content"]
     assert content[0]["type"] == "text"
@@ -497,7 +499,8 @@ def test_transcription_rate_limit_names_its_kind(captured, provider):
     with pytest.raises(ProviderError) as excinfo:
         provider.transcribe(b"ogg-bytes", "audio/ogg")
     assert excinfo.value.kind == "rate_limit"
-    assert DEFAULT_MODEL in str(excinfo.value)
+    # The media model, because that is the one the call actually ran on.
+    assert DEFAULT_MEDIA_MODEL in str(excinfo.value)
 
 
 def test_transcription_other_errors_keep_the_response_body(captured, provider):
@@ -506,7 +509,7 @@ def test_transcription_other_errors_keep_the_response_body(captured, provider):
         provider.transcribe(b"ogg-bytes", "audio/ogg")
     assert excinfo.value.kind == "provider_error"
     assert "upstream" in str(excinfo.value)
-    assert DEFAULT_MODEL in str(excinfo.value)
+    assert DEFAULT_MEDIA_MODEL in str(excinfo.value)
 
 
 def test_transcription_network_failure_is_a_provider_error(provider, monkeypatch):
@@ -564,19 +567,36 @@ def test_vision_runs_on_the_media_model_when_one_is_configured(captured, provide
     assert image_part["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
 
-def test_media_falls_back_to_the_chat_model_when_no_media_model_is_set(captured, monkeypatch):
-    """Unset means "same as chat", so an existing deployment changes nothing."""
+def test_media_falls_back_to_a_model_that_can_hear_not_to_the_chat_model(captured, monkeypatch):
+    """Unset must NOT mean "same as chat".
+
+    It used to, and that was safe only while the chat default could also read
+    audio. The conversation model is now GLM, which has no audio endpoint at
+    all -- so falling back to it would hand every unconfigured deployment the
+    exact failure LLM_MEDIA_MODEL was added to fix: OpenRouter answers 404,
+    media.py hands off to a person, and nothing says why.
+    """
     monkeypatch.setattr(
         openrouter_module,
         "settings",
         dataclasses.replace(settings, openrouter_api_key=KEY, llm_media_model=""),
     )
     provider = OpenRouterProvider(model="z-ai/glm-5.3-flash")
-    assert provider._media_model() == "z-ai/glm-5.3-flash"
+    assert provider._media_model() == DEFAULT_MEDIA_MODEL
 
     captured["queue"].append(text_reply("مرحبا"))
     provider.transcribe(b"ogg-bytes", "audio/ogg")
-    assert captured["sent"][0]["body"]["model"] == "z-ai/glm-5.3-flash"
+    assert captured["sent"][0]["body"]["model"] == DEFAULT_MEDIA_MODEL
+    # Chat is untouched by the media default.
+    assert provider.model == "z-ai/glm-5.3-flash"
+
+
+def test_the_two_defaults_are_different_models(captured):
+    """The whole point of the split, stated once so it cannot drift back."""
+    assert DEFAULT_MODEL != DEFAULT_MEDIA_MODEL
+    provider = OpenRouterProvider(api_key=KEY)
+    assert provider.model == DEFAULT_MODEL
+    assert provider._media_model() == DEFAULT_MEDIA_MODEL
 
 
 def test_transcription_uses_the_media_model_not_the_chat_model(captured, monkeypatch):

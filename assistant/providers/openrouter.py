@@ -28,8 +28,9 @@ a whole conversation is not necessarily the one you want reading Egyptian
 Arabic off a voice note, and vice versa. ``gemini.py`` has had this setting
 since it was written (``_media_model``); this file simply ignored it, which
 is how a chat model with no audio endpoint at all came to be asked to
-transcribe. Unset, it falls back to the conversation model and nothing
-changes.
+transcribe. The two therefore have *separate* defaults -- ``DEFAULT_MODEL``
+for the tool loop, ``DEFAULT_MEDIA_MODEL`` for anything with sound or pixels
+in it -- so a deployment that sets neither still gets a model that can hear.
 
 * ``transcribe()`` (voice notes) sends an ``input_audio`` content part (the
   OpenAI-compatible shape: base64 payload plus a short format string) with an
@@ -75,9 +76,22 @@ log = logging.getLogger("wanas.provider.openrouter")
 
 BASE_URL = "https://openrouter.ai/api/v1"
 
-#: The model everything runs on -- conversation, voice-note transcription and
-#: photo reading alike -- unless LLM_MODEL pins another name.
-DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
+#: The conversation model -- the tool loop and every sentence a customer
+#: reads -- unless LLM_MODEL pins another name. Chosen over the media model
+#: below on the two things that cost this shop money: it does not invent
+#: catalogue facts (it refuses and escalates instead of naming colours or
+#: measurements nobody looked up), and it acts on the results it is handed.
+DEFAULT_MODEL = "z-ai/glm-5.3-flash"
+
+#: The model that reads a voice note or a photo, unless LLM_MEDIA_MODEL pins
+#: another name. It is a *separate* default rather than "whatever chat runs
+#: on" because the conversation model above has no audio endpoint at all:
+#: OpenRouter answers "no endpoints found that support input audio", and a
+#: deployment that configured nothing would silently turn every voice note
+#: into a person's job. That is the bug LLM_MEDIA_MODEL was wired up to fix,
+#: and defaulting media back to chat would reintroduce it for anyone who
+#: never set the variable.
+DEFAULT_MEDIA_MODEL = "google/gemini-3.1-flash-lite"
 
 #: Mime type -> the short format string the ``input_audio`` content part
 #: wants. Falls back to "ogg" (what WhatsApp voice notes are) for anything
@@ -122,8 +136,8 @@ class OpenRouterProvider(LLMProvider):
         # Both declared, not discovered (base.py): the runtime decides between
         # reading a voice note / photo and handing it to a person *before*
         # spending a call. Nothing gates either one -- they run on the same
-        # key and model as chat, which the constructor has just required to
-        # exist.
+        # key and endpoint as chat, which the constructor has just required to
+        # exist. Not necessarily the same *model*: see `_media_model`.
         self.supports_audio = True
         self.supports_vision = True
 
@@ -299,12 +313,17 @@ class OpenRouterProvider(LLMProvider):
     def _media_model(self) -> str:
         """Which model reads a voice note or a photo.
 
-        Same setting `gemini.py::_media_model` reads, and the same fallback:
-        unset means the conversation model, so nothing has to be configured
-        for this to work. It is a model id only -- the key, the transport and
-        the error mapping are the ones chat already uses.
+        Same setting `gemini.py::_media_model` reads. The fallback is
+        `DEFAULT_MEDIA_MODEL` rather than the conversation model, because the
+        conversation model cannot hear -- see the constant. A caller that
+        pins `LLM_MODEL` to something that *can* read media and leaves
+        `LLM_MEDIA_MODEL` blank gets this default instead of their own model,
+        which is the one cost of the arrangement and is worth it: the
+        alternative silently breaks voice notes for everyone who configures
+        nothing. It is a model id only -- the key, the transport and the
+        error mapping are the ones chat already uses.
         """
-        return (settings.llm_media_model or "").strip() or self.model
+        return (settings.llm_media_model or "").strip() or DEFAULT_MEDIA_MODEL
 
     # -- media: voice notes (media model, input_audio part) -----------------
 
@@ -405,7 +424,7 @@ class OpenRouterProvider(LLMProvider):
             return ""
         return text
 
-    # -- media: photos (vision, same model, same endpoint) ------------------
+    # -- media: photos (vision, media model, same endpoint) -----------------
 
     #: The vision pass answers in this shape or not at all. A schema rather
     #: than a "reply with JSON" instruction, because the caller branches on

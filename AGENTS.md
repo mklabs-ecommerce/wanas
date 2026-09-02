@@ -146,10 +146,12 @@ conversation.
 
 **Providers sit behind a provider abstraction (`assistant/providers/`); the
 default is OpenRouter (`assistant/providers/openrouter.py`), called over raw
-HTTPS for chat, voice-note transcription and photos alike -- all three run on
-the same model ("google/gemini-3.1-flash-lite" unless `LLM_MODEL` says
-otherwise) through the same `chat/completions` call, keyed by
-`OPENROUTER_API_KEY` alone. Gemini
+HTTPS for chat, voice-note transcription and photos alike -- all three go
+through the same `chat/completions` call, keyed by `OPENROUTER_API_KEY`
+alone, on two model ids: the conversation and its tool loop on `LLM_MODEL`
+("z-ai/glm-5.3-flash" by default), the voice notes and photos on
+`LLM_MEDIA_MODEL` ("google/gemini-3.1-flash-lite" by default), because the
+conversation model has no audio endpoint. Gemini
 (`assistant/providers/gemini.py`) is kept as a fully configurable alternate
 provider (`LLM_PROVIDER=gemini`) that handles chat, voice and photos itself
 on its own key.** Cost or availability is the reason the provider may change,

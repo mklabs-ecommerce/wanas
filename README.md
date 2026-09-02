@@ -20,10 +20,12 @@ PostgreSQL        chat history, carts, clients, shipping rates, staff queue
 - **PostgreSQL** is not a duplicate product database. It holds what Shopify has
   no field for — style, department, collection, size charts, per-colour photos
   — plus everything conversational.
-- **OpenRouter** (the default) runs the whole LLM side on one model and one
-  key: chat replies, voice-note transcription (audio sent as an `input_audio`
-  content part) and photo reading (`image_url`) all go through its
-  `chat/completions` endpoint. **Gemini** stays fully configurable as
+- **OpenRouter** (the default) runs the whole LLM side on one key and one
+  endpoint: chat replies, voice-note transcription (audio sent as an
+  `input_audio` content part) and photo reading (`image_url`) all go through
+  its `chat/completions` endpoint. Two models, not one — `LLM_MODEL` answers
+  and calls the tools, `LLM_MEDIA_MODEL` reads the audio and the pictures,
+  because the model that is best at the tool loop cannot hear. **Gemini** stays fully configurable as
   an alternate provider (`LLM_PROVIDER=gemini`) that handles chat, voice and
   photos itself. Every provider sits behind the same abstraction; nothing
   above `assistant/providers/` imports a vendor SDK.

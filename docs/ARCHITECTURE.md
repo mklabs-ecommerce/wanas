@@ -124,11 +124,13 @@ simplest place for its own photos to live.
 
 Nothing above `assistant/providers/` imports a vendor SDK; every provider is
 called over raw HTTPS. **OpenRouter** (`openrouter.py`) routes the
-conversation model by default and runs the whole shop on one model through
-one `chat/completions` endpoint: replies, voice-note transcription (an
-`input_audio` content part) and photo reading (an `image_url` content part)
-all use the same model on the same key -- no separate media model, no second
-credential. **Gemini** (`gemini.py`) stays fully configurable as an alternate
+conversation model by default and runs the whole shop through one
+`chat/completions` endpoint on one key: replies, voice-note transcription (an
+`input_audio` content part) and photo reading (an `image_url` content part).
+One key and one endpoint, but two model ids -- `LLM_MODEL` for the tool loop
+and the reply, `LLM_MEDIA_MODEL` for anything with sound or pixels in it,
+because the conversation model has no audio endpoint at all. No second
+credential and no second provider either way. **Gemini** (`gemini.py`) stays fully configurable as an alternate
 provider (`LLM_PROVIDER=gemini`): chat, voice and photos all run on Gemini's
 own key in that mode. Swapping providers is one new class and one config
 value (`LLM_PROVIDER`), because cost is the reason it may change.

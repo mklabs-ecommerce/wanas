@@ -13,9 +13,12 @@ something looks wrong.
       `LLM_PROVIDER=gemini` with `LLM_API_KEY`/`GEMINI_API_KEY`) — otherwise
       the rehearsal stand-in answers, and it is a keyword matcher, not the
       product. Under the default OpenRouter provider that one key covers
-      everything: chat, voice-note transcription and photo reading all run on
-      the same model; under `LLM_PROVIDER=gemini`, voice and photos both run
-      on the Gemini key instead
+      everything -- chat, voice-note transcription and photo reading -- but
+      on two models: `LLM_MODEL` answers, `LLM_MEDIA_MODEL` reads the voice
+      notes and photos, and leaving the latter blank falls back to a model
+      that can hear rather than to the chat model, which cannot. Under
+      `LLM_PROVIDER=gemini`, voice and photos both run on the Gemini key
+      instead
 - [ ] `SHOPIFY_STORE_DOMAIN` + `SHOPIFY_ADMIN_TOKEN` set, with the token's
       scopes covering **both** the chat path and the dashboard's Shopify
       section: `read_products`, `read_inventory`, `read_locations`,
