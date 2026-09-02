@@ -179,7 +179,31 @@ def _split_name(name: str) -> tuple[str, str]:
     return first, last
 
 
-def _customer(*, name: str, phone: str | None, email: str | None) -> dict | None:
+def _find_customer_gid(phone: str | None) -> str | None:
+    """An existing Shopify customer id for this phone, best effort.
+
+    Wrapped in the widest possible except on purpose. This runs inside the
+    order path, and nothing it can tell us is worth losing a sale over: with
+    no id the order is still created, it just reaches the admin without a
+    customer attached, which is exactly what
+    `scripts/shopify_backfill_customers.py` exists to repair.
+    """
+    if not phone:
+        return None
+    try:
+        from integrations.shopify import admin_customers
+
+        found = admin_customers.find_customer(phone=phone)
+    except Exception:
+        log.warning("could not look up a Shopify customer for the order", exc_info=True)
+        return None
+    gid = (found or {}).get("id")
+    return gid if isinstance(gid, str) and gid.strip() else None
+
+
+def _customer(
+    *, name: str, phone: str | None, email: str | None, customer_gid: str | None = None
+) -> dict | None:
     """The customer to attach to the order, or None when there is nothing to
     attach them by.
 
@@ -188,21 +212,38 @@ def _customer(*, name: str, phone: str | None, email: str | None) -> dict | None
     what leaves `numberOfOrders` empty, so nothing downstream can tell a
     returning buyer from a first-time one.
 
-    `toUpsert` is match-or-create in the same call: Shopify looks the phone
-    (or email) up and links the existing record instead of making a second
-    one. A name alone is not something it can match on and not something it
-    will create a customer from, so with neither identifier the block is
-    omitted entirely rather than sent in a form that could cost the sale.
+    **A phone is not something `toUpsert` can be keyed on.** This block used
+    to be sent with a name and a phone and nothing else, on the reading that
+    Shopify would match or create a customer from the phone the way it does
+    from an email. It does not:
+
+        OrderCreateUpsertCustomerAttributesInput requires at least one of
+        id, email
+
+    and it refuses the *whole* `orderCreate`. This shop is cash on delivery
+    and never asks for an email, so that refusal was not an edge case -- it
+    was every order. The bot collected a name, an address and a phone, said
+    "تأكيد الأوردر؟", and then could not place it; `confirm_order` returned an
+    error and the turn escalated to a person, which is what a customer saw as
+    "someone from the team will contact you".
+
+    So the block is built only when there is a key Shopify accepts: an `id`
+    resolved from the phone (`_find_customer_gid`), or an email. With
+    neither, it is omitted and the order is created without a customer --
+    strictly better than an order that does not exist. The phone still rides
+    along as an attribute, on the address, and in the note.
 
     The name given for *this* order overwrites the name on a matched record.
     That is the intended reading -- it is the name the customer typed most
     recently -- and the per-order name is on the shipping address either way.
     """
-    if not phone and not email:
+    if not customer_gid and not email:
         return None
 
     first, last = _split_name(name)
     attributes: dict[str, str] = {}
+    if customer_gid:
+        attributes["id"] = customer_gid
     if first:
         attributes["firstName"] = first
     if last:
@@ -312,7 +353,11 @@ def create_order(
     if email:
         order["email"] = email
 
-    customer = _customer(name=customer_name, phone=intl, email=email)
+    # Only worth a lookup when there is no email to key on already.
+    customer_gid = None if email else _find_customer_gid(intl)
+    customer = _customer(
+        name=customer_name, phone=intl, email=email, customer_gid=customer_gid
+    )
     if customer:
         order["customer"] = customer
 

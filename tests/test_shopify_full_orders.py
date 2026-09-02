@@ -336,9 +336,17 @@ def test_an_order_with_no_shopify_id_still_cancels_the_old_way(priced, shopify):
 #
 # Without a customer on the order, the admin's Orders list reads "No customer"
 # for every sale the bot ever made, and `numberOfOrders` stays empty -- so
-# nothing downstream can tell a returning buyer from a first-time one. Shopify
-# matches `toUpsert` on the phone, so a returning customer links to the record
-# they already have instead of gaining a second one.
+# nothing downstream can tell a returning buyer from a first-time one.
+#
+# `toUpsert` cannot be keyed on a phone, which is what this section used to
+# assume and what cost production every single order:
+#
+#     OrderCreateUpsertCustomerAttributesInput requires at least one of id, email
+#
+# and Shopify refuses the whole `orderCreate` for it. This shop is cash on
+# delivery and never asks for an email, so the id has to be looked up from the
+# phone first -- and when there is no match, the order goes without a customer
+# rather than not going at all.
 #
 # These reach for the real `create_order` rather than the fake shelf, which
 # replaces the whole function: what is under test is the payload it builds, so
@@ -367,8 +375,25 @@ def refusal(*errors):
     return {"orderCreate": {"order": None, "userErrors": list(errors)}}
 
 
-def sell(monkeypatch, recorder, **overrides):
+KNOWN_CUSTOMER = "gid://shopify/Customer/551"
+
+
+def sell(monkeypatch, recorder, *, known_customer=None, **overrides):
+    """Place an order against `recorder`.
+
+    `known_customer` stands in for the phone lookup: a gid means Shopify
+    already has this buyer, None means it does not. Always stubbed so a test
+    never reaches for a real client, and so which of the two cases is under
+    test is written down rather than inherited from the environment.
+    """
     monkeypatch.setattr(shopify_orders, "get_client", lambda: recorder)
+    from integrations.shopify import admin_customers
+
+    monkeypatch.setattr(
+        admin_customers,
+        "find_customer",
+        lambda **_kw: {"id": known_customer} if known_customer else None,
+    )
     args = {
         "reference": "WNS-1",
         "items": [{"shopify_variant_id": "gid://shopify/ProductVariant/1",
@@ -388,9 +413,11 @@ def sell(monkeypatch, recorder, **overrides):
 def test_the_order_carries_the_customer_who_placed_it(monkeypatch):
     recorder = Recorder(CREATED)
 
-    sell(monkeypatch, recorder)
+    sell(monkeypatch, recorder, known_customer=KNOWN_CUSTOMER)
 
     customer = recorder.calls[0]["order"]["customer"]["toUpsert"]
+    # The id is what Shopify accepts as a key; the phone rides along.
+    assert customer["id"] == KNOWN_CUSTOMER
     assert customer["phone"] == "+201067177128"
     assert customer["firstName"] == "Hazem"
     assert customer["lastName"] == "Abdelhamid"
@@ -402,7 +429,8 @@ def test_the_customer_and_the_packing_slip_split_the_name_the_same_way(monkeypat
     address on the parcel can never disagree about the same person."""
     recorder = Recorder(CREATED)
 
-    sell(monkeypatch, recorder, customer_name="حازم عبد الحميد")
+    sell(monkeypatch, recorder, customer_name="حازم عبد الحميد",
+         known_customer=KNOWN_CUSTOMER)
 
     order = recorder.calls[0]["order"]
     customer = order["customer"]["toUpsert"]
@@ -425,6 +453,51 @@ def test_a_customer_with_nothing_to_match_on_is_left_off(monkeypatch):
 
 
 @pytest.mark.no_shopify
+def test_a_phone_shopify_does_not_know_sends_no_customer_block(monkeypatch):
+    """The production bug, in the shape it actually took.
+
+    Every order here is cash on delivery with a name, an address and a phone
+    and no email. That went out as `toUpsert: {firstName, lastName, phone}`,
+    and Shopify refused the whole order:
+
+        OrderCreateUpsertCustomerAttributesInput requires at least one of
+        id, email
+
+    so `confirm_order` returned an error, the turn escalated, and the customer
+    who had just typed "اكد" was told someone would call them. An order with
+    no customer attached is worth far more than no order.
+    """
+    recorder = Recorder(CREATED)
+
+    sell(monkeypatch, recorder, known_customer=None)
+
+    order = recorder.calls[0]["order"]
+    assert "customer" not in order
+    # The sale still carries everything needed to pack and deliver it.
+    assert order["shippingAddress"]["phone"] == "+201067177128"
+    assert order["lineItems"]
+
+
+@pytest.mark.no_shopify
+def test_no_customer_block_we_send_is_ever_keyed_on_a_phone_alone(monkeypatch):
+    """The invariant, over the shapes an order can actually take."""
+    for overrides in (
+        {"known_customer": None},
+        {"known_customer": KNOWN_CUSTOMER},
+        {"email": "hazem@example.com"},
+        {"phone": "not a number", "email": None},
+        {"phone": "", "email": "hazem@example.com"},
+    ):
+        recorder = Recorder(CREATED)
+        sell(monkeypatch, recorder, **overrides)
+        block = recorder.calls[0]["order"].get("customer")
+        if block is None:
+            continue
+        attributes = block["toUpsert"]
+        assert attributes.get("id") or attributes.get("email"), (overrides, attributes)
+
+
+@pytest.mark.no_shopify
 def test_an_email_alone_is_enough_to_attach_them(monkeypatch):
     recorder = Recorder(CREATED)
 
@@ -443,7 +516,7 @@ def test_a_refused_customer_costs_the_link_not_the_sale(monkeypatch):
         CREATED,
     )
 
-    result = sell(monkeypatch, recorder)
+    result = sell(monkeypatch, recorder, known_customer=KNOWN_CUSTOMER)
 
     assert result["name"] == "#1029"
     assert len(recorder.calls) == 2
@@ -479,7 +552,7 @@ def test_a_refusal_that_is_not_about_the_customer_still_propagates(monkeypatch):
     recorder = Recorder(refusal(price), refusal(price))
 
     with pytest.raises(shopify_orders.OrderRejected) as caught:
-        sell(monkeypatch, recorder)
+        sell(monkeypatch, recorder, known_customer=KNOWN_CUSTOMER)
 
     assert "Price is invalid" in str(caught.value)
     assert len(recorder.calls) == 2

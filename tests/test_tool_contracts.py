@@ -1030,3 +1030,91 @@ def test_the_size_chart_follows_the_same_switch(ctx):
     chart = call(ctx, "get_size_chart")
     assert chart.get("error") != "no_product_in_context"
     assert chart["title"] != "WANAS Hoodie"
+
+
+# --- the cache must not swallow "send me the photos" ------------------------
+
+
+def _colour_split_product(ctx):
+    """A product whose catalogue entry has more than one colour photo."""
+    from domain.services import catalog
+
+    for row in catalog.get_products(ctx.session)["products"]:
+        payload = catalog.get_variants(ctx.session, row["product_id"])
+        if payload and len(payload.get("color_images") or {}) > 1:
+            return row["product_id"]
+    return None
+
+
+def test_asking_for_photos_twice_still_sends_photos(ctx):
+    """The production failure.
+
+    A customer asked for the Ringer photos, got them, and asked again. The
+    second `get_variants(more_images=True)` matched the first in the session
+    cache, so the handler never ran -- and `_more_images` is set *by the
+    handler* and popped before the result is stored, so the cached copy does
+    not carry it. `more_images` came back False, the request fell into the
+    plain "show me the product" branch, every candidate was already in
+    `sent_images`, and nothing was attached. The model had promised photos, so
+    the image-promise guard retried; the retry hit the token ceiling and the
+    customer got the generic failure message.
+    """
+    product = _colour_split_product(ctx)
+    if product is None:
+        pytest.skip("no colour-split product in the seed")
+
+    first = call(ctx, "get_variants", product_id=product, more_images=True)
+    assert "error" not in first
+    assert ctx.attachments, "the first request sent no photos at all"
+    _turn(ctx, "get_variants", {"product_id": product, "more_images": True}, first)
+
+    # Those photos have now gone out. `agent._sent_images` rebuilds exactly
+    # this set from the stored history on the next turn.
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+    again = call(ctx, "get_variants", product_id=product, more_images=True)
+    assert "error" not in again
+    assert ctx.attachments, (
+        "asking for the photos a second time attached none -- the cached "
+        "result lost the _more_images marker"
+    )
+
+
+def test_a_cached_size_chart_is_still_sent(ctx):
+    """Same shape, different marker: `_size_chart_image` is also set by the
+    handler and popped before storage, so a repeat ask must not go silent."""
+    product = "wanas-hoodie"
+    first = call(ctx, "get_size_chart", product_id=product)
+    if "error" in first:
+        pytest.skip("no size chart for the seeded product")
+    assert ctx.attachments, "the first size-chart request sent no picture"
+    _turn(ctx, "get_size_chart", {"product_id": product}, first)
+
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+    again = call(ctx, "get_size_chart", product_id=product)
+    assert "error" not in again
+    assert ctx.attachments, "the cached size chart was never re-sent"
+
+
+def test_asking_for_the_same_colour_twice_still_sends_that_colour(ctx):
+    """`_image_color` is lost by the cache the same way `_more_images` is, and
+    it decides *which* photo goes out -- so a repeat ask must not silently
+    fall back to the whole-product branch."""
+    product = _colour_split_product(ctx)
+    if product is None:
+        pytest.skip("no colour-split product in the seed")
+
+    from domain.services import catalog
+
+    colour = next(iter(catalog.get_variants(ctx.session, product)["color_images"]))
+
+    first = call(ctx, "get_variants", product_id=product, color=colour)
+    assert ctx.attachments, "the first colour request sent no photo"
+    _turn(ctx, "get_variants", {"product_id": product, "color": colour}, first)
+
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+    again = call(ctx, "get_variants", product_id=product, color=colour)
+    assert "error" not in again
+    assert again.get("_image_color") is None, "the marker must not reach the model"

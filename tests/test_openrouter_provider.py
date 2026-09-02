@@ -833,3 +833,27 @@ def test_vision_rate_limit_names_its_kind(captured, provider):
     with pytest.raises(ProviderError) as excinfo:
         provider.inspect_image(b"bytes", "image/jpeg", catalog=[])
     assert excinfo.value.kind == "rate_limit"
+
+
+def test_the_chat_budget_leaves_room_for_a_reasoning_model(captured, provider):
+    """1024 was the reply's budget on a model that does not reason. On one
+    that does, the same number is reasoning *plus* reply, and GLM was measured
+    spending all of it on one question in six -- finish_reason=length, no
+    content, no tool calls, and the customer gets the generic apology."""
+    provider.generate("p", [msg.user("الشحن كام؟")], [])
+    assert captured["sent"][0]["body"]["max_tokens"] == 4096
+    assert OpenRouterProvider.CHAT_MAX_TOKENS == 4096
+
+
+def test_an_empty_reply_is_reported_with_its_finish_reason(captured, provider):
+    """The signal that says *why* a turn produced nothing. Without it, a
+    budget exhausted by reasoning is indistinguishable from a content filter.
+    """
+    captured["queue"].append(
+        {"choices": [{"message": {"role": "assistant", "content": ""},
+                      "finish_reason": "length"}]}
+    )
+    reply = provider.generate("p", [msg.user("hi")], [])
+    assert not reply.text
+    assert not reply.tool_calls
+    assert reply.finish_reason == "length"

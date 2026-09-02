@@ -407,6 +407,36 @@ def _resolve_implicit_product(ctx: ToolContext, name: str, arguments: dict) -> N
         log.info("%s called with no product_id, resolved to %s", name, recent["product_id"])
 
 
+def _restore_image_markers(result: dict, arguments: dict) -> None:
+    """Put back the internal markers a cached result cannot be carrying.
+
+    `_more_images` and `_image_color` are set by the handler and popped in
+    `call_tool` before the result is ever stored, so a cache hit -- which
+    replays the *stored* result and never runs the handler -- arrives without
+    them. Everything downstream then reads the request as an ordinary "show me
+    the product" one.
+
+    That is what made a customer who asked for the Ringer photos a second time
+    get no photos at all: the repeat matched the first call in the cache,
+    `more_images` came back False, the plain branch found every candidate
+    already in `sent_images` and attached nothing, and the model -- which had
+    just promised photos -- tripped the image-promise guard into a retry that
+    ended in the generic failure message.
+
+    Re-deriving them from the arguments is exact rather than approximate: the
+    handler sets each marker from the argument of the same name, and the cache
+    only matches calls whose arguments are identical, so a hit necessarily had
+    the same values. The rule this restores is that **a cached call must have
+    the same side effects as a fresh one**; the cache is there to save a round
+    trip, not to change what the customer gets.
+    """
+    if arguments.get("more_images"):
+        result["_more_images"] = True
+    color = arguments.get("color")
+    if isinstance(color, str) and color.strip():
+        result["_image_color"] = color
+
+
 def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     """Dispatch. Never raises: an unexpected exception becomes an error dict."""
     spec = REGISTRY.get(name)
@@ -423,6 +453,7 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     if cached is not None:
         log.info("tool %s(%s) served from session cache, not re-fetched", name, arguments)
         result = dict(cached)
+        _restore_image_markers(result, arguments)
     else:
         try:
             result = spec.handler(ctx, **arguments)

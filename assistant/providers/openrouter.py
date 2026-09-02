@@ -225,12 +225,30 @@ class OpenRouterProvider(LLMProvider):
                     )
         return messages
 
+    #: The completion ceiling for one chat call.
+    #:
+    #: 4096, not the 1024 it was, because on a reasoning model that budget is
+    #: not the reply -- it is the reasoning *plus* the reply. `z-ai/glm-5.3-flash`
+    #: was measured spending 40 to 533 reasoning tokens on ordinary shop
+    #: questions and, on one in six, all 1024 of them: `finish_reason=length`,
+    #: no content, no tool calls. `agent.run_turn` sees an empty reply and the
+    #: customer gets the generic apology, which is exactly what happened in
+    #: production to "الشحن كام وبيوصل امتى؟".
+    #:
+    #: Raising it also made the tail *shorter*, not longer -- median 10.4s
+    #: against 10.9s, worst case 15.3s against 42.5s -- because the slowest
+    #: calls were the ones grinding into the ceiling and returning nothing.
+    #: There is no cheaper lever: this endpoint answers
+    #: "Reasoning is mandatory for this endpoint and cannot be disabled."
+    #: to `reasoning: {"enabled": false}`.
+    CHAT_MAX_TOKENS = 4096
+
     def _build_payload(self, system_prompt: str, history: list[dict], tools: list) -> dict:
         payload: dict = {
             "model": self.model,
             "messages": self._messages(system_prompt, history),
             "temperature": 0.3,
-            "max_tokens": 1024,
+            "max_tokens": self.CHAT_MAX_TOKENS,
         }
         if tools:
             payload["tools"] = [self._schema(spec) for spec in tools]
