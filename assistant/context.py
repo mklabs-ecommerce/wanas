@@ -33,6 +33,19 @@ for one class of bug where the bot said something nobody chose. Compaction
 only ever *removes whole messages*; every sentence that survives is the exact
 sentence that was said.
 
+**Compaction removes; it must never delete more than the cap requires.** The
+recalled block is aligned to open on something the customer said, which reads
+better than an answer with no question in front of it. That alignment used to
+walk *forward* to the first user message and drop everything before it -- and
+a conversation the **shop** started has no user message in front of its first
+line at all, because a back-in-stock notice, an abandoned-cart nudge and a
+status push are all written here by `domain/services/notifications.py` as
+assistant messages. The whole recalled block was discarded on that basis,
+including the one line saying what the conversation was about, while `recall`
+still had fifty free slots. Five exchanges in, the bot could no longer say
+what it had messaged the customer about. `_opening` snaps backwards instead,
+so alignment can only ever keep more, never less.
+
 This is a read-only view. It never writes, and the stored transcript keeps the
 tool exchanges in full -- `session.transcript()` and the dashboard are
 unaffected.
@@ -71,11 +84,37 @@ def _compact(message: dict) -> dict | None:
     return None
 
 
-def _first_user(messages: list[dict], start: int = 0) -> int:
-    for index in range(start, len(messages)):
-        if messages[index].get("role") == USER:
+def _opening(messages: list[dict], cut: int) -> int:
+    """Where the recalled block should begin, at or *before* `cut`.
+
+    The block reads better when it opens on something the customer said --
+    an answer with no question in front of it is a confusing way to resume.
+    This used to be done by walking *forward* to the first user message and
+    throwing away everything before it, which is a cosmetic preference
+    implemented as unbounded data loss:
+
+    * a conversation the **shop** started -- a back-in-stock notice, an
+      abandoned-cart nudge, a status push, all written into `sessions` by
+      `domain/services/notifications.py` as assistant messages -- has no user
+      message in front of its opening line at all. The whole recalled block
+      was therefore discarded, and with it the one message that said what the
+      conversation was *about*. Five exchanges in, the bot no longer knew
+      what it had nudged the customer about, while `recall` still had fifty
+      free slots to hold it in.
+    * any run of consecutive assistant messages sitting at the cut was
+      dropped for the same reason.
+
+    So it snaps backwards instead. Keeping a few messages more than
+    `recall` is the safe direction to be wrong in, and it is the direction
+    `session.trim` already chose for the same class of problem ("keeps more
+    than the cap" rather than return a fragment). When nothing before `cut`
+    is a user message -- the shop-opened case -- the answer is 0: keep the
+    block whole rather than delete it.
+    """
+    for index in range(min(cut, len(messages)), -1, -1):
+        if index < len(messages) and messages[index].get("role") == USER:
             return index
-    return len(messages)
+    return 0
 
 
 def for_model(
@@ -112,12 +151,13 @@ def for_model(
             kept = _compact(message)
             if kept is not None:
                 older.append(kept)
-        if len(older) > recall_cap:
-            older = older[len(older) - recall_cap :]
         # Start the recalled part at something the customer said, so the model
         # reads it as a conversation resuming rather than an answer with no
-        # question in front of it.
-        older = older[_first_user(older) :]
+        # question in front of it -- but never by deleting what came before
+        # the first thing they said. `_opening` snaps backwards, so a block
+        # that is already inside the cap is kept whole.
+        if len(older) > recall_cap:
+            older = older[_opening(older, len(older) - recall_cap) :]
 
     if not older and not verbatim:
         return list(history)

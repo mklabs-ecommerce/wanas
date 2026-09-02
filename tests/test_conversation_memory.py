@@ -100,6 +100,62 @@ def test_recall_is_bounded_but_far_longer_than_the_verbatim_window():
     assert sent[0]["role"] == "user"
 
 
+def test_a_conversation_the_shop_started_keeps_its_opening_message():
+    """The reported "it forgets partway through".
+
+    `notifications.py` writes the back-in-stock notice, the abandoned-cart
+    nudge and the status pushes into `sessions` as assistant messages, so a
+    conversation the shop opened has no customer message in front of its
+    first line. The recalled block used to be trimmed *forward* to the first
+    user message, which in that shape meant discarding the block entirely --
+    including the one line that said what the conversation was about, and
+    with `recall` nowhere near full. Five exchanges in, the bot no longer
+    knew what it had nudged the customer about.
+    """
+    notice = "الـ Ringer Tee البيج رجع تاني مقاس M"
+    history = [msg.assistant(notice)]
+    history += _exchange("تمام، وبكام؟", "بـ ٧٥٠ جنيه.")
+    for n in range(8):
+        history += _exchange(f"سؤال {n}؟", f"رد {n}.")
+
+    sent = context.for_model(history)
+    assert any(notice in (m.get("content") or "") for m in sent), (
+        "the message the shop opened with was dropped from the model's view"
+    )
+
+
+def test_a_run_of_shop_sent_messages_is_not_discarded_to_reach_a_question():
+    """The same defect without the shop *opening*: several automated messages
+    in a row sitting at the recall boundary were dropped wholesale."""
+    pushes = [msg.assistant(f"رسالة تلقائية {n}") for n in range(6)]
+    history = pushes + [m for n in range(10) for m in _exchange(f"س {n}؟", f"ر {n}.")]
+
+    sent = context.for_model(history, recent=8, recall=60)
+    kept = [m.get("content") for m in sent]
+    for push in pushes:
+        assert push["content"] in kept, f"{push['content']} was discarded"
+
+
+def test_the_recalled_block_still_opens_on_a_question_when_it_can():
+    """The readability rule the trim existed for survives -- it just snaps
+    backwards now instead of deleting what it skipped."""
+    history = [m for n in range(20) for m in _exchange(f"سؤال {n}", f"رد {n}")]
+
+    sent = context.for_model(history, recent=8, recall=10)
+    assert sent[0]["role"] == "user"
+
+
+def test_nothing_before_the_cut_is_dropped_without_being_over_the_cap():
+    """A block that already fits must never lose a message."""
+    for leading in range(0, 5):
+        history = [msg.assistant(f"تلقائي {i}") for i in range(leading)]
+        history += [m for n in range(4) for m in _exchange(f"س {n}", f"ر {n}")]
+        sent = context.for_model(history, recent=4, recall=60)
+        said = [m.get("content") for m in sent]
+        for i in range(leading):
+            assert f"تلقائي {i}" in said, (leading, i)
+
+
 def test_recall_can_be_turned_off_entirely():
     history = _exchange("أول سؤال", "أول رد") + _exchange("تاني سؤال", "تاني رد")
     assert context.for_model(history, recent=4, recall=0) == history[-4:]
