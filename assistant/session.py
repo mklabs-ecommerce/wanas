@@ -470,8 +470,34 @@ def append(
     return save(session, channel, external_id, history + list(messages))
 
 
+def photo_mid_labels(outcomes: list, attachment_labels: dict[str, str]) -> dict[str, str]:
+    """Which id was which photo, for the ids that went out as one.
+
+    Each image is its own send with its own id, and `OutboundMessage` carries
+    the path it was for -- so the id and the colourway can be paired here
+    without counting positions or assuming the attachments went out in order.
+    A photo the turn had no label for is simply left out: an unnamed picture
+    resolves to its message like any other, which is what used to happen to
+    all of them.
+    """
+    labels: dict[str, str] = {}
+    for out in outcomes:
+        if not out.delivered:
+            continue
+        label = attachment_labels.get(out.image_path or "")
+        if not label:
+            continue
+        for mid in out.message_ids:
+            labels[mid] = label
+    return labels
+
+
 def attach_outbound_ids(
-    session: Session, channel: str, external_id: str, message_ids: list[str]
+    session: Session,
+    channel: str,
+    external_id: str,
+    message_ids: list[str],
+    mid_labels: dict[str, str] | None = None,
 ) -> bool:
     """Record the platform ids a reply actually went out as.
 
@@ -487,6 +513,14 @@ def attach_outbound_ids(
     because the ids do not exist until after the send, which is after the turn
     has already stored its reply. Returns False when there was nothing to
     stamp -- a paused conversation, or a send that failed outright.
+
+    `mid_labels` says what the id at each key *was*, for the ids that went out
+    as a photo: "Ringer Boxy Fit Tshirt (Beige)". Knowing the message is not
+    enough when one message was four photos, one per colourway -- resolving
+    the quote to the message alone hands the next turn the same four colours
+    the customer was trying to choose between, which is a guess wearing the
+    clothes of an answer. Storage-only, like `mids` itself; no provider ever
+    sees it.
     """
     ids = [m for m in (message_ids or []) if m]
     if not ids:
@@ -504,6 +538,13 @@ def attach_outbound_ids(
         # SQLAlchemy only notices a reassignment.
         updated = dict(message)
         updated["mids"] = merged
+        labelled = {
+            mid: label
+            for mid, label in (mid_labels or {}).items()
+            if isinstance(mid, str) and mid and isinstance(label, str) and label
+        }
+        if labelled:
+            updated["mid_labels"] = {**(message.get("mid_labels") or {}), **labelled}
         stored = list(stored)
         stored[index] = updated
         row.history = stored

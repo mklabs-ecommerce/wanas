@@ -328,6 +328,11 @@ def _sent_images(history: list[dict]) -> set[str]:
 class AgentReply:
     text: str
     attachments: list[str] = field(default_factory=list)
+    #: What each attached photo is of, keyed by path. Carried to the channel
+    #: adapter so the platform message id a photo goes out as can be recorded
+    #: against the thing it shows -- see `ToolContext.attachment_labels` and
+    #: `assistant/quoting.py`. Empty for a reply that attached nothing.
+    attachment_labels: dict[str, str] = field(default_factory=dict)
     #: A tappable picker a tool asked for, in the neutral shape
     #: `assistant/interactive.py` defines. The adapter decides whether it can
     #: send one; a channel that cannot just sends the text.
@@ -522,6 +527,7 @@ def run_turn(
                 return AgentReply(
                     text=text_out,
                     attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
                     interactive=ctx.interactive,
                     tool_calls=called,
                     error="image_promise" if image_promise else "dangling_promise",
@@ -543,6 +549,7 @@ def run_turn(
             return AgentReply(
                 text=text_out or GENERIC_FAILURE,
                 attachments=ctx.attachments,
+                attachment_labels=ctx.attachment_labels,
                 interactive=ctx.interactive,
                 tool_calls=called,
             )
@@ -578,6 +585,7 @@ def run_turn(
             return AgentReply(
                 text="",
                 attachments=ctx.attachments,
+                attachment_labels=ctx.attachment_labels,
                 interactive=ctx.interactive,
                 tool_calls=called,
                 silent=True,
@@ -591,6 +599,7 @@ def run_turn(
     return AgentReply(
         text=LOOP_EXHAUSTED,
         attachments=ctx.attachments,
+        attachment_labels=ctx.attachment_labels,
         interactive=ctx.interactive,
         tool_calls=called,
         error="loop_cap",

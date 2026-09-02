@@ -28,6 +28,18 @@ The quote is folded into the text of the turn as words, because the neutral
 message format has no structured "in reply to" field and inventing one would
 mean touching every provider. The exact original sentence is quoted, never a
 paraphrase of it.
+
+**A photo is resolved to the photo, not to the message it rode in on.** One
+reply is often several sends -- the words, then one picture per colourway --
+and they share a single stored message, differing only by the platform id
+each went out as. Resolving to the message alone therefore answered "عايز
+ديه" under the beige tee by handing the model all four colours the customer
+had just picked between, which is the same guess-from-recency this module
+exists to stop, one level down. So each photo's id is stored against what it
+showed (`mid_labels`, written by `assistant/session.py::photo_mid_labels` at
+send time, from the labels the tool layer collected in
+`ToolContext.attachment_labels`), and a quote that lands on one names the
+colourway instead of the message.
 """
 
 from __future__ import annotations
@@ -69,10 +81,35 @@ def find(transcript: list[dict], target_id: str) -> dict | None:
     return None
 
 
-def _describe(message: dict) -> str | None:
+def _photo_label(message: dict, target_id: str) -> str | None:
+    """What the *specific* photo they replied to was of, if it is known.
+
+    One assistant message is often several sends: the words, then one picture
+    per colourway. They share a stored message and differ only by platform
+    id, so resolving the quote to the message is not resolving it at all --
+    it hands back all four colours the customer was pointing away from. The
+    id-to-photo map is written at send time by
+    `assistant/session.py::photo_mid_labels`; this is the only reader.
+    """
+    labels = message.get("mid_labels")
+    if not isinstance(labels, dict):
+        return None
+    label = labels.get(target_id)
+    return label if isinstance(label, str) and label.strip() else None
+
+
+def _describe(message: dict, target_id: str = "") -> str | None:
     role = message.get("role")
     if role not in (USER, ASSISTANT):
         return None
+
+    # A photo beats the message it was sent with. "I want this one" under a
+    # picture of the beige tee is a choice of colour, and quoting the four-way
+    # message it belonged to loses exactly the thing that was chosen.
+    photo = _photo_label(message, target_id)
+    if photo:
+        return f'a photo you sent of: "{photo}"'
+
     text = (message.get("content") or "").strip()
     if not text:
         # A message with no words -- a bare photo, most often. Say that much
@@ -106,7 +143,7 @@ def annotate(text: str, transcript: list[dict], target_ids) -> str:
         if message is None:
             log.info("quoted message %s is not in this transcript; answering unannotated", target)
             continue
-        described = _describe(message)
+        described = _describe(message, target)
         if described:
             quotes.append(described)
 

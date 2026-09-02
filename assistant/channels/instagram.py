@@ -1083,18 +1083,27 @@ def _deliver(external_id: str, pending: Pending) -> None:
         outcomes.append(client.send_image(external_id, path))
 
     _flag_delivery_failures(external_id, outcomes)
-    _remember_sent_ids(external_id, outcomes)
+    _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
 
 
-def _remember_sent_ids(external_id: str, outcomes: list) -> None:
+def _remember_sent_ids(
+    external_id: str, outcomes: list, attachment_labels: dict[str, str] | None = None
+) -> None:
     """Stamp the ids Instagram gave this reply onto the message it stored, so
-    a later "reply to this" on it resolves. See the WhatsApp adapter's twin."""
+    a later "reply to this" on it resolves. See the WhatsApp adapter's twin,
+    including why each photo is recorded with the colourway it showed."""
     sent = [mid for out in outcomes if out.delivered for mid in out.message_ids]
     if not sent:
         return
     try:
         with session_scope() as db:
-            session_store.attach_outbound_ids(db, CHANNEL, external_id, sent)
+            session_store.attach_outbound_ids(
+                db,
+                CHANNEL,
+                external_id,
+                sent,
+                mid_labels=session_store.photo_mid_labels(outcomes, attachment_labels or {}),
+            )
     except Exception:
         log.exception("could not record the outbound message ids for %s", external_id)
 

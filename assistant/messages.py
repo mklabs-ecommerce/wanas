@@ -18,8 +18,8 @@ having one.
 The agent only ever speaks this. Adding a provider means writing one class and
 changing one config value; no other file changes.
 
-Several keys are **storage-only**: `mids`, `images`, `audio`, `attachments`,
-`by`, `delivery`, `at` and `receipt`. They are written into history and read
+Several keys are **storage-only**: `mids`, `mid_labels`, `images`, `audio`,
+`attachments`, `by`, `delivery`, `at` and `receipt`. They are written into history and read
 back by the dashboard and the harness, and no provider ever sees them --
 every translation layer builds its request from `role`/`content`/`tool_calls`
 and ignores what it does not recognise. That is the discipline to follow when
@@ -137,6 +137,12 @@ def assistant(
         # `assistant/session.py::attach_outbound_ids`; it is what makes a
         # customer's "reply to this" on something the bot said resolvable at
         # all. Never sent to the provider, same as `attachments`.
+        #
+        # `mid_labels` rides alongside it, written by the same function: for
+        # the ids that went out as a photo, what that photo showed. One reply
+        # can be four pictures of four colourways under a single stored
+        # message, so the id is the only thing telling them apart -- see
+        # `assistant/quoting.py`.
         message["mids"] = [m for m in mids if m]
     if tool_calls:
         message["tool_calls"] = tool_calls

@@ -49,6 +49,11 @@ VOICE_ACK = "وصلتني رسالتك الصوتية 🎧 حد من الفري�
 class RuntimeReply:
     text: str | None = None
     attachments: list[str] = field(default_factory=list)
+    #: What each attached photo is of, keyed by path -- see
+    #: `assistant/agent.py::AgentReply.attachment_labels`. The adapter pairs
+    #: it with the platform id each photo went out as, which is what lets a
+    #: customer's reply to one of four colour photos resolve to one colour.
+    attachment_labels: dict[str, str] = field(default_factory=dict)
     #: An interactive payload the adapter should send instead of plain text
     #: (a governorate list, a size picker). None on every channel that has no
     #: such thing, which is why it never reaches the model.
@@ -533,6 +538,7 @@ def _handle(
     return RuntimeReply(
         text=reply.text,
         attachments=reply.attachments,
+        attachment_labels=reply.attachment_labels,
         interactive=reply.interactive,
         tool_calls=reply.tool_calls,
         error=reply.error,

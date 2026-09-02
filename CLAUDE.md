@@ -384,7 +384,16 @@ tests/                   pytest suite (flat, one test_<module>.py per
   included, and folds the original sentence into the turn. An unresolvable id
   is left unannotated on purpose: a reply to something older than the
   transcript is still an ordinary message, and inventing which one it was is
-  exactly the wrong-message answer this closed.
+  exactly the wrong-message answer this closed. **A quoted photo resolves to
+  the photo, not to the message it rode in on**: one reply is often several
+  sends -- the words, then one picture per colourway -- sharing a single
+  stored message and differing only by id, so resolving to the message handed
+  the model back all four colours the customer had just pointed away from.
+  Each photo's id is stored against what it showed (`mid_labels`, written by
+  `session.photo_mid_labels` from the labels the tool layer collected in
+  `ToolContext.attachment_labels`). A photo with no label -- a product the
+  catalogue never split by colour -- falls back to quoting its message, which
+  is still better than naming a colourway nobody chose.
 - No Alembic — tables are created at startup via `Base.metadata.create_all`
   (`app.py`), which adds missing tables but **not** missing columns on
   existing ones. That gap cost four days of production orders

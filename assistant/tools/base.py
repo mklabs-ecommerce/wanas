@@ -35,6 +35,16 @@ class ToolContext:
     #: channel adapter alongside the reply text. The model writes the words;
     #: it never emits a path into the message body.
     attachments: list[str] = field(default_factory=list)
+    #: What each attached photo actually *is*, keyed by path -- "Ringer Boxy
+    #: Fit Tshirt (Beige)" rather than a filename. A reply that sends one
+    #: photo per colourway leaves the customer looking at four pictures and
+    #: only one way to point at one of them: long-press the photo they want
+    #: and reply to it. Resolving that quote back to a colour is only possible
+    #: if something wrote down which colour each picture was, and until this
+    #: existed nothing did -- the paths were collected as a bare list and the
+    #: colour that chose them was discarded one line later. See
+    #: `assistant/quoting.py`, which is where the label is finally read.
+    attachment_labels: dict[str, str] = field(default_factory=dict)
     #: Images already delivered earlier in this conversation (read from the
     #: session history before the turn starts). The default image policy
     #: never re-sends one of these -- credit waste, not helpfulness.
@@ -69,19 +79,26 @@ class ToolContext:
         self.interactive = payload
         return True
 
-    def attach(self, path: str, *, force: bool = False) -> bool:
+    def attach(self, path: str, *, force: bool = False, label: str | None = None) -> bool:
         """Add an image to this turn's reply, once.
 
         `force` bypasses the cross-turn `sent_images` check but never the
         same-turn de-dup -- it exists for the size chart (the answer itself)
         and for an explicit "send more photos" request, where resending
         something already shown is the customer's actual ask, not spam.
+
+        `label` says what the picture is of, for `attachment_labels` above.
+        Optional because a product the catalogue never split by colour has
+        nothing to distinguish, and a photo with no label is still a photo --
+        it just cannot be named later if the customer replies to it.
         """
         if not (isinstance(path, str) and path) or path in self.attachments:
             return False
         if not force and path in self.sent_images:
             return False
         self.attachments.append(path)
+        if label:
+            self.attachment_labels[path] = label
         return True
 
 
@@ -343,7 +360,7 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     # product's sizes come up and never again. An explicit get_size_chart
     # still forces it, because asking for it again is asking to see it again.
     if isinstance(chart_image, str) and chart_image:
-        ctx.attach(chart_image)
+        ctx.attach(chart_image, label=_chart_label(result))
     return result
 
 
@@ -430,6 +447,57 @@ def _matching_color(color_images: dict, color: str | None) -> str | None:
     return None
 
 
+def _image_labels(result: dict) -> dict[str, str]:
+    """What each photo in a tool result is of, keyed by path.
+
+    Built from `color_images`, which is the only place the colourway of a
+    picture is ever written down -- `_candidate_images` reads it to *choose*
+    a photo and then returns bare paths, so the colour was known and thrown
+    away at exactly the moment it became worth keeping.
+
+    The label is the product name and the colourway, both straight out of the
+    database. It is never shown to the customer and never sent to the model
+    as data; it exists so that when they long-press one of four photos and
+    say "I want this one", `assistant/quoting.py` can say which one that was
+    instead of quoting the whole four-photo message and leaving the model to
+    guess. Guessing is how the wrong colour gets added to a cart.
+    """
+    name = result.get("name") or result.get("title")
+    name = name if isinstance(name, str) and name.strip() else None
+    labels: dict[str, str] = {}
+
+    color_images = result.get("color_images")
+    if isinstance(color_images, dict):
+        for key, paths in color_images.items():
+            if not (isinstance(key, str) and key.strip()) or not isinstance(paths, list):
+                continue
+            label = f"{name} ({key})" if name else key
+            for path in paths:
+                if isinstance(path, str) and path:
+                    labels.setdefault(path, label)
+
+    if name:
+        # A product with no colour split still gets a name, so a reply to one
+        # of two extra angles at least resolves to the right product.
+        images = result.get("images")
+        if isinstance(images, list):
+            for path in images:
+                if isinstance(path, str) and path:
+                    labels.setdefault(path, name)
+    return labels
+
+
+def _chart_label(result: dict) -> str | None:
+    """"<product> size chart", when the result names a product.
+
+    A size chart is the one attachment a customer replies to meaning
+    something other than "this colour" -- they are asking about the numbers.
+    Saying so is what stops the next turn reading it as a colour choice.
+    """
+    name = result.get("title") or result.get("name")
+    return f"{name} size chart" if isinstance(name, str) and name.strip() else None
+
+
 def _collect_images(
     ctx: ToolContext, result: dict, *, more_images: bool = False, color: str | None = None
 ) -> None:
@@ -442,9 +510,11 @@ def _collect_images(
     are the product's photos, which follow the strict budget below and are
     never repeated unless nothing unseen is left to show.
     """
+    labels = _image_labels(result)
+
     image = result.get("image")
     if isinstance(image, str) and image:
-        ctx.attach(image, force=True)
+        ctx.attach(image, force=True, label=labels.get(image) or _chart_label(result))
 
     candidates = _candidate_images(result, color)
     if not candidates:
@@ -463,7 +533,7 @@ def _collect_images(
         for path in ranked:
             if added >= budget:
                 break
-            if ctx.attach(path, force=True):
+            if ctx.attach(path, force=True, label=labels.get(path)):
                 added += 1
         return
 
@@ -481,7 +551,7 @@ def _collect_images(
         return
 
     for path in candidates[:MAX_PRODUCT_IMAGES]:
-        ctx.attach(path)
+        ctx.attach(path, label=labels.get(path))
 
 
 def tool_specs() -> list[ToolSpec]:

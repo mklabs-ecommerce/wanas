@@ -265,3 +265,119 @@ def test_a_quote_pointing_outside_the_batch_is_handed_on(seeded):
         texts=["ميديم"], text_ids=["wamid.9"], reply_to={"wamid.9": "wamid.bot.earlier"}
     )
     assert pending.unresolved_reply_to() == ["wamid.bot.earlier"]
+
+
+# --- (c) which of four photos they replied to ------------------------------
+#
+# The four-colour message is the case that broke. `get_variants` with
+# more_images sends one picture per colourway as four separate WhatsApp
+# messages that share a single stored assistant message; the customer
+# long-presses the beige one and writes "عايز ديه". Resolving the quote to
+# the *message* gave the model the four-colour sentence back and no way to
+# tell which photo it was under -- so the choice the customer had just made
+# by pointing at it was thrown away, and the next turn asked them which
+# colour they meant, or picked one.
+
+
+class _Sent:
+    """One accepted send, shaped like `notifications.OutboundMessage`."""
+
+    def __init__(self, mid, image_path=None, delivered=True):
+        self.message_ids = [mid] if mid else []
+        self.image_path = image_path
+        self.delivered = delivered
+
+
+def test_a_photo_carries_the_colourway_it_showed(seeded):
+    provider = ScriptedProvider([ModelReply(text="دي كل الألوان")])
+    run_turn(seeded, CHANNEL, WHO, "ابعتلي كل الألوان", provider=provider)
+
+    session_store.attach_outbound_ids(
+        seeded,
+        CHANNEL,
+        WHO,
+        ["wamid.words", "wamid.beige", "wamid.navy"],
+        mid_labels={
+            "wamid.beige": "Ringer Boxy Fit Tshirt (Beige)",
+            "wamid.navy": "Ringer Boxy Fit Tshirt (Navy)",
+        },
+    )
+
+    transcript = session_store.transcript(seeded, CHANNEL, WHO)
+    annotated = quoting.annotate("عايز ديه", transcript, ["wamid.beige"])
+
+    assert "Beige" in annotated
+    assert "Navy" not in annotated
+    assert annotated.endswith("عايز ديه")
+
+
+def test_replying_to_the_words_still_quotes_the_words(seeded):
+    """Only the ids that went out as a photo are labelled. A reply to the
+    sentence itself must keep behaving exactly as it did."""
+    said = "دي كل الألوان المتاحة"
+    provider = ScriptedProvider([ModelReply(text=said)])
+    run_turn(seeded, CHANNEL, WHO, "ابعتلي كل الألوان", provider=provider)
+
+    session_store.attach_outbound_ids(
+        seeded,
+        CHANNEL,
+        WHO,
+        ["wamid.words", "wamid.beige"],
+        mid_labels={"wamid.beige": "Ringer Boxy Fit Tshirt (Beige)"},
+    )
+
+    transcript = session_store.transcript(seeded, CHANNEL, WHO)
+    assert said in quoting.annotate("تمام", transcript, ["wamid.words"])
+
+
+def test_an_unlabelled_photo_falls_back_to_quoting_its_message(seeded):
+    """A product the catalogue never split by colour has nothing to name.
+    That is the old behaviour, and it is still the right one -- silence about
+    which photo beats inventing a colourway."""
+    said = "اتفضل، ده المنتج"
+    provider = ScriptedProvider([ModelReply(text=said)])
+    run_turn(seeded, CHANNEL, WHO, "وريني المنتج", provider=provider)
+    session_store.attach_outbound_ids(seeded, CHANNEL, WHO, ["wamid.words", "wamid.pic"])
+
+    transcript = session_store.transcript(seeded, CHANNEL, WHO)
+    assert said in quoting.annotate("ده", transcript, ["wamid.pic"])
+
+
+def test_the_id_of_each_photo_is_paired_with_what_it_showed():
+    """The adapter's half: `OutboundMessage.image_path` is what pairs an id
+    with a colourway, so the pairing never depends on the sends coming back
+    in the order the attachments went out in."""
+    labels = session_store.photo_mid_labels(
+        [
+            _Sent("wamid.words"),
+            _Sent("wamid.navy", image_path="data/images/tee-navy.jpg"),
+            _Sent("wamid.beige", image_path="data/images/tee-beige.jpg"),
+            _Sent("wamid.dropped", image_path="data/images/tee-brown.jpg", delivered=False),
+        ],
+        {
+            "data/images/tee-beige.jpg": "Ringer Boxy Fit Tshirt (Beige)",
+            "data/images/tee-navy.jpg": "Ringer Boxy Fit Tshirt (Navy)",
+            "data/images/tee-brown.jpg": "Ringer Boxy Fit Tshirt (Brown)",
+        },
+    )
+
+    assert labels == {
+        "wamid.navy": "Ringer Boxy Fit Tshirt (Navy)",
+        "wamid.beige": "Ringer Boxy Fit Tshirt (Beige)",
+    }
+
+
+def test_the_colour_that_chose_a_photo_is_written_down_at_attach_time(seeded):
+    """The tool layer's half, and the one that was missing: `_candidate_images`
+    read `color_images` to pick a photo and returned bare paths, so the colour
+    was known and discarded one line later."""
+    from assistant.tools.base import ToolContext, call_tool, load_all
+
+    load_all()
+    ctx = ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
+    call_tool(ctx, "get_variants", {"product_id": "wanas-hoodie", "more_images": True})
+
+    assert ctx.attachments
+    labelled = [p for p in ctx.attachments if p in ctx.attachment_labels]
+    assert labelled, "a colour-split product must name every photo it sends"
+    assert len({ctx.attachment_labels[p] for p in labelled}) == len(labelled)
