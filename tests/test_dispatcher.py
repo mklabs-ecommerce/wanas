@@ -173,3 +173,73 @@ def test_the_dispatcher_returns_before_the_work_is_done():
     finally:
         release.set()
         dispatcher.shutdown()
+
+
+def test_shutdown_answers_what_is_still_buffered():
+    """A deploy must not throw away a customer's half-typed sentence.
+
+    `app.py`'s lifespan calls `shutdown(wait=True)` precisely so buffered
+    fragments get their turn. It did not: cancelling the timers left the
+    `Pending` sitting in `_pending`, and `ThreadPoolExecutor.shutdown` only
+    waits for tasks already submitted. The customer had been recorded as
+    having written (`record_inbound`) and was then never answered -- which the
+    dashboard shows as unanswered forever, with nothing in the log.
+    """
+    handled: list[tuple[str, str]] = []
+    dispatcher = MessageDispatcher(
+        lambda key, item: handled.append((key, item.text)),
+        # Long enough that nothing can fire on its own before shutdown.
+        debounce_seconds=30,
+        max_workers=2,
+    )
+    dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+    dispatcher.submit("2020", Pending(texts=["بكام؟"]))
+    assert handled == []  # still inside the debounce window
+
+    dispatcher.shutdown(wait=True)
+
+    assert sorted(handled) == [("2010", "عايز هودي"), ("2020", "بكام؟")]
+
+
+def test_conversation_locks_do_not_accumulate():
+    """One `threading.Lock` per customer who ever messaged, kept for the life
+    of the process, is an unbounded leak on a long-lived instance. The lock
+    still has to outlive any thread waiting on it, which is why it is
+    refcounted rather than deleted after each run."""
+    dispatcher = MessageDispatcher(lambda key, item: None, debounce_seconds=0)
+    try:
+        for i in range(50):
+            dispatcher.submit(f"customer-{i}", Pending(texts=["هاي"]))
+        assert dispatcher.wait_idle(5)
+        assert dispatcher._conversation_locks == {}
+        assert dispatcher._lock_users == {}
+    finally:
+        dispatcher.shutdown()
+
+
+def test_one_conversation_is_still_answered_one_turn_at_a_time():
+    """The refcounting above must not weaken the guarantee it is built around:
+    two fragments of one conversation never run concurrently."""
+    overlaps: list[int] = []
+    running = 0
+    guard = threading.Lock()
+
+    def handler(key, item):
+        nonlocal running
+        with guard:
+            running += 1
+            overlaps.append(running)
+        time.sleep(0.05)
+        with guard:
+            running -= 1
+
+    dispatcher = MessageDispatcher(handler, debounce_seconds=0.05, max_workers=4)
+    try:
+        for _ in range(6):
+            dispatcher.submit("2010", Pending(texts=["هاي"]))
+            time.sleep(0.08)
+        assert dispatcher.wait_idle(10)
+    finally:
+        dispatcher.shutdown()
+
+    assert max(overlaps) == 1

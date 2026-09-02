@@ -176,6 +176,11 @@ class MessageDispatcher:
         #: fragment that arrives while the previous turn is mid-flight produces
         #: two agent turns racing over the same session row.
         self._conversation_locks: dict[str, threading.Lock] = {}
+        #: How many threads hold or are waiting on each conversation lock, so
+        #: the entry can be dropped when the count reaches zero instead of
+        #: accumulating one lock per customer forever. See
+        #: `_release_conversation_lock`.
+        self._lock_users: dict[str, int] = {}
         # Re-entrant: `submit` takes it and then updates the busy counter,
         # which takes it again on the same thread.
         self._lock = threading.RLock()
@@ -249,6 +254,8 @@ class MessageDispatcher:
                 # because every later message for every customer is dropped
                 # silently after it.
                 log.exception("failed to handle buffered messages for %s", key)
+            finally:
+                self._release_conversation_lock(key, lock)
 
     def _conversation_lock(self, key: str) -> threading.Lock:
         with self._lock:
@@ -256,7 +263,34 @@ class MessageDispatcher:
             if lock is None:
                 lock = threading.Lock()
                 self._conversation_locks[key] = lock
+            self._lock_users[key] = self._lock_users.get(key, 0) + 1
             return lock
+
+    def _release_conversation_lock(self, key: str, lock: threading.Lock) -> None:
+        """Forget a conversation's lock once nothing is holding or waiting for
+        it.
+
+        Without this the dict is append-only: one `threading.Lock` per
+        customer who has *ever* messaged, kept for the life of the process.
+        On a single long-lived Railway instance that is an unbounded leak
+        keyed on customer count -- slow, invisible, and only ever noticed as a
+        process that grows for weeks.
+
+        Refcounted rather than "delete after the last run", because deleting a
+        lock another thread is already blocked on would hand the next arrival
+        a *different* lock object for the same conversation -- which is the
+        two-turns-racing-one-session-row bug this lock exists to stop.
+        """
+        with self._lock:
+            remaining = self._lock_users.get(key, 1) - 1
+            if remaining > 0:
+                self._lock_users[key] = remaining
+                return
+            self._lock_users.pop(key, None)
+            # Only drop the entry if it is still the same object -- a lock
+            # replaced under us belongs to a newer arrival.
+            if self._conversation_locks.get(key) is lock:
+                self._conversation_locks.pop(key, None)
 
     # -- lifecycle --------------------------------------------------------
 
@@ -276,11 +310,40 @@ class MessageDispatcher:
         return self._idle.wait(timeout)
 
     def shutdown(self, *, wait: bool = True) -> None:
+        """Stop taking new work, and answer what is already buffered.
+
+        The flush is the point. `app.py`'s lifespan calls this on every deploy
+        to "let anything still buffered finish rather than dropping a
+        customer's message" -- but cancelling the timers and shutting the pool
+        does not do that on its own: `_pool.shutdown` only waits for tasks
+        already *submitted*, and a conversation still inside its debounce
+        window has no task yet. It sat in `_pending` and was thrown away, so
+        every deploy silently abandoned mid-sentence customers, who had
+        already been recorded as having written (`record_inbound`) and so read
+        as unanswered forever.
+
+        Cancelling first and draining second is deliberate: a timer that fires
+        while we drain finds `_pending` empty and releases its own busy count,
+        so nothing is run twice and nothing is left counted.
+        """
         with self._lock:
             timers = list(self._timers.values())
             self._timers.clear()
         for timer in timers:
             timer.cancel()
+
+        with self._lock:
+            buffered = list(self._pending.items())
+            self._pending.clear()
+        for key, item in buffered:
+            try:
+                self._pool.submit(self._run_and_release, key, item)
+            except RuntimeError:
+                # The pool is already shutting down (a second shutdown call).
+                # Run it here rather than lose it.
+                log.warning("flushing buffered messages for %s inline at shutdown", key)
+                self._run_and_release(key, item)
+
         self._pool.shutdown(wait=wait)
 
     @property
