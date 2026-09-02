@@ -56,12 +56,11 @@ os.environ["HARNESS_ENABLED"] = "1"
 # makes the run hermetic -- otherwise a real GEMINI_API_KEY or a local
 # CHATBOT_DEBUG=1 silently changes what the assertions see, and the same test
 # passes on one machine and fails on another.
-#: Kept before the blanking below so the opt-in live conversation tests can
-#: still reach a real model. Nothing else may read it.
-#: The live suite's way back to a real model, read before the blanking above
-#: takes the keys away. Every provider the shop can actually be configured
-#: with is listed: reading only the Gemini pair silently skipped the live
-#: suite on a deployment running OpenRouter, which is this one.
+#: The live suite's way back to a real model, read before the blanking below
+#: takes the keys away. Nothing else may read it. Every provider the shop can
+#: actually be configured with is listed: reading only the Gemini pair
+#: silently skipped the live suite on a deployment running OpenRouter, which
+#: is this one.
 REAL_LLM_KEY = (
     os.getenv("LLM_API_KEY")
     or os.getenv("OPENROUTER_API_KEY")
@@ -83,6 +82,19 @@ for _name in (
     "WHATSAPP_ACCESS_TOKEN",
     "WHATSAPP_APP_SECRET",
     "WHATSAPP_VERIFY_TOKEN",
+    # The Instagram half of the same rule, and it was missing: a developer
+    # with real INSTAGRAM_ACCOUNT_ID / INSTAGRAM_ACCESS_TOKEN in .env made
+    # `settings.instagram_configured` true inside the suite, so the adapter's
+    # "inert without credentials" test got a 403 (bad signature) where it
+    # asserts a 503. The same test passed in CI and failed on the shop's own
+    # machine -- exactly the split this block exists to prevent. The app
+    # secret is blanked too, so a signature test can never be graded against
+    # a real key.
+    "INSTAGRAM_ACCOUNT_ID",
+    "INSTAGRAM_ACCESS_TOKEN",
+    "INSTAGRAM_APP_SECRET",
+    "INSTAGRAM_VERIFY_TOKEN",
+    "INSTAGRAM_APP_SCOPED_ID",
     # A real value here would make the "no secret configured" dashboard tests
     # pass or fail depending on whose .env happens to be sitting next to the
     # repo, rather than on the code.
