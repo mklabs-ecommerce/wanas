@@ -311,13 +311,20 @@ async def lifespan(_app: FastAPI):
         # port, so a deploy that says "over SMTP" is a deploy whose alerts
         # will never arrive, and that is worth seeing at boot rather than
         # discovering from a comment nobody was told about.
-        how = "the Gmail API" if settings.gmail_api_configured else "SMTP"
+        over_https = settings.resend_configured or settings.gmail_api_configured
+        if settings.resend_configured:
+            how = "Resend"
+        elif settings.gmail_api_configured:
+            how = "the Gmail API"
+        else:
+            how = "SMTP"
         log.info("owner alerts will be emailed to %s over %s", settings.alert_email_to, how)
-        if not settings.gmail_api_configured and settings.public_base_url:
+        if not over_https and settings.public_base_url:
             log.warning(
                 "alert emails are configured for SMTP, which Railway blocks on every "
-                "port -- set GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN "
-                "(scripts/gmail_authorise.py) or the owner will never receive one"
+                "port -- set RESEND_API_KEY, or GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / "
+                "GMAIL_REFRESH_TOKEN (scripts/gmail_authorise.py), or the owner will "
+                "never receive one"
             )
     else:
         log.info(
@@ -471,9 +478,13 @@ def health() -> dict:
         "dashboard_configured": settings.dashboard_configured,
         "alert_email_configured": settings.alert_email_configured,
         "alert_email_transport": (
-            "gmail_api"
-            if settings.gmail_api_configured
-            else ("smtp" if settings.alert_smtp_configured else None)
+            "resend"
+            if settings.resend_configured
+            else (
+                "gmail_api"
+                if settings.gmail_api_configured
+                else ("smtp" if settings.alert_smtp_configured else None)
+            )
         ),
         "catalog_products": product_count,
         "catalog_variants": variant_count,

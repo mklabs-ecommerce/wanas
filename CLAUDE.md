@@ -223,18 +223,26 @@ integrations/            everything that talks to an external vendor over
                              answering somebody while reading somebody
                              else's name
   mail/
-    client.py                picks the transport and sends. Two, because
+    client.py                picks the transport and sends. Three, because
                              Railway blocks every outbound SMTP port (25,
                              465, 587, 2525 -> "Network is unreachable" from
                              the container; plain HTTP connects instantly),
                              so an app password cannot deliver from the
                              deploy however correct it is
-    gmail_api.py             Gmail over HTTPS/443 -- what production sends
-                             with. Same mailbox, no new vendor, no cost; the
-                             price is an OAuth refresh token that dies on a
-                             password change, a revoked grant, or after 7
-                             days if the consent screen was left in Testing.
-                             scripts/gmail_authorise.py mints one
+    gmail_api.py             Gmail over HTTPS/443. Same mailbox, no new
+                             vendor, no cost; the price is an OAuth refresh
+                             token that dies on a password change, a revoked
+                             grant, or after 7 days if the consent screen was
+                             left in Testing. scripts/gmail_authorise.py
+                             mints one
+    resend.py                Resend over HTTPS/443 -- what production sends
+                             with, and first in the picking order, because it
+                             is the one transport with nothing in it that
+                             expires: one long-lived RESEND_API_KEY and one
+                             POST. RESEND_FROM must be a domain verified with
+                             Resend; blank falls back to their shared sender,
+                             which delivers only to the account owner -- who
+                             is exactly who these alerts go to
                              *What* is worth an email is decided in
                              domain/services/alert_email.py
 assistant/               the AI agent runtime, shared byte-for-byte by every

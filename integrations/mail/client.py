@@ -5,27 +5,31 @@ in the codebase that talks to a mail service. The policy of *what* is worth an
 email lives in `domain/services/alert_email.py`; this file knows how to send
 one and nothing else.
 
-**Two transports, because one of them cannot work in production.** Railway
+**Three transports, because one of them cannot work in production.** Railway
 blocks every outbound SMTP port -- 25, 465, 587 and 2525 all answer `Network
 is unreachable` after the full connect timeout from inside the container,
 while plain HTTP connects in milliseconds. That is a platform policy against
-spam, so an app password is worthless there however correct it is. The Gmail
-API (`gmail_api.py`) sends as the same mailbox over 443 and is what actually
-delivers from the deploy.
+spam, so an app password is worthless there however correct it is. Both HTTPS
+routes send over 443 and either one delivers from the deploy.
 
-SMTP stays, and is not dead code: it is what a developer's machine has, what
-most other hosts have, and what makes this file portable off Railway. It is
-also the fallback that keeps alerts flowing if the Gmail OAuth grant is ever
-revoked while running somewhere SMTP is permitted.
+`send_email` picks, in order: **Resend** (`resend.py`) when its API key is
+set, else the **Gmail API** (`gmail_api.py`) when its three OAuth values are,
+else **SMTP**. None configured is a documented off state, not an error --
+every one of these alerts still reaches the dashboard queue.
 
-`send_email` picks: the Gmail API when its three OAuth values are set, else
-SMTP. Neither configured is a documented off state, not an error -- every one
-of these alerts still reaches the dashboard queue.
+Resend leads because it is the only one of the three with nothing in it that
+expires. The Gmail route's cost is its refresh token, which Google kills
+after seven days while the consent screen is in Testing, and on a password
+change or a revoked grant; that failure is silent in the worst way, because
+the thing that breaks *is* the warning channel. Resend is one long-lived key
+and one POST. Gmail stays as the route that needs no third-party vendor at
+all, and SMTP is not dead code either: it is what a developer's machine has,
+what most other hosts have, and what makes this file portable off Railway.
 
-There is no new dependency either way: `smtplib`, `email.message` and
+There is no new dependency any of these ways: `smtplib`, `email.message` and
 `base64` ship with Python, and `httpx` is already here for every other
-vendor. An email provider's SDK would be a fifth vendor to keep a key for,
-and this sends a handful of plain-text messages a week.
+vendor. An email provider's SDK would be one more thing to keep current, and
+this sends a handful of plain-text messages a week.
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ import ssl
 from email.message import EmailMessage
 
 from config.settings import settings
-from integrations.mail import gmail_api
+from integrations.mail import gmail_api, resend
 
 log = logging.getLogger("wanas.mail")
 
@@ -48,10 +52,13 @@ TIMEOUT_SECONDS = 20
 def send_email(subject: str, body: str) -> bool:
     """Send one alert to the owner, over whichever transport is configured.
 
-    The Gmail API wins when it is set up, because it is the only one that can
-    leave a Railway container. Returns whether the message was accepted, and
-    raises nothing -- see `send_over_smtp`.
+    Resend first, then the Gmail API: both leave a Railway container, and
+    Resend has no OAuth grant that can quietly expire. SMTP answers when
+    neither is set up. Returns whether the message was accepted, and raises
+    nothing -- see `send_over_smtp`.
     """
+    if settings.resend_configured:
+        return resend.send_email(subject, body)
     if settings.gmail_api_configured:
         return gmail_api.send_email(subject, body)
     return send_over_smtp(subject, body)

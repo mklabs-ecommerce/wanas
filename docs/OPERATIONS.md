@@ -421,7 +421,7 @@ gets filtered, and filtering it would cost every alert above. The list lives
 in `domain/services/alert_email.py`; moving that line is a decision about the
 owner's attention, not a formatting change.
 
-### Railway blocks SMTP. This is why there are two transports.
+### Railway blocks SMTP. This is why there are three transports.
 
 Every outbound SMTP port is blocked from inside the container. Tested there:
 
@@ -437,12 +437,36 @@ spam. So a Gmail **App Password** works from a laptop and cannot deliver a
 single alert from the deploy, however correct it is. That is not a
 misconfiguration to hunt; it is the network.
 
-The **Gmail API** sends as the same mailbox over HTTPS (443), costs nothing,
-and adds no vendor. It is what production uses. SMTP stays for local
-development and for any host that permits it, and `send_email` picks: the
-Gmail API when its three values are set, else SMTP. `GET /health` reports
-which, as `alert_email_transport`, and the boot log says so too -- a deploy
-logging `over SMTP` is a deploy whose alerts will never arrive.
+Two transports send over HTTPS (443) instead, and either delivers from the
+deploy. `send_email` picks in order: **Resend** when `RESEND_API_KEY` is set,
+else the **Gmail API** when its three values are, else **SMTP**. `GET /health`
+reports which, as `alert_email_transport`, and the boot log says so too -- a
+deploy logging `over SMTP` is a deploy whose alerts will never arrive.
+
+Resend goes first because it is the only one of the three with nothing in it
+that expires. The Gmail route's cost is its refresh token: Google kills it
+after seven days while the consent screen is in Testing, and on a password
+change or a revoked grant. That failure is the worst kind here, because the
+thing that broke *is* the warning channel. Gmail stays as the route that needs
+no third-party vendor and sends as the shop's own mailbox; SMTP stays for local
+development and for any host that permits it.
+
+### Setting up Resend (production)
+
+Two variables, one of them optional:
+
+| Variable | Notes |
+| --- | --- |
+| `RESEND_API_KEY` | From the Resend dashboard. A credential -- Railway and `.env` only, never committed or logged. |
+| `RESEND_FROM` | A sender on a domain verified in Resend. Blank falls back to `onboarding@resend.dev`. |
+
+The fallback sender needs no DNS work but delivers **only to the Resend
+account owner's own address**, which is who these alerts go to anyway -- so it
+works unconfigured. Verifying a domain and setting `RESEND_FROM` to something
+like `alerts@wanasgallery.com` is what stops the owner's inbox filing the
+shop's alerts as a stranger's. A send refused for an unverified sender is
+logged as `resend refused the alert email ... domain is not verified` and
+returns False; the alert is still in the staff queue.
 
 ### Setting up the Gmail API (production)
 

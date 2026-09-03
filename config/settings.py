@@ -313,6 +313,18 @@ class Settings:
     gmail_client_id: str
     gmail_client_secret: str
     gmail_refresh_token: str
+    #: Resend, same 443 and the same reason, but with nothing in it that
+    #: expires: one long-lived API key instead of an OAuth grant that Google
+    #: kills after seven days in Testing, on a password change, or on a
+    #: revoked consent. That silence is the worst kind here, because the thing
+    #: that breaks is the warning channel. Preferred over both of the above.
+    #:
+    #: RESEND_FROM must be on a domain verified with Resend; the default is
+    #: Resend's shared sender, which needs no verification but delivers only
+    #: to the Resend account owner's own address -- which is who these alerts
+    #: go to anyway.
+    resend_api_key: str
+    resend_from: str
 
     alert_email_cooldown_seconds: float
     #: A hard ceiling per hour across everything, so no bug can turn the
@@ -325,6 +337,11 @@ class Settings:
         return bool(self.gmail_client_id and self.gmail_client_secret and self.gmail_refresh_token)
 
     @property
+    def resend_configured(self) -> bool:
+        """The key is the only required half -- `resend_from` has a default."""
+        return bool(self.resend_api_key)
+
+    @property
     def alert_smtp_configured(self) -> bool:
         return bool(self.alert_smtp_host and self.alert_smtp_username and self.alert_smtp_password)
 
@@ -334,11 +351,11 @@ class Settings:
         documented off state, not an error: the staff queue and the dashboard
         carry every one of these alerts either way.
 
-        Either transport counts. The Gmail API is the one that works from
+        Any transport counts. Resend and the Gmail API both work from
         Railway; SMTP is what a developer's machine and most other hosts have.
         """
         return bool(self.alert_email_to) and (
-            self.gmail_api_configured or self.alert_smtp_configured
+            self.resend_configured or self.gmail_api_configured or self.alert_smtp_configured
         )
 
     @property
@@ -535,6 +552,8 @@ def load_settings() -> Settings:
         gmail_client_id=os.getenv("GMAIL_CLIENT_ID", "").strip(),
         gmail_client_secret=os.getenv("GMAIL_CLIENT_SECRET", "").strip(),
         gmail_refresh_token=os.getenv("GMAIL_REFRESH_TOKEN", "").strip(),
+        resend_api_key=os.getenv("RESEND_API_KEY", "").strip(),
+        resend_from=os.getenv("RESEND_FROM", "").strip() or "onboarding@resend.dev",
         alert_email_cooldown_seconds=_float("ALERT_EMAIL_COOLDOWN_SECONDS", 900.0),
         alert_email_max_per_hour=_int("ALERT_EMAIL_MAX_PER_HOUR", 20),
     )

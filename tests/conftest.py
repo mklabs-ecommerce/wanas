@@ -135,6 +135,8 @@ for _name in (
     "GMAIL_CLIENT_ID",
     "GMAIL_CLIENT_SECRET",
     "GMAIL_REFRESH_TOKEN",
+    "RESEND_API_KEY",
+    "RESEND_FROM",
 ):
     os.environ[_name] = ""
 

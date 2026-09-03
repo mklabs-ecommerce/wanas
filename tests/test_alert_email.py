@@ -409,6 +409,138 @@ def test_smtp_still_answers_where_there_is_no_gmail_grant(monkeypatch):
     assert calls == ["smtp"]
 
 
+def test_resend_wins_over_every_other_transport(monkeypatch):
+    """Both HTTPS routes leave a Railway container, so this is not about
+    reachability -- it is about what expires. The Gmail grant dies after seven
+    days in Testing, on a password change, or on a revoked consent, and the
+    channel that would warn about it is the channel that broke. A long-lived
+    key has none of that, so it goes first."""
+    import dataclasses
+
+    from config.settings import settings as real
+    from integrations.mail import client as mail_client
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        mail_client,
+        "settings",
+        dataclasses.replace(
+            real,
+            alert_email_to="owner@example.com",
+            resend_api_key="key",
+            gmail_client_id="id",
+            gmail_client_secret="secret",
+            gmail_refresh_token="refresh",
+            alert_smtp_host="smtp.example.com",
+            alert_smtp_username="user",
+            alert_smtp_password="pass",
+        ),
+    )
+    monkeypatch.setattr(
+        mail_client.resend, "send_email", lambda s, b: calls.append("resend") or True
+    )
+    monkeypatch.setattr(
+        mail_client.gmail_api, "send_email", lambda s, b: calls.append("gmail") or True
+    )
+    monkeypatch.setattr(mail_client, "send_over_smtp", lambda s, b: calls.append("smtp") or True)
+
+    assert mail_client.send_email("subject", "body") is True
+    assert calls == ["resend"]
+
+
+def test_the_resend_client_is_inert_without_a_key():
+    """Same rule as every other transport: not configured is an off state, not
+    an error -- the alert is already in the staff queue either way."""
+    from integrations.mail import resend
+
+    assert resend.send_email("subject", "body") is False
+
+
+def test_resend_posts_the_alert_as_plain_text(monkeypatch):
+    """The one shape assertion: a bearer key in the header, the owner in `to`,
+    and the body as `text` -- an alert is a plain message, not an HTML mail."""
+    import dataclasses
+
+    import httpx
+
+    from config.settings import settings as real
+    from integrations.mail import resend
+
+    monkeypatch.setattr(
+        resend,
+        "settings",
+        dataclasses.replace(
+            real,
+            alert_email_to="owner@example.com",
+            resend_api_key="key",
+            resend_from="alerts@wanas.example",
+        ),
+    )
+    seen: dict = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        seen.update(url=url, headers=headers, json=json)
+        return httpx.Response(200, json={"id": "abc"})
+
+    monkeypatch.setattr(resend.httpx, "post", fake_post)
+
+    assert resend.send_email("subject", "body") is True
+    assert seen["url"] == resend.SEND_URL
+    assert seen["headers"]["Authorization"] == "Bearer key"
+    assert seen["json"] == {
+        "from": "alerts@wanas.example",
+        "to": ["owner@example.com"],
+        "subject": "subject",
+        "text": "body",
+    }
+
+
+def test_a_refused_resend_send_is_false_not_an_exception(monkeypatch):
+    """An unverified sender domain is the refusal that actually happens, and
+    it must not break the path that raised the alert."""
+    import dataclasses
+
+    import httpx
+
+    from config.settings import settings as real
+    from integrations.mail import resend
+
+    monkeypatch.setattr(
+        resend,
+        "settings",
+        dataclasses.replace(real, alert_email_to="owner@example.com", resend_api_key="key"),
+    )
+    monkeypatch.setattr(
+        resend.httpx,
+        "post",
+        lambda *a, **k: httpx.Response(403, json={"message": "domain is not verified"}),
+    )
+
+    assert resend.send_email("subject", "body") is False
+
+
+def test_a_resend_key_alone_is_enough_to_have_email_configured():
+    """`resend_from` has a working default, so unlike the Gmail grant there is
+    no partial state to guard against."""
+    import dataclasses
+
+    from config.settings import settings as real
+
+    configured = dataclasses.replace(
+        real,
+        alert_email_to="owner@example.com",
+        resend_api_key="key",
+        gmail_client_id="",
+        gmail_client_secret="",
+        gmail_refresh_token="",
+        alert_smtp_username="",
+        alert_smtp_password="",
+    )
+    assert configured.resend_configured is True
+    assert configured.alert_email_configured is True
+    assert dataclasses.replace(configured, alert_email_to="").alert_email_configured is False
+
+
 def test_a_partial_gmail_grant_is_not_configured():
     """Two of the three values is not a usable credential, and treating it as
     one would pick a transport that cannot authenticate over the one that
