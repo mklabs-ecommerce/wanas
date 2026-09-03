@@ -9,14 +9,23 @@ Both, not either -- a prompt instruction is a preference; a tool that refuses
 is a guarantee. Anything here that is not backed by a tool is a bug in the
 design, not a rule.
 
-The one rule here with no tool behind it is **scope** ("# انت بتتكلم في حاجة
-واحدة بس"), and that is a property of the design rather than a gap in it:
-answering "what is the capital of France?" is not a tool call, it is free
-text, and there is nothing to refuse. No deterministic check can tell an
-off-topic question from an oddly-worded one about a hoodie without a model,
-so the prompt is the only lever, and it is written to leave no partial-credit
-option -- the redirect is the *whole* reply, never a paragraph of general
-knowledge with a sales line stapled to the end.
+**Scope** ("# انت بتتكلم في حاجة واحدة بس") is half an exception. What the
+model *says* to an off-topic question is free text with nothing to refuse: no
+deterministic check can tell an off-topic question from an oddly-worded one
+about a hoodie without a model, so the prompt is the only lever there, and it
+is written to leave no partial-credit option -- the redirect is the *whole*
+reply, never a paragraph of general knowledge with a sales line stapled to
+the end.
+
+What the model *does* with one is not free text, and used to be treated as
+though it were. The section has always said an off-topic question is not a
+reason to escalate ("ده مش سبب لـ request_human"), while the `request_human`
+schema thirty lines of tool code away listed `out_of_scope` as one of five
+reasons to pick from -- and a schema enum is a menu, while a prompt line is a
+preference. That is a conversation abandoned mid-flow over a customer asking
+something friendly, and it is exactly the shape of failure this file's rule
+about tools exists to prevent. `MODEL_HANDOFF_REASONS` in
+`assistant/tools/support_tools.py` is the tool that refuses it now.
 
 What the prompt alone owns otherwise is *judgement*: when to ask, when to act,
 how much to say. No tool can decide that a customer who wrote "عايز حاجة حلوة للخروج"

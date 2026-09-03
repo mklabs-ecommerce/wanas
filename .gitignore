@@ -50,3 +50,9 @@ logs/
 # Leftovers from the SFTP/FUSE mount: files deleted while still open. Not ours.
 .fuse_hidden*
 ziSuwgjf
+
+# scripts/eval_order_flow.py and scripts/eval_abandonment.py write here --
+# real transcripts against a throwaway database, not something to check in.
+scripts/_eval_output/
+scripts/_eval_output_smoke/
+scripts/_eval_abandonment/

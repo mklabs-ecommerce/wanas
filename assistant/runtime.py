@@ -25,7 +25,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from assistant import agent, media, messages as msg, session as session_store
+from assistant import agent, media, messages as msg, recovery, session as session_store
 from assistant.providers import LLMProvider, get_provider
 from assistant.tools.support_tools import raise_handoff
 from common.timeutil import as_aware
@@ -382,6 +382,27 @@ def _handle(
     # all -- only a staff action clears the flag. This drop used to be
     # completely silent, which is how a latched pause looked like the bot
     # ignoring one number; make it observable without changing the semantics.
+    #
+    # ...unless the bot is what stopped it, and the customer has just written
+    # back. A handoff raised over a message rather than over a person's
+    # decision -- "I could not follow that", "I cannot open a sticker" -- is
+    # undone by the customer's next typed message, if it arrives soon enough.
+    # See `assistant/recovery.py` for every condition; none of them is a guess
+    # about whether things "look normal again".
+    resumed = None
+    if identity.paused_until_staff_reply:
+        item = recovery.resumable_handoff(
+            db,
+            channel,
+            external_id,
+            session_store.load(db, channel, external_id),
+        )
+        if item is not None:
+            recovery.take_back(db, item)
+            identities.unpause(db, channel, external_id)
+            identity = identities.get_or_create(db, channel, external_id)
+            resumed = recovery.RESUME_INSTRUCTION
+
     if identity.paused_until_staff_reply:
         session_store.append(
             db,
@@ -534,6 +555,7 @@ def _handle(
             recorded_ids=recorded_ids,
             reply_to=reply_to,
             mids=mids,
+            system_extra=resumed,
         )
     return RuntimeReply(
         text=reply.text,

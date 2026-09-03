@@ -361,13 +361,17 @@ def run_turn(
     recorded_ids: set[str] | None = None,
     reply_to: list[str] | None = None,
     mids: list[str] | None = None,
+    system_extra: str | None = None,
 ) -> AgentReply:
     provider = provider or get_provider()
     specs = tool_specs()
     # The surface shapes the prompt: WhatsApp's wording stays byte-identical
     # to what it has always been; Instagram gets its own lines (see
-    # assistant/prompt.py).
-    system_prompt = build_system_prompt(channel=channel)
+    # assistant/prompt.py). `system_extra` is appended for one turn only and
+    # is never stored -- today the resume paragraph
+    # (`assistant/recovery.py::RESUME_INSTRUCTION`), which the turn after this
+    # one must not still be reading.
+    system_prompt = build_system_prompt(system_extra, channel=channel)
 
     # The messages this turn is about were already written to the transcript
     # when they arrived, so staff could see the conversation before the bot

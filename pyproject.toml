@@ -48,6 +48,8 @@ ignore = [
 # Re-wrapping its lines changes what the model reads, and Arabic counted in
 # characters trips a limit that was chosen for code.
 "assistant/prompt.py" = ["E501"]
+# Same reasoning, for the one Arabic paragraph appended on a resumed turn.
+"assistant/recovery.py" = ["E501"]
 # The seed data merge is a data file with a program attached.
 "data/merge_catalog.py" = ["E501"]
 

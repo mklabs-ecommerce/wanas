@@ -476,6 +476,15 @@ def takeover(channel: str, external_id: str, wanas_staff: str | None = Cookie(de
         if refused is not None:
             return refused
         identities.pause(db, channel, external_id)
+        # A takeover is a person's decision, so it outranks the bot's own
+        # recovery: clear the stamp that would let the customer's next message
+        # pull the conversation back out from under whoever just claimed it.
+        # See `assistant/recovery.py`.
+        handoff = _open_handoffs(db).get((channel, external_id))
+        if handoff is not None and (handoff.payload or {}).get("auto_resume_after_abandonment"):
+            payload = dict(handoff.payload or {})
+            payload.pop("auto_resume_after_abandonment", None)
+            handoff.payload = payload
     return JSONResponse({"ok": True})
 
 
