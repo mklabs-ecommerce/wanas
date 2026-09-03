@@ -14,6 +14,7 @@ import logging
 
 import pytest
 
+from common import bidi
 from config.settings import settings
 from tests.fake_instagram import FakeInstagram
 
@@ -45,7 +46,10 @@ def test_a_short_arabic_message_is_one_post_with_the_right_shape(fake):
     assert fake.posts[-1]["headers"]["Authorization"] == "Bearer test-token"
     payload = fake.message_payloads()[-1]
     assert payload["recipient"] == {"id": "1234567890"}
-    assert payload["message"]["text"] == "عايز هودي"
+    # Laid out for a right-to-left renderer on the way out -- what is stored
+    # in `sessions` is still the plain sentence. See `common/bidi.py`.
+    assert payload["message"]["text"] == bidi.shape("عايز هودي")
+    assert bidi.unshape(payload["message"]["text"]) == "عايز هودي"
 
 
 def test_the_messages_url_carries_the_configured_api_version(monkeypatch):
@@ -82,9 +86,28 @@ def test_a_1400_byte_arabic_message_is_chunked_under_950_bytes_in_order(fake):
     assert result.delivered is True
     assert result.error is None
     # Chunks arrive in order and carry the whole message.
-    assert "".join("".join(sent).split()) == "".join(text.split())
+    assert "".join("".join(bidi.unshape(c) for c in sent).split()) == "".join(text.split())
     urls = [c["url"] for c in fake.posts]
     assert urls == [GRAPH_MESSAGES] * len(sent)
+
+
+def test_a_chunk_is_still_under_the_cap_after_it_is_laid_out(fake):
+    """Shaping adds invisible marks -- three UTF-8 bytes each -- so a chunk
+    cut to exactly the cap crosses it once laid out, and Instagram refuses an
+    oversized message rather than truncating it. The chunker is given the
+    headroom back; this is the check that it actually was."""
+    from integrations.instagram.client import MAX_CHUNK_BYTES
+
+    line = "عندنا Boxy WNS Tee باللون Olive والمقاس XL رقم"
+    text = chr(10).join(f"{line} {n}" for n in range(40))
+    assert len(text.encode("utf-8")) > MAX_CHUNK_BYTES
+
+    make_client().send_text("1234567890", text)
+    sent = fake.texts()
+    assert len(sent) > 1
+    assert all(len(c.encode("utf-8")) <= MAX_CHUNK_BYTES for c in sent)
+    rejoined = "".join(bidi.unshape(c) for c in sent)
+    assert "".join(rejoined.split()) == "".join(text.split())
 
 
 def test_chunks_break_at_sentence_boundaries_when_one_exists():
@@ -314,5 +337,5 @@ def test_an_unknown_interactive_kind_falls_back_to_plain_text(fake):
 
     assert result.delivered is True
     sent_texts = fake.texts()
-    assert sent_texts == ["هيّا نختار"]
+    assert [bidi.unshape(t) for t in sent_texts] == ["هيّا نختار"]
     assert all("quick_replies" not in (m["message"]) for m in fake.message_payloads())

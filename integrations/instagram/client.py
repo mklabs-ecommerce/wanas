@@ -39,6 +39,7 @@ from pathlib import Path
 
 import httpx
 
+from common import bidi
 from config.settings import PROJECT_ROOT, settings
 from domain.services.notifications import OutboundMessage
 
@@ -131,6 +132,40 @@ def _chunks(text: str, *, limit: int = MAX_CHUNK_BYTES) -> list[str]:
         return [c for c in chunks if c.strip()]
 
     return _hard_split(text, limit)
+
+
+def _shaped_chunks(text: str) -> list[str]:
+    """Split for the byte cap, then lay the pieces out right-to-left.
+
+    In that order because `common/bidi.py` marks each *line* it is given, and
+    a chunk is what actually leaves as one message -- shaping the whole
+    string first would put the direction mark on the first chunk only and
+    leave every later one to pick its own.
+
+    The cap is the reason this is not a one-liner. Shaping adds invisible
+    marks, three UTF-8 bytes each, so a chunk cut to exactly 950 bytes can
+    cross it once laid out -- and Instagram answers an oversized message with
+    a refusal, not a truncation. So the chunker is handed the headroom back
+    and asked again, rather than the cap being quietly exceeded. Two passes
+    settle it in practice; the loop is bounded because a chunk size that
+    keeps shrinking is a bug, not something to keep retrying.
+    """
+    limit = MAX_CHUNK_BYTES
+    shaped: list[str] = []
+    for _ in range(3):
+        pieces = _chunks(text, limit=limit)
+        shaped = [bidi.shape(piece) for piece in pieces]
+        overflow = max(
+            (
+                len(out.encode("utf-8")) - len(raw.encode("utf-8"))
+                for raw, out in zip(pieces, shaped, strict=True)
+            ),
+            default=0,
+        )
+        if all(len(out.encode("utf-8")) <= MAX_CHUNK_BYTES for out in shaped):
+            return shaped
+        limit = max(limit - max(overflow, 1), MAX_CHUNK_BYTES // 2)
+    return shaped
 
 
 def _clip_title(title: str) -> str:
@@ -288,7 +323,7 @@ class InstagramClient:
 
         outcomes: list[tuple[bool, str | None]] = []
         sent_ids: list[str] = []
-        for index, chunk in enumerate(_chunks(text)):
+        for index, chunk in enumerate(_shaped_chunks(text)):
             ok, error, sent_id = self._post(
                 {
                     "recipient": {"id": to},
@@ -540,7 +575,7 @@ class InstagramClient:
             self._messages_url(),
             {
                 "recipient": {"comment_id": comment_id},
-                "message": {"text": text},
+                "message": {"text": bidi.shape(text)},
             },
         )
         # The response carries the resulting conversation's recipient -- the

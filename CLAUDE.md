@@ -94,6 +94,19 @@ common/                  zero-dependency shared kernel (no imports from any
                             integrations/shopify/webhooks.py)
   servable_paths.py        the local-file path guard api/public_media.py and
                             assistant/media_serving.py both need
+  bidi.py                  Arabic with English inside it, laid out so it
+                            renders the way it was written. Product names,
+                            sizes and colours stay Latin on purpose, and the
+                            plain bidi algorithm then mirrors a line that
+                            opens with one, swaps two colours across an
+                            Arabic comma, and throws a closing full stop to
+                            the far left. Every Latin run is wrapped in
+                            FSI/PDI and every line marked RTL -- at the
+                            *send* boundary only (both clients' send_text),
+                            so the transcript, the dashboard and every search
+                            over `sessions` still see plain text. The prompt
+                            asks for Arabic-first lines too: a preference and
+                            a guarantee, not either
 domain/                  persistence + business rules; no vendor HTTP calls,
                           no FastAPI routes; must never import assistant/
   db.py                    SQLAlchemy engine/session

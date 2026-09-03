@@ -21,6 +21,7 @@ from pathlib import Path
 
 import httpx
 
+from common import bidi
 from common.identifiers import is_bsuid
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
@@ -140,7 +141,7 @@ class WhatsAppClient:
                 "recipient_type": "individual",
                 **self._addressed(to),
                 "type": "text",
-                "text": {"preview_url": False, "body": text},
+                "text": {"preview_url": False, "body": bidi.shape(text)},
             }
         )
         return OutboundMessage(
@@ -161,7 +162,7 @@ class WhatsAppClient:
             # has no picture for yet).
             image_field = {"link": image_path}
             if caption:
-                image_field["caption"] = caption[:1024]
+                image_field["caption"] = bidi.shape(caption[:1024])
             ok, error, sent_id = self._post(
                 {
                     "messaging_product": "whatsapp",
@@ -198,7 +199,9 @@ class WhatsAppClient:
                 **self._addressed(to),
                 "type": "image",
                 "image": (
-                    {"id": media_id, "caption": caption[:1024]} if caption else {"id": media_id}
+                    {"id": media_id, "caption": bidi.shape(caption[:1024])}
+                    if caption
+                    else {"id": media_id}
                 ),
             }
         )

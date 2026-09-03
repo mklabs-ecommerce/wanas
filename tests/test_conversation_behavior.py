@@ -524,6 +524,26 @@ def test_the_prompt_names_the_robotic_phrases_it_bans(phrase):
     assert phrase in banned, "the ban list lost a phrase that was observed in real replies"
 
 
+def test_the_prompt_asks_for_the_sentence_to_be_written_properly():
+    """Colloquial is the register, not a licence for a broken sentence. The
+    observed reply -- «قول ليها تقيس لنفسها طولها وعرضها الصدر» -- was three
+    mistakes at once: a misspelt «قوللها», a verb with no clear object, and a
+    pronoun that changed person mid-line. One rule each, because the model
+    answering now (GLM) gets Masry right less reliably than the Gemini it
+    replaced and there is no tool that can refuse a badly written sentence."""
+    section = SYSTEM_PROMPT.split("# اكتب عربي مظبوط")[1]
+    assert "«قوللها»" in section
+    assert "«تقيس الصدر والطول»" in section
+    assert "الضمير يفضل ثابت" in section
+
+
+def test_the_prompt_says_how_to_mix_the_two_scripts_on_one_line():
+    """The other half of what `common/bidi.py` repairs. Both, not either:
+    text that needs no repair is better than text that got repaired."""
+    assert "ابدأه بكلمة عربية مش باسم إنجليزي" in SYSTEM_PROMPT
+    assert "«Olive و Black» مش «Olive، Black»" in SYSTEM_PROMPT
+
+
 def test_the_prompt_covers_every_reference_word_that_was_observed():
     for reference in ("التاني", "الأول", "طب الأسود", "نفس المقاس", "أيوه", "تمام", "ماشي"):
         assert reference in SYSTEM_PROMPT
@@ -595,7 +615,11 @@ def test_the_prompt_did_not_become_a_wall_of_text():
     real conversation, in which the bot named four colours correctly, was
     replied to with a photo of one of them, and then told the same customer a
     different product's colours as if the first answer had never happened."""
-    assert 3000 < len(SYSTEM_PROMPT) < 13200
+    # Raised for the writing-quality section: the model on the conversation
+    # is GLM, whose Masry is correct less reliably than the Gemini it
+    # replaced, and "write the sentence properly" is a rule with no tool
+    # behind it -- the prompt is the only lever there is.
+    assert 3000 < len(SYSTEM_PROMPT) < 15000
 
 
 # --------------------------------------------------------------------------

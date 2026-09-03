@@ -20,6 +20,7 @@ from assistant.channels import whatsapp as adapter
 from assistant.providers import set_provider
 from assistant.providers.base import ModelReply
 from assistant.providers.fake import RehearsalProvider, ScriptedProvider
+from common import bidi
 from config.settings import settings
 from domain.models import Order, QueueKind, ShippingRate
 from domain.services import notifications, queues
@@ -436,7 +437,7 @@ def test_a_shopify_hosted_photo_is_sent_by_link_not_uploaded(configured, monkeyp
 
     assert uploads == []  # never went near the upload endpoint
     assert result.delivered is True
-    assert posts[0]["image"] == {"link": url, "caption": "زي كده"}
+    assert posts[0]["image"] == {"link": url, "caption": bidi.shape("زي كده")}
 
 
 def test_a_local_photo_still_goes_through_the_cached_upload(configured, monkeypatch):

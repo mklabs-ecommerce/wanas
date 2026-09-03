@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api import public_media
+from common import bidi
 from config.settings import settings
 
 SECRET = "test-media-secret"
@@ -136,8 +137,10 @@ def test_send_image_of_a_local_chart_posts_its_public_url(fake, configured):
     assert "/public/media/" in image_payload["payload"]["url"]
     # The caption went first, as its own text message: Instagram attachments
     # carry no caption field.
-    assert fake.texts()[-1] == "مقاسات السويتبانتس"
-    texts_before_image = [p["message"].get("text") for p in payloads[:-1]]
+    # ...laid out right-to-left on the way out, like every other outbound
+    # line (`common/bidi.py`); the stored copy stays the plain sentence.
+    assert bidi.unshape(fake.texts()[-1]) == "مقاسات السويتبانتس"
+    texts_before_image = [bidi.unshape(p["message"].get("text") or "") for p in payloads[:-1]]
     assert "مقاسات السويتبانتس" in texts_before_image
 
 
