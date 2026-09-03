@@ -228,6 +228,23 @@ def seeded(db):
 
 
 @pytest.fixture(autouse=True)
+def no_retry_delay(monkeypatch):
+    """Nobody in this suite should ever actually wait out a retry delay.
+
+    `assistant/agent.py::_generate_with_retry` and
+    `assistant/turn_retry.py::call_with_retry` both sleep thirty real seconds
+    between a failed attempt and the retry -- correct in production, and a
+    30-second stall multiplied across every test that provokes a provider
+    failure otherwise. A test proving the retry *waits* the right amount
+    overrides this itself (its own `monkeypatch.setattr` on the same name
+    takes precedence within that test); every other test just gets the fast
+    path for free.
+    """
+    monkeypatch.setattr("assistant.agent._sleep", lambda seconds: None)
+    monkeypatch.setattr("assistant.turn_retry._sleep", lambda seconds: None)
+
+
+@pytest.fixture(autouse=True)
 def shopify(request, monkeypatch):
     """A working in-memory Shopify shelf, installed for every test.
 

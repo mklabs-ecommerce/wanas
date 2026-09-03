@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, Response
 
-from assistant import session as session_store
+from assistant import session as session_store, turn_retry
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
@@ -521,18 +521,25 @@ def _annotate_replies(pending: Pending) -> str:
 
 def _deliver(external_id: str, pending: Pending) -> None:
     try:
-        reply = handle_message(
-            CHANNEL,
-            external_id,
-            pending.annotated_text(),
-            image_paths=pending.image_paths or None,
-            audio_paths=pending.audio_paths or None,
-            recorded_ids=pending.recorded_ids or None,
-            # A quote pointing outside this batch -- at something the bot
-            # said, or at a message from a turn already answered. The runtime
-            # resolves it against the stored transcript.
-            reply_to=pending.unresolved_reply_to() or None,
-            mids=_batch_ids(pending) or None,
+        # One silent retry, thirty seconds later, for whatever crashes here
+        # rather than inside `run_turn`'s own guard -- see
+        # `assistant/turn_retry.py` for why a whole-turn retry is safe.
+        reply = turn_retry.call_with_retry(
+            lambda: handle_message(
+                CHANNEL,
+                external_id,
+                pending.annotated_text(),
+                image_paths=pending.image_paths or None,
+                audio_paths=pending.audio_paths or None,
+                recorded_ids=pending.recorded_ids or None,
+                # A quote pointing outside this batch -- at something the bot
+                # said, or at a message from a turn already answered. The
+                # runtime resolves it against the stored transcript.
+                reply_to=pending.unresolved_reply_to() or None,
+                mids=_batch_ids(pending) or None,
+            ),
+            channel=CHANNEL,
+            external_id=external_id,
         )
     except Exception:
         # The turn died somewhere `agent.run_turn` doesn't already guard --
@@ -540,7 +547,8 @@ def _deliver(external_id: str, pending: Pending) -> None:
         # every id in the batch was claimed at ingest. Release them so Meta's
         # retry is processed instead of suppressed forever. A turn that
         # *succeeded* never gets here, so a handled message still cannot be
-        # processed twice.
+        # processed twice. The retry above has already happened once by the
+        # time this runs, so this is the second failure, not the first.
         release_claims(pending.text_ids + pending.image_ids + pending.audio_ids)
         log.exception("turn crashed before producing a reply for %s; sending fallback", external_id)
         _send_crash_fallback(external_id)

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -42,6 +43,24 @@ load_all()
 RATE_LIMITED = "الضغط عالي شوية، ابعتلي تاني بعد دقيقة."
 GENERIC_FAILURE = "حصلت مشكلة عندنا دلوقتي. جرب تبعت تاني بعد شوية وأنا موجود."
 LOOP_EXHAUSTED = "معلش خدت وقت في ده. ممكن توضحلي طلبك في جملة واحدة؟"
+
+#: How long to wait before retrying one failed model call. Same figure as
+#: `assistant/turn_retry.py`'s whole-turn retry, and the same reasoning: long
+#: enough for a rate limit or a dropped connection to actually clear, short
+#: enough that the customer is not kept waiting for nothing.
+MODEL_RETRY_DELAY_SECONDS = 30.0
+
+#: Seam for tests: replaced with a no-op so the retry path can be proven to
+#: run without a suite actually sleeping thirty seconds.
+_sleep = time.sleep
+
+#: `ProviderError` kinds worth retrying once. `auth` is deliberately absent --
+#: a rejected key or missing configuration will be rejected identically
+#: thirty seconds later, and every second spent waiting is a second the
+#: customer goes unanswered for a problem no retry fixes; it falls straight
+#: through to the existing `except ProviderError` handling below, unretried,
+#: exactly as before this shipped.
+_TRANSIENT_PROVIDER_ERROR_KINDS = {"rate_limit", "provider_error"}
 
 
 #: Any local path the model might echo out of a tool result. The prompt tells
@@ -349,6 +368,56 @@ class AgentReply:
     silent: bool = False
 
 
+def _generate_with_retry(
+    provider: LLMProvider,
+    system_prompt: str,
+    model_history: list[dict],
+    specs,
+    *,
+    channel: str,
+    external_id: str,
+):
+    """One model call, with a single silent retry for a transient failure.
+
+    The two `except` clauses in `run_turn` below are the *existing*
+    behaviour -- a rate limit becomes `RATE_LIMITED`, anything else becomes
+    `GENERIC_FAILURE` -- and this function does not change what they do. It
+    only changes when they are reached: today, on the very first failure;
+    now, only after one retry thirty seconds later has *also* failed. A
+    non-transient `ProviderError` (`auth`) is re-raised immediately, with no
+    wait, since a retry cannot change its outcome.
+
+    `system_prompt` and `model_history` are passed in rather than
+    recomputed, so both attempts see the exact same request -- nothing about
+    the conversation moves between them.
+    """
+    try:
+        return provider.generate(system_prompt, model_history, specs)
+    except ProviderError as exc:
+        if exc.kind not in _TRANSIENT_PROVIDER_ERROR_KINDS:
+            raise
+        reason = exc.kind
+    except Exception:
+        # Unclassified -- a bug in translation, a library raising something
+        # unexpected. Retrying will not fix a real bug, but it will not make
+        # one worse either, and it is the only chance a flaky one-off (a
+        # library hiccuping on a dropped connection) gets to resolve itself
+        # before the customer sees a generic apology for what was actually
+        # nothing.
+        reason = "unclassified"
+
+    log.warning(
+        "provider %s failed (%s) for %s/%s; waiting %.0fs and retrying once before answering",
+        provider.name,
+        reason,
+        channel,
+        external_id,
+        MODEL_RETRY_DELAY_SECONDS,
+    )
+    _sleep(MODEL_RETRY_DELAY_SECONDS)
+    return provider.generate(system_prompt, model_history, specs)
+
+
 def run_turn(
     db: Session,
     channel: str,
@@ -438,7 +507,19 @@ def run_turn(
             # itself: recent messages verbatim, older ones compacted down
             # to what was actually said. See `assistant/context.py` --
             # the stored conversation keeps everything either way.
-            reply = provider.generate(system_prompt, context.for_model(history), specs)
+            #
+            # A transient failure here (a rate limit, a dropped connection)
+            # gets one silent retry thirty seconds later before either of the
+            # `except` clauses below ever sees it -- see
+            # `_generate_with_retry`. Only a *second* failure reaches them.
+            reply = _generate_with_retry(
+                provider,
+                system_prompt,
+                context.for_model(history),
+                specs,
+                channel=channel,
+                external_id=external_id,
+            )
         except ProviderError as exc:
             # A rate limit is transient and worth telling the customer about.
             # An auth or configuration failure is a deployment problem that no

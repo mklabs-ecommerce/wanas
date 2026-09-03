@@ -38,6 +38,7 @@ from assistant import (
     comment_replies,
     messages as msg,
     session as session_store,
+    turn_retry,
 )
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
@@ -1086,29 +1087,37 @@ def _deliver(external_id: str, pending: Pending) -> None:
             text = f"{text}\n{note}" if text else note
 
     try:
-        reply = handle_message(
-            CHANNEL,
-            external_id,
-            text,
-            image_paths=pending.image_paths or None,
-            audio_paths=pending.audio_paths or None,
-            recorded_ids=pending.recorded_ids or None,
-            # A quote pointing outside this debounce batch -- at something the
-            # bot said, most often. Resolved against the stored transcript by
-            # the runtime, exactly as on WhatsApp.
-            reply_to=pending.unresolved_reply_to() or None,
-            mids=[
-                mid
-                for mid in (*pending.text_ids, *pending.image_ids, *pending.audio_ids)
-                if mid
-            ]
-            or None,
+        # One silent retry, thirty seconds later, for whatever crashes here
+        # rather than inside `run_turn`'s own guard -- see
+        # `assistant/turn_retry.py` for why a whole-turn retry is safe.
+        reply = turn_retry.call_with_retry(
+            lambda: handle_message(
+                CHANNEL,
+                external_id,
+                text,
+                image_paths=pending.image_paths or None,
+                audio_paths=pending.audio_paths or None,
+                recorded_ids=pending.recorded_ids or None,
+                # A quote pointing outside this debounce batch -- at
+                # something the bot said, most often. Resolved against the
+                # stored transcript by the runtime, exactly as on WhatsApp.
+                reply_to=pending.unresolved_reply_to() or None,
+                mids=[
+                    mid
+                    for mid in (*pending.text_ids, *pending.image_ids, *pending.audio_ids)
+                    if mid
+                ]
+                or None,
+            ),
+            channel=CHANNEL,
+            external_id=external_id,
         )
     except Exception:
         # The turn died somewhere `agent.run_turn` doesn't already guard --
         # session/identity plumbing, media handling, the Shopify read -- and
         # every id in the batch was claimed at ingest. Release them so Meta's
-        # retry is processed instead of suppressed forever.
+        # retry is processed instead of suppressed forever. The retry above
+        # has already happened once by the time this runs.
         claimed = [i for i in pending.text_ids + pending.image_ids + pending.audio_ids if i]
         release_claims([_claim_id(i) for i in claimed])
         log.exception("turn crashed before producing a reply for %s; sending fallback", external_id)

@@ -425,6 +425,10 @@ def test_an_unexpected_provider_crash_still_answers_the_customer(seeded, caplog)
 
 def test_raw_provider_text_never_reaches_the_customer_by_default(seeded, captured, provider):
     assert settings.chatbot_debug is False
+    # Queued twice: a provider failure now gets one silent retry
+    # (`agent._generate_with_retry`) before falling back, so the fallback
+    # text is only reached once both attempts have failed.
+    captured["queue"].append(FakeResponse({}, status_code=400, text="INVALID_ARGUMENT: contents[0].parts"))
     captured["queue"].append(FakeResponse({}, status_code=400, text="INVALID_ARGUMENT: contents[0].parts"))
     reply = agent.run_turn(seeded, CHANNEL, WHO, "هاي", provider=provider)
     assert reply.text == agent.GENERIC_FAILURE
