@@ -167,6 +167,55 @@ _PROMISE_PATTERN = re.compile(
 #: promise.
 _SUBSTANCE = re.compile(r"\d|مش متاح|مش متوفر|خلص|نفد|sold out|out of stock")
 
+#: A reply the model did not finish writing. The generation stopped because it
+#: ran into the completion ceiling, not because the sentence ended, so what
+#: came back is cut off wherever the token counter stopped -- mid-word,
+#: mid-number, mid-question. `finish_reason` is the only thing that
+#: distinguishes it from a finished reply: the text itself reads as ordinary
+#: Arabic right up to the point it stops making sense, which is exactly how it
+#: reached customers -- an order summary closing with a half-written
+#: "اطمأت وأنا أسجله؟".
+#:
+#: Two spellings because the field is the upstream provider's, passed through
+#: untranslated: OpenAI-compatible stacks say `length`, some say `max_tokens`,
+#: and Gemini says `MAX_TOKENS`. Compared lower-cased.
+TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
+
+#: How many times a truncated reply is regenerated before the deterministic
+#: fallback is used instead. Same shape as the promise retries below and for
+#: the same reason: the model usually finishes when asked for something
+#: shorter, and a customer cannot be kept waiting forever if it does not.
+_TRUNCATION_RETRY_LIMIT = 2
+
+#: Appended to the system prompt when a reply came back cut off. Never stored:
+#: like the promise nudges, the point is that the model does not read its own
+#: broken output back, only the instruction to write something that fits.
+_TRUNCATION_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات اتقطع في نصه لأنه طويل أوي. "
+    "اكتبه تاني أقصر بكتير -- أهم معلومة بس، في جملتين أو تلاتة على الأكتر، وخلي الجملة الأخيرة كاملة."
+)
+
+#: Sent instead of half a sentence. It says the one true thing -- the message
+#: did not come out whole -- and asks for the one thing that lets the next turn
+#: answer, so it needs nothing following it to make sense. The same standard
+#: `PROMISE_FALLBACK` is held to.
+TRUNCATED_FALLBACK = (
+    "معلش، الرسالة اتقطعت مني. ممكن تقوللي تاني عايز إيه بالظبط وأنا أرد عليك فورًا؟"
+)
+
+
+def _is_truncated(reply) -> bool:
+    """Whether the model stopped because it ran out of budget.
+
+    Structural, like `_is_dangling_promise`'s "did a tool actually run":
+    there is nothing in the *wording* of a cut-off reply to detect -- it is
+    real Arabic that simply stops -- so the provider's own `finish_reason` is
+    the whole signal, and the only one available.
+    """
+    reason = str(getattr(reply, "finish_reason", "") or "").strip().lower()
+    return reason in TRUNCATED_FINISH_REASONS
+
+
 #: How many times a dangling promise is sent back to the model before the
 #: deterministic fallback is used instead. Never 0 retries (the model usually
 #: gets it right when told) and never unbounded (a customer is waiting).
@@ -492,6 +541,7 @@ def run_turn(
     )
     called: list[str] = []
     promise_retries = 0
+    truncation_retries = 0
     # The customer sent a picture of their own this turn, so every mention of
     # a photo in the reply is about *theirs* -- "وصلتني الصورة، دي أقرب حاجة
     # عندنا" is an answer, not an undelivered promise. Without this the
@@ -546,6 +596,49 @@ def run_turn(
             return AgentReply(text=text_out, error="provider_crash", tool_calls=called)
 
         if not reply.tool_calls:
+            if reply.text and _is_truncated(reply):
+                # The model ran into the completion ceiling mid-sentence.
+                # There is nothing in the text to catch this on, and it is the
+                # last thing the customer hears -- a turn produces exactly one
+                # reply, so a half-written one is the whole answer. Ask for a
+                # shorter one; if it still will not fit, say so plainly rather
+                # than send the fragment.
+                if truncation_retries < _TRUNCATION_RETRY_LIMIT:
+                    log.warning(
+                        "truncated reply (finish_reason=%s, %d chars) from provider %s "
+                        "for %s/%s, retry %d/%d",
+                        reply.finish_reason,
+                        len(reply.text),
+                        provider.name,
+                        channel,
+                        external_id,
+                        truncation_retries + 1,
+                        _TRUNCATION_RETRY_LIMIT,
+                    )
+                    truncation_retries += 1
+                    system_prompt = f"{system_prompt}{_TRUNCATION_NUDGE}"
+                    continue
+
+                log.error(
+                    "provider %s kept truncating its reply for %s/%s after %d retries; "
+                    "sending the fallback instead of half a sentence",
+                    provider.name,
+                    channel,
+                    external_id,
+                    _TRUNCATION_RETRY_LIMIT,
+                )
+                text_out = TRUNCATED_FALLBACK
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    error="truncated",
+                )
+
             if not reply.text:
                 # Usually a token limit or a content filter, and invisible
                 # otherwise.
@@ -644,6 +737,29 @@ def run_turn(
                 interactive=ctx.interactive,
                 tool_calls=called,
             )
+
+        if _is_truncated(reply) and truncation_retries < _TRUNCATION_RETRY_LIMIT:
+            # Tool calls from a generation that ran out of budget mid-write.
+            # What survives is whatever fitted, and a call the model had not
+            # finished specifying is a lookup for something it did not mean --
+            # the wrong-product answer, reached from a new direction. Nothing
+            # has run yet, so the hop is discarded and asked for again;
+            # `_parse` already refuses the commoner case, where the cut lands
+            # inside the arguments JSON and leaves it unparseable.
+            log.warning(
+                "truncated tool-call hop (finish_reason=%s, calls=%s) from provider %s "
+                "for %s/%s, retry %d/%d",
+                reply.finish_reason,
+                [c.get("name") for c in reply.tool_calls],
+                provider.name,
+                channel,
+                external_id,
+                truncation_retries + 1,
+                _TRUNCATION_RETRY_LIMIT,
+            )
+            truncation_retries += 1
+            system_prompt = f"{system_prompt}{_TRUNCATION_NUDGE}"
+            continue
 
         # The signatures ride along in the history and are handed straight
         # back to the provider on the next pass. Nothing here reads them --

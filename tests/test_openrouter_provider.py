@@ -511,6 +511,48 @@ def test_unintelligible_audio_transcribes_to_an_empty_string(captured, provider)
     assert provider.transcribe(b"bytes", "audio/ogg") == ""
 
 
+def test_a_transcript_that_hit_the_ceiling_goes_to_a_person_not_into_the_turn(
+    captured, provider, caplog
+):
+    """Half of what the customer said is worse than none of it.
+
+    A cut-off transcript does not read as broken, it reads as a *shorter
+    message*, and the whole turn is then built on it -- "عايز الهودي الأسود
+    لارج بس لو مش متاح خليه ميديم" cut after "الأسود" is a different order.
+    Everything downstream treats this string as the customer's own words, so
+    there is nowhere further down to catch it. Empty is the documented "hand
+    it to a person" signal, and a person listening to the voice note is
+    exactly right: the words exist, we just could not write them all down.
+    """
+    captured["queue"].append(
+        {
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "عايز الهودي الأسود"},
+                    "finish_reason": "length",
+                }
+            ]
+        }
+    )
+    with caplog.at_level(logging.WARNING):
+        assert provider.transcribe(b"bytes", "audio/ogg") == ""
+    assert "ceiling" in caplog.text
+
+
+def test_a_finished_transcript_is_returned_whatever_its_length(captured, provider):
+    """The guard keys on `finish_reason`, never on the text."""
+    captured["queue"].append(text_reply("عايز الهودي الأسود لارج " * 40))
+    assert provider.transcribe(b"bytes", "audio/ogg").startswith("عايز الهودي")
+
+
+def test_the_transcription_budget_fits_a_long_voice_note(captured, provider):
+    """Arabic runs two to three tokens a word here, and a customer describing
+    an order and an address in one recording overran the old 1024."""
+    captured["queue"].append(text_reply("تمام"))
+    provider.transcribe(b"bytes", "audio/ogg")
+    assert captured["sent"][0]["body"]["max_tokens"] == 4096
+
+
 def test_transcription_never_sends_the_key_in_the_body(captured, provider):
     captured["queue"].append(text_reply("تمام"))
     provider.transcribe(b"ogg-bytes", "audio/ogg")
@@ -839,10 +881,16 @@ def test_the_chat_budget_leaves_room_for_a_reasoning_model(captured, provider):
     """1024 was the reply's budget on a model that does not reason. On one
     that does, the same number is reasoning *plus* reply, and GLM was measured
     spending all of it on one question in six -- finish_reason=length, no
-    content, no tool calls, and the customer gets the generic apology."""
+    content, no tool calls, and the customer gets the generic apology.
+
+    4096 fixed the *empty* reply and left the truncated one: an order summary
+    behind a few hundred reasoning tokens can still stop mid-sentence. The
+    ceiling is headroom; `agent.run_turn` refusing to send a truncated reply
+    is the guarantee.
+    """
     provider.generate("p", [msg.user("الشحن كام؟")], [])
-    assert captured["sent"][0]["body"]["max_tokens"] == 4096
-    assert OpenRouterProvider.CHAT_MAX_TOKENS == 4096
+    assert captured["sent"][0]["body"]["max_tokens"] == 8192
+    assert OpenRouterProvider.CHAT_MAX_TOKENS == 8192
 
 
 def test_an_empty_reply_is_reported_with_its_finish_reason(captured, provider):
@@ -857,3 +905,145 @@ def test_an_empty_reply_is_reported_with_its_finish_reason(captured, provider):
     assert not reply.text
     assert not reply.tool_calls
     assert reply.finish_reason == "length"
+
+
+# --------------------------------------------------------------------------
+# 7. Which serving stack answers, and what it is told
+#
+# The garbled-Arabic bug. One model id is not one model: OpenRouter hosts
+# `z-ai/glm-5.3-flash` on twenty-three upstream providers at three
+# quantizations and load-balances between them per request (six identical
+# requests were measured landing on three different ones). By default an
+# upstream that does not implement `temperature` is sent it anyway and
+# silently drops it, so a reply meant to be sampled at 0.3 was sampled at that
+# stack's own default. Most replies survived that; some came back
+# grammatically broken or answering a question nobody asked.
+# --------------------------------------------------------------------------
+
+
+def test_the_payload_pins_which_upstreams_may_answer(captured, provider):
+    """`require_parameters` is the correctness half: it is what makes
+    temperature a setting rather than a suggestion."""
+    provider.generate("p", [msg.user("الشحن كام؟")], [])
+
+    routing = captured["sent"][0]["body"]["provider"]
+    assert routing["require_parameters"] is True
+    assert routing["order"] == ["z-ai", "deepinfra", "novita"]
+    # fp8 and up. An endpoint that will not say what precision it runs at is
+    # not one to put a customer's Arabic through.
+    assert "unknown" not in routing["quantizations"]
+    assert "fp8" in routing["quantizations"]
+    # Excluding bad stacks must not turn a good one into a single point of
+    # failure: anything that survives the filter may still answer.
+    assert routing["allow_fallbacks"] is True
+
+
+def test_the_temperature_the_routing_protects_is_still_sent(captured, provider):
+    provider.generate("p", [msg.user("الشحن كام؟")], [])
+    assert captured["sent"][0]["body"]["temperature"] == 0.3
+
+
+def test_routing_is_configurable_and_can_be_turned_off(captured, monkeypatch):
+    """A deployment that clears both variables gets OpenRouter's own default
+    back, unchanged -- the filter is a decision, not a hardcoding."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(
+            settings,
+            openrouter_api_key=KEY,
+            openrouter_providers=(),
+            openrouter_quantizations=(),
+        ),
+    )
+    OpenRouterProvider(api_key=KEY).generate("p", [msg.user("hi")], [])
+    assert "provider" not in captured["sent"][0]["body"]
+
+
+def test_the_routing_env_vars_reach_settings(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_PROVIDERS", " z-ai , together ")
+    monkeypatch.setenv("OPENROUTER_QUANTIZATIONS", "fp8")
+    loaded = load_settings()
+    assert loaded.openrouter_providers == ("z-ai", "together")
+    assert loaded.openrouter_quantizations == ("fp8",)
+
+
+def test_an_empty_routing_var_means_empty_not_default(monkeypatch):
+    """Unset and explicitly-blank are different answers and have to stay
+    distinguishable: blank is "do not constrain this"."""
+    monkeypatch.setenv("OPENROUTER_PROVIDERS", "")
+    assert load_settings().openrouter_providers == ()
+    monkeypatch.delenv("OPENROUTER_PROVIDERS")
+    assert load_settings().openrouter_providers == ("z-ai", "deepinfra", "novita")
+
+
+# -- reasoning blocks across a tool loop ------------------------------------
+
+
+def _reasoning_details() -> list[dict]:
+    return [{"type": "reasoning.text", "text": "the customer asked for XL", "index": 0}]
+
+
+def test_reasoning_details_come_back_on_the_reply(captured, provider):
+    captured["queue"].append(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "reasoning_details": _reasoning_details(),
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {"name": "get_variants", "arguments": "{}"},
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ]
+        }
+    )
+    reply = provider.generate("p", [msg.user("عايز XL")], [])
+    assert reply.signature == _reasoning_details()
+
+
+def test_reasoning_details_are_replayed_with_the_turn_that_produced_them(captured, provider):
+    """OpenRouter is explicit that a reasoning model needs its own blocks back
+    for multi-turn tool calling. Without them the model gets its tool results
+    with no record of why it asked for them, and answers the question it
+    reconstructs rather than the one that was asked."""
+    history = [
+        msg.user("عايز XL"),
+        msg.assistant(
+            "",
+            [msg.tool_call("call_1", "get_variants", {"product_id": "wanas-hoodie"})],
+            signature=_reasoning_details(),
+        ),
+        msg.tool_results([msg.tool_result("call_1", "get_variants", {"variants": []})]),
+    ]
+    provider.generate("p", history, [])
+
+    assistant = captured["sent"][0]["body"]["messages"][2]
+    assert assistant["reasoning_details"] == _reasoning_details()
+
+
+def test_a_foreign_signature_is_still_dropped(captured, provider):
+    """A Gemini thought signature is a string. It means nothing on this
+    protocol and must not be dressed up as a reasoning block."""
+    history = [
+        msg.user("عايز XL"),
+        msg.assistant("", [msg.tool_call("call_1", "get_variants", {})], signature=SIG),
+    ]
+    provider.generate("p", history, [])
+
+    assistant = captured["sent"][0]["body"]["messages"][2]
+    assert "reasoning_details" not in assistant
+    assert "sig-" not in json.dumps(captured["sent"][0]["body"]["messages"])
+
+
+def test_a_reply_with_no_reasoning_carries_no_signature(captured, provider):
+    captured["queue"].append(text_reply("تمام"))
+    assert provider.generate("p", [msg.user("hi")], []).signature is None

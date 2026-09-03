@@ -222,7 +222,12 @@ class GeminiProvider(LLMProvider):
                     # A signature on the text part is replayed too: Gemini 3
                     # can attach one to the reasoning that preceded the tool
                     # calls, not only to the calls themselves.
-                    if message.get("signature"):
+                    # Only ever a string. A stored session that ran on
+                    # OpenRouter carries its `reasoning_details` list in the
+                    # same field (see `assistant/providers/base.py`), and that
+                    # is another protocol's blob -- dropped here exactly as a
+                    # Gemini signature is dropped over there.
+                    if isinstance(message.get("signature"), str) and message["signature"]:
                         text_part["thoughtSignature"] = message["signature"]
                     parts.append(text_part)
                 for call in message.get("tool_calls") or []:
@@ -252,8 +257,25 @@ class GeminiProvider(LLMProvider):
                     contents.append({"role": "user", "parts": parts})
         return contents
 
+    #: The completion ceiling for one chat call.
+    #:
+    #: 8192, matching `openrouter.py::CHAT_MAX_TOKENS`, and raised from 1024
+    #: for the same reason it was raised there. On Gemini 3 this budget is not
+    #: the reply -- `thinkingConfig` is deliberately left at the API default
+    #: below, so it is the thinking *plus* the reply, and a shop answer behind
+    #: a few hundred thinking tokens can run out mid-sentence. A reply cut off
+    #: at the ceiling comes back as `finishReason: MAX_TOKENS`, which
+    #: `agent.run_turn` now refuses to send; this is the headroom that keeps
+    #: that guard from having to fire in the first place.
+    #:
+    #: Costed in generated tokens, so a ceiling nothing reaches is free.
+    CHAT_MAX_TOKENS = 8192
+
     def _build_payload(self, system_prompt: str, history: list[dict], tools: list) -> dict:
-        generation_config: dict = {"temperature": 0.3, "maxOutputTokens": 1024}
+        generation_config: dict = {
+            "temperature": 0.3,
+            "maxOutputTokens": self.CHAT_MAX_TOKENS,
+        }
         if not is_gemini_3(self.model):
             # Short replies, latency over deliberation. `thinkingBudget` is a
             # 2.x field; Gemini 3 rejects it outright, so its thinking
@@ -507,7 +529,26 @@ class GeminiProvider(LLMProvider):
             # Deterministic: a transcript is not a place for creativity.
             "generationConfig": {"temperature": 0.0},
         }
-        text = self._first_text(self._generate_media(payload, self._media_model()))
+        body = self._generate_media(payload, self._media_model())
+
+        # A transcript that ran into the output ceiling is half of what the
+        # customer said, and half is worse than none: it does not read as
+        # broken, it reads as a *shorter message*, and the whole turn is then
+        # built on it. Everything downstream treats this string as the
+        # customer's own words, so there is nowhere further down to catch it.
+        # Empty is the documented "hand it to a person" signal
+        # (`assistant/media.py::transcribe_voice`), and a person listening to
+        # the recording is right here -- the words exist, we could not write
+        # all of them down. Same guard `openrouter.py::transcribe` carries.
+        for candidate in body.get("candidates") or []:
+            if str(candidate.get("finishReason") or "").strip().upper() == "MAX_TOKENS":
+                log.warning(
+                    "transcript hit the output ceiling (finishReason=MAX_TOKENS); "
+                    "handing the voice note to a person rather than answering half of it"
+                )
+                return ""
+
+        text = self._first_text(body)
         if not text or text.strip() in {"(غير مفهوم)", "()"}:
             return ""
         return text

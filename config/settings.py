@@ -45,6 +45,20 @@ def _float(name: str, default: float) -> float:
         return default
 
 
+def _csv(name: str, default: str = "") -> tuple[str, ...]:
+    """A comma-separated env var as a tuple, blanks and whitespace dropped.
+
+    An explicitly empty variable means an empty tuple ("do not constrain
+    this"), which is a different answer from "unset" and has to stay
+    distinguishable from it -- hence the default is applied to the *unset*
+    case only.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        raw = default
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
 def _bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name, "").strip().lower()
     if not raw:
@@ -88,6 +102,28 @@ class Settings:
     #: hand a routed-inference key to Google (or a Google key to OpenRouter),
     #: which only surfaces later as an auth failure far from its cause.
     openrouter_api_key: str
+
+    #: Which upstream providers OpenRouter may serve the conversation model
+    #: from, most preferred first (provider slugs, comma-separated).
+    #:
+    #: This exists because OpenRouter's *default* is to load-balance one model
+    #: id across every upstream that hosts it -- 23 of them for
+    #: `z-ai/glm-5.3-flash`, at three different quantizations, and six
+    #: identical requests were measured landing on three different ones. That
+    #: is not a performance detail: with `require_parameters` off, a provider
+    #: that does not support `temperature` is sent the request anyway and
+    #: **silently ignores it**, so a reply this shop meant to generate at 0.3
+    #: was generated at whatever that stack defaults to. Egyptian Arabic is
+    #: the first thing to break under that, and it breaks intermittently --
+    #: which is exactly how it presented: most replies fine, some garbled.
+    #:
+    #: Blank keeps OpenRouter's own preference order within the *filtered*
+    #: candidate set; it never restores the unfiltered default.
+    openrouter_providers: tuple[str, ...]
+    #: Quantizations the conversation model may be served at. "unknown" is
+    #: excluded on purpose -- an endpoint that will not say what precision it
+    #: runs at is not one to put a customer's Arabic through.
+    openrouter_quantizations: tuple[str, ...]
 
     whatsapp_phone_number_id: str
     whatsapp_access_token: str
@@ -406,6 +442,12 @@ def load_settings() -> Settings:
         comment_classifier_model=_first_env("COMMENT_CLASSIFIER_MODEL", default=""),
         llm_debug_payload=_bool("LLM_DEBUG_PAYLOAD", False),
         openrouter_api_key=_first_env("OPENROUTER_API_KEY", default=""),
+        openrouter_providers=_csv(
+            "OPENROUTER_PROVIDERS", default="z-ai,deepinfra,novita"
+        ),
+        openrouter_quantizations=_csv(
+            "OPENROUTER_QUANTIZATIONS", default="fp8,bf16,fp16"
+        ),
         whatsapp_phone_number_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),
         whatsapp_access_token=os.getenv("WHATSAPP_ACCESS_TOKEN", ""),
         whatsapp_app_secret=os.getenv("WHATSAPP_APP_SECRET", ""),

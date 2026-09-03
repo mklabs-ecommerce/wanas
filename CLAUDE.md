@@ -566,6 +566,39 @@ tests/                   pytest suite (flat, one test_<module>.py per
   `chat/completions` call as chat, keyed by `OPENROUTER_API_KEY` alone --
   audio rides as an `input_audio` part, a photo as a base64 `image_url`.
   There is no Whisper call and no `OPENAI_API_KEY` anywhere in the codebase.
+- **A model id is not a serving stack.** OpenRouter hosts one id on many
+  upstream providers (twenty-three for `z-ai/glm-5.3-flash`) and
+  load-balances between them per request, and by default a provider that does
+  not implement `temperature` is sent it anyway and **silently drops it** —
+  so a reply meant to be sampled at 0.3 gets that stack's own default.
+  Egyptian Arabic degrades first under that and it degrades *per request*,
+  which is what produced the intermittently garbled replies: most fine, the
+  occasional one grammatically broken or answering a question nobody asked.
+  `OPENROUTER_PROVIDERS` / `OPENROUTER_QUANTIZATIONS` pin the candidate set
+  (`_routing` in `openrouter.py`), and the `require_parameters` filter they
+  turn on is the part that matters — it makes `temperature` a setting rather
+  than a suggestion. Fallbacks stay on: this excludes stacks that answer
+  badly, it does not make one provider a single point of failure.
+- **A reply that hit the token ceiling is never sent.** `finish_reason`
+  (`length` / `max_tokens` / Gemini's `MAX_TOKENS`) is the *only* signal that
+  a reply stopped mid-sentence — the text reads as ordinary Arabic right up to
+  where it stops — and a turn produces exactly one reply, so a fragment is the
+  whole answer the customer gets. `agent.run_turn` regenerates twice asking
+  for something shorter, then sends `TRUNCATED_FALLBACK` rather than half a
+  sentence. The same guard covers a truncated *tool-call* hop, which is a
+  lookup the model never finished specifying.
+- **A truncated transcript is worse than none.** Half a voice note does not
+  read as broken, it reads as a *shorter message*, and the whole turn is built
+  on it — so both providers' `transcribe()` return `""` on a ceiling hit,
+  which is the documented "hand it to a person" signal
+  (`assistant/media.py::transcribe_voice`).
+- The reasoning blocks a reasoning model returns (`reasoning_details` on
+  OpenRouter, `thoughtSignature` on Gemini) ride in `ModelReply.signature` and
+  are handed back with the assistant turn that produced them. OpenRouter
+  requires this for multi-turn tool calling: without it the model gets its
+  tool results back with no record of *why* it asked for them, and answers the
+  question it reconstructs rather than the one that was asked. Each provider
+  recognises only its own shape (a list vs a string) and drops the other.
 - `LLM_PROVIDER=fake` runs the scripted provider used by tests and by the
   harness when no key is set.
 - The provider also owns media: `transcribe()` for voice notes and

@@ -584,3 +584,43 @@ def test_a_refusal_is_not_retried(provider, captured, monkeypatch, status):
         provider.generate("sys", [msg.user("hi")], tool_specs())
 
     assert len(captured["sent"]) == 1
+
+
+# --- ceilings, and what a reply that hits one is worth ---------------------
+
+
+def test_the_chat_budget_leaves_room_for_a_thinking_model(captured, provider):
+    """Gemini 3's thinking configuration is left at the API default, so this
+    budget is thinking *plus* reply. At 1024 a shop answer behind a few
+    hundred thinking tokens runs out mid-sentence, which is a fragment sent to
+    a customer -- the same failure `openrouter.py` was carrying."""
+    provider.generate("p", [msg.user("الشحن كام؟")], [])
+    config = captured["sent"][0]["body"]["generationConfig"]
+    assert config["maxOutputTokens"] == 8192
+
+
+def test_a_transcript_that_hit_the_ceiling_goes_to_a_person(captured, provider):
+    """Half of what the customer said is worse than none of it: it reads as a
+    shorter message, not as a failure, and the whole turn is built on it."""
+    captured["queue"].append(
+        {
+            "candidates": [
+                {
+                    "content": {"parts": [{"text": "عايز الهودي الأسود"}]},
+                    "finishReason": "MAX_TOKENS",
+                }
+            ]
+        }
+    )
+    assert provider.transcribe(b"bytes", "audio/ogg") == ""
+
+
+def test_a_finished_transcript_is_returned(captured, provider):
+    captured["queue"].append(
+        {
+            "candidates": [
+                {"content": {"parts": [{"text": "عايز الهودي الأسود"}]}, "finishReason": "STOP"}
+            ]
+        }
+    )
+    assert provider.transcribe(b"bytes", "audio/ogg") == "عايز الهودي الأسود"

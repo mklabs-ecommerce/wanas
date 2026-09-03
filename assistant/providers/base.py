@@ -36,7 +36,14 @@ class ModelReply:
     #: Opaque per-turn blob some providers attach to the assistant's own text
     #: and require back on the next request. Meaningless above this layer;
     #: carried, never inspected. Per-tool-call signatures live on the calls.
-    signature: str | None = None
+    #:
+    #: A string for Gemini's thought signatures, a list for OpenRouter's
+    #: `reasoning_details` blocks -- the shape is the provider's business, and
+    #: it round-trips through the JSON history column either way. Each
+    #: provider recognises only its own and drops the other, so a session that
+    #: changed providers mid-life cannot feed one protocol's blob to the
+    #: other.
+    signature: str | list | None = None
     #: Logged when the reply is empty -- usually a token limit or a content
     #: filter, and invisible otherwise.
     finish_reason: str | None = None

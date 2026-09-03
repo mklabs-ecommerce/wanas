@@ -14,10 +14,23 @@ Quirks absorbed here, none of which leak upward:
   ``tool_call_id``, not parts bundled into a user turn.
 * An assistant turn that carries tool calls is sent with ``content: null``
   rather than an empty string, which strict routers prefer.
-* **No thought signatures.** Nothing in this protocol demands an opaque blob
-  back, so `ModelReply.signature` stays None and any signature arriving in
-  history from another provider's stored session is dropped on the way out --
-  it means nothing here.
+* **Reasoning blocks ride in `ModelReply.signature`.** The conversation model
+  is a reasoning model, and OpenRouter is explicit that for multi-turn tool
+  calling the `reasoning_details` blocks an assistant turn came back with have
+  to be sent back with it: they are the model's own working, and the request
+  that follows a tool result is the model resuming that working rather than
+  starting it again. Dropped -- which is what this file used to do -- the
+  model gets its tool results back with no record of why it asked for them,
+  and answers the question it reconstructs rather than the one that was asked.
+  That is a whole class of "the reply has nothing to do with the message" on
+  its own.
+
+  So `signature` carries the `reasoning_details` list, which is exactly the
+  job that field was added for: an opaque per-turn blob some providers require
+  back, carried through history untouched and never inspected above this
+  layer. It survives the database round trip because history is a JSON column.
+  A signature arriving from *another* provider's stored session is a string,
+  not a list, and is still dropped on the way out -- it means nothing here.
 
 **One key, one vendor, one call shape -- but not always one model.** Chat,
 voice-note transcription and photo reading all run through the *same*
@@ -111,6 +124,14 @@ _AUDIO_FORMATS = {
     "audio/webm": "webm",
     "audio/flac": "flac",
 }
+
+
+#: Finish reasons meaning the model stopped at its token ceiling rather than
+#: at the end of what it had to say. The same set `assistant/agent.py` guards
+#: a chat reply with, kept here too because a *transcript* that stops early is
+#: the more dangerous of the two: a cut-off reply looks wrong, a cut-off
+#: transcript looks like a shorter message.
+_TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
 
 
 class OpenRouterProvider(LLMProvider):
@@ -211,8 +232,15 @@ class OpenRouterProvider(LLMProvider):
                     entry["tool_calls"] = calls
                     if not entry["content"]:
                         entry["content"] = None
-                # A `signature` on this turn (or on any of its calls) belongs
-                # to another provider's protocol; dropped, never inspected.
+                # The reasoning blocks this turn was produced with, handed
+                # straight back so the model can resume its own working
+                # instead of reconstructing it -- see the module docstring.
+                # Only ever a list: a `signature` shaped like anything else
+                # came from another provider's protocol and means nothing
+                # here, so it is dropped exactly as it always was.
+                signature = message.get("signature")
+                if isinstance(signature, list) and signature:
+                    entry["reasoning_details"] = signature
                 messages.append(entry)
             elif role == TOOL_RESULTS:
                 for result in message.get("results") or []:
@@ -241,7 +269,71 @@ class OpenRouterProvider(LLMProvider):
     #: There is no cheaper lever: this endpoint answers
     #: "Reasoning is mandatory for this endpoint and cannot be disabled."
     #: to `reasoning: {"enabled": false}`.
-    CHAT_MAX_TOKENS = 4096
+    #: Raised again from 4096 for the same reason it went from 1024 to 4096,
+    #: one failure mode further on. At 4096 the budget was enough that the
+    #: model rarely returned *nothing*, but "rarely nothing" is not the same
+    #: as "always finished": a long reply (an order summary carries the name,
+    #: the address, the phone, the line items, shipping and a total) behind
+    #: several hundred reasoning tokens can still run out mid-sentence, and
+    #: `finish_reason="length"` is a reply cut off wherever the counter
+    #: stopped -- half a word, a dangling question. That is one of the shapes
+    #: the garbled replies took in production.
+    #:
+    #: Costed in generated tokens, so a ceiling nothing reaches is free; the
+    #: measured ceiling on ordinary shop turns is under 1000. This is
+    #: headroom, and `agent.run_turn`'s truncation guard is the guarantee
+    #: underneath it -- a ceiling can always be reached by something, and a
+    #: half-written sentence must never be sent whatever the budget was.
+    CHAT_MAX_TOKENS = 8192
+
+    def _routing(self) -> dict | None:
+        """Which upstreams OpenRouter may serve this model from.
+
+        **A model id is not a serving stack.** OpenRouter routes one id across
+        every provider that hosts it -- twenty-three of them for
+        `z-ai/glm-5.3-flash`, at fp8 and at quantizations that decline to say
+        what they are -- and load-balances between them per request. Six
+        identical requests from this codebase were measured landing on three
+        different providers.
+
+        That would be an availability feature and nothing more, except for
+        what the default does with parameters: with `require_parameters` off,
+        a provider that does not implement `temperature` is still sent the
+        request and **silently drops it**. The reply is then sampled at that
+        stack's own default, which is typically 1.0 rather than the 0.3 below.
+        Egyptian Arabic is the first thing that degrades under that, and it
+        degrades *per request* -- most replies fine, an occasional one
+        grammatically broken or answering a question nobody asked. That is the
+        shape of the garbled replies this shop saw in production, and no
+        amount of prompt work reaches it, because the prompt is not what
+        changed between a good reply and a bad one.
+
+        So the candidate set is filtered rather than left open:
+
+        * `require_parameters` -- only providers that actually implement
+          everything in the payload. This is the correctness half: it is what
+          makes `temperature` a setting rather than a suggestion.
+        * `quantizations` -- fp8 and up, never "unknown".
+        * `order` -- preference within what survives the filter, first-party
+          first.
+        * `allow_fallbacks` stays **on**. The point is to exclude stacks that
+          answer badly, not to make one provider a single point of failure;
+          anything the filter admits can answer if the preferred ones cannot.
+
+        Returns None when nothing is configured, which leaves OpenRouter's
+        default behaviour exactly as it was -- the tests that pin the payload
+        shape for a bare provider keep passing, and a deployment can opt out.
+        """
+        routing: dict = {}
+        if settings.openrouter_providers:
+            routing["order"] = list(settings.openrouter_providers)
+        if settings.openrouter_quantizations:
+            routing["quantizations"] = list(settings.openrouter_quantizations)
+        if not routing:
+            return None
+        routing["allow_fallbacks"] = True
+        routing["require_parameters"] = True
+        return routing
 
     def _build_payload(self, system_prompt: str, history: list[dict], tools: list) -> dict:
         payload: dict = {
@@ -250,6 +342,9 @@ class OpenRouterProvider(LLMProvider):
             "temperature": 0.3,
             "max_tokens": self.CHAT_MAX_TOKENS,
         }
+        routing = self._routing()
+        if routing:
+            payload["provider"] = routing
         if tools:
             payload["tools"] = [self._schema(spec) for spec in tools]
         return payload
@@ -349,7 +444,18 @@ class OpenRouterProvider(LLMProvider):
         if not text and not tool_calls:
             log.warning("openrouter returned no text and no tool calls (finish_reason=%s)", finish_reason)
 
-        return ModelReply(text=text, tool_calls=tool_calls, finish_reason=finish_reason)
+        # Carried, never read. `_messages` sends it back on the next hop of
+        # the same tool loop, which is what OpenRouter asks for and what keeps
+        # a post-tool-result reply attached to the question that caused it.
+        reasoning = message.get("reasoning_details")
+        signature = reasoning if isinstance(reasoning, list) and reasoning else None
+
+        return ModelReply(
+            text=text,
+            tool_calls=tool_calls,
+            finish_reason=finish_reason,
+            signature=signature,
+        )
 
     def _media_model(self) -> str:
         """Which model reads a voice note or a photo.
@@ -411,7 +517,11 @@ class OpenRouterProvider(LLMProvider):
             "model": model,
             # Deterministic: a transcript is not a place for creativity.
             "temperature": 0.0,
-            "max_tokens": 1024,
+            # Room for a long voice note. Arabic runs two to three tokens a
+            # word here, and a customer describing an order and an address in
+            # one recording overran 1024 -- which, before the guard above,
+            # arrived as a shorter message rather than as a failure.
+            "max_tokens": 4096,
             "messages": [
                 {
                     "role": "user",
@@ -459,7 +569,32 @@ class OpenRouterProvider(LLMProvider):
 
         body = response.json()
         choices = body.get("choices") or []
-        raw = (choices[0].get("message") or {}).get("content") if choices else None
+        if not choices:
+            return ""
+
+        # A transcript that ran into the ceiling is half of what the customer
+        # said, and it is worse than nothing: it does not read as broken, it
+        # reads as a *shorter message*, and the whole turn is then built on
+        # it. "عايز الهودي الأسود لارج بس لو مش متاح خليه ميديم" cut after
+        # "الأسود" is a different order. Everything downstream trusts this
+        # string as the customer's own words -- `search_terms`, the model, the
+        # cart -- so there is nowhere further down to catch it.
+        #
+        # Empty is the documented "hand this to a person" signal
+        # (`assistant/media.py::transcribe_voice`), and a person listening to
+        # the voice note is exactly right here: the words exist, we just could
+        # not write all of them down.
+        finish_reason = choices[0].get("finish_reason")
+        if str(finish_reason or "").strip().lower() in _TRUNCATED_FINISH_REASONS:
+            log.warning(
+                "transcript from model %r hit the completion ceiling (finish_reason=%s); "
+                "handing the voice note to a person rather than answering half of it",
+                model,
+                finish_reason,
+            )
+            return ""
+
+        raw = (choices[0].get("message") or {}).get("content")
         text = self._clean_transcript(str(raw or ""))
         if not text or text in {"(غير مفهوم)", "()"}:
             return ""

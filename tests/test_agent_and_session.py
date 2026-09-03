@@ -663,3 +663,102 @@ def test_a_failed_lookup_is_not_what_the_conversation_is_about(seeded):
         msg.tool_results([{"id": "c1", "name": "get_variants", "content": {"error": "product_not_found"}}]),
     ]
     assert agent.promise_fallback(history) == agent.PROMISE_FALLBACK
+
+
+# --- a reply the model never finished writing -----------------------------
+#
+# The other half of the garbled-Arabic bug. `finish_reason="length"` means the
+# generation stopped at the completion ceiling rather than at the end of a
+# sentence, so what came back is cut off wherever the counter stopped. It
+# reads as ordinary Arabic until it stops making sense, there is no second
+# message to complete it, and the old loop stored it and sent it -- an order
+# summary reached a customer closing on a half-written question.
+
+
+def _cut_off(text: str) -> ModelReply:
+    return ModelReply(text=text, finish_reason="length")
+
+
+def test_a_truncated_reply_is_regenerated_rather_than_sent(seeded):
+    provider = ScriptedProvider(
+        [
+            _cut_off("الإجمالي 950 جنيه، اطم"),
+            ModelReply(text="الإجمالي 950 جنيه. أأكد الأوردر؟"),
+        ]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "اكد", provider=provider)
+
+    assert reply.text == "الإجمالي 950 جنيه. أأكد الأوردر؟"
+    assert reply.error is None
+    # The fragment is not in what the customer got, and not in the transcript
+    # either -- the model must not read its own broken output back.
+    stored = session_store.load(seeded, CHANNEL, WHO)
+    assert not any((m.get("content") or "")[-3:] == "اطم" for m in stored)
+
+
+def test_a_reply_that_keeps_truncating_becomes_the_fallback_not_a_fragment(seeded):
+    provider = ScriptedProvider([_cut_off("الإجمالي 950 جنيه، اطم") for _ in range(4)])
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "اكد", provider=provider)
+
+    assert reply.text == agent.TRUNCATED_FALLBACK
+    assert reply.error == "truncated"
+    # Two retries, then the fallback: bounded, because a customer is waiting.
+    assert len(provider.calls) == agent._TRUNCATION_RETRY_LIMIT + 1
+
+
+def test_the_retry_asks_for_something_shorter(seeded):
+    provider = ScriptedProvider([_cut_off("طويل أوي"), ModelReply(text="تمام")])
+    agent.run_turn(seeded, CHANNEL, WHO, "اكد", provider=provider)
+
+    first_prompt = provider.calls[0][0]
+    second_prompt = provider.calls[1][0]
+    assert agent._TRUNCATION_NUDGE not in first_prompt
+    assert second_prompt.endswith(agent._TRUNCATION_NUDGE)
+
+
+def test_a_finished_reply_is_untouched_whatever_its_length(seeded):
+    """The guard keys on `finish_reason`, never on the text. A long reply that
+    ended properly is a long reply, not a truncated one."""
+    long_reply = ("تمام. " * 200).strip()
+    provider = ScriptedProvider([ModelReply(text=long_reply, finish_reason="stop")])
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "اكد", provider=provider)
+
+    assert reply.text == long_reply
+    assert reply.error is None
+    assert len(provider.calls) == 1
+
+
+def test_an_empty_truncated_reply_still_takes_the_old_path(seeded):
+    """`finish_reason=length` with no text at all is the *older* bug -- the
+    budget spent entirely on reasoning. It has its own handling and must not
+    be diverted into the truncation retry, which exists for a reply that has
+    words in it."""
+    provider = ScriptedProvider([ModelReply(text="", finish_reason="length")])
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "اكد", provider=provider)
+
+    assert reply.text == agent.GENERIC_FAILURE
+    assert len(provider.calls) == 1
+
+
+def test_gemini_spelling_of_the_same_finish_reason_is_recognised(seeded):
+    """The field is the upstream provider's, passed through untranslated."""
+    provider = ScriptedProvider(
+        [ModelReply(text="نص مقطوع", finish_reason="MAX_TOKENS"), ModelReply(text="تمام")]
+    )
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "اكد", provider=provider)
+    assert reply.text == "تمام"
+
+
+def test_a_truncated_tool_call_hop_is_discarded_rather_than_acted_on(seeded):
+    """A call the model had not finished specifying is a lookup for something
+    it did not mean. Nothing has run yet, so the hop is simply asked for
+    again."""
+    truncated = reply_with("get_products", {"query": "هو"})
+    truncated.finish_reason = "length"
+    provider = ScriptedProvider([truncated, ModelReply(text="تمام")])
+
+    reply = agent.run_turn(seeded, CHANNEL, WHO, "عايز هودي", provider=provider)
+
+    assert reply.text == "تمام"
+    # The truncated call never ran.
+    assert reply.tool_calls == []
