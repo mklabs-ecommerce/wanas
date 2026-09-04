@@ -860,9 +860,56 @@ def test_a_classifier_model_decouples_the_public_surface_from_the_chat_model(
 
     assert captured["sent"][0]["body"]["model"] == "cheap/classifier-1"
     # ...and nothing else about the call moved: still JSON-only, no tools.
-    assert captured["sent"][0]["body"]["max_tokens"] == 64
+    assert captured["sent"][0]["body"]["max_tokens"] == OpenRouterProvider._COMMENT_MAX_TOKENS
     assert captured["sent"][0]["body"]["temperature"] == 0.0
     assert "tools" not in captured["sent"][0]["body"]
+
+
+def test_a_truncated_classification_is_refused_rather_than_answered(captured):
+    """The bug this closes, in production: the ceiling was 64 tokens and the
+    live model is a reasoning one, so every comment with any weight to it ran
+    out of budget partway through working out whether the writer was a
+    customer. A classification that runs out does not fail loudly -- it comes
+    back as `{}` or as prose cut mid-sentence -- and the coercion below turned
+    that into `other`, which answers politely and raises no alert. Two openly
+    angry public comments were filed as small talk and the owner was never
+    told.
+
+    Refusing sends it to `classifier_unavailable` instead: nothing published,
+    somebody told."""
+    provider = OpenRouterProvider(api_key=KEY)
+    captured["queue"].append(
+        {
+            "choices": [
+                {"message": {"role": "assistant", "content": "{\"cat"}, "finish_reason": "length"}
+            ]
+        }
+    )
+
+    with pytest.raises(ProviderError):
+        provider.classify_comment("تعامل وحش جدا")
+
+
+def test_a_reply_with_no_category_is_an_outage_not_an_other(captured):
+    """`other` is a judgement -- the model read the comment and found nothing
+    remarkable. An empty answer is the absence of one, and the two must not
+    look alike: filing a missing answer under `other` is what let a furious
+    comment get a friendly DM and no alert."""
+    provider = OpenRouterProvider(api_key=KEY)
+    captured["queue"].append(text_reply("{}"))
+
+    with pytest.raises(ProviderError):
+        provider.classify_comment("المكان وحش جدا جدا")
+
+
+def test_an_unrecognised_category_name_is_still_an_answer(captured):
+    """The other side of the same line. The model picked something; this map
+    just has not been taught the name. `other` files it under a real bucket
+    and the comment gets answered, which beats silence."""
+    provider = OpenRouterProvider(api_key=KEY)
+    captured["queue"].append(text_reply(json.dumps({"category": "vibes"})))
+
+    assert provider.classify_comment("حلو اوي").category == "other"
 
 
 def test_the_classifier_model_env_var_reaches_settings(monkeypatch):

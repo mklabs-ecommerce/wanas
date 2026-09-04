@@ -72,14 +72,13 @@ import httpx
 
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
 from assistant.providers.base import (
-    COMMENT_CATEGORIES,
-    LEGACY_COMMENT_CATEGORIES,
     CommentClassification,
     ImageReading,
     LLMProvider,
     ModelReply,
     ProviderError,
     SizeChartReading,
+    classification_from,
     normalise_chart_reading,
 )
 from assistant.providers.gemini import mask_key
@@ -767,6 +766,27 @@ class OpenRouterProvider(LLMProvider):
 
     # -- comments: classification (cheap, no tools, no history) -----------
 
+    #: The completion ceiling for one classification.
+    #:
+    #: The answer is fifteen tokens of JSON. This is 2048 for the same reason
+    #: the chat ceiling is not 1024: on a reasoning model the budget is not
+    #: the reply, it is the reasoning *plus* the reply, and this endpoint
+    #: answers "Reasoning is mandatory for this endpoint and cannot be
+    #: disabled." to `reasoning: {"enabled": false}`. Measured on the live
+    #: model against real comments, one classification spends 46 to 634
+    #: completion tokens -- an insult costs ten times a price question,
+    #: because the model works out whether the writer is a customer.
+    #:
+    #: It was 64, which was the whole bug: every comment with any weight to
+    #: it ran out of budget, and a classification that ran out does not fail
+    #: loudly. It comes back as prose cut mid-sentence, or as `{}` -- and an
+    #: empty category used to be coerced to `other`, which answers politely,
+    #: sends a DM, and raises no alert. Two openly angry public comments were
+    #: filed as `other` in production and the owner was never told.
+    #:
+    #: Costed in generated tokens, so headroom nothing reaches is free.
+    _COMMENT_MAX_TOKENS = 2048
+
     #: Six categories, and the two new ones are described by *who is writing*
     #: rather than by tone: a complaint and a hater's insult read alike to a
     #: sentiment model, and they get opposite treatment here.
@@ -804,7 +824,7 @@ class OpenRouterProvider(LLMProvider):
             # reuses the chat model, which is the behaviour this replaced.
             "model": settings.comment_classifier_model or self.model,
             "temperature": 0.0,
-            "max_tokens": 64,
+            "max_tokens": self._COMMENT_MAX_TOKENS,
             "response_format": {"type": "json_object"},
             "messages": [{"role": "user", "content": instruction}],
         }
@@ -832,18 +852,25 @@ class OpenRouterProvider(LLMProvider):
 
         body = response.json()
         choices = body.get("choices") or []
+        finish_reason = str(choices[0].get("finish_reason") or "").strip().lower() if choices else ""
+        if finish_reason in _TRUNCATED_FINISH_REASONS:
+            # The same rule as a truncated reply, one level down and worse: a
+            # cut-off classification does not read as broken, it reads as an
+            # answer. Refusing it hands the comment to `classifier_unavailable`
+            # -- an alert and a silence -- instead of publishing a line chosen
+            # from a category the model never finished picking.
+            raise ProviderError(
+                f"classification on model {model!r} hit the completion ceiling "
+                f"({self._COMMENT_MAX_TOKENS} tokens)"
+            )
+
         raw = (choices[0].get("message") or {}).get("content") if choices else None
         try:
             parsed = json.loads(str(raw or "").strip() or "{}")
         except json.JSONDecodeError as exc:
             raise ProviderError(f"classification reply was not JSON: {raw!r:.200}") from exc
 
-        category = str(parsed.get("category") or "").strip().lower()
-        category = LEGACY_COMMENT_CATEGORIES.get(category, category)
-        if category not in COMMENT_CATEGORIES:
-            log.warning("classify_comment returned an unknown category %r; treating as other", category)
-            category = "other"
-        return CommentClassification(category=category)
+        return classification_from(parsed)
 
 
 def _debug_dump(payload: dict) -> str:

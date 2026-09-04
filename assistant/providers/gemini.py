@@ -42,12 +42,12 @@ import httpx
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
 from assistant.providers.base import (
     COMMENT_CATEGORIES,
-    LEGACY_COMMENT_CATEGORIES,
     CommentClassification,
     ImageReading,
     LLMProvider,
     ModelReply,
     ProviderError,
+    classification_from,
 )
 from config.settings import settings
 
@@ -681,12 +681,7 @@ class GeminiProvider(LLMProvider):
         except json.JSONDecodeError as exc:
             raise ProviderError(f"classification reply was not JSON: {raw[:200]}") from exc
 
-        category = str(parsed.get("category") or "").strip().lower()
-        category = LEGACY_COMMENT_CATEGORIES.get(category, category)
-        if category not in COMMENT_CATEGORIES:
-            log.warning("classify_comment returned an unknown category %r; treating as other", category)
-            category = "other"
-        return CommentClassification(category=category)
+        return classification_from(parsed)
 
 
 def _debug_dump(payload: dict) -> str:

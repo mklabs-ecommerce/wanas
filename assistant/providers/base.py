@@ -14,8 +14,11 @@ whether reasoning has to be switched off.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
+
+log = logging.getLogger("wanas.providers")
 
 
 class ProviderError(Exception):
@@ -268,6 +271,36 @@ class CommentClassification:
     #: LEGACY_COMMENT_CATEGORIES, anything unrecognised to "other", which
     #: answers politely and asks rather than guessing at engagement.
     category: str = "other"
+
+
+def classification_from(parsed: dict) -> CommentClassification:
+    """One classifier answer, turned into a category -- or refused.
+
+    The distinction this draws is the whole point of it, and getting it wrong
+    is what let two openly angry public comments be answered as small talk:
+
+    * A category name nobody here recognises is still an *answer*. The model
+      read the comment and picked something; `other` files it under a real
+      bucket and the comment is answered politely, which is the right outcome
+      for a name this map has not been taught yet.
+    * A **missing or empty** category is not an answer at all. It is what a
+      truncated, refused or empty completion leaves behind, and coercing it to
+      `other` is indistinguishable from the model having judged the comment
+      unremarkable -- so a furious comment gets a friendly DM, raises no
+      alert, and the owner never hears about it. That is refused here, and
+      `assistant/channels/instagram.py` turns the refusal into silence plus a
+      `classifier_unavailable` alert: nothing published, and somebody told.
+
+    Shared by both providers so the two doors cannot drift apart.
+    """
+    category = str(parsed.get("category") or "").strip().lower()
+    if not category:
+        raise ProviderError("classification reply carried no category")
+    category = LEGACY_COMMENT_CATEGORIES.get(category, category)
+    if category not in COMMENT_CATEGORIES:
+        log.warning("classify_comment returned an unknown category %r; treating as other", category)
+        category = "other"
+    return CommentClassification(category=category)
 
 
 class LLMProvider:
