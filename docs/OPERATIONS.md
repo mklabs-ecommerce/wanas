@@ -89,6 +89,13 @@ something looks wrong.
       parcel is routinely more than a day after the customer last wrote.
       (`domain/services/notifications.py`: `record_status_push`,
       `deliver_status_push`, `send_proactive`.)
+
+      **The copy to submit is in `docs/WHATSAPP_TEMPLATES.md`.** Paste it as
+      written: it is the same voice as the bot's own messages, and every one
+      of the five is variable-free by necessity, not by preference --
+      `WhatsAppClient.send_template` sends `{"name": ..., "language": ...}`
+      with no `components`, so a template carrying `{{1}}` is approved by Meta
+      and then refused at send time for a parameter count that never arrives.
 - [ ] Staff replying from the dashboard are subject to the same rule: a
       conversation whose customer last wrote over 24 hours ago refuses the
       reply with `outside_window` and says to phone them, rather than sending
