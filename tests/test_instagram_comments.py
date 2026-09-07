@@ -858,9 +858,9 @@ def test_there_is_no_like_comment_and_nothing_calls_the_likes_endpoint(
 
 
 FAQ_EXPECTED = {
-    "delivery_time": "التوصيل بياخد لغاية 4 أيام لكل محافظات مصر 🖤",
-    "shipping_cost": "الشحن 110 جنيه لكل محافظات مصر 🖤",
-    "payment": "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع 🖤",
+    "delivery_time": "التوصيل بياخد لغاية 4 أيام لكل محافظات مصر.",
+    "shipping_cost": "الشحن 110 جنيه لكل محافظات مصر.",
+    "payment": "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع.",
 }
 
 

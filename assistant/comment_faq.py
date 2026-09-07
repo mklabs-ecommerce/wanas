@@ -39,9 +39,9 @@ from domain.services.search_terms import expand, normalize
 #: No URL in the payment line: Instagram suppresses the reach of a comment
 #: carrying a link, so the answer would be published and then unread.
 FAQ_REPLIES: dict[str, str] = {
-    "delivery_time": "التوصيل بياخد لغاية 4 أيام لكل محافظات مصر 🖤",
-    "shipping_cost": "الشحن 110 جنيه لكل محافظات مصر 🖤",
-    "payment": "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع 🖤",
+    "delivery_time": "التوصيل بياخد لغاية 4 أيام لكل محافظات مصر.",
+    "shipping_cost": "الشحن 110 جنيه لكل محافظات مصر.",
+    "payment": "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع.",
 }
 
 #: Written already normalized (no hamza, `ي` not `ى`, `ه` not `ة`, lowercase)
