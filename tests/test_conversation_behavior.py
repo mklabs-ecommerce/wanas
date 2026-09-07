@@ -555,7 +555,7 @@ def test_the_prompt_still_carries_the_rules_that_are_not_negotiable():
         "متقولش سعر ولا مقاس ولا حاجة متوفرة من دماغك",
         "الـ variant_id بييجي من get_variants بس",
         "متقولش إن الأوردر اتعمل غير لما confirm_order يرجّع رقم أوردر",
-        "الدفع كاش عند الاستلام بس",
+        "الدفع كاش عند الاستلام، أو أونلاين من الموقع",
         "مقاسات الهدوم وهي مفرودة",
         "الـ Tops مفيهاش XL",
         "request_human",
