@@ -619,7 +619,15 @@ def test_the_prompt_did_not_become_a_wall_of_text():
     # is GLM, whose Masry is correct less reliably than the Gemini it
     # replaced, and "write the sentence properly" is a rule with no tool
     # behind it -- the prompt is the only lever there is.
-    assert 3000 < len(SYSTEM_PROMPT) < 15000
+    #
+    # Raised again (15000 -> 16500) for the tone pass: the ban on invented
+    # small talk, and the emoji rule that replaced it. Both are the same
+    # shape as the writing-quality section above -- a preference no tool can
+    # refuse, so the prompt is the only place they can live. The trigger was
+    # a real reply to "صباحو" that padded itself with "ومستنيين النهارده حلو",
+    # a sentence carrying no information at all; a model told only to be
+    # warm writes that, and only an explicit rule stops it.
+    assert 3000 < len(SYSTEM_PROMPT) < 16500
 
 
 # --------------------------------------------------------------------------
