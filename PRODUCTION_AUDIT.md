@@ -22,8 +22,8 @@ code and duplicated logic, and technical debt.
 Production was inspected directly — GitHub and Railway APIs plus live HTTP
 probes — rather than assumed to match the local checkout.
 
-**~55,000 lines** across 8 layers, 22 database tables, 19 agent tools,
-4 external vendors, 79 test modules.
+**~65,000 lines** across 8 layers, 22 database tables, 19 agent tools,
+4 external vendors, 78 test modules.
 
 ---
 

@@ -1,6 +1,6 @@
 # Testing
 
-**1694 tests, 22 skipped**, across 79 test modules. Flat layout — one
+**1694 tests, 22 skipped**, across 78 test modules. Flat layout — one
 `test_<subject>.py` per subject rather than a mirror of the source tree,
 because what is worth proving does not map one-to-one onto where the code
 lives.
