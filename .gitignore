@@ -56,3 +56,7 @@ ziSuwgjf
 scripts/_eval_output/
 scripts/_eval_output_smoke/
 scripts/_eval_abandonment/
+
+# Agent skills installed by `npx skills add` (third-party, not part of this app)
+.agents/
+skills-lock.json
