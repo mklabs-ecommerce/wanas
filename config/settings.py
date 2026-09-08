@@ -218,6 +218,15 @@ class Settings:
     #: old shape until the first write that needs the new column fails.
     auto_migrate_schema: bool
 
+    #: How long an inbound-delivery idempotency claim (`webhook_events`) is
+    #: kept before the scheduler prunes it. The row's only job is to stop a
+    #: platform *retry* being processed twice, and no platform here retries
+    #: for anything like this long -- Meta gives up after days, Shopify after
+    #: 48 hours -- so 30 is an order of magnitude of headroom, not a tight
+    #: fit. Without the prune the table is append-only for the life of the
+    #: deployment: one row per message ever received. 0 disables it.
+    webhook_event_retention_days: int
+
     #: Report, at boot, which wanas.db products Shopify no longer has -- a log
     #: line, never a write. The deleting half stays
     #: `scripts/shopify_reconcile_products.py`, run by hand: this runs
@@ -502,6 +511,7 @@ def load_settings() -> Settings:
         # app.py. Set it to 0 to have startup report the drift and change
         # nothing, leaving `scripts/migrate_schema.py` to do it by hand.
         auto_migrate_schema=_bool("AUTO_MIGRATE_SCHEMA", True),
+        webhook_event_retention_days=_int("WEBHOOK_EVENT_RETENTION_DAYS", 30),
         reconcile_report_on_boot=_bool("RECONCILE_REPORT_ON_BOOT", True),
         # Off unless asked for. It is an unauthenticated surface that can
         # converse as any customer identity, so the default that costs

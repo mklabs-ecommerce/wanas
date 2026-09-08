@@ -7,7 +7,12 @@ check is a poll for a different reason -- Shopify *does* tell us, on
 `products/create`, but that delivery is refused unless
 `SHOPIFY_WEBHOOK_SECRET` is set, and a product staff added being invisible to
 every customer is too expensive a thing to leave resting on one environment
-variable. The webhook is the fast path; this is the floor under it. In-process and
+variable. The webhook is the fast path; this is the floor under it. The
+retention pass (`domain/services/retention.py`) is here for a third reason
+again: nothing anywhere else ever deletes an idempotency claim once its retry
+window has closed, so the table only ever grew.
+
+In-process and
 single-instance, the same scope note as `assistant/dispatcher.py`: this fits
 one Railway instance. Two instances would each run their own copy of this
 loop -- both jobs are idempotent against a duplicate pass (the waitlist
@@ -23,7 +28,7 @@ import threading
 
 from config.settings import settings
 from domain.db import session_scope
-from domain.services import reengagement
+from domain.services import reengagement, retention
 from integrations.instagram import token as instagram_token
 
 log = logging.getLogger("wanas.scheduler")
@@ -79,6 +84,16 @@ class Scheduler:
             self._import_new_products()
         except Exception:
             log.exception("catalog import failed")
+        try:
+            # Housekeeping, not a feature: `webhook_events` is written once
+            # per inbound delivery and was never read back after its retry
+            # window closed, so without this the table only ever grew. Cheap
+            # and silent on a tick with nothing to remove
+            # (`domain/services/retention.py`), and it swallows its own
+            # failures the way every other job on this tick does.
+            retention.prune_webhook_events()
+        except Exception:
+            log.exception("webhook claim retention pass failed")
 
     def _import_new_products(self) -> None:
         """Mirror any product added in Shopify Admin since the last tick.

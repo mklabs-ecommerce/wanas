@@ -113,6 +113,45 @@ def test_an_unknown_username_is_refused(client, seeded):
     assert login(client, username="ghost").status_code == 401
 
 
+def test_an_unknown_username_still_costs_a_password_hash(seeded, staff, monkeypatch):
+    """No username oracle: the reply body was already identical, but an
+    unknown name used to return *before* any hashing and a real one after
+    240,000 rounds of PBKDF2. That gap is measurable over the internet and
+    answers "does this account exist?" -- see
+    `domain/services/auth.py::authenticate`.
+    """
+    from domain.services import auth
+
+    calls = []
+    real = auth.verify_password
+    monkeypatch.setattr(
+        auth, "verify_password", lambda pw, enc: calls.append(enc) or real(pw, enc)
+    )
+
+    assert auth.authenticate(seeded, "ghost", "whatever") is None
+    assert len(calls) == 1, "an unknown username must still verify against something"
+
+    calls.clear()
+    assert auth.authenticate(seeded, "sara", "wrong-password") is None
+    assert len(calls) == 1, "a known username does exactly one verification too"
+
+
+def test_a_deactivated_account_also_costs_a_password_hash(seeded, staff, monkeypatch):
+    from domain.services import auth
+
+    staff.is_active = False
+    seeded.commit()
+
+    calls = []
+    real = auth.verify_password
+    monkeypatch.setattr(
+        auth, "verify_password", lambda pw, enc: calls.append(enc) or real(pw, enc)
+    )
+
+    assert auth.authenticate(seeded, "sara", "correct-horse") is None
+    assert len(calls) == 1
+
+
 def test_a_correct_login_sets_a_cookie_and_reaches_me(client, staff):
     res = login(client)
     assert res.status_code == 200

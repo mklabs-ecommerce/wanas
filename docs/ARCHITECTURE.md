@@ -1,8 +1,30 @@
 # Architecture
 
-How the pieces fit, and why they are arranged this way. Business rules live in
-[`AGENTS.md`](../AGENTS.md); day-to-day operations in
-[OPERATIONS.md](OPERATIONS.md).
+How the pieces fit, and why they are arranged this way.
+
+**This is a reusable system with one brand deployed on it.** Everything below
+describes the system; the brand is a set of credentials, a catalogue, and
+about a dozen files of customer-facing wording. Where the two are hard to tell
+apart, [REUSING_FOR_NEW_BRANDS.md](REUSING_FOR_NEW_BRANDS.md) draws the line
+precisely.
+
+### The document set
+
+| Document | Answers |
+|---|---|
+| **ARCHITECTURE.md** (this) | how the pieces fit, and the decisions they follow from |
+| [CHATBOT.md](CHATBOT.md) | the agent loop, prompt, tools, memory, guards |
+| [INTEGRATIONS.md](INTEGRATIONS.md) | every external system and how it is authenticated |
+| [DATA_FLOW.md](DATA_FLOW.md) | the end-to-end paths, including the error branches |
+| [DATABASE.md](DATABASE.md) | tables, relationships, lifecycle, consistency rules |
+| [CONFIGURATION.md](CONFIGURATION.md) | every environment variable |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | build, start, monitor, maintain |
+| [TESTING.md](TESTING.md) | the suite, and the flows that must always be verified |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | symptom → cause → fix |
+| [REUSING_FOR_NEW_BRANDS.md](REUSING_FOR_NEW_BRANDS.md) | deploying this for a different brand |
+| [MEDIA.md](MEDIA.md) | voice notes and photos in detail |
+| [OPERATIONS.md](OPERATIONS.md) | day-to-day runbook for this deployment |
+| [`AGENTS.md`](../AGENTS.md) | the business rules and data assumptions |
 
 ## The shape of it
 
@@ -33,7 +55,7 @@ How the pieces fit, and why they are arranged this way. Business rules live in
                                                      ▼
                        ┌───────────────────────────────────────────────┐
                        │  assistant/agent.py   the tool-use loop          │
-                        │    the LLM ⇄ 18 tools, capped at 8 rounds     │
+                        │    the LLM ⇄ 19 tools, capped at 8 rounds     │
                        └───────────────────────────────────────────────┘
                              │                              │
                assistant/tools/*                      domain/services/*
@@ -197,6 +219,39 @@ note before this existed.
 | `assistant/display.py` | Turning stored history into bubbles a person can read — shared by the harness and the dashboard. |
 | `data/` | Catalog metadata Shopify has no field for. Not a product database. |
 | `scripts/` | Shopify maintenance. All dry-run by default, idempotent, need `--apply`. |
+| `domain/services/scheduler.py` | The one clock. Re-engagement, token refresh, catalogue import, retention. |
+| `domain/services/retention.py` | Prunes `webhook_events` past the platform retry window. Without it the idempotency table is append-only for the life of the deployment. |
+| `domain/services/notifications.py` | Every message the shop starts, and the deliverability decision that goes with it. |
+| `domain/services/alert_email.py` | Which queue items are worth waking the owner for. |
+| `common/events.py` | Post-commit hooks — an outbound message must never describe a write that later rolled back. |
+| `common/identifiers.py` | Phone number vs. business-scoped user id. The one place that tells them apart. |
+| `common/bidi.py` | RTL layout, applied at the **send boundary only**, so the transcript stays plain text. |
+| `assistant/context.py` | What the model is *sent*, as opposed to what is stored. |
+| `assistant/session.py` | Stored history: the live slice, the archive, and the caps on both. |
+| `assistant/quoting.py` | Resolving "reply to this message" against the whole transcript. |
+| `assistant/recovery.py` | Taking a handoff back when the customer writes again. |
+| `assistant/comment_faq.py` / `comment_replies.py` | The public comment wording. Lookups, never a model call. |
+| `api/legal.py` | `GET /privacy` — the policy Meta requires a logged-out reviewer to read. |
+| `railway.toml` | The healthcheck. Deliberately partial: the host merges only the keys it names. |
+
+### The layering rule
+
+```
+common/        zero dependencies on anything below — safe for everyone to import
+config/        environment only
+domain/        persistence + business rules.  MUST NOT import assistant/
+integrations/  vendor HTTP, one package per vendor
+assistant/     the agent runtime.            MUST NOT import dashboard/
+api/           the public unauthenticated HTTP surface
+dashboard/     the staff surface.            assistant/ never imports back
+app.py         the only file that wires them together
+```
+
+Where a lower layer needs something from a higher one, it takes a **registered
+callback**, never an import: `register_transcript_recorder`,
+`register_history_clearer`, `register_mailer`, `register_sender`. All four are
+registered in `app.py` and nowhere else. That is why the retention pass lives
+in `domain/` rather than beside the claim it prunes — the scheduler runs it.
 
 ## Who a WhatsApp customer is
 

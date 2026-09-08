@@ -1,0 +1,32 @@
+# Railway deployment settings that belong in the repository rather than only
+# in a dashboard nobody can diff.
+#
+# Deliberately partial. Railway merges this file over the service's own
+# settings, and only the keys named here are overridden -- the builder
+# (Railpack) and the start command stay exactly where they are. The start
+# command in particular is `uvicorn app:app --host 0.0.0.0 --port $PORT` and is
+# not restated here, because restating it is the one way this file could
+# silently change it. See Procfile, which is where it is written down.
+#
+# What this file is actually for: the healthcheck.
+#
+# Without `healthcheckPath` Railway switches traffic to a new container as soon
+# as the process is listening, and "listening" is not "working". This app does
+# a great deal at startup -- schema reconciliation, catalog seeding, sender
+# registration, the Shopify and Instagram wiring -- and a deploy that binds the
+# port and then fails any of it would have been sent live customer messages
+# anyway, with the healthy previous version already torn down. `restartPolicy`
+# catches a process that *dies*; nothing caught one that came up wrong.
+#
+# `/health` is the right probe for that and already exists: it opens a database
+# session and counts the catalog, so it answers 200 only when the process can
+# actually reach Postgres and has something to sell. When it does not answer,
+# Railway fails the deploy and keeps the previous container serving, which is
+# the outcome this shop wants on every one of those failures.
+#
+# The timeout is generous on purpose: boot does real work, and a healthcheck
+# tight enough to fail a slow-but-fine start is worse than none.
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300

@@ -14,6 +14,7 @@ what keeps /domain/ free of any import from /assistant/.
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 from contextlib import asynccontextmanager
 from decimal import Decimal
@@ -49,10 +50,66 @@ from domain.services import alert_email, conversation_reset, notifications
 from domain.services.scheduler import scheduler
 from integrations.shopify.webhooks import router as shopify_router
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-#: httpx logs every outbound request URL, in full, at INFO -- and the line
-#: above turns INFO on for every logger in the process, third-party ones
+#: Ordinary logging goes to **stdout**, and only WARNING and above to stderr.
+#:
+#: `logging.basicConfig` sends everything to stderr, and Railway classifies a
+#: log line's severity by the stream it arrived on -- so every `INFO wanas:`
+#: line in production was filed as `error`. Filtering the deploy's logs for
+#: errors returned the whole log, which is the same as having no filter: the
+#: three lines that actually mattered ("rejected a webhook with a bad
+#: signature") sat in a list of hundreds of routine ones. uvicorn's own access
+#: log already writes to stdout, so this also stops one process describing
+#: itself two different ways.
+#:
+#: Splitting rather than moving everything to stdout: "there is something in
+#: stderr" has to keep meaning "something went wrong", or the same filter is
+#: broken in the other direction.
+class _MaxLevel(logging.Filter):
+    def __init__(self, level: int):
+        super().__init__()
+        self.level = level
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno <= self.level
+
+
+def build_log_handlers(stdout, stderr) -> list[logging.Handler]:
+    """The two handlers, built but not installed.
+
+    Separated from `_configure_logging` so the routing can be asserted on
+    without a test mutating the root logger out from under pytest's own
+    capture -- the same "seam for tests" shape `assistant/agent.py::_sleep`
+    uses.
+    """
+    formatter = logging.Formatter("%(levelname)s %(name)s: %(message)s")
+
+    out = logging.StreamHandler(stdout)
+    out.setFormatter(formatter)
+    out.addFilter(_MaxLevel(logging.INFO))
+
+    err = logging.StreamHandler(stderr)
+    err.setFormatter(formatter)
+    err.setLevel(logging.WARNING)
+    return [out, err]
+
+
+def _configure_logging() -> None:
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    # Replace rather than add: anything that already called `basicConfig`
+    # (an import, a test run) would otherwise have every line written twice.
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+    for handler in build_log_handlers(sys.stdout, sys.stderr):
+        root.addHandler(handler)
+
+
+_configure_logging()
+
+#: httpx logs every outbound request URL, in full, at INFO -- and
+#: `_configure_logging` above sets the *root* logger to INFO, which turns it on
+#: for every logger in the process, third-party ones
 #: included. That is how the Gemini key ended up in clear text in Railway's
 #: logs on every model call: it travelled as `?key=...`, and a URL is not a
 #: safe place to put a secret precisely because so many things log one.
