@@ -548,6 +548,13 @@ customer.
 
 ## Reading the logs
 
+**INFO and below go to stdout; WARNING and above go to stderr.** That split is
+load-bearing on Railway, which files a log line's severity by the stream it
+arrived on. With everything on stderr — which is what `logging.basicConfig`
+does — every routine line was labelled `error`, so filtering the deploy's logs
+for errors returned the whole log. So: **anything in stderr is something to
+look at.**
+
 The logger names say where you are: `wanas.runtime`, `wanas.agent`,
 `wanas.tools`, `wanas.dispatcher`, `wanas.media`, `wanas.channel.whatsapp`,
 `wanas.webhooks.shopify`, `wanas.shopify`, `wanas.provider.openrouter`,
@@ -565,6 +572,9 @@ Lines worth alerting on:
 | `CHATBOT_DEBUG is ON` | Someone shipped a development `.env`. |
 | `SHOPIFY_WEBHOOK_SECRET is not set` | Tracking messages will never fire, silently. |
 | `failed to handle buffered messages` | A worker swallowed an exception; a customer got no reply. |
+| `released N webhook claim(s) after a failed turn` | A turn crashed. The platform's retry will now be processed, so this is the recovery working — but the crash itself is worth reading. |
+| `LEFT OPEN -- cancel it by hand` | A Shopify order exists with nothing on our side. Act on this one immediately. |
+| `pruned N webhook idempotency claim(s)` | Routine housekeeping (`domain/services/retention.py`). Informational. |
 
 ## Common situations
 
