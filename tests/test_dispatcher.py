@@ -359,3 +359,104 @@ def test_the_short_window_can_never_exceed_the_full_one():
         assert dispatcher._wait_for(Pending(fragments=1, first_seen=time.perf_counter())) <= 0.2
     finally:
         dispatcher.shutdown()
+
+
+def test_a_conversation_that_fragments_is_remembered():
+    """Writing in pieces is a habit of a person, not a property of a message.
+    A conversation that has done it once starts patient every time after --
+    which is the whole reason everyone else's first window can be a second."""
+    waits: list[float] = []
+    started = [time.monotonic()]
+
+    def handler(key, item):
+        waits.append(time.monotonic() - started[0])
+
+    dispatcher = MessageDispatcher(
+        handler, debounce_seconds=0.6, first_debounce_seconds=0.05, adaptive=True
+    )
+    try:
+        # First conversation of theirs: two fragments, so the batch itself
+        # buys the long window and the habit is noted.
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        time.sleep(0.02)
+        dispatcher.submit("2010", Pending(texts=["أسود"]))
+        assert dispatcher.wait_idle(5)
+
+        # A later, single message from the same customer waits the long
+        # window without having to prove anything.
+        started[0] = time.monotonic()
+        waits.clear()
+        time.sleep(0.05)
+        dispatcher.submit("2010", Pending(texts=["وكمان لارج"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert waits and waits[0] >= 0.5, f"a known fragmenter waited only {waits[0]:.2f}s"
+
+
+def test_a_stranger_still_gets_the_short_window():
+    waits: list[float] = []
+    started = time.monotonic()
+    dispatcher = MessageDispatcher(
+        lambda key, item: waits.append(time.monotonic() - started),
+        debounce_seconds=0.6,
+        first_debounce_seconds=0.05,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        time.sleep(0.02)
+        dispatcher.submit("2010", Pending(texts=["أسود"]))
+        assert dispatcher.wait_idle(5)
+        # A *different* customer learns nothing from that one.
+        started = time.monotonic()
+        waits.clear()
+        dispatcher.submit("2020", Pending(texts=["الشحن كام؟"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert waits and waits[0] < 0.4
+
+
+def test_writing_again_right_after_a_reply_counts_as_fragmenting():
+    """The window closing early on someone is itself the evidence. Their next
+    message arrives moments after the batch was released, which is what a
+    split thought looks like from here -- and it must not happen to them
+    twice."""
+    waits: list[float] = []
+    dispatcher = MessageDispatcher(
+        lambda key, item: waits.append(time.monotonic()),
+        debounce_seconds=0.6,
+        first_debounce_seconds=0.05,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        assert dispatcher.wait_idle(5)
+        # Straight after the first batch ran: the rest of what they were
+        # saying. This one should be waited on properly.
+        marker = time.monotonic()
+        dispatcher.submit("2010", Pending(texts=["أسود لارج"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert len(waits) == 2
+    assert waits[1] - marker >= 0.5
+
+
+def test_the_fragment_memory_does_not_grow_without_bound():
+    """One entry per customer who has ever written, kept for the life of the
+    process, is the same slow leak the conversation locks were fixed for."""
+    from assistant import dispatcher as dispatcher_module
+
+    dispatcher = MessageDispatcher(lambda key, item: None, debounce_seconds=0.01)
+    try:
+        now = time.perf_counter()
+        for index in range(dispatcher_module._FRAGMENTER_MEMORY + 500):
+            dispatcher._note_fragmenter(f"c{index}", now)
+        assert len(dispatcher._fragmenters) <= dispatcher_module._FRAGMENTER_MEMORY
+    finally:
+        dispatcher.shutdown()

@@ -330,4 +330,57 @@ this?" would start receiving a picture unasked), and the brief for this work
 rules out refactors unrelated to latency. It is in the pull request as a
 decision for the shop to take.
 
+### Iteration 4 — the window remembers who actually writes in fragments
+
+**Ranked first because:** after iteration 2 the split of an ~11.6 s reply is
+model 8.5 s (73%), debounce 2.09 s (18%), Meta round trips 0.6 s (5%), Shopify
+0.23 s (2%). Everything below the debounce is under the 3% bar (see
+"Hypotheses that measurement killed"), and the model floor is not ours to move.
+The debounce is.
+
+**The problem with iteration 1's answer.** Two seconds was chosen as the
+shortest wait that still gave a fragmenting customer a fair chance, and it had
+to be, because the short window was the only thing standing between them and a
+split reply. But the 2% who fragment are not a random 2% — writing in pieces
+is a habit of a person.
+
+**The change.** `MessageDispatcher` remembers a conversation that has written
+in fragments and gives *that* conversation the full six seconds from its first
+message, every time after. Two things count as evidence, and the second is the
+one that matters:
+
+* a batch that merged more than one message, and
+* a message arriving within `MESSAGE_FRAGMENT_MEMORY_SECONDS` (20 s) of that
+  conversation's previous batch being answered — which is exactly what a
+  thought split by a window closing too early looks like from here. The
+  customer it happened to is the customer it must not happen to twice.
+
+Held for a day (`MESSAGE_FRAGMENT_MEMORY_TTL_SECONDS`), capped at 5,000
+conversations and pruned by age, because a dict keyed on customer that only
+grows is the same invisible leak the conversation locks were fixed for.
+
+That makes the default safe to halve: `MESSAGE_DEBOUNCE_FIRST_SECONDS` 2 s → **1 s**.
+
+**Before / after**, measured on the dispatcher at production settings (median
+of three, submit → handler):
+
+| batch | original fixed window | after iteration 1 | after iteration 4 |
+|---|---|---|---|
+| 1 message, customer never seen fragmenting | 6.00 s | 2.01 s | **1.00 s** |
+| 1 message, **known fragmenter** | 6.00 s | 2.01 s | **6.00 s** |
+| 2 messages, 1 s apart | 7.00 s | 7.02 s | 7.02 s |
+| 3 messages, 1 s apart | 8.01 s | 8.01 s | 8.02 s |
+
+**−1.0 s on 98% of replies, −8.6% of an 11.6 s total** — and the rare case is
+served *better* than it was before any of this work, not worse: a known
+fragmenter now gets the full six seconds from their first message, which even
+the original fixed window only gave them from their second.
+
+**Quality gate:** passed. **Suite:** green (four new dispatcher tests, including
+one that pins the memory cannot grow without bound). **Flag:**
+`ADAPTIVE_DEBOUNCE=0` still restores the original fixed window;
+`MESSAGE_DEBOUNCE_FIRST_SECONDS=2` restores iteration 1's.
+
+**Kept.**
+
 <!-- ITERATIONS -->

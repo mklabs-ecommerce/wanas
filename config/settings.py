@@ -214,6 +214,14 @@ class Settings:
     #: The ceiling on a batch's total age, however many fragments extend it.
     #: Unreachable with a fixed window; reachable once the window extends.
     message_debounce_max_seconds: float
+    #: How soon after a batch was answered a new message from the same
+    #: conversation still reads as the rest of the same thought rather than a
+    #: new one. Evidence that this customer writes in fragments.
+    message_fragment_memory_seconds: float
+    #: How long that evidence is kept. Writing in pieces is a habit of a
+    #: person, so it is worth remembering across a whole day of conversations
+    #: -- it is what lets the window for everyone else be a single second.
+    message_fragment_memory_ttl_seconds: float
     #: 0 restores the old fixed window exactly, with no deploy.
     adaptive_debounce: bool
     #: Threads that run agent turns. One conversation is always serial; this
@@ -518,8 +526,10 @@ def load_settings() -> Settings:
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),
         max_quantity_per_line=_int("MAX_QUANTITY_PER_LINE", 10),
         message_debounce_seconds=_float("MESSAGE_DEBOUNCE_SECONDS", 6.0),
-        message_debounce_first_seconds=_float("MESSAGE_DEBOUNCE_FIRST_SECONDS", 2.0),
+        message_debounce_first_seconds=_float("MESSAGE_DEBOUNCE_FIRST_SECONDS", 1.0),
         message_debounce_max_seconds=_float("MESSAGE_DEBOUNCE_MAX_SECONDS", 15.0),
+        message_fragment_memory_seconds=_float("MESSAGE_FRAGMENT_MEMORY_SECONDS", 20.0),
+        message_fragment_memory_ttl_seconds=_float("MESSAGE_FRAGMENT_MEMORY_TTL_SECONDS", 86400.0),
         adaptive_debounce=_bool("ADAPTIVE_DEBOUNCE", True),
         message_workers=_int("MESSAGE_WORKERS", 8),
         latency_log=_bool("LATENCY_LOG", True),
