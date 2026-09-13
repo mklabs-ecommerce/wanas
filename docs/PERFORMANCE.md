@@ -1,0 +1,152 @@
+# Latency
+
+How long the bot takes to answer, where that time goes, and what was done
+about it. Every number here was measured; nothing in this document is an
+estimate unless it says so in the line it appears on.
+
+The tools are in the repository, so any of it can be re-run:
+
+```bash
+python scripts/bench_turn.py --runs 5                   # this codebase, model excluded
+LLM_PROVIDER=openrouter python scripts/bench_turn.py --runs 3 --real
+python scripts/quality_gate.py --check docs/perf/golden_fake.json
+railway logs --service wanas --json | python scripts/latency_report.py -
+railway run --service wanas -- python scripts/prod_turn_latency.py --days 30
+```
+
+---
+
+## The baseline (2026-09-13, before any change)
+
+### Real customers, real conversations
+
+Read out of production's own transcript with `scripts/prod_turn_latency.py`:
+every stored message carries `at` (`assistant/messages.py`), so the gap between
+a customer's message and the reply that answered it *is* that turn's duration.
+**213 answered turns across 25 conversations, 60 days.**
+
+| | mean | p50 | p90 | p95 | max |
+|---|---|---|---|---|---|
+| **agent turn** (s) | **14.81** | 11.91 | 31.72 | 46.58 | 67.57 |
+| whatsapp (n=129) | 15.06 | 12.22 | 33.87 | 46.58 | 64.92 |
+| instagram_dm (n=84) | 14.41 | 11.30 | 31.00 | 39.07 | 67.57 |
+
+Distribution: 60 turns under 5s, 37 at 5–10s, 58 at 10–20s, 46 at 20–40s,
+**12 at 40s or worse.**
+
+That measurement covers the agent turn only. It starts when the turn starts,
+which is *after* the debounce window has closed, and it ends when the reply is
+stored, which is *before* Meta is called. The two ends are added below.
+
+### End to end, per average turn
+
+| stage | cost | share | how it was measured |
+|---|---|---|---|
+| **model hops** | **13.8 s** | **65%** | 1.62 hops/turn × ~8.5 s/hop, from the hop histogram below |
+| **debounce window** | **6.0 s** | **28%** | `MESSAGE_DEBOUNCE_SECONDS` default, unset in production, so exactly 6.0 s on every turn |
+| Shopify live read | 0.44 s | 2% | `catalog.fetch_all()` timed three times from inside the Railway container: 455 / 417 / 438 ms, 211 variants, once per turn |
+| Meta send + ingest | ~0.6 s | 3% | two Meta round trips per message (`mark_as_read` in the webhook, `send_text` after) |
+| **this codebase** | **0.02 s** | **0.1%** | `bench_turn.py` with the model removed: 6–34 ms for a whole turn |
+| **total** | **≈ 21.3 s** | | matches the reported "21 seconds to a full minute" |
+
+### Where the model time actually is
+
+Hops per turn, and what each count costs, from the same 213 turns:
+
+| hops | turns | mean (s) | p50 | p90 | max |
+|---|---|---|---|---|---|
+| 1 | 100 | 10.18 | 7.27 | 22.29 | 67.57 |
+| 2 | 97 | 17.02 | 15.56 | 34.35 | 53.36 |
+| 3 | 14 | 31.52 | 27.43 | 57.79 | 64.92 |
+| 4 | 2 | 42.36 | — | — | 46.58 |
+
+Mean hops per turn: **1.62**. So one model round trip costs roughly
+**7 s at the median and 8.5 s at the mean**, and the marginal cost of the
+second hop is about the same as the first. `TOOL_LOOP_CAP` is 8 and nothing
+has ever come close to it — the cap is not what is slow, the *per hop* cost
+is, and after that the *number* of hops.
+
+Tools called across those turns, most used first: `get_variants` (65),
+`get_products` (47), `add_to_cart` (24), `get_categories` (19),
+`get_shipping_fee` (17), `get_my_profile` (16), `confirm_order` (13),
+`ask_governorate` (12), `get_size_chart` (4), then single figures.
+
+### What is sent on every hop
+
+| | chars | ≈ tokens |
+|---|---|---|
+| system prompt (whatsapp) | 15,695 | ~5,200 |
+| system prompt (instagram_dm) | 16,170 | ~5,400 |
+| tool declarations (19 tools) | 14,729 | ~3,700 |
+| **fixed prefix, every hop** | | **~9,000** |
+
+Plus the conversation itself: stored histories run to a mean of 45 messages
+and a p95 of 267, of which `assistant/context.py` sends the last 24 verbatim
+and up to 60 older ones compacted.
+
+### The benchmark, with the model taken out
+
+`python scripts/bench_turn.py --runs 1`, planned provider, in-memory Shopify
+shelf, SQLite:
+
+| scenario | turn (ms) |
+|---|---|
+| greeting | 11 |
+| product_question | 12 |
+| sizes | 15 |
+| add_to_cart | 12 |
+| confirm_order | 11 / 34 (the step that writes the order) |
+| shipping_question | 6 |
+
+Stage split across those nine turns: tools 36%, session save 9%, history load
+7%, prompt build and context build both under 1%.
+
+**This is the finding that decides everything after it.** The codebase's own
+contribution to a 21-second reply is about 20 milliseconds — one tenth of one
+percent. There is no slow loop to find, no N+1 query worth chasing, no
+serialisation to unpick. Every second the customer waits is a network round
+trip or a deliberate wait, and the only optimisations worth making are the
+ones that remove a round trip, shorten one, or stop waiting.
+
+### Production configuration at the time of the baseline
+
+`LLM_PROVIDER=openrouter`, `LLM_MODEL=z-ai/glm-5.3-flash`,
+`LLM_MEDIA_MODEL=google/gemini-3.1-flash-lite`,
+`OPENROUTER_PROVIDERS=z-ai,deepinfra,novita`,
+`OPENROUTER_QUANTIZATIONS=fp8,bf16,fp16`. `MESSAGE_DEBOUNCE_SECONDS`,
+`TOOL_LOOP_CAP`, `MODEL_CONTEXT_*` and `MESSAGE_WORKERS` are all unset, so all
+four run on their defaults (6.0 s, 8, 24/60, 8 threads). One replica, Railway
+region **ams** (Amsterdam), trial plan, `uvicorn app:app`.
+
+### Judgement calls made while measuring
+
+* **The baseline comes from the transcript, not from the logs.** There was no
+  timing instrumentation before this work, so the logs could not say where a
+  turn's time went — but every message has carried `at` since receipts
+  shipped, and that is a direct measurement of 213 real customer turns rather
+  than a sample of whatever was still in the log buffer. The logs are what the
+  *post-change* numbers come from, now that there is something in them to read.
+* **A gap over ten minutes is not a slow turn.** It is a paused conversation, a
+  crashed turn answered by the next message, or a customer who came back the
+  next morning. `MAX_PLAUSIBLE_SECONDS` in `scripts/prod_turn_latency.py`
+  drops them; nothing the model has ever done comes close to the cut.
+* **`by="system"` messages are not answers.** A status push or a cart nudge is
+  written whenever the shop decided it, and counting one as a reply to the
+  customer's last message produces gaps measured in hours.
+* **The benchmark never touches the real Shopify store.** The order scenario
+  runs against the suite's in-memory shelf (`tests/fake_shopify.py`), because
+  a benchmark that places real cash-on-delivery orders and decrements real
+  stock on every run is not a benchmark. `--live-shopify` exists for read
+  timing and drops the order scenario when it is used.
+* **No optimisation was allowed to change what a reply means.**
+  `scripts/quality_gate.py` is what enforces that, and a change that fails it
+  is reverted however much time it saved.
+
+---
+
+## Iterations
+
+Each entry: what changed, the numbers before and after, and whether it was
+kept. Reverts stay in the git history rather than being squashed away.
+
+<!-- ITERATIONS -->
