@@ -470,4 +470,127 @@ down.
 
 **Kept.**
 
-<!-- ITERATIONS -->
+---
+
+## Hypotheses that measurement killed
+
+Named rather than quietly dropped, because each was a plausible place to spend
+a day and the measurement is what says not to.
+
+| hypothesis | measured | verdict |
+|---|---|---|
+| **The ~29 KB system prompt is thousands of tokens on every hop** | It is ~5,200 tokens, plus ~3,700 for the tool declarations. But removing *all 19 tool declarations* — a third of the request, 10,326 → 6,772 prompt tokens — moved the median hop from 1,902 ms to 1,732 ms. **170 ms for 3,554 tokens.** | Prompt size is not what a hop costs. Trimming it would have been days of quality risk for a tenth of a second. |
+| **Prompt caching on OpenRouter** | Already automatic and already working: `cached_tokens` is 10,101 of a 10,849-token prompt (93%). An explicit Anthropic-style `cache_control` breakpoint changed nothing (5,846 ms vs 5,698 ms). | Nothing to win. Already on. |
+| **Keeping the cache warm between a quiet shop's turns** | The TTL is between 30 s and 90 s, so at this shop's volume most real turns *are* cold. But a cold prompt costs 2,505 ms against a warm 2,332 ms. | ~170 ms. A background keep-alive would be a permanent stream of API calls for nothing. |
+| **`OPENROUTER_PROVIDERS` ordering was chosen for quality, not speed** | Pinned one at a time: **Z.AI 6,384 ms**, Novita 10,338 ms, DeepInfra *not available at all* for this model under the quantization filter (HTTP 404, "No endpoints found"). | The order already puts the fastest first. `deepinfra` in the list is a dead entry; leaving OpenRouter to choose freely was *slower* (6,832 ms). |
+| **A fresh `httpx.Client` per call — a TLS handshake every time** | True, and it costs 9–12 ms. DNS+TCP+TLS from the Railway container: openrouter.ai 9.3 ms, graph.facebook.com 10.9 ms, the Shopify domain 11.7 ms. A reused httpx client against Meta: 193 ms vs 196 ms. | ~50 ms per turn, 0.4%. Real, and far below the bar. Every one of these hosts terminates at an edge close to Amsterdam. |
+| **`TOOL_LOOP_CAP=8` lets a turn run away** | Across 213 real production turns the maximum was **4** hops and the mean 1.62. Nothing has ever come near the cap. | The cap is not what is slow. The *per hop* cost is. |
+| **Executing a turn's tool calls in parallel** | Tools are 0.1% of a turn: `get_products` 17 ms, `get_variants` 3 ms, `add_to_cart` 4 ms, `get_shipping_fee` 2 ms. | There is nothing there to parallelise. |
+| **N+1 queries, indexes, the SQLAlchemy pool** | `history_load` 1 ms, `session_save` 2 ms, `context_build` and `prompt_build` under 1 ms each. | The database is not in the picture. |
+| **Questions with one stored answer going through the tool loop** | The shipping fee and delivery window are already in the system prompt: the real model answers "الشحن كام وبيوصل امتى؟" in a single hop with no tool call, correctly (110 EGP, up to 4 days). | Already true. |
+| **A short Shopify cache (30–60 s)** | Would have worked and was rejected on correctness, not speed: `catalog.live_stock` reads through the same snapshot and `add_to_cart` decides whether a sale may happen on what it says. Prefetching gets the same 419 ms with the freshness untouched. | Replaced by iteration 5's prefetch. |
+| **Railway region / cold starts** | One replica in **ams**, and every upstream measured answers within 10 ms of connection setup from there. Uvicorn was up throughout; no cold start was observed in any run. | Not a factor at this size. |
+
+---
+
+## Where the time goes now
+
+Measured the same way as everything above: the six scenarios, 3 runs, 27 real
+turns, run from inside the Railway container against the real model — with the
+reasoning setting flipped back and forth in the same session, so the two
+columns are a paired comparison rather than two runs on different days.
+
+| | before (as shipped) | after | change |
+|---|---|---|---|
+| **agent turn, mean** | 16,919 ms | **5,629 ms** | **−66.7%** |
+| agent turn, p50 | 14,773 ms | **4,892 ms** | −66.9% |
+| agent turn, p90 | 36,093 ms | 10,152 ms | −71.9% |
+| agent turn, max | 37,765 ms | 11,863 ms | −68.6% |
+| debounce, single message | 6,000 ms | **1,000 ms** | −83.3% |
+| Meta courtesy calls, in front of the window | 196–400 ms | 0 ms | off the path |
+| Shopify live read | 419 ms | **0 ms waited** | overlapped |
+| retry guards fired (dangling promise / truncation / empty / loop cap) | 1 in 27 turns | **0 in 27** | — |
+
+**End to end, per average reply: 21.3 s → about 6.9 s. p50 about 6.1 s.**
+Against the target — an ordinary product question under 10 seconds, and the
+average at less than half of 21.3 s — both are met with room.
+
+And the split, which is the answer to "where does it go now":
+
+| stage | cost | share |
+|---|---|---|
+| **the model** | **5.6 s** | **82%** |
+| debounce | 1.0 s | 15% |
+| the Meta send | 0.2 s | 3% |
+| Shopify | 0 s waited | 0% |
+| everything this codebase does | 0.02 s | 0.3% |
+
+Inside a turn, `llm` is **99.5%**. There is nothing left in this repository to
+optimise. The next second has to come from the model, the provider, or the
+shape of the conversation.
+
+### What was deliberately not done, and why
+
+* **The debounce was not cut below one second.** The evidence that justified
+  6 s → 2 s → 1 s is the batch-size histogram, and it does not distinguish
+  1.0 s from 0.6 s: a second webhook delivery for a pair of photos lands within
+  a few hundred milliseconds either way, and a person typing a second line
+  takes two to four seconds and is missed by both. Halving it again would buy
+  0.4 s on the strength of "probably fine", which is not the standard the rest
+  of this document was held to.
+* **`get_products` was not made a photo-sending tool.** That is the repair for
+  the reverted iteration 3 and it is worth ~12% — see that entry. It changes
+  what a customer receives, which is the shop's decision rather than a latency
+  one.
+
+---
+
+## What is left, and what it would cost
+
+The remaining 82% is the model. Measured on this shop's own system prompt, its
+19 tool declarations and two real questions — one answered in words, one that
+should produce a tool call — three samples each:
+
+| model | plain-reply hop | tool-call hop | whole benchmark (18 turns) |
+|---|---|---|---|
+| **`z-ai/glm-5.3-flash`** (current) | 1,903 ms | 4,556 ms | 5,629 ms mean / 4,892 p50 |
+| `google/gemini-3.1-flash-lite` | 2,975 ms | **1,041 ms** | **2,910 ms mean / 3,519 p50** |
+| `inception/mercury-2.5` | **1,420 ms** | 1,351 ms | **2,697 ms mean / 3,352 p50** |
+| `deepseek/deepseek-v4-flash` | 2,288 ms | 2,827 ms | — |
+| `openai/gpt-oss-120b` | 2,177 ms | 4,753 ms | — |
+| `qwen/qwen3.7-flash` | 7,300 ms | 2,927 ms | — |
+
+The current model's *tool-calling* hop is its slow one, and that is the hop
+every product question pays for.
+
+**Both leading alternatives would roughly halve what is left — and both showed
+a quality cost on their first run through the scenarios.** The quality gate
+passed `inception/mercury-2.5`, and reading its Arabic shows why a gate is not
+a substitute for a person: the facts and the flow are right (photos attached,
+590 / 60 / 650 correct, the order placed) but the idiom slips — "تيشيرت بوي بـ
+Fit بـكاجوال" is mangled, and "تم إضافة" is Modern Standard where the shop
+writes "ضفتلك". `google/gemini-3.1-flash-lite` reads better than either —
+natural Egyptian throughout — and then offered a payment method the shop does
+not have: "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع". There is no
+online payment; that is why nothing here can issue a refund. Every other check
+in the gate passed that reply, which is why the gate now has a rule for it.
+
+So a model change is a real option with a real number against it, and it needs
+its own quality baseline in Egyptian Arabic before anyone takes it — not a
+latency decision. Note also that `OPENROUTER_PROVIDERS` names upstreams that
+host GLM specifically; switching the model means clearing it, which gives up
+the `require_parameters` filter's guarantee that `temperature` is honoured
+unless a new candidate set is chosen for the new model.
+
+Beyond the model:
+
+* **A different shape for the tool loop.** A turn that needs a lookup costs two
+  round trips because the model has to be told what the lookup returned.
+  Nothing short of predicting the call and running it speculatively alongside
+  the first hop changes that, and a speculative `add_to_cart` is not something
+  this shop can have.
+* **Streaming.** No help here: WhatsApp delivers one message, so the reply
+  cannot start before it is finished.
+* **Region.** Already right. Every upstream measured answers within ~10 ms of
+  connection setup from Amsterdam.
+
