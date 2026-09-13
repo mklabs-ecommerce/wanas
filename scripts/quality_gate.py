@@ -209,20 +209,6 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
             else:
                 failures.append(message)
 
-        # The part that is *not* negotiable, drift allowed or not: a step the
-        # golden run looked something up for must still look something up. A
-        # real model legitimately reaches the same answer by a different route
-        # -- answering a sizing question from `get_products` instead of
-        # `get_variants` saves a whole round trip and is not wrong -- but a
-        # reply that consults nothing at all and still states a price is the
-        # invented-fact failure every rule in this repository is built against,
-        # and it is exactly what a latency change could buy by accident.
-        if golden_tools and not new_tools:
-            failures.append(
-                f"{where}: the golden run looked something up ({sorted(golden_tools)}) "
-                "and this one answered without calling anything"
-            )
-
         # Photos. `get_variants` is the only tool that attaches one, so any
         # change that lets the model answer a product question *without*
         # calling it can silently stop the customer ever seeing the garment --
@@ -261,6 +247,40 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                 print(f"  note: {message}")
             else:
                 failures.append(message)
+
+    # The part that is *not* negotiable, drift allowed or not: a conversation
+    # the golden run consulted the catalog during must still consult it. A
+    # reply that looks nothing up and still states a price is the invented-fact
+    # failure every rule in this repository is built against, and it is exactly
+    # what a latency change could buy by accident.
+    #
+    # Judged per **conversation**, not per message, and that is the whole
+    # subtlety. Which step does the lookup is the model's business: putting the
+    # piece in the cart on "size L in black" rather than waiting for "yes, add
+    # it" is a better reply, not a worse one, and a per-step rule fails it --
+    # it failed exactly that, on a change that does not touch the prompt, the
+    # tools or the model. Answering the *whole conversation* without ever
+    # looking anything up is a different thing entirely, and still fails.
+    for scenario in sorted({key[0] for key in fresh_steps} | {key[0] for key in golden_steps}):
+        golden_used = {
+            tool
+            for key, replies in golden_steps.items()
+            if key[0] == scenario
+            for reply in replies
+            for tool in reply["tool_calls"]
+        }
+        new_used = {
+            tool
+            for key, replies in fresh_steps.items()
+            if key[0] == scenario
+            for reply in replies
+            for tool in reply["tool_calls"]
+        }
+        if golden_used and not new_used:
+            failures.append(
+                f"{scenario}: the golden run looked something up ({sorted(golden_used)}) "
+                "and this one answered the whole conversation without calling anything"
+            )
 
     return failures
 

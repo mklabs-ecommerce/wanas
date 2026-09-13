@@ -235,6 +235,13 @@ class Settings:
     #: LATENCY_LOG=0 to silence it.
     latency_log: bool
 
+    #: Whether the live Shopify read is started when the turn opens rather
+    #: than when the first catalog tool asks for it -- ~440 ms that then
+    #: overlaps the first model hop instead of following it. Not a cache: the
+    #: snapshot is still per message, which is what `add_to_cart` depends on.
+    #: Costs a Shopify call on turns that would never have made one.
+    shopify_prefetch: bool
+
     #: How sure the vision pass has to be before a photo is treated as "this
     #: product". Below it the reading is only used to ask a better question.
     image_match_confidence: float
@@ -533,6 +540,7 @@ def load_settings() -> Settings:
         adaptive_debounce=_bool("ADAPTIVE_DEBOUNCE", True),
         message_workers=_int("MESSAGE_WORKERS", 8),
         latency_log=_bool("LATENCY_LOG", True),
+        shopify_prefetch=_bool("SHOPIFY_PREFETCH", True),
         image_match_confidence=_float("IMAGE_MATCH_CONFIDENCE", 0.6),
         voice_notes_enabled=_bool("VOICE_NOTES_ENABLED", True),
         image_understanding_enabled=_bool("IMAGE_UNDERSTANDING_ENABLED", True),

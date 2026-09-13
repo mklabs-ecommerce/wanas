@@ -460,3 +460,38 @@ def test_the_fragment_memory_does_not_grow_without_bound():
         assert len(dispatcher._fragmenters) <= dispatcher_module._FRAGMENTER_MEMORY
     finally:
         dispatcher.shutdown()
+
+
+# --------------------------------------------------------------------------
+# work the reply does not wait for
+# --------------------------------------------------------------------------
+
+
+def test_offthread_work_runs_and_never_raises(caplog):
+    """A read receipt that fails must cost a log line and nothing else. The
+    whole premise is that this work does not matter enough to block on, so it
+    does not matter enough to break a turn either."""
+    import logging as _logging
+
+    from common import offthread
+
+    done = threading.Event()
+    offthread.run_later("a test", done.set)
+    assert done.wait(5)
+
+    with caplog.at_level(_logging.WARNING, logger="wanas.offthread"):
+        failed = threading.Event()
+
+        def boom():
+            failed.set()
+            raise RuntimeError("meta said no")
+
+        offthread.run_later("a failing test", boom)
+        assert failed.wait(5)
+        # Give the guard a moment to log after the callable raised.
+        for _ in range(50):
+            if any("a failing test" in r.getMessage() for r in caplog.records):
+                break
+            time.sleep(0.02)
+
+    assert any("a failing test" in record.getMessage() for record in caplog.records)

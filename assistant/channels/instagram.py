@@ -52,7 +52,7 @@ from assistant.providers.base import (
 )
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
-from common import telemetry
+from common import offthread, telemetry
 from common.security import verify_signature
 from common.timeutil import as_aware
 from config.settings import PROJECT_ROOT, settings
@@ -262,13 +262,24 @@ def _accept_message(messaging: dict, *, verify_seconds: float = 0.0) -> None:
 
     # Seen + typing after the record, never before -- same reasoning as
     # WhatsApp's blue ticks.
-    seen_started = time.perf_counter()
+    # Seen + typing after the record, never before -- same reasoning as
+    # WhatsApp's blue ticks, and now on a background thread for the same
+    # reason too. These are three Graph calls at ~135 ms each, all of them
+    # *before* the debounce window opens and not one of them something the
+    # reply waits for: an Instagram message was carrying almost four tenths of
+    # a second of courtesy before the process started thinking. The handle
+    # lookup goes with them -- it is read once per customer and the dashboard
+    # is what reads it, not the turn.
+    offthread.run_later("instagram seen/typing", _acknowledge, client, sender_id)
+
+    dispatcher.submit(sender_id, pending)
+
+
+def _acknowledge(client: InstagramClient, sender_id: str) -> None:
+    """Seen, typing, and the @handle -- none of which the reply waits for."""
     client.mark_seen(sender_id)
     client.typing_on(sender_id)
     _ensure_platform_profile(client, sender_id)
-    pending.spent("mark_as_read", time.perf_counter() - seen_started)
-
-    dispatcher.submit(sender_id, pending)
 
 
 def _ensure_platform_profile(client: InstagramClient, igsid: str) -> None:

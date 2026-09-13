@@ -383,4 +383,91 @@ one that pins the memory cannot grow without bound). **Flag:**
 
 **Kept.**
 
+### Iteration 5 — nothing the answer does not depend on runs before the answer
+
+**Ranked first because:** what is left after iteration 4 is model 8.5 s (82%),
+debounce 1.09 s (10%), Meta round trips 0.6 s (6%), Shopify 0.21 s (2%). The
+model floor is not ours; the debounce has had two passes. The network calls
+are one idea, not two: **work the reply does not wait for was sitting in front
+of the reply.**
+
+**What was measured first.** Graph and Shopify round trips, timed from inside
+the Railway container:
+
+| call | median |
+|---|---|
+| WhatsApp `GET /{phone_number_id}` | 196 ms |
+| Instagram `GET /{account_id}` | 135 ms |
+| Shopify `fetch_all` (211 variants) | 419 ms |
+
+And where each one sat:
+
+* `mark_as_read` ran **in the webhook, before `dispatcher.submit`** — so the
+  debounce window did not even start until Meta had answered. 196 ms on every
+  WhatsApp reply.
+* Instagram did three of them there: `mark_seen`, `typing_on`, and the
+  once-per-customer handle lookup. ~270–400 ms before the process started
+  thinking.
+* The Shopify read happened wherever the first catalog tool asked for it —
+  which is *after* the model has come back saying which tool to call. Squarely
+  on the critical path.
+
+**The change.** `common/offthread.py`: a small bounded pool for work the
+customer would not notice never happened. The read receipt, the typing
+indicator and the handle lookup go there — after the transcript write, never
+before it. And `shopify_catalog.prefetch()`, called when the turn opens, starts
+the live read so it overlaps the first model hop (~2.4 s) instead of following
+it.
+
+The prefetch is **not** a cache and deliberately not one: the snapshot is still
+read once per message and thrown away with the turn. `catalog.live_stock` reads
+through it and `add_to_cart` decides whether a sale may happen on what it says
+— a 30-second cache would have been cheaper and would have let a sold-out size
+be sold. What it does cost is a Shopify call on turns that would never have
+made one (a greeting); `SHOPIFY_PREFETCH=0` is the way out.
+
+**Before / after.** The prefetch, measured with real Shopify reads in the loop
+(`--live-shopify`, which skips the order scenario so no real order is placed):
+
+| | before | after |
+|---|---|---|
+| `shopify` stage | 419 ms mean on 9 of 18 turns | — |
+| `shopify_wait` (what the turn actually stood still for) | — | **0 ms** |
+
+The read is fully hidden. The turn totals moved 7,841 → 6,319 ms mean in the
+same pair of runs, but most of that is model variance between runs and is not
+claimed here: **the attributable saving is 419 ms on the turns that read the
+shelf, 210 ms per average turn.**
+
+The Meta calls do not appear in the benchmark at all — it does not go through
+a webhook — so they are stated from the direct measurement above: 196 ms per
+WhatsApp turn, ~270 ms per Instagram turn, weighted by the production split
+(129 WhatsApp / 84 Instagram) = **225 ms per average turn.**
+
+Together **435 ms off a ~10.2 s reply, −4.3%.**
+
+`shopify_wait` is new instrumentation added in the same commit, and it is there
+because a prefetched read leaves *no* `shopify` stage on the turn's line — which
+reads as "the shelf was free" when what happened is "the shelf was paid for
+somewhere else". The honest number is how long the turn stood still for it.
+
+**Quality gate:** passed — after fixing the gate, which is worth writing down.
+It first failed on `confirm_order[1]`: the golden run called `add_to_cart`
+there and this one called nothing. Reading the transcript, this run had already
+put the piece in the cart on the *previous* message — a better reply, not a
+worse one — and the change under test does not touch the prompt, the tools or
+the model, so it cannot have caused a different route. The rule was wrong, not
+the change: "answered without looking anything up" is a property of a
+**conversation**, not of a message. It now judges per scenario, and a check
+that the rewritten rule still catches a reply that states a price having called
+nothing at all is part of this commit.
+
+**Suite:** green. **Flags:** `SHOPIFY_PREFETCH` (default on). The off-thread
+courtesy calls have no flag: there is no configuration in which a customer
+benefits from their reply waiting on their own read receipt, and
+`common/offthread.py` falls back to running inline if the pool is shutting
+down.
+
+**Kept.**
+
 <!-- ITERATIONS -->

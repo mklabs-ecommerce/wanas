@@ -26,7 +26,7 @@ from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
-from common import telemetry
+from common import offthread, telemetry
 from common.security import verify_signature  # noqa: F401 -- re-exported; tests import it from here
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
@@ -516,12 +516,14 @@ def _accept(message: dict, contact_name: str | None, *, verify_seconds: float = 
         pending.recorded_ids.add(message_id)
 
     # Blue ticks and a typing bubble now, because the answer is seconds away
-    # and an unread message is what makes someone send it again. After the
-    # record, never before it: a hiccup talking to Meta must not be what
-    # costs the shop its only copy of what the customer said.
-    read_started = time.perf_counter()
-    client.mark_as_read(message_id)
-    pending.spent("mark_as_read", time.perf_counter() - read_started)
+    # and an unread message is what makes someone send it again -- but on a
+    # background thread, because nothing waits for them and this one sits
+    # *before* the debounce window opens. Measured from the Railway container,
+    # a Graph call is 196 ms, so every WhatsApp reply was carrying a fifth of a
+    # second of read receipt before the process had started thinking. Still
+    # after the record, never before it: see `common/offthread.py` for what may
+    # and may not be moved here.
+    offthread.run_later("whatsapp read receipt", client.mark_as_read, message_id)
 
     dispatcher.submit(external_id, pending)
 
