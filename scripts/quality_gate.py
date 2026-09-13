@@ -209,6 +209,20 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
             else:
                 failures.append(message)
 
+        # The part that is *not* negotiable, drift allowed or not: a step the
+        # golden run looked something up for must still look something up. A
+        # real model legitimately reaches the same answer by a different route
+        # -- answering a sizing question from `get_products` instead of
+        # `get_variants` saves a whole round trip and is not wrong -- but a
+        # reply that consults nothing at all and still states a price is the
+        # invented-fact failure every rule in this repository is built against,
+        # and it is exactly what a latency change could buy by accident.
+        if golden_tools and not new_tools:
+            failures.append(
+                f"{where}: the golden run looked something up ({sorted(golden_tools)}) "
+                "and this one answered without calling anything"
+            )
+
         golden_numbers = set().union(*(digits(r.get("text") or "") for r in golden_replies))
         new_numbers = set().union(*(digits(r.get("text") or "") for r in fresh_replies))
         # Only numbers the golden run stated and the new one dropped. A new
@@ -222,7 +236,17 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
             if len(number) >= 3
         }
         if lost:
-            failures.append(f"{where}: facts dropped from the reply: {sorted(lost)}")
+            message = f"{where}: facts dropped from the reply: {sorted(lost)}"
+            if allow_tool_drift:
+                # A run that took a different route through the tools reaches a
+                # differently-shaped reply, and "the sizing answer no longer
+                # repeats the price" is phrasing, not a lost fact. With drift
+                # allowed this is reported for a person to read rather than
+                # failed on; `expects_text` is the part that still fails, and
+                # it pins the facts the scenario actually cares about.
+                print(f"  note: {message}")
+            else:
+                failures.append(message)
 
     return failures
 

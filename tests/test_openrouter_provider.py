@@ -1094,3 +1094,77 @@ def test_a_foreign_signature_is_still_dropped(captured, provider):
 def test_a_reply_with_no_reasoning_carries_no_signature(captured, provider):
     captured["queue"].append(text_reply("تمام"))
     assert provider.generate("p", [msg.user("hi")], []).signature is None
+
+
+# --------------------------------------------------------------------------
+# 8. how hard the model is allowed to think
+# --------------------------------------------------------------------------
+#
+# Reasoning was 92% of the generated tokens on an ordinary shop turn, and
+# generated tokens are where the seconds are. This endpoint refuses to be told
+# not to think at all ("Reasoning is mandatory for this endpoint and cannot be
+# disabled") and accepts being told how hard, which is the whole of what
+# `_reasoning` sends. A setting rather than a constant because what is being
+# traded is judgement.
+
+
+def test_the_reasoning_effort_is_sent(captured, monkeypatch):
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, openrouter_api_key=KEY, openrouter_reasoning_effort="low"),
+    )
+    OpenRouterProvider(api_key=KEY).generate("p", [msg.user("الشحن كام؟")], [])
+    assert captured["sent"][0]["body"]["reasoning"] == {"effort": "low"}
+
+
+def test_a_blank_effort_sends_no_reasoning_field_at_all(captured, monkeypatch):
+    """The way back is a blank variable, and it has to produce byte-for-byte
+    the request this made before the setting existed -- not `{"effort": ""}`,
+    which is a different request that happens to look empty."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, openrouter_api_key=KEY, openrouter_reasoning_effort=""),
+    )
+    OpenRouterProvider(api_key=KEY).generate("p", [msg.user("الشحن كام؟")], [])
+    assert "reasoning" not in captured["sent"][0]["body"]
+
+
+def test_default_is_also_a_way_to_say_leave_it_alone(captured, monkeypatch):
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, openrouter_api_key=KEY, openrouter_reasoning_effort="DEFAULT"),
+    )
+    OpenRouterProvider(api_key=KEY).generate("p", [msg.user("hi")], [])
+    assert "reasoning" not in captured["sent"][0]["body"]
+
+
+def test_the_effort_does_not_disturb_the_rest_of_the_payload(captured, monkeypatch):
+    """`temperature` and the routing filter are what keep the Arabic readable
+    (see `_routing`); a latency setting must not quietly displace either."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(
+            settings,
+            openrouter_api_key=KEY,
+            openrouter_reasoning_effort="low",
+            openrouter_providers=("z-ai",),
+            openrouter_quantizations=("fp8",),
+        ),
+    )
+    OpenRouterProvider(api_key=KEY).generate("p", [msg.user("hi")], [])
+    body = captured["sent"][0]["body"]
+    assert body["temperature"] == 0.3
+    assert body["provider"]["require_parameters"] is True
+    assert body["provider"]["order"] == ["z-ai"]
+    assert body["reasoning"] == {"effort": "low"}
+
+
+def test_the_effort_env_var_reaches_settings(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_REASONING_EFFORT", "  minimal ")
+    assert load_settings().openrouter_reasoning_effort == "minimal"
+    monkeypatch.setenv("OPENROUTER_REASONING_EFFORT", "")
+    assert load_settings().openrouter_reasoning_effort == ""

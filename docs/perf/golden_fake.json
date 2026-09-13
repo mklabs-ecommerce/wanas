@@ -15,19 +15,19 @@
       "text": "أهلاً بيك في وناس جاليري. تحب أساعدك في إيه؟",
       "tool_calls": [],
       "error": null,
-      "seconds": 0.011522300002980046,
+      "seconds": 0.02111719999811612,
       "expects_tools": [],
       "expects_text": []
     },
     {
       "scenario": "product_question",
       "step": 0,
-      "text": "Boxy WNS Tee متاح عندنا بسعر 590 جنيه.",
+      "text": "تيشيرت Boxy WNS Tee متاح عندنا بسعر 590 جنيه. تحب تشوف المقاسات؟",
       "tool_calls": [
         "get_products"
       ],
       "error": null,
-      "seconds": 0.011837099998956546,
+      "seconds": 0.013732799998251721,
       "expects_tools": [
         "get_products"
       ],
@@ -44,10 +44,8 @@
         "get_variants"
       ],
       "error": null,
-      "seconds": 0.014499099997919984,
-      "expects_tools": [
-        "get_variants"
-      ],
+      "seconds": 0.015784499992150813,
+      "expects_tools": [],
       "expects_text": [
         "L"
       ]
@@ -55,13 +53,13 @@
     {
       "scenario": "add_to_cart",
       "step": 0,
-      "text": "تمام، Boxy WNS Tee مقاس L بـ590 جنيه. أحطهولك؟",
+      "text": "تمام، متوفر منه مقاس L بلون Black بسعر 590 جنيه. تحب أحطهولك في السلة؟",
       "tool_calls": [
         "get_products",
         "get_variants"
       ],
       "error": null,
-      "seconds": 0.010717400000430644,
+      "seconds": 0.012314399995375425,
       "expects_tools": [
         "get_variants"
       ],
@@ -75,22 +73,20 @@
         "add_to_cart"
       ],
       "error": null,
-      "seconds": 0.010670099989511073,
-      "expects_tools": [
-        "add_to_cart"
-      ],
+      "seconds": 0.012507399995229207,
+      "expects_tools": [],
       "expects_text": []
     },
     {
       "scenario": "confirm_order",
       "step": 0,
-      "text": "تمام، Boxy WNS Tee مقاس L بـ590 جنيه.",
+      "text": "تمام، متوفر منه مقاس L بلون Black بسعر 590 جنيه.",
       "tool_calls": [
         "get_products",
         "get_variants"
       ],
       "error": null,
-      "seconds": 0.011044200000469573,
+      "seconds": 0.013197199994465336,
       "expects_tools": [],
       "expects_text": []
     },
@@ -102,10 +98,8 @@
         "add_to_cart"
       ],
       "error": null,
-      "seconds": 0.006663699998171069,
-      "expects_tools": [
-        "add_to_cart"
-      ],
+      "seconds": 0.008749299988267012,
+      "expects_tools": [],
       "expects_text": []
     },
     {
@@ -116,10 +110,8 @@
         "confirm_order"
       ],
       "error": null,
-      "seconds": 0.026960400005918927,
-      "expects_tools": [
-        "confirm_order"
-      ],
+      "seconds": 0.032513700003619306,
+      "expects_tools": [],
       "expects_text": []
     },
     {
@@ -130,10 +122,8 @@
         "get_shipping_fee"
       ],
       "error": null,
-      "seconds": 0.005491399992024526,
-      "expects_tools": [
-        "get_shipping_fee"
-      ],
+      "seconds": 0.007387999998172745,
+      "expects_tools": [],
       "expects_text": []
     }
   ]

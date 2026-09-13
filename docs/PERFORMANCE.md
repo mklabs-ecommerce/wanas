@@ -200,4 +200,76 @@ unchanged. `ADAPTIVE_DEBOUNCE=0` restores the old fixed window with no deploy.
 
 **Kept.**
 
+### Iteration 2 — stop paying for reasoning the shop does not need
+
+**Ranked first because:** after iteration 1 the model is 79% of what is left,
+and a single round trip costs ~7 s at the median. Nothing else is within an
+order of magnitude.
+
+**The measurement that decided it.** Instrumenting the OpenRouter usage payload
+(iteration 0) showed where the generated tokens go. On an ordinary shop turn:
+
+| | mean | p50 | p90 |
+|---|---|---|---|
+| prompt tokens | 10,849 | 10,623 | 12,272 |
+| **of which cached** | **10,101 (93%)** | 10,304 | 10,688 |
+| completion tokens | 454 | 255 | 1,638 |
+| **of which reasoning** | **416 (92%)** | 239 | 1,555 |
+
+Two findings in one table. The first killed a hypothesis: **prompt caching is
+already happening**, automatically, on 93% of the prefix — there is nothing to
+win there (see "Hypotheses that measurement killed"). The second is this
+iteration: **92% of everything this model generates is thinking, not answer.**
+The reply itself is 30–45 tokens.
+
+Then, against the shop's own prompt and tool declarations, three samples each:
+
+| request | median | reasoning tokens |
+|---|---|---|
+| baseline (no `reasoning` field) | 5,698 ms | 49–120 |
+| `reasoning {"effort": "low"}` | **4,647 ms** | **0** |
+| `reasoning {"effort": "minimal"}` | 5,389 ms | 0 |
+| `reasoning {"max_tokens": 128}` | 4,778 ms | 0 |
+| `reasoning {"enabled": false}` | HTTP 400 | — |
+
+The endpoint refuses to be told *not* to think and accepts being told how
+hard. The existing comment in `openrouter.py` had tested only the first of
+those, which is how a fifth of every round trip stayed invisible.
+
+**The change.** `OpenRouterProvider._reasoning()` sends
+`reasoning: {"effort": OPENROUTER_REASONING_EFFORT}`, default `low`. A blank
+value sends no `reasoning` field at all — byte-for-byte the request this made
+before — and is the way back with no deploy. `temperature`, the routing filter
+and `max_tokens` are untouched; a test pins that.
+
+**Before / after**, the six scenarios × 3 runs = 27 real turns, run from
+inside the Railway container against the real model and the real network:
+
+| | before | after | change |
+|---|---|---|---|
+| turn mean | 20,931 ms | **8,536 ms** | **−59.2%** |
+| turn p50 | 19,281 ms | **7,477 ms** | −61.2% |
+| turn p90 | 38,239 ms | 14,198 ms | −62.9% |
+| turn max | 58,826 ms | 19,264 ms | −67.2% |
+| llm share of the turn | 99.8% | 99.7% | unchanged |
+
+Per scenario, after: greeting 4.3 s, shipping question 3.2 s, product question
+7.5 s, sizes 11.4 s, add to cart 11.5 s, order 9.1 s.
+
+**Quality gate:** **passed** against a golden set recorded on the *previous*
+settings — 18 replies, 9 steps, no errors, no fallbacks, every price and size
+still stated, still Egyptian Arabic, nothing truncated. The replies were also
+read by hand, because this is the one change that trades judgement for speed:
+the model still asks which colour when none was named, still catches a
+governorate that disagrees with the address, still reads the order back before
+placing it, and still quotes 590 / 60 / 650 correctly. Route variation between
+runs (`get_products` alone vs `get_products` + `get_variants` for a sizing
+question) is reported as a note, not a failure — see the gate's own docstring.
+
+**Suite:** green. **Flag:** `OPENROUTER_REASONING_EFFORT`, default **`low`** —
+the gate was clean on two runs and the hand read confirmed it.
+`OPENROUTER_REASONING_EFFORT=` (blank) restores the old request with no deploy.
+
+**Kept.**
+
 <!-- ITERATIONS -->

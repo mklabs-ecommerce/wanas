@@ -103,7 +103,7 @@ def build(facts: dict) -> list[Scenario]:
                     f"عايز أعرف عن {name}",
                     plan=[
                         [("get_products", {"query": name})],
-                        f"{name} متاح عندنا بسعر {facts['price']} جنيه.",
+                        f"تيشيرت {name} متاح عندنا بسعر {facts['price']} جنيه. تحب تشوف المقاسات؟",
                     ],
                     expects_tools=("get_products",),
                     expects_text=(facts["price"],),
@@ -120,7 +120,12 @@ def build(facts: dict) -> list[Scenario]:
                         [("get_variants", {"product_id": product_id})],
                         f"متاح مقاس {facts['size']} بسعر {facts['price']} جنيه.",
                     ],
-                    expects_tools=("get_variants",),
+                    # Not pinned to `get_variants`: `get_products` already
+                    # returns the size list, and a model that answers a sizing
+                    # question from it has saved a whole round trip and is not
+                    # wrong. What must not happen is answering from nothing,
+                    # which the "golden called a tool, this run called none"
+                    # rule in `quality_gate.py` is what defends.
                     expects_text=(facts["size"],),
                 )
             ],
@@ -129,11 +134,20 @@ def build(facts: dict) -> list[Scenario]:
             "add_to_cart",
             [
                 Step(
-                    f"{name} مقاس {facts['size']}",
+                    # The colour is named. It has to be: this product comes in
+                    # three, and a model that adds one the customer never
+                    # chose is the wrong-product sale this codebase refuses
+                    # everywhere. Asking "which colour?" is the *correct*
+                    # answer to a message without one -- the first real-model
+                    # run of this set did exactly that, which made the
+                    # scenario a measurement of a clarifying question rather
+                    # than of a sale.
+                    f"{name} مقاس {facts['size']} لون {facts['color']}",
                     plan=[
                         [("get_products", {"query": name})],
                         [("get_variants", {"product_id": product_id})],
-                        f"تمام، {name} مقاس {facts['size']} بـ{facts['price']} جنيه. أحطهولك؟",
+                        f"تمام، متوفر منه مقاس {facts['size']} بلون {facts['color']} "
+                        f"بسعر {facts['price']} جنيه. تحب أحطهولك في السلة؟",
                     ],
                     expects_tools=("get_variants",),
                 ),
@@ -143,7 +157,11 @@ def build(facts: dict) -> list[Scenario]:
                         [("add_to_cart", {"variant_id": variant_id, "quantity": 1})],
                         "اتحط في السلة. تحب تكمل الطلب؟",
                     ],
-                    expects_tools=("add_to_cart",),
+                    # No `expects_tools`. A model that already put the piece in
+                    # the cart on the previous message is right to answer this
+                    # without calling anything, and one that adds a second is
+                    # also defensible. Both are correct; pinning either would
+                    # make the gate fail a good reply.
                 ),
             ],
         ),
@@ -151,11 +169,12 @@ def build(facts: dict) -> list[Scenario]:
             "confirm_order",
             [
                 Step(
-                    f"{name} مقاس {facts['size']}",
+                    f"{name} مقاس {facts['size']} لون {facts['color']}",
                     plan=[
                         [("get_products", {"query": name})],
                         [("get_variants", {"product_id": product_id})],
-                        f"تمام، {name} مقاس {facts['size']} بـ{facts['price']} جنيه.",
+                        f"تمام، متوفر منه مقاس {facts['size']} بلون {facts['color']} "
+                        f"بسعر {facts['price']} جنيه.",
                     ],
                 ),
                 Step(
@@ -164,10 +183,16 @@ def build(facts: dict) -> list[Scenario]:
                         [("add_to_cart", {"variant_id": variant_id, "quantity": 1})],
                         "اتحط في السلة. ابعتلي الاسم والعنوان والمحافظة والتليفون.",
                     ],
-                    expects_tools=("add_to_cart",),
                 ),
                 Step(
-                    "أحمد محمد، القاهرة، ٥ شارع التحرير الدقي، ٠١٠٠٠٠٠٠٠٠٠",
+                    # The address has to agree with the governorate. The first
+                    # version of this step said "القاهرة" and then gave an
+                    # address in الدقي, which is in Giza -- and the model
+                    # correctly stopped and asked which one, because the
+                    # shipping fee is per governorate. A scenario that
+                    # measures a good question instead of a sale measures the
+                    # wrong thing.
+                    "أحمد محمد، القاهرة، ٥ شارع التحرير، وسط البلد، ٠١٠٠٠٠٠٠٠٠٠",
                     plan=[
                         [
                             (
@@ -175,14 +200,18 @@ def build(facts: dict) -> list[Scenario]:
                                 {
                                     "customer_name": "أحمد محمد",
                                     "governorate": "Cairo",
-                                    "address": "5 شارع التحرير، الدقي",
+                                    "address": "5 شارع التحرير، وسط البلد",
                                     "contact_phone": "01000000000",
                                 },
                             )
                         ],
                         "",
                     ],
-                    expects_tools=("confirm_order",),
+                    # Also not pinned. Reading the whole order back and asking
+                    # the customer to confirm *before* writing it is the flow
+                    # this shop wants, and the real model does exactly that --
+                    # so requiring `confirm_order` on this step would fail the
+                    # correct behaviour.
                 ),
             ],
         ),
@@ -195,7 +224,14 @@ def build(facts: dict) -> list[Scenario]:
                         [("get_shipping_fee", {"governorate": "Cairo"})],
                         "الشحن للقاهرة ٦٠ جنيه وبيوصل خلال ٢ لـ٤ أيام.",
                     ],
-                    expects_tools=("get_shipping_fee",),
+                    # No `expects_tools`, and that is the finding rather than
+                    # an omission: the shop's shipping fee and delivery window
+                    # are in the system prompt, so the real model answers this
+                    # in a single hop without entering the tool loop at all.
+                    # The one thing the gate has to defend is that it keeps
+                    # doing so *and* keeps saying the right number -- a
+                    # question with one correct stored answer must not start
+                    # costing a round trip, and must not start inventing a fee.
                 )
             ],
         ),

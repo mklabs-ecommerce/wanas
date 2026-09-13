@@ -103,6 +103,13 @@ class Settings:
     #: which only surfaces later as an auth failure far from its cause.
     openrouter_api_key: str
 
+    #: How hard the conversation model may think before answering, as
+    #: OpenRouter's `reasoning.effort`. Blank sends no `reasoning` field at
+    #: all, which is the request this made before the setting existed. See
+    #: `OpenRouterProvider._reasoning` for the measurements behind the
+    #: default.
+    openrouter_reasoning_effort: str
+
     #: Which upstream providers OpenRouter may serve the conversation model
     #: from, most preferred first (provider slugs, comma-separated).
     #:
@@ -477,6 +484,7 @@ def load_settings() -> Settings:
         comment_classifier_model=_first_env("COMMENT_CLASSIFIER_MODEL", default=""),
         llm_debug_payload=_bool("LLM_DEBUG_PAYLOAD", False),
         openrouter_api_key=_first_env("OPENROUTER_API_KEY", default=""),
+        openrouter_reasoning_effort=os.getenv("OPENROUTER_REASONING_EFFORT", "low").strip(),
         openrouter_providers=_csv(
             "OPENROUTER_PROVIDERS", default="z-ai,deepinfra,novita"
         ),
