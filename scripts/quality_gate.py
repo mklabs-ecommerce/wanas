@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Five checks, and each one is a failure mode this repository has already paid
+Seven checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -29,6 +29,16 @@ for at least once:
    truncation and promise fallbacks are all *correct* behaviour for a broken
    turn and all mean the customer did not get an answer. A benchmark that got
    faster because more turns fell back is the exact trap this closes.
+6. **Cash on delivery, and nothing else.** This shop takes cash at the door and
+   has no other way to be paid, which is why nothing in it can issue a refund.
+   A reply offering to take payment online is a promise the shop cannot keep,
+   made to a customer who may act on it. This rule exists because a candidate
+   model measured for a possible swap made exactly that offer on its first run
+   through these scenarios, and every other check passed it.
+7. **Photographs still go out.** Only `get_variants` attaches one, so a change
+   that lets the model answer a product question without calling it can quietly
+   stop a clothes shop ever showing the clothes. Judged against the golden run:
+   sending fewer is a judgement, sending none is a regression.
 
 Exit code 0 means keep the change; 1 means revert it.
 """
@@ -99,6 +109,46 @@ def is_egyptian_arabic(text: str) -> tuple[bool, str]:
     if not any(marker in text for marker in _EGYPTIAN):
         return False, "no Egyptian dialect marker"
     return True, ""
+
+
+#: Ways of saying "you can pay online / by card / by wallet", which this shop
+#: cannot do. Cash on delivery is the only payment it takes -- that is why
+#: nothing in the codebase can issue a refund -- so an offer of anything else
+#: is a promise made to a customer who may act on it.
+_OTHER_PAYMENT = (
+    "أونلاين", "اونلاين", "أون لاين", "اون لاين",
+    "فيزا", "ڤيزا", "بالفيزا", "كارت", "credit card", "بطاقة",
+    "انستاباي", "إنستاباي", "instapay", "فودافون كاش", "محفظة",
+    "تحويل بنكي", "paypal", "باي بال", "لينك دفع", "payment link",
+)
+
+#: ...but talking about cash on delivery is exactly right, and some of the
+#: words above appear inside perfectly correct sentences ("مش بنقبل فيزا").
+#: A denial is not an offer.
+_PAYMENT_DENIAL = ("مش", "ما بنقبل", "مابنقبلش", "غير متاح", "بس كاش", "كاش بس", "only cash")
+
+
+def offers_another_payment_method(text: str) -> str:
+    """The payment method a reply offered that this shop does not have, if any.
+
+    Deliberately a keyword check rather than a model call: a judge that can be
+    wrong is not a gate, and the failure being guarded against is specific and
+    literal. A sentence that *denies* the method is left alone -- "مش بنقبل
+    فيزا، كاش عند الاستلام بس" is the correct answer, not a violation.
+    """
+    lowered = (text or "").lower()
+    for method in _OTHER_PAYMENT:
+        if method.lower() not in lowered:
+            continue
+        # Look at the clause it appears in, not the whole reply: a summary can
+        # correctly say "cash on delivery" in one line and nothing about cards
+        # in another.
+        for clause in re.split(r"[.\n،؛!?]", text or ""):
+            if method.lower() in clause.lower() and not any(
+                d.lower() in clause.lower() for d in _PAYMENT_DENIAL
+            ):
+                return method
+    return ""
 
 
 def looks_truncated(text: str) -> bool:
@@ -191,6 +241,13 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
             ok, why = is_egyptian_arabic(text)
             if not ok:
                 failures.append(f"{where}: {why}")
+
+            offered = offers_another_payment_method(text)
+            if offered:
+                failures.append(
+                    f"{where}: the reply offered {offered!r} -- this shop is "
+                    "cash on delivery only"
+                )
 
             if looks_truncated(text):
                 failures.append(f"{where}: the reply reads as cut off")
