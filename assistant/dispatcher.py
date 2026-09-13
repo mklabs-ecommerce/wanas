@@ -80,6 +80,10 @@ class Pending:
     #: has pushed the deadline out.
     first_seen: float = 0.0
     last_seen: float = 0.0
+    #: How many platform messages this batch has collected. 1 is the ordinary
+    #: case by a very long way -- 249 of 254 measured turns -- and it is what
+    #: the adaptive window below keys on.
+    fragments: int = 0
 
     def spent(self, name: str, seconds: float) -> None:
         """Note ingest-side time against this message."""
@@ -100,6 +104,7 @@ class Pending:
             self.ingest[name] = self.ingest.get(name, 0.0) + seconds
         self.first_seen = min(t for t in (self.first_seen, other.first_seen) if t) or 0.0
         self.last_seen = max(self.last_seen, other.last_seen)
+        self.fragments += other.fragments
 
     @property
     def text(self) -> str:
@@ -188,10 +193,24 @@ class MessageDispatcher:
         *,
         debounce_seconds: float | None = None,
         max_workers: int | None = None,
+        adaptive: bool | None = None,
+        first_debounce_seconds: float | None = None,
+        max_batch_seconds: float | None = None,
     ):
         self._handler = handler
         self._debounce = (
             settings.message_debounce_seconds if debounce_seconds is None else debounce_seconds
+        )
+        self._adaptive = settings.adaptive_debounce if adaptive is None else adaptive
+        self._first_debounce = (
+            settings.message_debounce_first_seconds
+            if first_debounce_seconds is None
+            else first_debounce_seconds
+        )
+        self._max_batch = (
+            settings.message_debounce_max_seconds
+            if max_batch_seconds is None
+            else max_batch_seconds
         )
         self._pending: dict[str, Pending] = {}
         self._timers: dict[str, threading.Timer] = {}
@@ -233,6 +252,7 @@ class MessageDispatcher:
         if not item.first_seen:
             item.first_seen = now
         item.last_seen = now
+        item.fragments = max(1, item.fragments)
 
         if self._debounce <= 0:
             self._run(key, item)
@@ -255,10 +275,59 @@ class MessageDispatcher:
                 # first fragment of a sentence.
                 timer.cancel()
 
-            timer = threading.Timer(self._debounce, self._release, args=(key,))
+            pending = self._pending[key]
+            timer = threading.Timer(self._wait_for(pending), self._release, args=(key,))
             timer.daemon = True
             self._timers[key] = timer
             timer.start()
+
+    def _wait_for(self, item: Pending) -> float:
+        """How long this batch waits for the customer's next message.
+
+        The window exists because customers type in fragments, and that is
+        still true. What was not true is that it should cost the same on every
+        message: 249 of 254 measured production turns were a *single* message,
+        so the fixed six seconds was paid in full by 98% of turns to catch the
+        other 2%. Six seconds is also 28% of a twenty-one-second reply, which
+        made it the second most expensive thing in the whole path and the only
+        one nothing outside this process had a say in.
+
+        So the wait is short until a second fragment proves it is needed, and
+        then it is exactly what it always was:
+
+        * one message so far -> `MESSAGE_DEBOUNCE_FIRST_SECONDS` (2 s).
+        * two or more -> `MESSAGE_DEBOUNCE_SECONDS` (6 s), measured from the
+          newest one, which is byte-for-byte the old behaviour. A customer who
+          is *actually* writing in pieces gets the same patience they always
+          did; the deadline for their second fragment lands at the same wall
+          clock second as before.
+        * and never past `MESSAGE_DEBOUNCE_MAX_SECONDS` (15 s) from the first
+          fragment, so someone typing one word every five seconds cannot hold
+          a batch open indefinitely -- which the old fixed window could not do
+          either, and which becomes reachable once the window extends.
+
+        The cost is real and worth naming: a customer whose second fragment
+        arrives between 2 and 6 seconds after the first now gets two turns
+        instead of one. That is an extra model call and a reply that reads as
+        two messages rather than one -- not a wrong answer, and the
+        conversation lock still serialises them. Against it: four seconds off
+        98% of replies. `ADAPTIVE_DEBOUNCE=0` restores the old window exactly.
+        """
+        if not self._adaptive:
+            return self._debounce
+
+        # The short wait is never longer than the full one. Adaptive must not
+        # be able to make a single message *slower* than the fixed window it
+        # replaced, and a caller that pins a short `debounce_seconds` (the
+        # tests do) means that number, not the production default.
+        first = min(self._first_debounce, self._debounce)
+        wait = self._debounce if item.fragments > 1 else first
+        if self._max_batch > 0 and item.first_seen:
+            age = time.perf_counter() - item.first_seen
+            # Never negative: a batch already past the ceiling runs now rather
+            # than scheduling a timer in the past.
+            wait = min(wait, max(0.05, self._max_batch - age))
+        return max(0.05, wait)
 
     def _release(self, key: str) -> None:
         with self._lock:

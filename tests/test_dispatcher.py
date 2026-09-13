@@ -243,3 +243,119 @@ def test_one_conversation_is_still_answered_one_turn_at_a_time():
         dispatcher.shutdown()
 
     assert max(overlaps) == 1
+
+
+# --------------------------------------------------------------------------
+# the adaptive window
+# --------------------------------------------------------------------------
+#
+# The window costs every reply its full length, and 249 of 254 measured
+# production turns were a single message -- so 98% of replies were paying six
+# seconds to catch the other 2%. These pin both halves of the fix: a lone
+# message waits the short window, and a customer who really is writing in
+# fragments gets the long one back, measured from their newest message exactly
+# as before.
+
+
+def test_a_single_message_waits_the_short_window():
+    seen: list[float] = []
+    started = time.monotonic()
+    dispatcher = MessageDispatcher(
+        lambda key, item: seen.append(time.monotonic() - started),
+        debounce_seconds=1.0,
+        first_debounce_seconds=0.1,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["الشحن كام؟"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert len(seen) == 1
+    assert seen[0] < 0.6, f"a lone message waited {seen[0]:.2f}s, not the short window"
+
+
+def test_a_second_fragment_buys_back_the_full_window():
+    """The moment a batch is more than one message it behaves exactly as it
+    always did: the full window, measured from the newest fragment."""
+    handled: list[str] = []
+    dispatcher = MessageDispatcher(
+        lambda key, item: handled.append(item.text),
+        debounce_seconds=0.5,
+        first_debounce_seconds=0.1,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        time.sleep(0.05)
+        dispatcher.submit("2010", Pending(texts=["أسود"]))
+        # Well past the short window, comfortably inside the long one.
+        time.sleep(0.3)
+        dispatcher.submit("2010", Pending(texts=["لارج"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert handled == ["عايز هودي\nأسود\nلارج"]
+
+
+def test_a_batch_never_waits_past_the_ceiling():
+    """A fixed window could not be extended, so it needed no ceiling. An
+    adaptive one can, and a customer typing one word every few seconds must
+    not be able to hold their own reply open indefinitely."""
+    handled: list[str] = []
+    dispatcher = MessageDispatcher(
+        lambda key, item: handled.append(item.text),
+        debounce_seconds=0.4,
+        first_debounce_seconds=0.05,
+        max_batch_seconds=0.5,
+        adaptive=True,
+    )
+    started = time.monotonic()
+    try:
+        for word in ("عايز", "هودي", "أسود", "لارج", "دلوقتي"):
+            dispatcher.submit("2010", Pending(texts=[word]))
+            time.sleep(0.15)
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert handled, "the batch was never released"
+    assert time.monotonic() - started < 2.0
+    # Everything said still reaches the turn: the ceiling ends the *wait*, it
+    # does not throw a fragment away.
+    assert "عايز" in handled[0]
+
+
+def test_the_flag_restores_the_old_fixed_window():
+    seen: list[float] = []
+    started = time.monotonic()
+    dispatcher = MessageDispatcher(
+        lambda key, item: seen.append(time.monotonic() - started),
+        debounce_seconds=0.4,
+        first_debounce_seconds=0.05,
+        adaptive=False,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["الشحن كام؟"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert seen[0] >= 0.35, "with the flag off a lone message must still wait the full window"
+
+
+def test_the_short_window_can_never_exceed_the_full_one():
+    """A misconfiguration must not be able to make the adaptive window slower
+    than the fixed one it replaced."""
+    dispatcher = MessageDispatcher(
+        lambda key, item: None,
+        debounce_seconds=0.2,
+        first_debounce_seconds=5.0,
+        adaptive=True,
+    )
+    try:
+        assert dispatcher._wait_for(Pending(fragments=1, first_seen=time.perf_counter())) <= 0.2
+    finally:
+        dispatcher.shutdown()

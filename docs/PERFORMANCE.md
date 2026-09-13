@@ -149,4 +149,55 @@ region **ams** (Amsterdam), trial plan, `uvicorn app:app`.
 Each entry: what changed, the numbers before and after, and whether it was
 kept. Reverts stay in the git history rather than being squashed away.
 
+### Iteration 1 — the debounce window waits only as long as it has to
+
+**Ranked first because:** 6.0 s on every single reply, 28% of the total, and
+the only large term nothing outside this process had a say in.
+
+**The measurement that decided it.** `mids` on a stored user message is every
+platform id the debounced batch collected, so its length *is* how many
+fragments that turn was assembled from. Across 254 production turns:
+
+| fragments in the batch | turns |
+|---|---|
+| 1 | 249 (98.0%) |
+| 2 | 3 |
+| 3 | 1 |
+| 6 | 1 |
+
+Ninety-eight percent of replies were paying the full six seconds to catch the
+other two percent.
+
+**The change.** `MessageDispatcher._wait_for`: a batch waits
+`MESSAGE_DEBOUNCE_FIRST_SECONDS` (2 s) until a *second* fragment arrives, and
+from then on `MESSAGE_DEBOUNCE_SECONDS` (6 s) measured from the newest
+fragment — which is byte-for-byte the old behaviour. A new
+`MESSAGE_DEBOUNCE_MAX_SECONDS` (15 s) caps a batch's total age, which a fixed
+window never needed and an extending one does. The short wait is clamped so it
+can never exceed the full one.
+
+**Before / after**, measured on the dispatcher with the production settings
+(median of three runs, submit → handler):
+
+| batch | before | after | change |
+|---|---|---|---|
+| 1 message | 6.02 s | **2.01 s** | **−4.01 s** |
+| 2 messages, 1 s apart | 7.00 s | 7.02 s | unchanged |
+| 3 messages, 1 s apart | 8.01 s | 8.01 s | unchanged |
+
+Weighted by the distribution above, the mean debounce goes from 6.00 s to
+**2.09 s**: **−3.9 s off a 21.3 s reply, −18.4%**.
+
+**The cost, stated plainly.** A customer whose second fragment arrives between
+2 and 6 seconds after the first now gets two turns instead of one — an extra
+model call, and a reply that reads as two messages rather than one. Not a
+wrong answer, and the conversation lock still serialises them. Three of 254
+measured turns are in that shape at most.
+
+**Quality gate:** passed. **Suite:** green. **Flag:** `ADAPTIVE_DEBOUNCE`,
+default **on** — the gate was clean and the fragment behaviour above 2 s is
+unchanged. `ADAPTIVE_DEBOUNCE=0` restores the old fixed window with no deploy.
+
+**Kept.**
+
 <!-- ITERATIONS -->

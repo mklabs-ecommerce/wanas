@@ -198,6 +198,17 @@ class Settings:
     #: 0 processes each message on arrival, in the caller's thread, which is
     #: what the tests want.
     message_debounce_seconds: float
+    #: What the *first* message of a batch waits, before a second one has
+    #: proved the customer is writing in fragments. 249 of 254 measured
+    #: production turns were one message, so the full window above was paid by
+    #: 98% of turns to catch the other 2% -- and it was 28% of the whole
+    #: reply. See `MessageDispatcher._wait_for`.
+    message_debounce_first_seconds: float
+    #: The ceiling on a batch's total age, however many fragments extend it.
+    #: Unreachable with a fixed window; reachable once the window extends.
+    message_debounce_max_seconds: float
+    #: 0 restores the old fixed window exactly, with no deploy.
+    adaptive_debounce: bool
     #: Threads that run agent turns. One conversation is always serial; this
     #: caps how many *different* conversations run at once.
     message_workers: int
@@ -499,6 +510,9 @@ def load_settings() -> Settings:
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),
         max_quantity_per_line=_int("MAX_QUANTITY_PER_LINE", 10),
         message_debounce_seconds=_float("MESSAGE_DEBOUNCE_SECONDS", 6.0),
+        message_debounce_first_seconds=_float("MESSAGE_DEBOUNCE_FIRST_SECONDS", 2.0),
+        message_debounce_max_seconds=_float("MESSAGE_DEBOUNCE_MAX_SECONDS", 15.0),
+        adaptive_debounce=_bool("ADAPTIVE_DEBOUNCE", True),
         message_workers=_int("MESSAGE_WORKERS", 8),
         latency_log=_bool("LATENCY_LOG", True),
         image_match_confidence=_float("IMAGE_MATCH_CONFIDENCE", 0.6),
