@@ -1,0 +1,140 @@
+{
+  "facts": {
+    "product_id": "boxy-wns-tee",
+    "product_name": "Boxy WNS Tee",
+    "variant_id": "boxy-wns-tee-l-black",
+    "color": "Black",
+    "size": "L",
+    "price": "590",
+    "category": "T-Shirts"
+  },
+  "replies": [
+    {
+      "scenario": "greeting",
+      "step": 0,
+      "text": "أهلاً بيك في وناس جاليري. تحب أساعدك في إيه؟",
+      "tool_calls": [],
+      "error": null,
+      "seconds": 0.011522300002980046,
+      "expects_tools": [],
+      "expects_text": []
+    },
+    {
+      "scenario": "product_question",
+      "step": 0,
+      "text": "Boxy WNS Tee متاح عندنا بسعر 590 جنيه.",
+      "tool_calls": [
+        "get_products"
+      ],
+      "error": null,
+      "seconds": 0.011837099998956546,
+      "expects_tools": [
+        "get_products"
+      ],
+      "expects_text": [
+        "590"
+      ]
+    },
+    {
+      "scenario": "sizes",
+      "step": 0,
+      "text": "متاح مقاس L بسعر 590 جنيه.",
+      "tool_calls": [
+        "get_products",
+        "get_variants"
+      ],
+      "error": null,
+      "seconds": 0.014499099997919984,
+      "expects_tools": [
+        "get_variants"
+      ],
+      "expects_text": [
+        "L"
+      ]
+    },
+    {
+      "scenario": "add_to_cart",
+      "step": 0,
+      "text": "تمام، Boxy WNS Tee مقاس L بـ590 جنيه. أحطهولك؟",
+      "tool_calls": [
+        "get_products",
+        "get_variants"
+      ],
+      "error": null,
+      "seconds": 0.010717400000430644,
+      "expects_tools": [
+        "get_variants"
+      ],
+      "expects_text": []
+    },
+    {
+      "scenario": "add_to_cart",
+      "step": 1,
+      "text": "اتحط في السلة. تحب تكمل الطلب؟",
+      "tool_calls": [
+        "add_to_cart"
+      ],
+      "error": null,
+      "seconds": 0.010670099989511073,
+      "expects_tools": [
+        "add_to_cart"
+      ],
+      "expects_text": []
+    },
+    {
+      "scenario": "confirm_order",
+      "step": 0,
+      "text": "تمام، Boxy WNS Tee مقاس L بـ590 جنيه.",
+      "tool_calls": [
+        "get_products",
+        "get_variants"
+      ],
+      "error": null,
+      "seconds": 0.011044200000469573,
+      "expects_tools": [],
+      "expects_text": []
+    },
+    {
+      "scenario": "confirm_order",
+      "step": 1,
+      "text": "اتحط في السلة. ابعتلي الاسم والعنوان والمحافظة والتليفون.",
+      "tool_calls": [
+        "add_to_cart"
+      ],
+      "error": null,
+      "seconds": 0.006663699998171069,
+      "expects_tools": [
+        "add_to_cart"
+      ],
+      "expects_text": []
+    },
+    {
+      "scenario": "confirm_order",
+      "step": 2,
+      "text": "",
+      "tool_calls": [
+        "confirm_order"
+      ],
+      "error": null,
+      "seconds": 0.026960400005918927,
+      "expects_tools": [
+        "confirm_order"
+      ],
+      "expects_text": []
+    },
+    {
+      "scenario": "shipping_question",
+      "step": 0,
+      "text": "الشحن للقاهرة ٦٠ جنيه وبيوصل خلال ٢ لـ٤ أيام.",
+      "tool_calls": [
+        "get_shipping_fee"
+      ],
+      "error": null,
+      "seconds": 0.005491399992024526,
+      "expects_tools": [
+        "get_shipping_fee"
+      ],
+      "expects_text": []
+    }
+  ]
+}

@@ -16,6 +16,7 @@ length of a model call.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, Response
@@ -25,6 +26,7 @@ from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
+from common import telemetry
 from common.security import verify_signature  # noqa: F401 -- re-exported; tests import it from here
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
@@ -81,11 +83,13 @@ async def inbound(request: Request) -> Response:
         return Response("whatsapp not configured", status_code=503)
 
     raw = await request.body()
+    verify_started = time.perf_counter()
     if not verify_signature(
         settings.whatsapp_app_secret, raw, request.headers.get("x-hub-signature-256")
     ):
         log.warning("rejected a webhook with a bad signature")
         return Response("bad signature", status_code=403)
+    verify_seconds = time.perf_counter() - verify_started
 
     try:
         payload = await request.json()
@@ -96,7 +100,7 @@ async def inbound(request: Request) -> Response:
     for message, contact_name in _iter_messages(payload):
         seen += 1
         try:
-            _accept(message, contact_name)
+            _accept(message, contact_name, verify_seconds=verify_seconds)
         except Exception:  # never let one bad message stop the batch
             # `_accept` claimed the id before any work, so without giving it
             # back this message -- and every Meta retry of it -- would be
@@ -366,7 +370,7 @@ def _iter_messages(payload: dict):
 # --------------------------------------------------------------------------
 
 
-def _accept(message: dict, contact_name: str | None) -> None:
+def _accept(message: dict, contact_name: str | None, *, verify_seconds: float = 0.0) -> None:
     """Everything that has to happen before the webhook answers.
 
     Media download lives here rather than on the worker because Meta's media
@@ -404,6 +408,12 @@ def _accept(message: dict, contact_name: str | None) -> None:
 
     client = WhatsAppClient()
     pending = Pending(last_message_id=message_id)
+    # Everything the webhook spends before the debounce window even opens is
+    # latency the customer pays, and none of it was visible: the signature
+    # check, Meta's media download, the transcript write, the read receipt.
+    # Carried on the batch to the worker thread that will report it -- see
+    # `Pending.ingest`.
+    pending.spent("webhook_verify", verify_seconds)
     # A long-pressed "reply to this" on a specific earlier message. Meta
     # carries it as `context.id`; recorded here so `Pending.annotated_text`
     # (assistant/dispatcher.py) can tell the model which of several
@@ -424,16 +434,20 @@ def _accept(message: dict, contact_name: str | None) -> None:
             # but Meta allows it) resolves through the same mechanism.
             pending.texts.append(caption)
             pending.text_ids.append(message_id)
+        media_started = time.perf_counter()
         downloaded = client.download_media(image.get("id", ""), INBOUND_MEDIA_DIR)
+        pending.spent("media_download", time.perf_counter() - media_started)
         # Even if the download fails the photo still has to reach a person --
         # the media id is enough for staff to chase it.
         pending.image_paths.append(downloaded or f"whatsapp-media:{image.get('id')}")
         pending.image_ids.append(message_id)
     elif message_type in AUDIO_TYPES:
         audio = message.get(message_type) or message.get("audio") or {}
+        media_started = time.perf_counter()
         downloaded = client.download_media(
             audio.get("id", ""), INBOUND_MEDIA_DIR, default_extension=".ogg"
         )
+        pending.spent("media_download", time.perf_counter() - media_started)
         pending.audio_paths.append(downloaded or f"whatsapp-media:{audio.get('id')}")
         pending.audio_ids.append(message_id)
     elif message_type == "interactive":
@@ -488,21 +502,26 @@ def _accept(message: dict, contact_name: str | None) -> None:
     # Stored *before* the debounce window opens and before a single model
     # token is spent, in its own committed transaction. From here on the
     # conversation exists for the dashboard no matter what the turn does.
-    if record_inbound(
+    record_started = time.perf_counter()
+    recorded = record_inbound(
         CHANNEL,
         external_id,
         pending.text,
         images=pending.image_paths or None,
         audio=pending.audio_paths or None,
         message_id=message_id,
-    ):
+    )
+    pending.spent("record_inbound", time.perf_counter() - record_started)
+    if recorded:
         pending.recorded_ids.add(message_id)
 
     # Blue ticks and a typing bubble now, because the answer is seconds away
     # and an unread message is what makes someone send it again. After the
     # record, never before it: a hiccup talking to Meta must not be what
     # costs the shop its only copy of what the customer said.
+    read_started = time.perf_counter()
     client.mark_as_read(message_id)
+    pending.spent("mark_as_read", time.perf_counter() - read_started)
 
     dispatcher.submit(external_id, pending)
 
@@ -520,6 +539,20 @@ def _annotate_replies(pending: Pending) -> str:
 
 
 def _deliver(external_id: str, pending: Pending) -> None:
+    """The whole answer, and the one place it is timed.
+
+    The turn scope opens here rather than inside `handle_message` because the
+    send is part of what the customer waited for, and because the ingest
+    stages the webhook measured (`Pending.ingest`) have to be folded onto the
+    same line -- they happened on a different thread, before this one existed.
+    """
+    with telemetry.turn(CHANNEL, external_id, batch=len(pending.texts) or 1):
+        for name, seconds in pending.ingest.items():
+            telemetry.add(name, seconds)
+        _deliver_turn(external_id, pending)
+
+
+def _deliver_turn(external_id: str, pending: Pending) -> None:
     try:
         # One silent retry, thirty seconds later, for whatever crashes here
         # rather than inside `run_turn`'s own guard -- see
@@ -581,26 +614,32 @@ def _deliver(external_id: str, pending: Pending) -> None:
             db, "interactive_messages_enabled", settings.interactive_messages_enabled
         )
 
+    telemetry.note(tool_calls=list(reply.tool_calls), turn_error=reply.error)
+
     outcomes = []
     if reply.interactive and interactive_enabled:
         # The picker carries its own prompt, so the model's words go first and
         # the tappable list follows -- two messages, in the order a person
         # would send them.
-        if reply.text:
-            outcomes.append(client.send_text(external_id, reply.text))
-        outcomes.append(
-            client.send_interactive(external_id, reply.interactive, fallback=reply.text or "")
-        )
+        with telemetry.stage("send"):
+            if reply.text:
+                outcomes.append(client.send_text(external_id, reply.text))
+            outcomes.append(
+                client.send_interactive(external_id, reply.interactive, fallback=reply.text or "")
+            )
     elif reply.text:
-        outcomes.append(client.send_text(external_id, reply.text))
+        with telemetry.stage("send"):
+            outcomes.append(client.send_text(external_id, reply.text))
 
     for path in reply.attachments:
         # The model wrote the words; the adapter decides how the picture is
         # delivered. Text carries the answer, the image supports it.
-        outcomes.append(client.send_image(external_id, path))
+        with telemetry.stage("send_image"):
+            outcomes.append(client.send_image(external_id, path))
 
-    _flag_delivery_failures(external_id, outcomes)
-    _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
+    with telemetry.stage("post_send"):
+        _flag_delivery_failures(external_id, outcomes)
+        _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
 
 
 def _batch_ids(pending: Pending) -> list[str]:

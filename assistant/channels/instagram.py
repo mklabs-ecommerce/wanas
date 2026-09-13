@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -51,6 +52,7 @@ from assistant.providers.base import (
 )
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
 from assistant.tools.support_tools import raise_handoff
+from common import telemetry
 from common.security import verify_signature
 from common.timeutil import as_aware
 from config.settings import PROJECT_ROOT, settings
@@ -104,11 +106,13 @@ async def inbound(request: Request) -> Response:
     raw = await request.body()
     # Signed with the *Instagram* app secret -- a different string from
     # WHATSAPP_APP_SECRET even inside the same Meta app.
+    verify_started = time.perf_counter()
     if not verify_signature(
         settings.instagram_app_secret, raw, request.headers.get("x-hub-signature-256")
     ):
         log.warning("rejected a webhook with a bad signature")
         return Response("bad signature", status_code=403)
+    verify_seconds = time.perf_counter() - verify_started
 
     try:
         payload = await request.json()
@@ -118,7 +122,7 @@ async def inbound(request: Request) -> Response:
     for kind, item, entry_time in _route(payload):
         try:
             if kind == "message":
-                _accept_message(item)
+                _accept_message(item, verify_seconds=verify_seconds)
             else:
                 _accept_comment(item, entry_time)
         except Exception:  # never let one bad item stop the batch
@@ -185,7 +189,7 @@ def _is_own_account(sender_id: str | None) -> bool:
     return bool(sender_id) and sender_id in settings.instagram_self_ids
 
 
-def _accept_message(messaging: dict) -> None:
+def _accept_message(messaging: dict, *, verify_seconds: float = 0.0) -> None:
     """Everything that has to happen before the webhook answers.
 
     Attachment downloads live here rather than on the worker (STEP 7) for the
@@ -220,7 +224,14 @@ def _accept_message(messaging: dict) -> None:
 
     client = InstagramClient()
     pending = Pending(last_message_id=mid)
-    if not _collect_message(message, mid, pending, client, sender_id):
+    # Same accounting as the WhatsApp adapter: everything the webhook spends
+    # before the debounce window opens is latency the customer pays, measured
+    # here and reported on the worker thread's one line per turn.
+    pending.spent("webhook_verify", verify_seconds)
+    collect_started = time.perf_counter()
+    collected = _collect_message(message, mid, pending, client, sender_id)
+    pending.spent("media_download", time.perf_counter() - collect_started)
+    if not collected:
         # An unsupported attachment took the handoff path and acknowledged it;
         # nothing goes to the agent.
         return
@@ -236,21 +247,26 @@ def _accept_message(messaging: dict) -> None:
     # Same rule as WhatsApp: the transcript gets the message before the
     # debounce window, so a turn that stalls or crashes still leaves the
     # conversation visible to staff. See `runtime.record_inbound`.
-    if record_inbound(
+    record_started = time.perf_counter()
+    recorded = record_inbound(
         CHANNEL,
         sender_id,
         pending.text,
         images=pending.image_paths or None,
         audio=pending.audio_paths or None,
         message_id=_claim_id(mid),
-    ):
+    )
+    pending.spent("record_inbound", time.perf_counter() - record_started)
+    if recorded:
         pending.recorded_ids.add(_claim_id(mid))
 
     # Seen + typing after the record, never before -- same reasoning as
     # WhatsApp's blue ticks.
+    seen_started = time.perf_counter()
     client.mark_seen(sender_id)
     client.typing_on(sender_id)
     _ensure_platform_profile(client, sender_id)
+    pending.spent("mark_as_read", time.perf_counter() - seen_started)
 
     dispatcher.submit(sender_id, pending)
 
@@ -1073,6 +1089,15 @@ def _commenter_handle(db, commenter) -> str | None:
 
 
 def _deliver(external_id: str, pending: Pending) -> None:
+    """The whole answer, and the one place it is timed -- see the WhatsApp
+    adapter's twin for why the scope opens here and not inside the turn."""
+    with telemetry.turn(CHANNEL, external_id, batch=len(pending.texts) or 1):
+        for name, seconds in pending.ingest.items():
+            telemetry.add(name, seconds)
+        _deliver_turn(external_id, pending)
+
+
+def _deliver_turn(external_id: str, pending: Pending) -> None:
     text = pending.annotated_text()
 
     # A reply to a live story is tied to a specific post id (`story_id`,
@@ -1145,25 +1170,31 @@ def _deliver(external_id: str, pending: Pending) -> None:
     with session_scope() as db:
         interactive_enabled = runtime_flags_enabled(db)
 
+    telemetry.note(tool_calls=list(reply.tool_calls), turn_error=reply.error)
+
     outcomes = []
     if reply.interactive and interactive_enabled:
         # The picker carries its own prompt, so the model's words go first --
         # two messages, in the order a person would send them. On Instagram
         # the "picker" degrades to quick replies or numbered text inside the
         # client; the adapter does not care which.
-        if reply.text:
-            outcomes.append(client.send_text(external_id, reply.text))
-        outcomes.append(
-            client.send_interactive(external_id, reply.interactive, fallback=reply.text or "")
-        )
+        with telemetry.stage("send"):
+            if reply.text:
+                outcomes.append(client.send_text(external_id, reply.text))
+            outcomes.append(
+                client.send_interactive(external_id, reply.interactive, fallback=reply.text or "")
+            )
     elif reply.text:
-        outcomes.append(client.send_text(external_id, reply.text))
+        with telemetry.stage("send"):
+            outcomes.append(client.send_text(external_id, reply.text))
 
     for path in reply.attachments:
-        outcomes.append(client.send_image(external_id, path))
+        with telemetry.stage("send_image"):
+            outcomes.append(client.send_image(external_id, path))
 
-    _flag_delivery_failures(external_id, outcomes)
-    _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
+    with telemetry.stage("post_send"):
+        _flag_delivery_failures(external_id, outcomes)
+        _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
 
 
 def _remember_sent_ids(

@@ -202,6 +202,13 @@ class Settings:
     #: caps how many *different* conversations run at once.
     message_workers: int
 
+    #: One line of JSON per turn saying where its wall-clock time went
+    #: (`common/telemetry.py`). On by default: it carries no message text and
+    #: no customer identifier beyond a short hash, it costs one log line per
+    #: reply, and production is the only place the real numbers exist. Set
+    #: LATENCY_LOG=0 to silence it.
+    latency_log: bool
+
     #: How sure the vision pass has to be before a photo is treated as "this
     #: product". Below it the reading is only used to ask a better question.
     image_match_confidence: float
@@ -493,6 +500,7 @@ def load_settings() -> Settings:
         max_quantity_per_line=_int("MAX_QUANTITY_PER_LINE", 10),
         message_debounce_seconds=_float("MESSAGE_DEBOUNCE_SECONDS", 6.0),
         message_workers=_int("MESSAGE_WORKERS", 8),
+        latency_log=_bool("LATENCY_LOG", True),
         image_match_confidence=_float("IMAGE_MATCH_CONFIDENCE", 0.6),
         voice_notes_enabled=_bool("VOICE_NOTES_ENABLED", True),
         image_understanding_enabled=_bool("IMAGE_UNDERSTANDING_ENABLED", True),

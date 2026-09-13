@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -65,6 +66,24 @@ class Pending:
     #: conversation is visible immediately without reading twice afterwards.
     recorded_ids: set[str] = field(default_factory=set)
     extras: dict = field(default_factory=dict)
+    #: What the webhook spent on this message before it was queued, by stage
+    #: name, in seconds -- signature check, media download, `record_inbound`,
+    #: the read receipt. Measured in the adapter and carried here because the
+    #: turn it belongs to runs on another thread minutes of wall clock later,
+    #: and the one line per turn has to be able to say so. Summed across a
+    #: merged batch: three fragments cost three ingests.
+    ingest: dict[str, float] = field(default_factory=dict)
+    #: `time.perf_counter()` when the first and the most recent fragment of
+    #: this batch arrived. The difference between `last_seen` and the moment
+    #: the handler starts is the debounce wait the customer actually paid,
+    #: which is not the same as the configured window once a second message
+    #: has pushed the deadline out.
+    first_seen: float = 0.0
+    last_seen: float = 0.0
+
+    def spent(self, name: str, seconds: float) -> None:
+        """Note ingest-side time against this message."""
+        self.ingest[name] = self.ingest.get(name, 0.0) + max(0.0, seconds)
 
     def merge(self, other: Pending) -> None:
         self.texts.extend(other.texts)
@@ -77,6 +96,10 @@ class Pending:
         self.reply_to.update(other.reply_to)
         self.recorded_ids |= other.recorded_ids
         self.extras.update(other.extras)
+        for name, seconds in other.ingest.items():
+            self.ingest[name] = self.ingest.get(name, 0.0) + seconds
+        self.first_seen = min(t for t in (self.first_seen, other.first_seen) if t) or 0.0
+        self.last_seen = max(self.last_seen, other.last_seen)
 
     @property
     def text(self) -> str:
@@ -201,6 +224,16 @@ class MessageDispatcher:
         That is what the test suite wants -- assert on the outcome right after
         the request -- and it is never what production wants.
         """
+        # Stamped here rather than in the adapter so every channel gets it for
+        # free, and so the clock that measures the wait is the same one that
+        # ends it. `first_seen` survives a merge; `last_seen` is what the wait
+        # is actually measured from, because a second fragment pushes the
+        # deadline out and the customer pays from *their last* message.
+        now = time.perf_counter()
+        if not item.first_seen:
+            item.first_seen = now
+        item.last_seen = now
+
         if self._debounce <= 0:
             self._run(key, item)
             return
@@ -246,7 +279,16 @@ class MessageDispatcher:
 
     def _run(self, key: str, item: Pending) -> None:
         lock = self._conversation_lock(key)
+        queued = time.perf_counter()
         with lock:
+            # Everything between the customer's last message and the handler
+            # starting: the debounce window itself, plus however long this
+            # conversation waited behind its own previous turn. Separated
+            # because the first is a tuning decision and the second is
+            # contention, and they are fixed by completely different things.
+            if item.last_seen:
+                item.spent("debounce_wait", queued - item.last_seen)
+            item.spent("turn_queue_wait", time.perf_counter() - queued)
             try:
                 self._handler(key, item)
             except Exception:

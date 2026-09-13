@@ -82,6 +82,7 @@ from assistant.providers.base import (
     normalise_chart_reading,
 )
 from assistant.providers.gemini import mask_key
+from common import telemetry
 from config.settings import settings
 
 log = logging.getLogger("wanas.provider.openrouter")
@@ -351,7 +352,8 @@ class OpenRouterProvider(LLMProvider):
     # -- request ----------------------------------------------------------
 
     def generate(self, system_prompt: str, history: list[dict], tools: list) -> ModelReply:
-        response = self._post(self._build_payload(system_prompt, history, tools))
+        payload = self._build_payload(system_prompt, history, tools)
+        response = self._post(payload)
 
         if response.status_code == 429:
             raise ProviderError(
@@ -371,7 +373,24 @@ class OpenRouterProvider(LLMProvider):
                 f"openrouter error {response.status_code} on model {self.model!r}: {response.text[:500]}"
             )
 
-        return self._parse(response.json())
+        data = response.json()
+        # Which upstream stack served this one, and what it cost. Both come
+        # back on every response and neither was being read: without them a
+        # slow turn cannot be told apart from a slow *provider*, and
+        # `_routing`'s order was chosen for quality with no measurement of
+        # what each candidate does to the tail. Attached to the model hop
+        # `assistant/agent.py` already has open -- see `common/telemetry.py`.
+        usage = data.get("usage") or {}
+        details = usage.get("completion_tokens_details") or {}
+        telemetry.note_llm(
+            upstream=data.get("provider"),
+            model=data.get("model"),
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+            reasoning_tokens=details.get("reasoning_tokens"),
+            cached_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+        )
+        return self._parse(data)
 
     def _headers(self) -> dict[str, str]:
         headers = {
