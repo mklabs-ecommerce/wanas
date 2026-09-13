@@ -136,6 +136,64 @@ def test_style_and_department_filters(seeded):
     assert all("oversized" in p["style"] for p in oversized["products"])
 
 
+def test_one_match_carries_its_variants(seeded):
+    """A search that landed on exactly one product hands back that product's
+    variants with it, so the follow-up question does not cost a second model
+    round trip -- which was ~2 to 3.5 seconds, the largest thing left in a
+    reply. The ids are the real ones, so add_to_cart can be called straight
+    off them."""
+    result = catalog.get_products(seeded, query="Boxy WNS Tee")
+    assert result["count"] == 1
+    product = result["products"][0]
+    variants = product["variants"]
+    assert variants, "a single match must carry its variants"
+    assert {v["variant_id"] for v in variants} == {
+        v["variant_id"]
+        for v in catalog.get_variants(seeded, product["product_id"])["variants"]
+    }
+    # Real rows, not a summary: the price a customer is charged and whether it
+    # can be sold have to be on them.
+    assert all("price" in v and "status" in v for v in variants)
+
+
+def test_several_matches_carry_none(seeded):
+    """Two or more results is browsing, and "which of these did you mean" is
+    an ambiguity worth keeping. Attaching every variant of every candidate
+    would also be a catalogue dump rather than an answer."""
+    result = catalog.get_products(seeded, category="T-Shirts")
+    assert result["count"] > 1
+    assert all("variants" not in p for p in result["products"])
+
+
+def test_the_flag_restores_the_old_result_shape(seeded, monkeypatch):
+    import dataclasses
+
+    from config.settings import settings as live
+
+    monkeypatch.setattr(
+        catalog, "settings", dataclasses.replace(live, search_carries_variants=False)
+    )
+    result = catalog.get_products(seeded, query="Boxy WNS Tee")
+    assert result["count"] == 1
+    assert "variants" not in result["products"][0]
+
+
+def test_carrying_variants_costs_no_extra_shopify_read(seeded, monkeypatch):
+    """The whole point is saving a round trip, so it must not buy one back.
+    The variants come out of the rows `selectinload` already loaded and the
+    same live snapshot the summary was built from -- one read, as before."""
+    reads = []
+    real = catalog.shopify_catalog.live_map
+    monkeypatch.setattr(
+        catalog.shopify_catalog,
+        "live_map",
+        lambda: (reads.append(1), real())[1],
+    )
+    result = catalog.get_products(seeded, query="Boxy WNS Tee")
+    assert result["products"][0]["variants"]
+    assert len(reads) == 1
+
+
 def test_get_variants_returns_sold_out_too(seeded):
     payload = catalog.get_variants(seeded, "wanas-hoodie")
     assert len(payload["variants"]) > len(payload["in_stock"])

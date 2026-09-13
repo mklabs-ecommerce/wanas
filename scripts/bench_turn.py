@@ -124,6 +124,11 @@ def run_scenario(
                 "step": index,
                 "text": reply.text or "",
                 "tool_calls": list(reply.tool_calls),
+                # How many pictures actually went out. Only `get_variants`
+                # attaches one, so this is the number that says whether a
+                # change which let the model answer *without* calling it has
+                # quietly stopped the customer seeing the product.
+                "attachments": len(reply.attachments or []),
                 "error": reply.error,
                 "seconds": time.perf_counter() - started,
             }

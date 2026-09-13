@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from common.money import money
+from config.settings import settings
 from domain.models import Product, Variant
 from domain.services import search_terms
 from integrations.shopify import catalog as shopify_catalog
@@ -261,6 +262,36 @@ def get_products(
 
     live_map = shopify_catalog.live_map()
     summaries = [_product_summary(p, live_map) for p in products]
+    if len(summaries) == 1 and settings.search_carries_variants:
+        # Exactly one match: hand back that product's variants with it, so the
+        # follow-up question does not cost a second model round trip.
+        #
+        # A round trip is ~2 to 3.5 seconds, and it was the largest thing left
+        # in a reply once the reasoning budget was dealt with. A customer who
+        # names a product and asks what sizes it comes in was costing
+        # get_products -> get_variants -> reply: three hops for one question
+        # whose answer was already sitting in the rows the first call loaded.
+        #
+        # Only on a single match, and that is the whole safety argument. Two or
+        # more results is browsing -- "which of these did you mean" is an
+        # ambiguity worth keeping, and attaching every variant of every
+        # candidate would be a catalogue dump. One result is the conversation
+        # already having settled on a product.
+        #
+        # These are the real `variant_id`s, so `add_to_cart` can be called
+        # straight off them. That does not weaken the rule it appears to: the
+        # rule is that an id may never be *constructed*, and these were not.
+        # `add_to_cart` re-checks live stock itself either way.
+        #
+        # What this deliberately does **not** do is send the photo.
+        # `get_variants` is still the only thing that attaches one, so a reply
+        # that shows the customer the product still calls it -- see that tool's
+        # description.
+        product = products[0]
+        summaries[0]["variants"] = [
+            variant_payload(v, live_map)
+            for v in sorted(product.variants, key=lambda v: (v.color or "", v.length or "", v.size))
+        ]
     return {"products": summaries, "count": len(summaries)}
 
 

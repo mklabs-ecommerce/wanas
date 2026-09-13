@@ -223,6 +223,20 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                 "and this one answered without calling anything"
             )
 
+        # Photos. `get_variants` is the only tool that attaches one, so any
+        # change that lets the model answer a product question *without*
+        # calling it can silently stop the customer ever seeing the garment --
+        # a reply that is faster and worse in the one way a clothes shop
+        # cannot afford. Compared as "the golden run sent pictures and this one
+        # sent none", not as an exact count: how many colourways a reply shows
+        # is a judgement the model is allowed to make differently.
+        golden_photos = max((r.get("attachments") or 0) for r in golden_replies)
+        new_photos = max((r.get("attachments") or 0) for r in fresh_replies)
+        if golden_photos and not new_photos:
+            failures.append(
+                f"{where}: the golden run sent {golden_photos} photo(s) and this one sent none"
+            )
+
         golden_numbers = set().union(*(digits(r.get("text") or "") for r in golden_replies))
         new_numbers = set().union(*(digits(r.get("text") or "") for r in fresh_replies))
         # Only numbers the golden run stated and the new one dropped. A new
