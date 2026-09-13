@@ -272,4 +272,62 @@ the gate was clean on two runs and the hand read confirmed it.
 
 **Kept.**
 
+### Iteration 3 — a single-match search carries its variants — **REVERTED**
+
+**Ranked first because:** with reasoning dealt with, a round trip is what is
+left. A probe isolating the remaining per-hop cost found a warm hop is ~1.9 s
+and that **prompt size is not what drives it**: removing all 19 tool
+declarations (10,326 → 6,772 prompt tokens, a third of the request) moved the
+median from 1,902 ms to 1,732 ms. 170 ms for 3,554 tokens. So the lever is the
+*number* of hops, not their size.
+
+**The change.** A `get_products` search that matched exactly **one** product
+handed that product's variants back with it — the same variant_ids, prices and
+availability `get_variants` returns — so "what sizes does it come in" could be
+answered in one round trip instead of two. Only on a single match: two or more
+results is browsing. 15 of the catalogue's 18 product names search to exactly
+one product, so this was the common case, not an edge.
+
+**Before / after**, 27 real turns:
+
+| | before | after | change |
+|---|---|---|---|
+| turn mean | 8,536 ms | 7,024 ms | **−17.7%** |
+| turn p50 | 7,477 ms | 6,585 ms | −11.9% |
+| tool calls p90 | 3 | 2 | |
+| hops p90 | 4 | 3 | |
+
+The mechanism worked exactly as designed.
+
+**Quality gate: FAILED.** And it failed on the thing the change was always
+going to risk: `get_variants` is the only tool that attaches a photograph, so
+a model that no longer needs to call it no longer sends one.
+
+```
+- sizes[0]:         the golden run sent 2 photo(s) and this one sent none
+- add_to_cart[0]:   the golden run sent 2 photo(s) and this one sent none
+- confirm_order[0]: the golden run sent 2 photo(s) and this one sent none
+```
+
+A customer asking about a t-shirt in a clothes shop and getting a correct,
+faster, picture-less answer is a worse reply. That is the rule this loop runs
+under: when fast and correct disagree, correct wins.
+
+**Reverted.** The commit stays in the history with its measurements, because
+the idea is repairable and the numbers are worth having.
+
+**What was kept from it:** the gate itself. `scripts/quality_gate.py` now fails
+any change where the golden run sent photographs and the new one sends none,
+and `bench_turn.py` records the count. That check did not exist before this
+iteration, which is exactly why an iteration was needed to find it.
+
+**The repair, not attempted here:** have a single-match `get_products` attach
+the photo and the size chart the way `get_variants` does. That keeps the saved
+round trip *and* the picture. It is left as an option rather than done, for two
+reasons: it makes `get_products` a photo-sending tool, which is a change to the
+shop's image policy rather than to its latency (a customer asking "do you have
+this?" would start receiving a picture unasked), and the brief for this work
+rules out refactors unrelated to latency. It is in the pull request as a
+decision for the shop to take.
+
 <!-- ITERATIONS -->

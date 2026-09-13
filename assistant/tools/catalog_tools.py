@@ -39,13 +39,7 @@ def get_categories(ctx: ToolContext) -> dict:
     "available. Never deny a colour that is in `in_stock_colors`, and never offer one that is not. "
     "Search for what the customer actually asked for, not for a product name you happen to know. "
     "The result is what you may choose from, not what you should list: for a vague request, offer "
-    "two or three that fit and let them narrow it down. "
-    "When exactly one product matches, the result also carries that product's full `variants` "
-    "list -- the same variant_ids, prices and availability get_variants returns. Answer sizes, "
-    "colours, prices and what is in stock straight from it, and call add_to_cart straight off "
-    "those ids: they are real ids, not constructed ones. Call get_variants as well only when the "
-    "customer should *see* the product, because attaching the photo and the size chart is "
-    "something only that tool can do.",
+    "two or three that fit and let them narrow it down.",
     properties={
         "category": {"type": "string", "description": "One of the categories from get_categories."},
         "style": {"type": "string", "description": "A style facet, e.g. oversized, zip-through."},
@@ -127,10 +121,8 @@ def _not_found(ctx: ToolContext, product_id: str) -> dict:
 
 @tool(
     "get_variants",
-    "Every variant of one product with its variant_id, price and availability, and the photo. "
-    "A variant_id may never be guessed or constructed -- it comes from here, or from a "
-    "single-match get_products result, and either way you can add it to a cart without calling "
-    "this again. What this is still the only way to get is the picture. Sold-out "
+    "Every variant of one product with its variant_id, price and availability. You must call this "
+    "before adding anything to a cart -- a variant_id cannot be guessed or constructed. Sold-out "
     "variants are returned too so you can say which combinations exist; `in_stock` is the only "
     "list you may offer from. If you already called this for the same product earlier in this "
     "conversation, its answer is still valid -- re-read it from what was already said instead of "

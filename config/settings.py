@@ -227,14 +227,6 @@ class Settings:
     #: LATENCY_LOG=0 to silence it.
     latency_log: bool
 
-    #: Whether a `get_products` search that matched exactly one product hands
-    #: that product's variants back with it. On, it saves the follow-up
-    #: question a whole model round trip -- ~2 to 3.5 seconds. Off restores
-    #: the old result shape, which is what the model has to fall back to
-    #: `get_variants` for. Never applies to a multi-result search: two or more
-    #: matches is browsing, and "which of these" is an ambiguity to keep.
-    search_carries_variants: bool
-
     #: How sure the vision pass has to be before a photo is treated as "this
     #: product". Below it the reading is only used to ask a better question.
     image_match_confidence: float
@@ -531,7 +523,6 @@ def load_settings() -> Settings:
         adaptive_debounce=_bool("ADAPTIVE_DEBOUNCE", True),
         message_workers=_int("MESSAGE_WORKERS", 8),
         latency_log=_bool("LATENCY_LOG", True),
-        search_carries_variants=_bool("SEARCH_CARRIES_VARIANTS", True),
         image_match_confidence=_float("IMAGE_MATCH_CONFIDENCE", 0.6),
         voice_notes_enabled=_bool("VOICE_NOTES_ENABLED", True),
         image_understanding_enabled=_bool("IMAGE_UNDERSTANDING_ENABLED", True),
