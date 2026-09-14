@@ -583,6 +583,15 @@ railway run --service wanas -- python scripts/prod_turn_latency.py --days 1
 The first real customer turns on the merged build, read with the two commands
 above. Three answered WhatsApp turns, all from one conversation:
 
+Provenance, because it changes how much these numbers are worth: the three
+turns ran on the **first** merged build, before the `total_ms` correction
+below. Their raw per-stage figures are exactly what production emitted; the
+`total` and `reply` rows are those same stages re-added the way the corrected
+build now adds them. Nothing was measured twice and nothing was estimated --
+the debounce wait and the `record_inbound` write were always on the line, they
+were simply not being counted into the total. The next real turn will emit
+these numbers directly.
+
 ```
 turns: 3
 
