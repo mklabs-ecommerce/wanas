@@ -4,6 +4,13 @@
 # deploy: an unpinned range means the build that ships is not the build that
 # was tested, and the difference only shows up in production. Bump these
 # deliberately, with the test suite green, not by accident on a Tuesday.
+#
+# The interpreter is pinned the same way and for the same reason, in
+# `.python-version` at the repo root -- railpack installs Python through mise,
+# which reads that file, and without it the deploy takes whatever mise
+# currently defaults to. A base image bump could then move the interpreter
+# under a running shop with nothing in this repository changing. CI runs the
+# same version, so the build that ships is the one the suite was green on.
 fastapi==0.141.1
 uvicorn==0.46.0
 sqlalchemy==2.0.52
