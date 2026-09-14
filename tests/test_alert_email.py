@@ -616,3 +616,180 @@ def test_an_expired_refresh_token_is_reported_not_raised(monkeypatch):
     monkeypatch.setattr(httpx, "post", lambda *a, **k: _Refused())
     assert gmail_api.send_email("subject", "body") is False
     gmail_api.reset_token_cache()
+
+
+# --------------------------------------------------------------------------
+# Silence is the bug. On 14 September an `item_swap` alert was raised, was
+# not rate-limited, reached Resend, and came back 200 -- and never arrived,
+# because the sender was Resend's shared sandbox address. Every one of these
+# pins one half of "that cannot happen quietly again": the boot check says
+# whether an alert can actually *arrive*, and no alert stops anywhere without
+# a log line naming the reason, the subject and why.
+# --------------------------------------------------------------------------
+
+
+def _mail_settings(monkeypatch, **overrides):
+    import dataclasses
+
+    from config.settings import settings as real
+    from integrations.mail import client
+
+    patched = dataclasses.replace(real, **overrides)
+    monkeypatch.setattr(client, "settings", patched)
+    return patched
+
+
+def test_the_shared_resend_sender_is_reported_as_not_deliverable(monkeypatch):
+    """The exact production state. A key is set, `/health` says configured,
+    Resend answers 200 -- and the mail is unauthenticated for the shop's
+    domain and reaches only the Resend account owner. Configured is not the
+    question; arriving is."""
+    from integrations.mail import client, resend
+
+    _mail_settings(
+        monkeypatch,
+        alert_email_to="owner@example.com",
+        resend_api_key="key",
+        resend_from=resend.SHARED_SENDER,
+    )
+    check = client.check_transport()
+    assert check.transport == "resend"
+    assert check.configured is True
+    assert check.deliverable is False
+    assert "RESEND_FROM" in check.detail
+
+
+def test_a_verified_resend_sender_is_deliverable(monkeypatch):
+    from integrations.mail import client
+
+    _mail_settings(
+        monkeypatch,
+        alert_email_to="owner@example.com",
+        resend_api_key="key",
+        resend_from="alerts@wanas.example",
+    )
+    check = client.check_transport()
+    assert (check.transport, check.deliverable) == ("resend", True)
+
+
+def test_smtp_on_railway_is_reported_as_not_deliverable(monkeypatch):
+    """Railway blocks every outbound SMTP port, so an SMTP-only deploy there
+    cannot send at all however correct the credentials are."""
+    from integrations.mail import client
+
+    _mail_settings(
+        monkeypatch,
+        alert_email_to="owner@example.com",
+        resend_api_key="",
+        gmail_client_id="",
+        gmail_client_secret="",
+        gmail_refresh_token="",
+        alert_smtp_host="smtp.gmail.com",
+        alert_smtp_username="u",
+        alert_smtp_password="p",
+    )
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    check = client.check_transport()
+    assert (check.transport, check.deliverable) == ("smtp", False)
+    assert "Railway" in check.detail
+
+
+def test_no_recipient_is_off_not_broken(monkeypatch):
+    from integrations.mail import client
+
+    _mail_settings(monkeypatch, alert_email_to="", resend_api_key="key")
+    check = client.check_transport()
+    assert (check.configured, check.deliverable) == (False, False)
+
+
+def test_a_refused_send_names_the_reason_the_subject_and_why(db, monkeypatch, caplog):
+    """The log line an owner asking "why did I never get an email about
+    SWAP-12" has to be able to find."""
+    _mail_inline(monkeypatch)
+    monkeypatch.setattr(alert_email, "_mailer", lambda subject, body: False)
+    monkeypatch.setattr(alert_email, "_describe", lambda: "the sender domain is not verified")
+    alert_email.reset_rate_limit()
+
+    with caplog.at_level("ERROR", logger="wanas.alert_email"):
+        item = queues.enqueue(
+            db,
+            kind=QueueKind.ITEM_SWAP.value,
+            reason="swap_requested",
+            summary="W-9: swap something",
+            channel="whatsapp",
+            external_id="201234567890",
+        )
+        _drain(db)
+
+    message = "\n".join(record.getMessage() for record in caplog.records)
+    assert "NOT sent" in message
+    assert item.queue_id in message
+    assert "swap_requested" in message
+    assert "201234567890" in message
+    assert "not verified" in message
+    alert_email.reset_rate_limit()
+
+
+def test_a_rate_limited_alert_says_so_rather_than_vanishing(db, mailbox, monkeypatch, caplog):
+    _mail_inline(monkeypatch)
+    for _ in range(2):
+        queues.enqueue(
+            db,
+            kind=QueueKind.ITEM_SWAP.value,
+            reason="swap_requested",
+            summary="W-9: swap something",
+            channel="whatsapp",
+            external_id="201234567890",
+        )
+    with caplog.at_level("WARNING", logger="wanas.alert_email"):
+        _drain(db)
+
+    assert len(mailbox) == 1
+    message = "\n".join(record.getMessage() for record in caplog.records)
+    assert "NOT sent" in message and "cooldown" in message
+    assert "201234567890" in message
+
+
+def test_an_unregistered_mailer_is_logged_not_shrugged_off(db, monkeypatch, caplog):
+    monkeypatch.setattr(alert_email, "_mailer", None)
+    with caplog.at_level("WARNING", logger="wanas.alert_email"):
+        queues.enqueue(
+            db,
+            kind=QueueKind.ITEM_SWAP.value,
+            reason="swap_requested",
+            summary="W-9: swap something",
+            channel="whatsapp",
+            external_id="201234567890",
+        )
+        _drain(db)
+    assert "no mailer is registered" in "\n".join(r.getMessage() for r in caplog.records)
+
+
+def test_resend_logs_the_message_id_it_was_given(monkeypatch, caplog):
+    """A 200 from Resend is acceptance, not arrival. The id is the only handle
+    anyone has on the message afterwards, so it goes in the log."""
+    import dataclasses
+
+    import httpx
+
+    from config.settings import settings as real
+    from integrations.mail import resend
+
+    monkeypatch.setattr(
+        resend,
+        "settings",
+        dataclasses.replace(
+            real,
+            alert_email_to="owner@example.com",
+            resend_api_key="key",
+            resend_from="alerts@wanas.example",
+        ),
+    )
+    monkeypatch.setattr(
+        resend.httpx,
+        "post",
+        lambda *a, **k: httpx.Response(200, json={"id": "msg-42"}),
+    )
+    with caplog.at_level("INFO", logger="wanas.mail.resend"):
+        assert resend.send_email("subject", "body") is True
+    assert "msg-42" in "\n".join(r.getMessage() for r in caplog.records)

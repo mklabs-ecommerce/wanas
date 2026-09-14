@@ -1,6 +1,8 @@
 """Sequential public identifiers.
 
-`WNS-<n>` from 1001 for orders (AGENTS.md), `SWAP-<n>` for swap requests
+`WNS-<n>` from 1001 for orders (AGENTS.md), `SWAP-<n>` for swap requests,
+`ADD-<n>` for add-an-item requests -- a different prefix on purpose, so the
+two cannot be confused at a glance in the queue or in an alert subject
 (15-tool-contracts.md), `HO-<n>` and `ALERT-<n>` for the other two queue kinds
 -- 16 only pins the swap prefix by example.
 
@@ -22,6 +24,7 @@ _STARTS = {ORDER_COUNTER: 1000, QUEUE_COUNTER: 0}
 
 _QUEUE_PREFIX = {
     QueueKind.ITEM_SWAP.value: "SWAP",
+    QueueKind.ITEM_ADD.value: "ADD",
     QueueKind.HANDOFF.value: "HO",
     QueueKind.ALERT.value: "ALERT",
 }

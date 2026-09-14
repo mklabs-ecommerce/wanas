@@ -95,16 +95,26 @@ _SUBJECT_PREFIX = {
     "order_cancelled": "Order cancelled",
     "low_stock": "Low stock",
     "swap_requested": "Item swap requested",
+    "add_requested": "Item add requested",
 }
 
 _Mailer = Callable[[str, str], bool]
+_Describer = Callable[[], str]
 _mailer: _Mailer | None = None
+_describe: _Describer | None = None
 
 
-def register_mailer(fn: _Mailer) -> None:
-    """The one place this module learns how to send. Called from `app.py`."""
-    global _mailer
+def register_mailer(fn: _Mailer, describe: _Describer | None = None) -> None:
+    """The one place this module learns how to send. Called from `app.py`.
+
+    `describe` is the same port one step further: when a send is refused this
+    module has to say *why* in the log, and the only thing that knows why is
+    the transport. It arrives as a callable for the same reason the mailer
+    does -- domain/ holds no vendor import, so it cannot go and ask.
+    """
+    global _mailer, _describe
     _mailer = fn
+    _describe = describe
 
 
 @dataclass(frozen=True)
@@ -154,7 +164,11 @@ def should_mail(kind: str, reason: str | None) -> bool:
     order does not move until someone makes it. An **alert** only if its
     reason is on the list above, which is where `order_confirmed` is kept out.
     """
-    if kind in (QueueKind.HANDOFF.value, QueueKind.ITEM_SWAP.value):
+    if kind in (
+        QueueKind.HANDOFF.value,
+        QueueKind.ITEM_SWAP.value,
+        QueueKind.ITEM_ADD.value,
+    ):
         return True
     if kind == QueueKind.ALERT.value:
         return (reason or "") in MAILED_ALERT_REASONS
@@ -181,19 +195,25 @@ def _allowed(snapshot: _Snapshot, *, cooldown: float, max_per_hour: int) -> bool
         _recent[:] = [t for t in _recent if now - t < 3600]
         if max_per_hour > 0 and len(_recent) >= max_per_hour:
             log.warning(
-                "alert email ceiling reached (%s/hour); %s not mailed",
-                max_per_hour,
+                "alert email NOT sent: %s (%r about %s) -- the %s/hour ceiling "
+                "is full (ALERT_EMAIL_MAX_PER_HOUR)",
                 snapshot.queue_id,
+                snapshot.reason,
+                snapshot.subject_key or "-",
+                max_per_hour,
             )
             return False
         previous = _last_sent.get(key)
         if previous is not None and now - previous < cooldown:
-            log.info(
-                "alert email for %s suppressed: %r about %s was mailed %.0fs ago",
+            log.warning(
+                "alert email NOT sent: %s (%r about %s) -- the same reason and "
+                "subject was mailed %.0fs ago, inside the %.0fs cooldown "
+                "(ALERT_EMAIL_COOLDOWN_SECONDS)",
                 snapshot.queue_id,
                 snapshot.reason,
                 snapshot.subject_key or "-",
                 now - previous,
+                cooldown,
             )
             return False
         _last_sent[key] = now
@@ -208,6 +228,20 @@ def reset_rate_limit() -> None:
         _recent.clear()
 
 
+def _why_not() -> str:
+    """The transport's own account of itself, for the refusal log line.
+
+    Falls back to saying nothing rather than raising: this runs inside an
+    error path, and a log line must never be what breaks one.
+    """
+    if _describe is None:
+        return "no detail available"
+    try:
+        return _describe()
+    except Exception:  # pragma: no cover - a log line must not raise
+        return "no detail available"
+
+
 def _compose(snapshot: _Snapshot) -> tuple[str, str]:
     from config.settings import settings
 
@@ -215,6 +249,12 @@ def _compose(snapshot: _Snapshot) -> tuple[str, str]:
         prefix = "Bot handed over"
     elif snapshot.kind == QueueKind.ITEM_SWAP.value:
         prefix = "Item swap"
+    elif snapshot.kind == QueueKind.ITEM_ADD.value:
+        # Deliberately not "Item swap" with different words after it. The
+        # subject line is what the owner reads on a lock screen, and the one
+        # thing they need from it is whether something is coming *off* an
+        # order.
+        prefix = "Item added to order"
     else:
         prefix = _SUBJECT_PREFIX.get(snapshot.reason, "Alert")
     where = f" ({snapshot.channel})" if snapshot.channel else ""
@@ -240,7 +280,15 @@ def _compose(snapshot: _Snapshot) -> tuple[str, str]:
         lines += [
             "",
             "A customer is waiting on this: the swap does not happen until "
-            "somebody approves or refuses it in the review queue.",
+            "somebody approves or refuses it in the review queue. Approving "
+            "it TAKES the original item off the order.",
+        ]
+    elif snapshot.kind == QueueKind.ITEM_ADD.value:
+        lines += [
+            "",
+            "A customer is waiting on this: the item is not on the order "
+            "until somebody approves it in the review queue. Approving it "
+            "adds a line and leaves everything already on the order alone.",
         ]
     for key, value in sorted((snapshot.payload or {}).items()):
         lines.append(f"{key:<11}: {str(value)[:500]}")
@@ -268,19 +316,49 @@ def _spawn(fn, snapshot: _Snapshot, **kwargs) -> None:
 
 
 def _send(snapshot: _Snapshot, *, cooldown: float, max_per_hour: int) -> None:
+    """Send one alert, and never fail quietly.
+
+    Every way out of this function that is not a delivered email leaves a log
+    line naming the queue item, the reason, what the alert is about, and why
+    it stopped -- including the ones that are nobody's fault. An owner who
+    asks "why did I not get an email about SWAP-12" must be able to answer it
+    from the log rather than from a guess, which is precisely what the
+    September 14th item swap could not be.
+    """
     mailer = _mailer
     if mailer is None:
+        log.warning(
+            "alert email NOT sent: %s (%r about %s) -- no mailer is registered "
+            "(app.py wires integrations/mail/client.py at boot)",
+            snapshot.queue_id,
+            snapshot.reason,
+            snapshot.subject_key or "-",
+        )
         return
     if not _allowed(snapshot, cooldown=cooldown, max_per_hour=max_per_hour):
         return
     subject, body = _compose(snapshot)
     try:
-        mailer(subject, body)
+        accepted = mailer(subject, body)
     except Exception:
         # Belt and braces -- the client swallows its own failures too. An
         # unsendable email must never be able to surface anywhere near the
         # code that raised the alert.
-        log.exception("alert email failed for %s", snapshot.queue_id)
+        log.exception(
+            "alert email NOT sent: %s (%r about %s) -- the mailer raised",
+            snapshot.queue_id,
+            snapshot.reason,
+            snapshot.subject_key or "-",
+        )
+        return
+    if not accepted:
+        log.error(
+            "alert email NOT sent: %s (%r about %s) -- the mailer refused it: %s",
+            snapshot.queue_id,
+            snapshot.reason,
+            snapshot.subject_key or "-",
+            _why_not(),
+        )
 
 
 def notify(session, item) -> None:
@@ -291,7 +369,25 @@ def notify(session, item) -> None:
     """
     from config.settings import settings
 
-    if _mailer is None or not should_mail(item.kind, item.reason):
+    if _mailer is None:
+        log.warning(
+            "alert email NOT queued: %s (%r) -- no mailer is registered",
+            item.queue_id,
+            item.reason,
+        )
+        return
+    if not should_mail(item.kind, item.reason):
+        # A deliberate policy skip, not a fault -- `order_confirmed` fires on
+        # every sale -- so it is debug rather than warning. It still says
+        # which item and why, because "was it filtered or did it fail?" is
+        # the first question asked about a missing alert.
+        log.debug(
+            "alert email not queued for %s: reason %r (kind %s) is not in "
+            "MAILED_ALERT_REASONS",
+            item.queue_id,
+            item.reason,
+            item.kind,
+        )
         return
     snapshot = _Snapshot(
         queue_id=item.queue_id,

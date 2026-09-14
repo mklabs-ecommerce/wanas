@@ -839,6 +839,29 @@ def order_cancelled(session: Session, order: Order, *, by: str = "customer") -> 
     )
 
 
+def item_add_requested(session: Session, order: Order, payload: dict, summary: str) -> str:
+    """A customer wants a *further* item on an order they already placed.
+
+    Its own queue kind, not a swap with an empty `from`. A swap and an add
+    differ by whether something comes off the order, which is the whole of
+    what a staff member is deciding when they press the button -- and the
+    only post-order request type that existed was the swap, so an add was
+    filed as "replace this line with that one" against a line the customer
+    had never mentioned.
+    """
+    item = queues.enqueue(
+        session,
+        kind=QueueKind.ITEM_ADD.value,
+        reason="add_requested",
+        summary=summary,
+        order_id=order.order_id,
+        channel=payload.get("channel"),
+        external_id=payload.get("external_id"),
+        payload=payload,
+    )
+    return item.queue_id
+
+
 def item_swap_requested(session: Session, order: Order, payload: dict, summary: str) -> str:
     item = queues.enqueue(
         session,

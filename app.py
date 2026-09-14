@@ -397,34 +397,14 @@ async def lifespan(_app: FastAPI):
     # ...and the one place the staff queue learns how to email the owner.
     # Registered unconditionally: the client itself is a no-op without SMTP
     # credentials, so "not configured" stays one answer in one place.
-    from integrations.mail.client import send_email
+    from integrations.mail.client import check_transport, log_transport_check, send_email
 
-    alert_email.register_mailer(send_email)
-    if settings.alert_email_configured:
-        # Which transport matters enough to log: Railway blocks every SMTP
-        # port, so a deploy that says "over SMTP" is a deploy whose alerts
-        # will never arrive, and that is worth seeing at boot rather than
-        # discovering from a comment nobody was told about.
-        over_https = settings.resend_configured or settings.gmail_api_configured
-        if settings.resend_configured:
-            how = "Resend"
-        elif settings.gmail_api_configured:
-            how = "the Gmail API"
-        else:
-            how = "SMTP"
-        log.info("owner alerts will be emailed to %s over %s", settings.alert_email_to, how)
-        if not over_https and settings.public_base_url:
-            log.warning(
-                "alert emails are configured for SMTP, which Railway blocks on every "
-                "port -- set RESEND_API_KEY, or GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / "
-                "GMAIL_REFRESH_TOKEN (scripts/gmail_authorise.py), or the owner will "
-                "never receive one"
-            )
-    else:
-        log.info(
-            "owner alert emails are off (ALERT_EMAIL_TO, and either the GMAIL_* trio "
-            "or ALERT_SMTP_*, unset); handoffs and alerts still reach the dashboard queue"
-        )
+    alert_email.register_mailer(send_email, describe=lambda: check_transport().detail)
+    # One boot check with one verdict, the same way the schema-drift and
+    # shipping-fee checks report: not "is something configured" -- production
+    # was configured, and its alerts still went nowhere -- but "can an alert
+    # actually leave here and arrive". See `client.check_transport`.
+    log_transport_check()
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()
@@ -564,8 +544,10 @@ def health() -> dict:
         product_count = db.query(Product).count()
         variant_count = db.query(Variant).count()
     from integrations.instagram import token as instagram_token
+    from integrations.mail.client import check_transport
 
     token_expires_at = instagram_token.expires_at()
+    _mail_check = check_transport()
     return {
         "status": "ok",
         "llm_provider": settings.llm_provider,
@@ -588,15 +570,11 @@ def health() -> dict:
         "image_understanding": settings.image_understanding_enabled,
         "dashboard_configured": settings.dashboard_configured,
         "alert_email_configured": settings.alert_email_configured,
-        "alert_email_transport": (
-            "resend"
-            if settings.resend_configured
-            else (
-                "gmail_api"
-                if settings.gmail_api_configured
-                else ("smtp" if settings.alert_smtp_configured else None)
-            )
-        ),
+        "alert_email_transport": _mail_check.transport,
+        # The question `alert_email_configured` cannot answer: production was
+        # configured, on Resend, and its alerts still never arrived.
+        "alert_email_deliverable": _mail_check.deliverable,
+        "alert_email_detail": _mail_check.detail,
         "catalog_products": product_count,
         "catalog_variants": variant_count,
     }

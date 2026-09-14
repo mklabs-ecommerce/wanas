@@ -39,6 +39,15 @@ log = logging.getLogger("wanas.mail.resend")
 
 SEND_URL = "https://api.resend.com/emails"
 
+#: Resend's shared sandbox sender, and what `RESEND_FROM` falls back to.
+#: Mail from it is accepted for the Resend account owner's own address and
+#: nobody else's, it carries none of the shop's own domain authentication,
+#: and a mailbox provider is entitled to file it anywhere. `client.py`'s
+#: transport check reports a deployment sitting on it as *not* deliverable,
+#: because a 200 from this sender is acceptance and not arrival -- which is
+#: exactly the shape the September 14th item-swap alert failed in.
+SHARED_SENDER = "onboarding@resend.dev"
+
 #: Never leave a worker thread hanging on a slow vendor. An alert that
 #: arrives a minute late is fine; a thread that never returns is not.
 TIMEOUT_SECONDS = 20
@@ -84,5 +93,19 @@ def send_email(subject: str, body: str) -> bool:
         log.exception("could not send the alert email %r over Resend", subject)
         return False
 
-    log.info("alert email sent over Resend: %s", subject)
+    # The message id is the only handle anyone has on a message afterwards:
+    # Resend returns 200 on *acceptance*, and an accepted message that never
+    # arrives can only be chased with this id. Logging "sent" without it is
+    # what left the September 14th alert untraceable.
+    message_id = ""
+    try:
+        message_id = str((response.json() or {}).get("id") or "")
+    except Exception:  # a 2xx with an unexpected body is still a send
+        pass
+    log.info(
+        "alert email accepted by Resend (id=%s, from=%s): %s",
+        message_id or "?",
+        settings.resend_from,
+        subject,
+    )
     return True

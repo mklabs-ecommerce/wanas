@@ -12,6 +12,12 @@ while plain HTTP connects in milliseconds. That is a platform policy against
 spam, so an app password is worthless there however correct it is. Both HTTPS
 routes send over 443 and either one delivers from the deploy.
 
+**Configured is not the same question as deliverable**, and conflating them
+cost a real alert: a production item-swap request was raised, reached Resend,
+came back 200, and never arrived -- because `RESEND_FROM` was unset, so it
+went out as Resend's shared sandbox sender. `check_transport` answers the
+second question and `app.py` logs it at boot; `/health` carries it too.
+
 `send_email` picks, in order: **Resend** (`resend.py`) when its API key is
 set, else the **Gmail API** (`gmail_api.py`) when its three OAuth values are,
 else **SMTP**. None configured is a documented off state, not an error --
@@ -35,8 +41,10 @@ this sends a handful of plain-text messages a week.
 from __future__ import annotations
 
 import logging
+import os
 import smtplib
 import ssl
+from dataclasses import dataclass
 from email.message import EmailMessage
 
 from config.settings import settings
@@ -47,6 +55,106 @@ log = logging.getLogger("wanas.mail")
 #: Never leave a worker thread hanging on an unreachable mail host. An alert
 #: that arrives two minutes late is fine; a thread that never returns is not.
 TIMEOUT_SECONDS = 20
+
+
+@dataclass(frozen=True)
+class TransportCheck:
+    """What `check_transport` found, in the shape the boot log needs.
+
+    `configured` and `deliverable` are deliberately two questions. The
+    September 14th item-swap alert was raised, was not rate-limited, reached
+    Resend, and came back 200 -- `/health` said `alert_email_configured:
+    true` and the log said "sent". Nothing arrived, because the sender was
+    Resend's shared sandbox address: no domain verified, so the message is
+    accepted and then delivered on sufferance. "Configured" was true and
+    useless. `deliverable` is the question worth asking at boot.
+    """
+
+    transport: str | None
+    configured: bool
+    deliverable: bool
+    detail: str
+
+
+def check_transport() -> TransportCheck:
+    """Can an owner alert actually leave this deployment and arrive?
+
+    Reports rather than repairs, the same way `domain/schema_drift.py` and
+    the shipping-fee check do -- there is nothing here a process can fix for
+    itself, and a mail misconfiguration must never be what stops the app
+    from booting.
+    """
+    if not settings.alert_email_to:
+        return TransportCheck(
+            None,
+            False,
+            False,
+            "no recipient: set ALERT_EMAIL_TO (or STORE_OWNER_EMAIL)",
+        )
+
+    if settings.resend_configured:
+        if settings.resend_from == resend.SHARED_SENDER:
+            return TransportCheck(
+                "resend",
+                True,
+                False,
+                f"sending as {resend.SHARED_SENDER}, Resend's shared sandbox sender, "
+                "because RESEND_FROM is unset -- Resend accepts these and delivers "
+                "them only to the Resend account owner, unauthenticated for this "
+                "shop's domain and filterable as bulk mail. Verify a domain at "
+                "resend.com/domains and set RESEND_FROM to an address on it",
+            )
+        return TransportCheck(
+            "resend", True, True, f"sending as {settings.resend_from} over Resend"
+        )
+
+    if settings.gmail_api_configured:
+        return TransportCheck(
+            "gmail_api",
+            True,
+            True,
+            "sending over the Gmail API -- note the refresh token dies on a "
+            "password change, a revoked grant, or after 7 days while the consent "
+            "screen is in Testing",
+        )
+
+    if settings.alert_smtp_configured:
+        on_railway = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_SERVICE_ID"))
+        if on_railway:
+            return TransportCheck(
+                "smtp",
+                True,
+                False,
+                "SMTP is the only transport configured, and Railway blocks every "
+                "outbound SMTP port (25/465/587/2525) -- no alert can leave this "
+                "container. Set RESEND_API_KEY, or the GMAIL_* trio",
+            )
+        return TransportCheck("smtp", True, True, f"sending over SMTP via {settings.alert_smtp_host}")
+
+    return TransportCheck(
+        None,
+        False,
+        False,
+        "no transport: set RESEND_API_KEY, or the GMAIL_CLIENT_ID / "
+        "GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN trio, or ALERT_SMTP_*",
+    )
+
+
+def log_transport_check() -> TransportCheck:
+    """Report the above once, at boot, at a level that matches the verdict."""
+    check = check_transport()
+    if check.deliverable:
+        log.info("owner alert emails -> %s: %s", settings.alert_email_to, check.detail)
+    elif check.configured:
+        # The dangerous state, and the one production was in: something is
+        # set up, so every other signal reads "configured", and nothing
+        # arrives.
+        log.error(
+            "owner alert emails will NOT reach %s: %s", settings.alert_email_to, check.detail
+        )
+    else:
+        log.warning("owner alert emails are off: %s", check.detail)
+    return check
 
 
 def send_email(subject: str, body: str) -> bool:

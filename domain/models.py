@@ -86,7 +86,17 @@ class Channel(str, enum.Enum):
 
 
 class QueueKind(str, enum.Enum):
+    #: Replace one line on an order with a different variant.
     ITEM_SWAP = "item_swap"
+    #: *Add* a line to an order, leaving everything already on it alone.
+    #: Its own kind rather than a flavour of ITEM_SWAP, because the two
+    #: actions differ by exactly the thing that matters -- whether a garment
+    #: the customer still wants comes off the order. `item_swap` used to be
+    #: the only post-order request type there was, so "ضيفه على نفس الأوردر"
+    #: had nowhere to go but the swap shape: it filed as "remove the Knitted
+    #: Polo, put the Heart Top in its place", one staff click away from
+    #: taking a garment off an order nobody asked to change.
+    ITEM_ADD = "item_add"
     HANDOFF = "handoff"
     ALERT = "alert"
 
@@ -121,6 +131,7 @@ HANDOFF_REASONS = (
 #: outage from meaning silent loss, now that an unclassifiable comment is
 #: dropped rather than DMed.
 ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancelled", "swap_requested",
+                 "add_requested",
                  "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed",
                  "status_push_undelivered",
                  "instagram_reply_delivery_failed", "instagram_token_refresh_failed", "comment_flood",
