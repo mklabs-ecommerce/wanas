@@ -42,10 +42,11 @@ REQUIRED_SCOPES = {
     "write_products": "creating and editing products from the dashboard",
     "read_orders": "reading orders",
     "write_orders": "placing an order, and cancelling one",
+    # Every one of these begins with `orderEditBegin`, which is the field
+    # Shopify denies, so the three fail together or not at all.
     "write_order_edits": (
-        "editing a placed order -- approving an item swap, approving an item "
-        "add, changing a line's quantity. Without it all three fail with "
-        "ACCESS_DENIED on orderEditBegin, however many times they are retried"
+        "editing a placed order: approving an item swap, approving an item "
+        "add, and changing a line's quantity"
     ),
     "read_inventory": "live stock",
     "write_inventory": "reserving and releasing stock",
@@ -121,10 +122,11 @@ def log_scope_check() -> list[str]:
         return gaps
     for scope in gaps:
         log.error(
-            "the Shopify Admin token is missing the %s scope, so %s will fail with "
-            "ACCESS_DENIED. Add the scope to the app in Shopify Admin and reinstall "
-            "it -- retrying never helps.",
+            "the Shopify Admin token is missing the %s scope. %s will fail with "
+            "ACCESS_DENIED until it is granted -- add it to the app in Shopify "
+            "Admin and reinstall. Retrying never helps.",
             scope,
-            REQUIRED_SCOPES[scope],
+            # Capitalised because it opens the second sentence.
+            REQUIRED_SCOPES[scope][:1].upper() + REQUIRED_SCOPES[scope][1:],
         )
     return gaps
