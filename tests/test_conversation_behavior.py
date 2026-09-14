@@ -670,7 +670,12 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # 18300 -> 18700: "never send your previous reply again", and
         # "«الاتنين» answering your own two-option question means both". The
         # audited conversation did exactly the opposite of each, in one turn.
-    assert 3000 < len(SYSTEM_PROMPT) < 18700
+        #
+        # 18700 -> 19000: "do not deny from memory either". The audited
+        # conversation told a customer asking for «حريمي» that there is no
+        # women's section, in a shop that has one -- the single most expensive
+        # sentence available, because that customer simply leaves.
+    assert 3000 < len(SYSTEM_PROMPT) < 19000
 
 
 # --------------------------------------------------------------------------

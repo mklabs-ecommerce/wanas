@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Thirteen checks, and each one is a failure mode this repository has already paid
+Fourteen checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -51,12 +51,16 @@ for at least once:
    beside it. A product name arrives in a tool result and has to come out byte
    for byte, so a Latin word that is a near-miss of a catalog word is
    reconstruction from memory and nothing else.
-9. **It does not say the last reply again.** A reply that repeats the one
+9. **It does not tell a customer the shop has no such line without asking.**
+   «مفيش قسم حريمي» went out with no tool called in the turn, to a shop that
+   has a women's department. A price answered from memory is checked at the
+   door; a customer told their whole category does not exist here just leaves.
+10. **It does not say the last reply again.** A reply that repeats the one
    before it has not used the message in between. The audited conversation
    listed two sweatpants and asked "photos, or sizes?"; the customer answered
    «الاتنين» and got the same two lines back with "which of the two?" under
    them.
-10. **Laid out so it reads the way it was written.** Arabic with Latin and
+11. **Laid out so it reads the way it was written.** Arabic with Latin and
    numbers inside it is the normal case here, and two shapes of line come
    out reordered on the phone: one opening with a Latin word takes
    left-to-right direction for the whole line, and a number separated from
@@ -65,17 +69,17 @@ for at least once:
    both at the send boundary, and this rule keeps them from being written
    in the first place: the dashboard shows staff the unrepaired string, and
    every shape the prompt asks for already renders correctly on its own.
-11. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
+12. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
    catalog field, so "I have no data about sleeve length" beside the words
    «نص كم» is the bot refusing to read something it is holding -- which is
    exactly the reply that made the field necessary.
-12. **Photographs still go out.** Judged against the golden run: sending fewer
+13. **Photographs still go out.** Judged against the golden run: sending fewer
    is a judgement, sending none is a regression. And judged absolutely as well,
    on the steps whose reply is about one named garment -- a comparison rule
    cannot catch a shop that has *never* sent a photo, and for a long time this
    one had not: `get_products` attached nothing, so every answer that came out
    of a search arrived as text.
-13. **And the size chart does not.** Not unless the customer asked about sizes,
+14. **And the size chart does not.** Not unless the customer asked about sizes,
    measurements or fit. It used to ride along with every `get_variants` call
    for a product that has a chart, so a question about price or colour was
    answered with a measurements table -- which got worse the moment a product
@@ -482,6 +486,36 @@ def repeats_the_previous_reply(text: str, previous: str) -> float:
     return difflib.SequenceMatcher(None, before, now).ratio()
 
 
+#: Claims that the shop does not stock a whole *line* of things -- a section,
+#: a department, a category. Deliberately not the narrow denials ("we're out
+#: of olive", "no half-sleeve hoodie"): those are answers to a lookup, and are
+#: often correct. These are statements about what the business sells, and the
+#: model has no way to know one without asking.
+_SECTION_DENIALS = (
+    "مفيش قسم", "مافيش قسم", "مفيش عندنا قسم", "مش عندنا قسم",
+    "مش بنبيع", "مابنبيعش", "مبنبيعش", "مفيش نوع",
+    "we don't sell", "we do not sell", "no section", "we don't have a section",
+)
+
+
+def denies_a_whole_section(text: str) -> str:
+    """The phrase in which a reply told a customer this shop has no such line.
+
+    From the audited conversation: a customer asked for «حريمي» -- womenswear
+    -- and was told «مفيش قسم حريمي لوحده», with no tool called in the turn.
+    The shop has a women's department with two products in it, and
+    `search_terms` already maps «حريمي» onto `women`, so the lookup that would
+    have answered it correctly was one call away and simply never happened.
+
+    That is the most expensive shape of answering from memory: a price quoted
+    from memory is checked at the door, but a customer told the shop does not
+    sell what they came for leaves, and nothing about the conversation looks
+    like a failure afterwards.
+    """
+    lowered = (text or "").lower()
+    return next((phrase for phrase in _SECTION_DENIALS if phrase.lower() in lowered), "")
+
+
 def layout_problems(text: str) -> list[str]:
     """Every way a reply is laid out so the customer reads something other
     than what was written.
@@ -649,6 +683,13 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                     f"{where}: the reply spelled the shop's name "
                     f"{sorted(set(misspelled))} -- it is Wanas Gallery"
                 )
+            denial = denies_a_whole_section(text)
+            if denial and not reply["tool_calls"]:
+                failures.append(
+                    f"{where}: the reply said {denial!r} without looking anything up "
+                    "-- what this shop stocks is not something to answer from memory"
+                )
+
             ratio = repeats_the_previous_reply(text, said_before)
             if ratio >= _REPEAT_RATIO:
                 failures.append(

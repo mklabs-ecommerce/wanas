@@ -546,3 +546,43 @@ def test_a_short_natural_reply_is_not_a_repeat():
 def test_the_rule_needs_a_previous_reply_to_compare_against():
     assert quality_gate.repeats_the_previous_reply("أي كلام", "") == 0.0
     assert quality_gate.repeats_the_previous_reply("", "أي كلام") == 0.0
+
+
+# --- denying a whole line of the shop -------------------------------------
+#
+# From the audited conversation: a customer asked for «حريمي» and was told
+# «مفيش قسم حريمي لوحده», with nothing called in the turn. The shop has a
+# women's department with two products in it, and `search_terms` already maps
+# «حريمي» onto `women` -- the lookup that would have answered it correctly was
+# one call away and never happened.
+
+
+def test_denying_a_section_without_looking_it_up_fails():
+    reply = _reply(
+        "product_question",
+        0,
+        "مفيش قسم حريمي لوحده، كل حاجة عندنا unisex بتلبس للرجالة والبنات.",
+        (),
+    )
+    failures = check(_run(reply), _run(reply))
+    assert any("without looking anything up" in f for f in failures), failures
+
+
+def test_the_same_denial_after_a_lookup_passes():
+    """Sometimes the answer really is no. What must not happen is the answer
+    being no because nobody checked."""
+    reply = _reply(
+        "product_question",
+        0,
+        "مفيش قسم حريمي لوحده، كل حاجة عندنا unisex بتلبس للرجالة والبنات.",
+        ("get_products",),
+    )
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_a_narrow_denial_is_not_this_rule():
+    """"we're out of olive" and "no half-sleeve hoodie" are answers to a
+    lookup and are usually right. This rule is about claims that a whole line
+    of the business does not exist, which the model cannot know unasked."""
+    assert quality_gate.denies_a_whole_section("للأسف اللون الزيتي خلص دلوقتي") == ""
+    assert quality_gate.denies_a_whole_section("مفيش هودي نص كم متسجّل عندنا") == ""
