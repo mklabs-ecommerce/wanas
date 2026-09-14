@@ -647,6 +647,7 @@ def _deliver_turn(external_id: str, pending: Pending) -> None:
     with telemetry.stage("post_send"):
         _flag_delivery_failures(external_id, outcomes)
         _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
+        _remember_undelivered_photos(external_id, outcomes, reply.attachment_labels)
 
 
 def _batch_ids(pending: Pending) -> list[str]:
@@ -689,6 +690,32 @@ def _remember_sent_ids(
             )
     except Exception:
         log.exception("could not record the outbound message ids for %s", external_id)
+
+
+def _remember_undelivered_photos(
+    external_id: str, outcomes: list, attachment_labels: dict[str, dict] | None = None
+) -> None:
+    """Write a refused photograph back onto the reply that tried to send it.
+
+    The reply is stored inside the turn, a moment before the send; the refusal
+    comes back after it. Nothing used to close that gap, so the transcript said
+    a picture had gone out while the alert queue said it had not -- and the
+    *turn* could only see the transcript. That is how the bot came to argue
+    with a customer who was simply right: it insisted the photo had arrived,
+    and then told them to restart WhatsApp.
+
+    Best effort, like `_remember_sent_ids`: a failure here costs the next turn
+    its honesty about one picture, and the alert `_flag_delivery_failures`
+    raised is still there for staff.
+    """
+    failed = session_store.undelivered_photos(outcomes, attachment_labels or {})
+    if not failed:
+        return
+    try:
+        with session_scope() as db:
+            session_store.record_undelivered_attachments(db, CHANNEL, external_id, failed)
+    except Exception:
+        log.exception("could not record the undelivered photo(s) for %s", external_id)
 
 
 def _send_crash_fallback(external_id: str) -> None:

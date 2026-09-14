@@ -257,6 +257,23 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              whole transcript, so the turn knows which
                              message it is about
   media.py                  voice notes and photos (see docs/MEDIA.md)
+  photo_claims.py           what a reply *says* about photographs, checked
+                             against what it is actually sending. The words
+                             are the model's and the pictures are the tool
+                             layer's, and nothing joined the two back together
+                             before the reply left -- so «دي صورتهم الاتنين»
+                             went out beside one photo, then beside none. The
+                             claim is read per clause (a plural, or a product
+                             named beside «صورة» that this reply carries no
+                             picture of) and checked against the attachments;
+                             a product counts as named only if a tool result
+                             in this same conversation returned it. It also
+                             owns two other refusals: blaming the customer's
+                             own phone or connection for a send *we* failed,
+                             and reading back the photographs the platform
+                             refused (`undelivered_attachments`, written after
+                             the send by the channel adapter) so the next turn
+                             resends and apologises instead of arguing
   interactive.py            tappable pickers, in a channel-neutral shape
   session.py                 DB-backed session storage
   display.py                 stored history -> bubbles a person can read;
@@ -431,6 +448,15 @@ tests/                   pytest suite (flat, one test_<module>.py per
   (`ToolContext.end_turn`): the confirmation is composed and sent by
   `domain/services/notifications.py`, so a model reply after it is a second
   confirmation for one order.
+- **A photograph is the same problem one level down.** A reply's text is
+  stored inside the turn, a moment before the send; a per-photo refusal comes
+  back after it. `session.record_undelivered_attachments` folds that answer
+  back onto the line already written -- taking the refused path *out of*
+  `attachments`, so the image policy stops treating the picture as already
+  shown, and recording it under `undelivered_attachments` with what it was of.
+  `assistant/photo_claims.py` reads it on the next turn. Never let a reply
+  claim a picture the attachment list does not carry, and never explain a
+  failed send by the customer's phone: the picture leaves from here.
 - **A stored message is not proof it arrived.** Meta refuses free-form
   business-initiated text more than 24 hours after the customer's last
   message (`notifications.CUSTOMER_SERVICE_WINDOW`), which is routine for a

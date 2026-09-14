@@ -112,6 +112,31 @@ def count_charts(reply) -> int:
     )
 
 
+def photos_by_product(reply) -> dict[str, int]:
+    """How many *garment* photos went out per product in one reply.
+
+    One per product is the rule, and it only has a meaning if the pictures can
+    be attributed -- `attachment_labels` carries the `product_id` each one came
+    from (`tools.base._image_labels`), which is the only place that is written
+    down. Size charts are excluded for the same reason `count_charts` exists:
+    a chart is a picture of a table, and the two are opposite failures.
+
+    A photo with no label at all counts under `""`, so a product the catalogue
+    never named still cannot quietly send five.
+    """
+    counts: dict[str, int] = {}
+    labels = getattr(reply, "attachment_labels", None) or {}
+    for path in getattr(reply, "attachments", None) or []:
+        label = labels.get(path)
+        if not isinstance(label, dict):
+            label = {"label": label} if label else {}
+        if str(label.get("label") or "").endswith("size chart"):
+            continue
+        key = str(label.get("product_id") or "")
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def run_scenario(
     scenario: bench_scenarios.Scenario, *, provider: PlannedProvider | None, real: bool
 ) -> list[dict]:
@@ -156,6 +181,11 @@ def run_scenario(
                 # Labelled by `tools.base._chart_label`, which is the only
                 # place a chart attachment is ever named.
                 "charts": count_charts(reply),
+                # And how they were spread across products. One reply that
+                # sends eight pictures of two garments and one that sends two
+                # are the same number to every rule above this one, and only
+                # the second is an answer to "photos of both, please".
+                "photos_by_product": photos_by_product(reply),
                 "error": reply.error,
                 "seconds": time.perf_counter() - started,
             }

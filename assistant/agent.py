@@ -21,7 +21,13 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from assistant import context, messages as msg, quoting, session as session_store
+from assistant import (
+    context,
+    messages as msg,
+    photo_claims,
+    quoting,
+    session as session_store,
+)
 from assistant.prompt import build_system_prompt
 from assistant.providers import LLMProvider, ProviderError, get_provider
 from assistant.tools.base import (
@@ -293,46 +299,12 @@ def _is_dangling_promise(text: str, *, tools_called: bool) -> bool:
     return not tools_called and words <= 12
 
 
-#: The word "photo", in the forms the model actually writes it. Deliberately
-#: not paired with a sending verb: Arabic has too many ways to say it
-#: («هبعتلك», «اتفضل», «دي», «جاية»), and every previous attempt to enumerate
-#: a phrase list is what let the next phrasing through.
-_IMAGE_WORD = re.compile(r"صور|صوره|صورة|\bphotos?\b|\bpictures?\b|\bimages?\b")
-
-#: The one sanctioned reason to mention photos while sending none: the product
-#: has none. The prompt asks for exactly this sentence, so it must not be
-#: retried -- nudging the model off it is nudging it towards inventing a
-#: picture.
-_NO_IMAGES = re.compile(
-    r"(?:مفيش|ما فيش|معندناش|معنديش|ملقيتش|مش متاح|مش موجود|no|don'?t have|do not have)"
-    r"[^\n]{0,20}?(?:صور|صوره|صورة|photo|picture|image)"
-)
-
-
-def _promises_images(text: str) -> bool:
-    """A reply that talks about photos in a turn that attached none.
-
-    The caller checks the attachments; this only decides whether the sentence
-    claims a picture is coming. Same invariant as `_is_dangling_promise` and
-    the same reason behind it: no second message is ever produced for a turn,
-    so "حاضر، هبعتلك صور كل الألوان" with an empty `attachments` list is not a
-    slow reply, it is the last thing the customer hears. It happened twice in
-    one conversation, both times after the model had been told the product was
-    already shown and answered in words alone.
-
-    Two exemptions, and both are cases where the reply is doing its job:
-    a **question** about photos ("تحب تشوف أنهي لون؟") leaves the customer
-    something to answer, which is never dead air; and telling them a product
-    has no photos is the honest answer the prompt asks for.
-    """
-    if not text:
-        return False
-    lowered = text.lower()
-    if not _IMAGE_WORD.search(lowered):
-        return False
-    if "؟" in text or "?" in text:
-        return False
-    return not _NO_IMAGES.search(lowered)
+#: Whether a reply's words claim a photograph lives in
+#: `assistant/photo_claims.py` now: the question stopped being "does it mention
+#: photos while attaching none" the moment a reply could claim *two* and send
+#: one. Re-exported under the old name because that is the check the tests
+#: state, and because it is still exactly what it says.
+_promises_images = photo_claims.promises_images
 
 
 #: Appended to the system prompt when a dangling promise is caught -- never
@@ -363,11 +335,12 @@ _PROMISE_NUDGE_FINAL = (
 #: the one thing that fixes it -- a picture exists only if the call is made in
 #: *this* reply -- and names the argument that sends all of them.
 _IMAGE_NUDGE = (
-    "\n\nتنبيه داخلي: ردك اللي فات قال إنك بتبعت صور، بس مفيش ولا صورة "
-    "اتبعتت. الصور بتتبعت بس لما تنادي get_variants في نفس الرد ده، ومفيش "
-    "رسالة تانية هتتبعت بعده. لو العميل طالب صور الألوان، نادي get_variants "
-    "بـ more_images: true دلوقتي -- ده مسموح حتى لو المنتج اتعرض قبل كده. "
-    "ولو المنتج ملوش صور، قول كده بصراحة بدل ما تقول إنك بعتها."
+    "\n\nتنبيه داخلي: ردك اللي فات قال إنك بعت صور، بس اللي اتبعت فعلاً أقل من "
+    "كده ({sent}). كل صورة بتتبعت بس لما تنادي get_variants للمنتج بتاعها في "
+    "نفس الرد ده، ومفيش رسالة تانية هتتبعت بعده — يعني منتجين يعني نداءين. "
+    "نادي اللي ناقص دلوقتي -- ده مسموح حتى لو المنتج اتعرض قبل كده -- أو اكتب "
+    "كلامك على قد اللي اتبعت بالظبط. ولو المنتج ملوش صور، قول كده بصراحة بدل "
+    "ما تقول إنك بعتها."
 )
 
 #: Sent instead of an image promise the model will not honour. Asks for the
@@ -376,6 +349,56 @@ _IMAGE_NUDGE = (
 IMAGE_PROMISE_FALLBACK = (
     "معلش، قولي اسم المنتج واللون اللي عايز تشوفه وأبعتلك صورته على طول."
 )
+
+#: The same last resort for a reply that *did* attach something, just not
+#: everything it claimed. Discarding a real photograph to ask "which product?"
+#: would be answering a question the customer has already answered.
+PARTIAL_IMAGE_FALLBACK = (
+    "دي الصورة اللي قدرت أبعتها 👆 قولي المنتج التاني اللي عايز تشوفه وأبعتلك صورته على طول."
+)
+
+#: Told to the model when a photograph this conversation sent was refused by
+#: the platform. Two facts and one instruction, and the instruction is the
+#: expensive one: the customer saying a picture never arrived is *right*, and
+#: the reply that told them to restart WhatsApp was the shop asking the
+#: customer to debug a failure on the shop's side.
+_UNDELIVERED_NOTE = (
+    "\n\nتنبيه داخلي: فيه صورة بعتناها في المحادثة دي والمنصة رفضتها، يعني "
+    "العميل فعلاً **ماوصلتوش** ({what}). لو قال إن الصورة مش واصلة، صدّقه: "
+    "اعتذر وقول إن المشكلة من عندنا إحنا، ونادي get_variants تاني في نفس الرد "
+    "ده عشان تتبعت من جديد. ممنوع تمامًا تقوله إن المشكلة في النت بتاعه أو في "
+    "التطبيق أو يقفل الواتس ويفتحه -- المشكلة عندنا ومعانا في السجل."
+)
+
+#: Appended when a reply blamed the customer's phone, app or line for our own
+#: failed send. Blunt on purpose: there is no partially-correct version of this
+#: sentence to steer towards.
+_BLAME_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات حمّل العميل مسؤولية إن الصورة مش واصلة "
+    "(النت، التطبيق، يقفل الواتس). ده ممنوع تمامًا: الصورة بتتبعت من عندنا، "
+    "ولو مش واصلة فالمشكلة عندنا. اكتب الرد تاني: اعتذر، قول إن المشكلة من "
+    "ناحيتنا، ونادي get_variants عشان تبعت الصورة من تاني، ولو لسه مش راضية "
+    "تتبعت اعرض عليه تحويله لحد من الفريق."
+)
+
+#: The last resort when the model will not stop diagnosing the customer's
+#: phone. It says the one true thing -- the failure is ours -- and offers the
+#: person, which is the only thing left that can actually get the picture to
+#: them.
+BLAME_FALLBACK = (
+    "معلش، الصورة مش راضية توصل من ناحيتنا إحنا، مش من عندك. "
+    "تحب أوصّلك بحد من الفريق يبعتهالك حالًا؟"
+)
+
+
+def _describe(named: list[str], count: int) -> str:
+    """The undelivered photos, as something that can go into a prompt line.
+
+    Names when the tool layer had them, a count otherwise -- never a file path,
+    which is meaningless to a customer and which the prompt forbids the model
+    from writing anywhere.
+    """
+    return "، ".join(named) if named else f"{count} صورة"
 
 
 def _sent_images(history: list[dict]) -> set[str]:
@@ -509,7 +532,23 @@ def run_turn(
         history = session_store.drop_provisional(
             session_store.load(db, channel, external_id), recorded_ids
         )
-    sent_images = _sent_images(history)
+    # A photograph the platform refused is not a photograph the customer has
+    # been shown, so it is taken back out of "already sent" -- the image policy
+    # would otherwise refuse to send the one picture the customer is asking
+    # for. The channel adapter records the refusal after the send, which is the
+    # only moment it is knowable; see `session.record_undelivered_attachments`.
+    undelivered = photo_claims.undelivered(history)
+    sent_images = _sent_images(history) - set(undelivered)
+    if undelivered:
+        named = photo_claims.undelivered_labels(history)
+        system_prompt = f"{system_prompt}{_UNDELIVERED_NOTE.format(what=_describe(named, len(undelivered)))}"
+        log.info(
+            "%s/%s has %d undelivered photo(s); the turn is told so rather than "
+            "left to insist they arrived",
+            channel,
+            external_id,
+            len(undelivered),
+        )
 
     refers_to = None
     if reply_to:
@@ -660,17 +699,58 @@ def run_turn(
             text_out, tool_leaked = strip_tool_leaks(text_out)
             text_out, _ = strip_markdown(text_out)
 
-            # Saying a photo is on its way while attaching none is the same
-            # failure as promising to go and check: the turn ends there, so
-            # the sentence *is* the last thing the customer gets. It is
-            # checked separately because the signal is structural rather than
-            # verbal -- the attachments list, not the wording -- and because
-            # what the model has to be told to fix it is different.
-            image_promise = (
-                not ctx.attachments
-                and not customer_sent_a_photo
-                and _promises_images(text_out)
+            # Blaming the customer's phone for our own failed send. Checked
+            # before the claim guard because it is the more expensive mistake
+            # and because a reply can be both: «الصور اتبعتت، جرب اقفل
+            # الواتس» claims a delivery *and* hands the customer the debugging.
+            blamed = photo_claims.blames_the_customer(text_out)
+
+            # Saying a photo is on its way while attaching fewer -- none at
+            # all, or one where the sentence claimed two -- is the same failure
+            # as promising to go and check: the turn ends there, so the
+            # sentence *is* the last thing the customer gets. It is checked
+            # separately because the signal is structural rather than verbal --
+            # the attachments, not the wording -- and because what the model
+            # has to be told to fix it is different.
+            image_promise = photo_claims.unbacked_claim(
+                text_out,
+                attachments=ctx.attachments,
+                labels=ctx.attachment_labels,
+                history=history,
+                customer_sent_a_photo=customer_sent_a_photo,
             )
+
+            if blamed:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s blamed the customer's own device for a "
+                        "delivery failure (%r), retry %d/%d",
+                        channel,
+                        external_id,
+                        blamed,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}{_BLAME_NUDGE}"
+                    continue
+                log.error(
+                    "provider %s kept blaming the customer's device for %s/%s; "
+                    "saying plainly that the failure is ours instead",
+                    provider.name,
+                    channel,
+                    external_id,
+                )
+                history.append(msg.assistant(BLAME_FALLBACK, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=BLAME_FALLBACK,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    error="blamed_the_customer",
+                )
 
             if image_promise or _is_dangling_promise(text_out, tools_called=bool(called)):
                 # A promise is never sent. Nothing in this system produces a
@@ -682,7 +762,7 @@ def run_turn(
                     log.warning(
                         "%s from provider %s for %s/%s "
                         "(tools this turn: %s), retry %d/%d",
-                        "photos promised but none attached" if image_promise else "dangling promise",
+                        image_promise or "dangling promise",
                         provider.name,
                         channel,
                         external_id,
@@ -692,7 +772,7 @@ def run_turn(
                     )
                     promise_retries += 1
                     nudge = (
-                        _IMAGE_NUDGE
+                        _IMAGE_NUDGE.format(sent=len(ctx.attachments))
                         if image_promise
                         else _PROMISE_NUDGE
                         if promise_retries == 1
@@ -711,9 +791,16 @@ def run_turn(
                     external_id,
                     _PROMISE_RETRY_LIMIT,
                 )
-                text_out = (
-                    IMAGE_PROMISE_FALLBACK if image_promise else promise_fallback(history)
-                )
+                if not image_promise:
+                    text_out = promise_fallback(history)
+                elif ctx.attachments:
+                    # Some pictures really did go. Sending the "tell me which
+                    # product" question would throw them away and ask for
+                    # something the customer has already said; this says what
+                    # is true of the reply that is actually leaving.
+                    text_out = PARTIAL_IMAGE_FALLBACK
+                else:
+                    text_out = IMAGE_PROMISE_FALLBACK
                 history.append(msg.assistant(text_out, attachments=ctx.attachments))
                 session_store.save(db, channel, external_id, history, merge_since=base)
                 return AgentReply(

@@ -62,6 +62,25 @@ class ToolContext:
     #: reply. Set by a tool, never by the model: the options have to come from
     #: the database for the same reason a price does.
     interactive: dict | None = None
+    #: Which product each attached *garment* photo is of, keyed by path. The
+    #: budget is one each (`MAX_PRODUCT_IMAGES`) and `gallery` below is the
+    #: only thing that raises it. A customer who answers «الاتنين» to "photos of
+    #: which one?" has asked for two photographs, one per product -- and used
+    #: to get every colourway of both, eight notifications for a two-word
+    #: message, because `more_images` was set per product and nothing counted
+    #: across the turn.
+    #:
+    #: A mapping rather than a counter so the count is always derived from
+    #: `attachments` itself: a size chart never appears here (it is a picture
+    #: of a table, not of the garment), and nothing can drift out of step with
+    #: what the reply is actually carrying.
+    photo_products: dict[str, str] = field(default_factory=dict)
+    #: Products the customer explicitly asked to see the colours of, and how
+    #: many photographs that buys. Set by the tool layer from the customer's
+    #: own words (`catalog_tools.asked_for_colors`), never from an argument the
+    #: model chose: a model-set flag would be right most of the time and wrong
+    #: exactly when the model was already confused about what was asked.
+    gallery: dict[str, int] = field(default_factory=dict)
     #: Set by a tool that has already said everything this turn needs to say,
     #: on its own and in words the shop wrote rather than words a model chose.
     #: The agent stops the loop there and sends nothing further: the value is
@@ -83,13 +102,29 @@ class ToolContext:
         self.interactive = payload
         return True
 
-    def attach(self, path: str, *, force: bool = False, label: dict | None = None) -> bool:
+    def attach(
+        self,
+        path: str,
+        *,
+        force: bool = False,
+        label: dict | None = None,
+        product: str | None = None,
+        chart: bool = False,
+    ) -> bool:
         """Add an image to this turn's reply, once.
 
         `force` bypasses the cross-turn `sent_images` check but never the
         same-turn de-dup -- it exists for the size chart (the answer itself)
         and for an explicit "send more photos" request, where resending
         something already shown is the customer's actual ask, not spam.
+
+        It does **not** bypass the per-product budget, and that is the point of
+        the budget living here rather than in `_collect_images`: one reply can
+        run `get_variants` twice, once per product, and each call knows only
+        about its own photographs. Counting across the turn is the only place
+        "one photo per product per reply" can be a guarantee instead of a
+        convention. `chart=True` opts a size chart out -- it is a picture of a
+        table, not of the garment, and the two are opposite failures.
 
         `label` says what the picture is of, for `attachment_labels` above.
         Optional because a photo the tool layer could not describe is still a
@@ -100,10 +135,30 @@ class ToolContext:
             return False
         if not force and path in self.sent_images:
             return False
+        key = product or (label or {}).get("product_id") or ""
+        if not chart:
+            budget = self.gallery.get(key, MAX_PRODUCT_IMAGES)
+            if self.photos_of(key) >= budget:
+                return False
+            self.photo_products[path] = key
         self.attachments.append(path)
         if label and label.get("label"):
             self.attachment_labels[path] = dict(label)
         return True
+
+    def photos_of(self, product: str | None) -> int:
+        """Garment photos of one product that this reply is already carrying."""
+        key = product or ""
+        return sum(1 for path in self.attachments if self.photo_products.get(path) == key)
+
+    def allow_gallery(self, product: str | None, count: int) -> None:
+        """Let one product send more than one photograph in this reply.
+
+        Called only when the customer's own words asked for the colours or for
+        more pictures. Never lowers a budget already granted.
+        """
+        key = product or ""
+        self.gallery[key] = max(self.gallery.get(key, MAX_PRODUCT_IMAGES), int(count))
 
 
 @dataclass(frozen=True)
@@ -476,13 +531,27 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     # budget without reaching the model as paths for it to describe. Popped
     # before `_collect_images` runs on it, for the same reason.
     photo_of = result.pop("_photo_of", None)
+    # Whether a *gallery* is allowed is decided from the customer's own words,
+    # here rather than inside the handler, for one reason: a cached result
+    # never runs the handler, and the question "did they ask for the colours"
+    # is about the message that arrived this turn, not about the arguments the
+    # cache is keyed on. Deriving it there would have made the second identical
+    # call answer the first call's question.
+    all_colors = more_images and asked_for_colors(ctx)
     # The *resolved* id, so a photo attached by an implicitly-resolved call is
     # labelled with the product it actually came from.
     _collect_images(
-        ctx, result, more_images=more_images, color=color, product_id=arguments.get("product_id")
+        ctx,
+        result,
+        more_images=more_images,
+        all_colors=all_colors,
+        color=color,
+        product_id=arguments.get("product_id"),
     )
     if isinstance(photo_of, dict):
-        _collect_images(ctx, photo_of, color=color, product_id=photo_of.get("product_id"))
+        _collect_images(
+            ctx, photo_of, color=color, product_id=photo_of.get("product_id")
+        )
     # After the product photo, and deliberately *not* forced: a chart is the
     # same picture every time, so the cross-conversation `sent_images` check
     # is exactly the rule wanted here -- it rides along the first time a
@@ -496,11 +565,51 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
         named = result if (result.get("name") or result.get("title")) else (photo_of or result)
         ctx.attach(
             chart_image,
+            chart=True,
             label=_chart_label(
                 named, (photo_of or {}).get("product_id") or arguments.get("product_id")
             ),
         )
     return result
+
+
+#: The customer asking to see the colours, or to see more pictures. Read from
+#: what they actually wrote, never from an argument the model chose -- the same
+#: shape (and the same reason) as `catalog_tools.asked_about_sizing`.
+#:
+#: This is what separates "show me the product" from "show me all the
+#: colours". Without the separation, `more_images` was a single flag meaning
+#: both, the model set it whenever photos came up at all, and a customer who
+#: answered «الاتنين» to "photos of which one?" received every colourway of
+#: both products -- eight pictures for a two-word message that asked for two.
+_COLOR_REQUEST = (
+    "كل الالوان", "كل الألوان", "الالوان كلها", "الألوان كلها", "باقي الالوان",
+    "باقي الألوان", "الوان تانيه", "الوان تانية", "ألوان تانية", "كل لون",
+    "الالوان المتاحه", "الألوان المتاحة", "صور تانيه", "صور تانية",
+    "صور كتير", "زوايا", "كل الصور", "باقي الصور", "صور اكتر", "صور أكتر",
+    "all the colors", "all the colours", "all colors", "all colours",
+    "more photos", "more pictures", "other angles", "every color", "every colour",
+)
+
+#: How far back the colour question is read. Two, for the same reason the
+#: address scan reads two: «ابعتلي صور» then «كل الألوان» is one request split
+#: across a debounce boundary.
+_COLOR_SCAN_MESSAGES = 2
+
+
+def asked_for_colors(ctx: ToolContext) -> bool:
+    """Did the customer themselves ask to see the colours, or more photos?"""
+    seen = 0
+    for message in reversed(ctx.history):
+        if message.get("role") != "user":
+            continue
+        content = (message.get("content") or "").lower()
+        if any(phrase in content for phrase in _COLOR_REQUEST):
+            return True
+        seen += 1
+        if seen >= _COLOR_SCAN_MESSAGES:
+            break
+    return False
 
 
 #: How many product photos an ordinary "show me the product" turn may carry.
@@ -525,15 +634,25 @@ MAX_EXTRA_IMAGES = 2
 MAX_COLOR_IMAGES = 6
 
 
-def _extra_budget(result: dict, candidates: list[str]) -> int:
+def _extra_budget(result: dict, candidates: list[str], *, all_colors: bool = False) -> int:
     """How many photos one explicit "show me more" may send.
 
     Colour-split: as many as it has colourways, because that is the question
     -- `_candidate_images` already returns exactly one photo per colour, so
     the length of the list *is* the colour count. Not split: two more angles.
+
+    **Only when the customer actually asked for the colours**, though, and that
+    condition is the fix for a real conversation: asked "photos of which of the
+    two?", the customer answered «الاتنين» and got every colourway of both
+    products. `more_images` is one flag covering two different requests -- "the
+    other angles of this" and "all the colours of this" -- and the model sets
+    it whenever photographs come up. The colour gallery is the expensive half,
+    so it now needs the customer's own words behind it
+    (`asked_for_colors`); without them "more" falls back to the same two extra
+    angles a product with no colour split gets.
     """
     color_images = result.get("color_images")
-    if isinstance(color_images, dict) and color_images:
+    if isinstance(color_images, dict) and color_images and all_colors:
         return min(len(candidates), MAX_COLOR_IMAGES)
     return MAX_EXTRA_IMAGES
 
@@ -656,6 +775,7 @@ def _collect_images(
     result: dict,
     *,
     more_images: bool = False,
+    all_colors: bool = False,
     color: str | None = None,
     product_id: str | None = None,
 ) -> None:
@@ -669,10 +789,16 @@ def _collect_images(
     never repeated unless nothing unseen is left to show.
     """
     labels = _image_labels(result, product_id)
+    product_key = product_id or result.get("product_id") or ""
 
     image = result.get("image")
     if isinstance(image, str) and image:
-        ctx.attach(image, force=True, label=labels.get(image) or _chart_label(result, product_id))
+        ctx.attach(
+            image,
+            force=True,
+            chart=True,
+            label=labels.get(image) or _chart_label(result, product_id),
+        )
 
     candidates = _candidate_images(result, color)
     if not candidates:
@@ -686,12 +812,16 @@ def _collect_images(
         ranked = [p for p in candidates if p not in ctx.sent_images] + [
             p for p in candidates if p in ctx.sent_images
         ]
-        budget = _extra_budget(result, candidates)
+        budget = _extra_budget(result, candidates, all_colors=all_colors)
+        # The per-product cap in `ctx.attach` is one photo, and it applies to
+        # every tool call in the turn rather than to this one -- so a request
+        # for more has to raise it explicitly, for this product only.
+        ctx.allow_gallery(product_key, budget)
         added = 0
         for path in ranked:
             if added >= budget:
                 break
-            if ctx.attach(path, force=True, label=labels.get(path)):
+            if ctx.attach(path, force=True, label=labels.get(path), product=product_key):
                 added += 1
         return
 
@@ -709,7 +839,7 @@ def _collect_images(
         return
 
     for path in candidates[:MAX_PRODUCT_IMAGES]:
-        ctx.attach(path, label=labels.get(path))
+        ctx.attach(path, label=labels.get(path), product=product_key)
 
 
 def tool_specs() -> list[ToolSpec]:

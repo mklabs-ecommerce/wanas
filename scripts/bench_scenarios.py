@@ -5,10 +5,12 @@ checks that what comes back still means the same thing. They have to be the
 same scenarios or a speed-up and the judgement about whether it cost anything
 are not about the same conversations.
 
-They are the seven shapes that actually arrive: a greeting, a product question,
+They are the eight shapes that actually arrive: a greeting, a product question,
 a sizing question, adding to the cart, placing the order, the sleeve question,
-and the shipping question -- which is the one with a single correct stored answer and therefore
-the one worth watching for a needless trip through the tool loop.
+"photos of both" -- the two-word answer that used to produce a gallery of every
+colourway of two products under a sentence claiming two pictures -- and the
+shipping question, which is the one with a single correct stored answer and
+therefore the one worth watching for a needless trip through the tool loop.
 
 Each step carries the customer's real words (both modes send exactly these) and
 a `plan`: what the fake provider should do for that step, as the hops a
@@ -56,6 +58,12 @@ class Step:
     #: chart may only ride along on a step with this set -- everywhere else an
     #: attached chart is a table nobody asked for.
     sizing_question: bool = False
+    #: The customer asked to see this product's colours (or simply more
+    #: photographs of it). More than one photo of one product may only go out
+    #: on a step with this set: «الاتنين» in answer to "photos of which one?"
+    #: is a request for two pictures, one per product, and it was answered with
+    #: every colourway of both.
+    asked_for_colors: bool = False
 
 
 @dataclass
@@ -83,6 +91,10 @@ def resolve(session) -> dict:
             "no in-stock variant in this database -- run `python manage.py seed` first"
         )
     product, variant = rows[0]
+    # A second, different product -- the «الاتنين» scenario needs two, and
+    # "both" is the only question in the set whose right answer is two
+    # photographs rather than one. Same deterministic pick, first by id.
+    second = next((p for p, _ in rows if p.product_id != product.product_id), product)
     return {
         "product_id": product.product_id,
         "product_name": product.name,
@@ -91,14 +103,18 @@ def resolve(session) -> dict:
         "size": variant.size or "",
         "price": f"{int(variant.price)}",
         "category": product.category or "",
+        "second_product_id": second.product_id,
+        "second_product_name": second.name,
     }
 
 
 def build(facts: dict) -> list[Scenario]:
-    """The seven scenarios, with the resolved ids folded in."""
+    """The eight scenarios, with the resolved ids folded in."""
     product_id = facts["product_id"]
     variant_id = facts["variant_id"]
     name = facts["product_name"]
+    second_id = facts["second_product_id"]
+    second_name = facts["second_product_name"]
 
     return [
         Scenario(
@@ -247,6 +263,42 @@ def build(facts: dict) -> list[Scenario]:
                     ],
                     expects_tools=("get_products",),
                 )
+            ],
+        ),
+        Scenario(
+            # «الاتنين» -- the conversation that produced four separate
+            # failures at once: the bot listed two sweatpants, asked "photos of
+            # which one?", was told "both", and answered with one picture
+            # under a sentence claiming two. Then with no picture at all under
+            # a sentence claiming two. Then with every colourway of both.
+            #
+            # The plan below is what a competent model does: one
+            # `get_variants` per product, no `more_images` anywhere, and a
+            # sentence that describes exactly what is attached. Rules 15 and 17
+            # in `quality_gate.py` are what stop the other three shapes.
+            "photos_of_both",
+            [
+                Step(
+                    f"وريني اللي عندكم في {facts['category']}",
+                    plan=[
+                        [("get_products", {"category": facts["category"]})],
+                        f"عندنا كذا حاجة في {facts['category']}، منها تيشيرت {name}. "
+                        "تحب تشوف صورة أنهي واحد؟",
+                    ],
+                    expects_tools=("get_products",),
+                ),
+                Step(
+                    "الاتنين",
+                    plan=[
+                        [
+                            ("get_variants", {"product_id": product_id}),
+                            ("get_variants", {"product_id": second_id}),
+                        ],
+                        f"دي صورة تيشيرت {name} 👆 ودي كمان صورة تيشيرت "
+                        f"{second_name} ورا بعضيهم، اتفرج عليهم وقولي عاجبك أنهي واحد.",
+                    ],
+                    expects_tools=("get_variants",),
+                ),
             ],
         ),
         Scenario(

@@ -60,6 +60,21 @@ def ctx(seeded):
     return ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
 
 
+def asked_for_colours(ctx, text="ابعتلي صور كل الألوان"):
+    """Put the colour request in the history, the way a real turn would.
+
+    A gallery -- one photo per colourway -- now needs the customer's own words
+    behind it, not just `more_images`. That flag is one model-set boolean
+    covering two different asks ("other angles of this" and "all the colours of
+    this"), and the model sets it whenever photographs come up at all, which is
+    how «الاتنين» answered a two-product question with eight pictures. A
+    `ToolContext` built straight in a test has an empty history, which
+    correctly reads as "nobody asked for the colours".
+    """
+    ctx.history.append({"role": "user", "content": text})
+    return ctx
+
+
 def asked_about_sizes(ctx, text="المقاسات إيه؟"):
     """Put a sizing question in the history, the way a real turn would.
 
@@ -100,7 +115,7 @@ def test_more_images_prefers_colour_variety_and_is_capped(ctx):
     and it is still capped -- one photo per colourway, not the whole gallery."""
     call(ctx, "get_variants", product_id="wanas-hoodie")
     first = list(ctx.attachments)
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
     added = [p for p in ctx.attachments if p not in first]
     assert 0 < len(added) <= MAX_COLOR_IMAGES
 
@@ -123,7 +138,7 @@ def test_all_the_colours_means_a_photo_of_each_one(ctx):
     customer then asked again for the rest, which is the request that produced
     no photo at all.
     """
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
     colourways = payload["color_images"]
     assert 1 < len(colourways) <= MAX_COLOR_IMAGES, "fixture check: several colours, under the cap"
 
@@ -135,7 +150,7 @@ def test_all_the_colours_means_a_photo_of_each_one(ctx):
 def test_the_ringer_tee_sends_all_four_of_its_colours(ctx):
     """The product from the report, by name. It comes in Beige, Brown,
     Burgundy and Navy, and "send the colour photos" answered with one."""
-    payload = call(ctx, "get_variants", product_id="ringer-tee", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="ringer-tee", more_images=True)
     assert len(payload["color_images"]) == 4, "fixture check: four colourways"
     assert len(photos(ctx)) == 4
 
@@ -143,7 +158,7 @@ def test_the_ringer_tee_sends_all_four_of_its_colours(ctx):
 def test_a_colour_photo_each_beats_two_angles_of_one(ctx):
     """One per colourway, not several of the same colour: the customer asked
     which colours exist, and two photos of the black one does not answer it."""
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
     for colour, paths in payload["color_images"].items():
         assert len([p for p in photos(ctx) if p in paths]) <= 1, colour
 
@@ -151,7 +166,7 @@ def test_a_colour_photo_each_beats_two_angles_of_one(ctx):
 def test_a_product_with_no_colour_split_still_gets_only_two_extra(ctx):
     """The per-colour budget is a rule about colours. Where there are none to
     show, "more" can only mean another angle, and two is still the limit."""
-    payload = call(ctx, "get_variants", product_id="feelin-fine-top", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="feelin-fine-top", more_images=True)
     if payload["color_images"]:
         pytest.skip("this product is colour-split; covered by the tests above")
     assert 0 < len(photos(ctx)) <= MAX_EXTRA_IMAGES
@@ -166,7 +181,7 @@ def test_asking_again_sends_the_colours_that_were_not_sent_yet(ctx):
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
 
-    call(ctx, "get_variants", product_id="wanas-hoodie", more_images=True)
+    call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
     later = set(photos(ctx))
     assert later, "asked for every colour and got nothing"
     for colour, paths in payload["color_images"].items():
@@ -675,7 +690,15 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # conversation told a customer asking for «حريمي» that there is no
         # women's section, in a shop that has one -- the single most expensive
         # sentence available, because that customer simply leaves.
-    assert 3000 < len(SYSTEM_PROMPT) < 19000
+        #
+        # 19000 -> 20000: photographs, honestly. "Your words must match the
+        # number of pictures that actually went out", "«الاتنين» is one photo
+        # per product, not every colour of both", and -- the expensive one --
+        # "if the customer says a photo did not arrive, they are right; never
+        # tell them to restart WhatsApp". The tool layer enforces the counting;
+        # nothing but the prompt can stop a sentence claiming a delivery that
+        # did not happen, or handing our failure to the customer to debug.
+    assert 3000 < len(SYSTEM_PROMPT) < 20000
 
 
 # --------------------------------------------------------------------------

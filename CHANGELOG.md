@@ -1,5 +1,64 @@
 # Changelog
 
+## Unreleased — The bot told a customer a photo had arrived, three times
+
+A customer was shown two sweatpants and asked which one they wanted a photo
+of. They answered «الاتنين». What followed was four separate failures in three
+messages: a sentence claiming two photographs beside one that went out and one
+the platform refused; then a sentence claiming photographs beside none at all;
+then every colourway of both products, under a line telling the customer to
+restart WhatsApp.
+
+- **A reply may no longer claim a photograph it is not sending.** The words are
+  the model's and the pictures are the tool layer's, and nothing joined them
+  back together before the reply left -- the old guard only caught the case
+  where *nothing* was attached, so "here are both" beside one picture passed
+  cleanly. `assistant/photo_claims.py::unbacked_claim` reads the claim per
+  clause: «الاتنين» or a plural «صور» beside fewer than two attachments fails,
+  and so does naming a product, beside the word «صورة», that this reply has no
+  photograph of. "Named" is a fact, not a guess -- only a product some tool
+  result in this same conversation actually returned counts, and a name whose
+  only distinctive word it shares with another product counts for neither.
+  Two nudges, then `PARTIAL_IMAGE_FALLBACK`, which keeps the photo that really
+  did go rather than throwing it away for a question.
+
+- **A refused photograph is now a fact the next turn can read.** The reply is
+  stored inside the turn, a moment before the send; the platform's refusal
+  comes back after it. Nothing closed that gap, so the transcript said a
+  picture had gone out while the alert queue said it had not -- and the turn
+  could only see the transcript, which is how the bot came to argue with a
+  customer who was right. The channel adapters now call
+  `session.record_undelivered_attachments`, which takes the failed path *out
+  of* `attachments` (so the image policy stops treating the one picture they
+  are asking for as already shown) and records it under
+  `undelivered_attachments` with what it was of. The next turn is told, by
+  name, and told that the customer saying so is ground truth.
+
+- **And it never hands our failure to the customer to debug.** «ممكن تكون
+  مشكلة في النت أو التطبيق — جرب اقفل الواتس وافتحه تاني», about a photograph
+  the system had already recorded as refused, is the worst answer available:
+  it is wrong, it is unanswerable, and the customer leaves.
+  `photo_claims.blames_the_customer` fails it, twice with a nudge and then with
+  `BLAME_FALLBACK` -- which says the one true thing, that the failure is ours,
+  and offers the person who can actually get the picture sent.
+
+- **«الاتنين» is two photographs, one per product.** `more_images` is a single
+  model-set flag covering two different asks -- "other angles of this" and "all
+  the colours of this" -- and the model sets it whenever photographs come up,
+  so a two-word message produced a screenful of notifications. The colour
+  gallery now needs the customer's own words behind it
+  (`tools.base.asked_for_colors`), and the one-photo budget follows the *turn*
+  rather than the tool call (`ToolContext.photo_products`): each `get_variants`
+  knows only about its own product's pictures, so counting across the reply is
+  the only place "one photo per product" can be a guarantee. Size charts are
+  not garment photos and never count against it.
+
+- **Three new gate rules**, numbers 15 to 17 in `scripts/quality_gate.py`: a
+  reply claiming a photo that did not go out fails, a reply blaming the
+  customer's phone or connection fails, and more than one photo of one product
+  fails unless that step asked for its colours. A new benchmark scenario,
+  `photos_of_both`, is the conversation itself.
+
 ## Unreleased — "Tell me the exact product" about the product it just named
 
 A customer discussing a product the bot itself had named two messages earlier

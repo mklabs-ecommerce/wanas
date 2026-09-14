@@ -19,7 +19,8 @@ The agent only ever speaks this. Adding a provider means writing one class and
 changing one config value; no other file changes.
 
 Several keys are **storage-only**: `mids`, `mid_labels`, `refers_to`,
-`images`, `audio`, `attachments`, `by`, `delivery`, `at` and `receipt`. They are written into history and read
+`images`, `audio`, `attachments`, `undelivered_attachments`, `by`, `delivery`,
+`at` and `receipt`. They are written into history and read
 back by the dashboard and the harness, and no provider ever sees them --
 every translation layer builds its request from `role`/`content`/`tool_calls`
 and ignores what it does not recognise. That is the discipline to follow when

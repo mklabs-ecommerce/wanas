@@ -29,6 +29,9 @@ def _reply(
     charts=0,
     expects_photo=False,
     sizing_question=False,
+    photos_by_product=None,
+    asked_for_colors=False,
+    customer_text="",
 ):
     return {
         "scenario": scenario,
@@ -44,6 +47,12 @@ def _reply(
         "expects_text": list(expects_text),
         "expects_photo": expects_photo,
         "sizing_question": sizing_question,
+        # How the photos were spread across products, and whether the customer
+        # asked for a product's colours -- one photo per product is the rule
+        # and the colour request is its only exemption.
+        "photos_by_product": dict(photos_by_product or {}),
+        "asked_for_colors": asked_for_colors,
+        "customer_text": customer_text,
     }
 
 
@@ -627,3 +636,95 @@ def test_the_bench_counts_a_chart_from_the_label_dict_not_its_repr():
     assert bench_turn.count_charts(_Reply()) == 1
     _Reply.attachment_labels = {}
     assert bench_turn.count_charts(_Reply()) == 0
+
+
+# --- photographs the reply is not actually sending -------------------------
+#
+# From the audited conversation: «دي صورتهم الاتنين 👆» beside one picture,
+# then «دي صورة Lightweight الأسود 👆» beside none, then «دي صور الاتنين تاني
+# 👆» beside none -- and the customer telling the shop each time that nothing
+# had arrived.
+
+
+def test_claiming_a_photo_and_sending_none_fails():
+    golden = _run(_reply("product_question", 0, "تيشيرت Ringer Tee بـ 500 جنيه", ("get_variants",), photos=1))
+    fresh = _run(
+        _reply("product_question", 0, "دي صورة تيشيرت Ringer Tee 👆", ("get_variants",), photos=0)
+    )
+    failures = check(golden, fresh)
+    assert any("says a photo is on its way and none went out" in f for f in failures), failures
+
+
+def test_a_reply_that_sends_the_photo_it_describes_passes():
+    reply = _reply("product_question", 0, "دي صورة تيشيرت Ringer Tee 👆", ("get_variants",), photos=1)
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_saying_a_product_has_no_photos_is_not_a_claim():
+    """The prompt asks for exactly this sentence when a product has none;
+    failing it would push the model towards inventing a picture instead."""
+    assert quality_gate.claimed_a_photo_it_did_not_send("معلش، مفيش صور للمنتج ده", 0) == ""
+    assert quality_gate.claimed_a_photo_it_did_not_send("تحب تشوف صور أنهي لون؟", 0) == ""
+
+
+def test_blaming_the_customers_phone_fails():
+    reply = _reply(
+        "product_question",
+        0,
+        "الصور اتبعتت. لو لسه مش بتوصلك ممكن تكون مشكلة في النت — جرب اقفل الواتس وافتحه تاني.",
+        ("get_variants",),
+        photos=1,
+    )
+    failures = check(_run(reply), _run(reply))
+    assert any("blamed the customer's own phone" in f for f in failures), failures
+
+
+def test_saying_the_failure_is_ours_passes():
+    reply = _reply(
+        "product_question",
+        0,
+        "معلش، الصورة مش راضية توصل من ناحيتنا إحنا. بعتهالك تاني دلوقتي 👆",
+        ("get_variants",),
+        photos=1,
+    )
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_a_gallery_nobody_asked_for_fails():
+    """«الاتنين» is two photographs, one per product. It produced every
+    colourway of both."""
+    reply = _reply(
+        "photos_of_both",
+        1,
+        "دي صور تيشيرت Ringer Tee 👆",
+        ("get_variants",),
+        photos=4,
+        photos_by_product={"ringer-tee": 4},
+    )
+    failures = check(_run(reply), _run(reply))
+    assert any("more than one photo of the same product" in f for f in failures), failures
+
+
+def test_one_photo_of_each_of_two_products_passes():
+    reply = _reply(
+        "photos_of_both",
+        1,
+        "دي صورة تيشيرت Ringer Tee 👆 وصورة Envy T-shirt ورا بعض.",
+        ("get_variants",),
+        photos=2,
+        photos_by_product={"ringer-tee": 1, "envy-tee": 1},
+    )
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_the_colours_the_customer_asked_for_are_allowed():
+    reply = _reply(
+        "photos_of_both",
+        1,
+        "دي صور الألوان المتاحة من تيشيرت Ringer Tee 👆",
+        ("get_variants",),
+        photos=4,
+        photos_by_product={"ringer-tee": 4},
+        asked_for_colors=True,
+    )
+    assert check(_run(reply), _run(reply)) == []

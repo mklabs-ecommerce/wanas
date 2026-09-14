@@ -317,6 +317,59 @@ def mark_undelivered(session: Session, channel: str, external_id: str, text: str
     return False
 
 
+def record_undelivered_attachments(
+    session: Session,
+    channel: str,
+    external_id: str,
+    failed: dict[str, str],
+) -> bool:
+    """Write down which of a reply's photographs never reached the customer.
+
+    Two edits to the newest assistant message, and both matter:
+
+    * the failed paths are **removed from `attachments`**, because that list is
+      what `assistant/agent.py::_sent_images` reads as "already shown" and a
+      photo that was refused has not been shown. Left in, it made the one
+      picture the customer was asking for the one picture the image policy
+      would never send again;
+    * they are written to `undelivered_attachments` as `{path: what it was
+      of}`, which is what the next turn reads (`assistant/photo_claims.py`) so
+      it can resend and apologise rather than insist the photo arrived.
+
+    Knowable only here: the message is stored inside the turn, a moment before
+    the send, and the platform's refusal comes back after it. That gap is the
+    whole bug -- the transcript said a photograph had gone out, the alert queue
+    said it had not, and the turn could only see the transcript.
+
+    False means there was nothing to annotate.
+    """
+    failed = {p: (label or "") for p, label in (failed or {}).items() if isinstance(p, str) and p}
+    if not failed:
+        return False
+    row = session.get(SessionRow, (channel, external_id))
+    if row is None:
+        return False
+    stored = _stored(row)
+    for index in range(len(stored) - 1, -1, -1):
+        message = stored[index]
+        if message.get("role") != ASSISTANT:
+            continue
+        kept = [p for p in (message.get("attachments") or []) if p not in failed]
+        previous = message.get("undelivered_attachments") or {}
+        if isinstance(previous, list):
+            previous = {p: "" for p in previous if isinstance(p, str)}
+        changes = {"undelivered_attachments": {**previous, **failed}}
+        if kept != list(message.get("attachments") or []):
+            changes["attachments"] = kept
+        # `touch=False`: this is something that happened *to* the reply already
+        # written, not a new message. `updated_at` is the inbox sort key and
+        # the six-hour expiry clock, and a send failure must move neither --
+        # same rule `record_receipt` follows.
+        _rewrite(session, row, stored, index, changes, touch=False)
+        return True
+    return False
+
+
 def attach_ids_to_text(
     session: Session, channel: str, external_id: str, text: str, message_ids: list[str]
 ) -> bool:
@@ -503,6 +556,25 @@ def photo_mid_labels(outcomes: list, attachment_labels: dict[str, dict]) -> dict
         for mid in out.message_ids:
             labels[mid] = label
     return labels
+
+
+def undelivered_photos(outcomes: list, attachment_labels: dict[str, dict]) -> dict[str, str]:
+    """The photographs in this send that the platform refused, `{path: label}`.
+
+    The mirror of `photo_mid_labels` above: that one pairs an id with what it
+    showed for the sends that worked, this one pairs a path with what it *would
+    have* shown for the sends that did not. `OutboundMessage.image_path` is
+    what makes either possible without counting positions.
+    """
+    failed: dict[str, str] = {}
+    for out in outcomes:
+        path = getattr(out, "image_path", None)
+        if out.delivered or not path:
+            continue
+        label = (attachment_labels or {}).get(path)
+        wording = label.get("label") if isinstance(label, dict) else label
+        failed[path] = wording if isinstance(wording, str) else ""
+    return failed
 
 
 def attach_outbound_ids(

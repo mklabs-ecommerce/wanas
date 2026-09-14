@@ -1211,6 +1211,25 @@ def _deliver_turn(external_id: str, pending: Pending) -> None:
     with telemetry.stage("post_send"):
         _flag_delivery_failures(external_id, outcomes)
         _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
+        _remember_undelivered_photos(external_id, outcomes, reply.attachment_labels)
+
+
+def _remember_undelivered_photos(
+    external_id: str, outcomes: list, attachment_labels: dict[str, dict] | None = None
+) -> None:
+    """Record a photograph Instagram refused, onto the reply that tried to send
+    it. See the WhatsApp adapter's twin: the reply is stored a moment before
+    the send and the refusal comes back after it, so without this the next turn
+    reads a transcript saying a picture arrived when it did not -- and argues
+    with the customer who says otherwise."""
+    failed = session_store.undelivered_photos(outcomes, attachment_labels or {})
+    if not failed:
+        return
+    try:
+        with session_scope() as db:
+            session_store.record_undelivered_attachments(db, CHANNEL, external_id, failed)
+    except Exception:
+        log.exception("could not record the undelivered photo(s) for %s", external_id)
 
 
 def _remember_sent_ids(

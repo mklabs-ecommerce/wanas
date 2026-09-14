@@ -9,8 +9,8 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Fourteen checks, and each one is a failure mode this repository has already paid
-for at least once:
+Seventeen checks, and each one is a failure mode this repository has already
+paid for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
    and answers from memory is a reply that will eventually invent a colour.
@@ -87,6 +87,21 @@ for at least once:
    answered with a measurements table -- which got worse the moment a product
    reply started carrying its photo, because that made the call the ordinary
    case rather than the rare one.
+15. **And a reply never claims a photograph it is not sending.** «دي صورتهم
+   الاتنين 👆» went out beside one picture, then beside none, then beside none
+   again, in one conversation -- the words are composed by the model and the
+   pictures are attached by the tool layer, and nothing used to join them back
+   together before the reply left. A customer reading a message that says a
+   photo is there has been told something false about their own screen.
+16. **And it never hands our failure to the customer to debug.** That same
+   conversation ended with «ممكن تكون مشكلة في النت أو التطبيق — جرب اقفل
+   الواتس وافتحه تاني», about a photograph the system had already recorded as
+   refused. The picture leaves from here: if it did not arrive, the failure is
+   ours, and a customer saying so is ground truth.
+17. **One photo per product per reply**, unless the customer asked for that
+   product's colours. Asked "photos of which of the two?", the customer
+   answered «الاتنين» and received every colourway of both -- a screenful of
+   notifications in answer to a two-word message that asked for two pictures.
 
 Exit code 0 means keep the change; 1 means revert it.
 """
@@ -103,7 +118,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from assistant import agent  # noqa: E402
+from assistant import agent, photo_claims  # noqa: E402
 from assistant.providers import set_provider  # noqa: E402
 from domain.db import session_scope  # noqa: E402
 from scripts import bench_scenarios, bench_turn  # noqa: E402
@@ -120,6 +135,8 @@ FALLBACKS = (
     agent.PROMISE_FALLBACK_WITH_PRODUCT,
     agent.PROMISE_FALLBACK_WITH_COLOR,
     agent.IMAGE_PROMISE_FALLBACK,
+    agent.PARTIAL_IMAGE_FALLBACK,
+    agent.BLAME_FALLBACK,
 )
 
 _ARABIC_INDIC = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
@@ -526,6 +543,52 @@ def repeats_the_previous_reply(text: str, previous: str) -> float:
     return difflib.SequenceMatcher(None, before, now).ratio()
 
 
+#: How many garment photos one product may appear in, in one reply, unless the
+#: customer asked for its colours. One. See `tools.base.MAX_PRODUCT_IMAGES` --
+#: this is the same rule judged from the outside, on what actually went out.
+_PHOTOS_PER_PRODUCT = 1
+
+
+def claimed_a_photo_it_did_not_send(text: str, photos: int) -> str:
+    """A reply whose words claim a picture the reply is not carrying.
+
+    The audited conversation, three messages running: «دي صورتهم الاتنين 👆»
+    with one photo attached and one refused by the platform, then «دي صورة
+    Lightweight الأسود 👆» with none at all, then «دي صور الاتنين تاني 👆». The
+    customer said each time that nothing had arrived, and was right each time.
+
+    Judged here on the count alone -- the per-product form of the same rule
+    lives in `assistant/photo_claims.py` and runs inside the turn, where the
+    labels are. What a gate can check without them is the case that cannot be
+    argued with: the sentence says a picture is coming and nothing went.
+    """
+    if photos > 0 or not photo_claims.promises_images(text):
+        return ""
+    return (text or "").strip()[:60]
+
+
+def too_many_photos_of_one_product(counts: dict, asked_for_colors: bool) -> str:
+    """A reply that answered "show me both" with a gallery of each.
+
+    «الاتنين» -- both -- is a request for two photographs, one per product. It
+    produced every colourway of both, because `more_images` is one flag meaning
+    two different things and nothing counted pictures across the turn. A
+    screenful of notifications for a two-word message is not a better answer
+    than two pictures; it is the shop not having listened.
+
+    The exemption is the request the gallery exists for: a customer who asked
+    for the colours gets the colours.
+    """
+    if asked_for_colors:
+        return ""
+    over = sorted(
+        f"{product or 'unnamed'}={count}"
+        for product, count in (counts or {}).items()
+        if count > _PHOTOS_PER_PRODUCT
+    )
+    return ", ".join(over)
+
+
 def layout_problems(text: str) -> list[str]:
     """Every way a reply is laid out so the customer reads something other
     than what was written.
@@ -577,6 +640,12 @@ def run(runs: int, real: bool, only: str) -> dict:
                 reply["expects_text"] = list(step.expects_text)
                 reply["expects_photo"] = bool(step.expects_photo)
                 reply["sizing_question"] = bool(step.sizing_question)
+                reply["asked_for_colors"] = bool(step.asked_for_colors)
+                # What the customer actually typed. The vocabulary rule below
+                # is about the gap between the question and the answer -- a
+                # customer asking for a garment this shop does not sell -- and
+                # it cannot be judged from the reply alone.
+                reply["customer_text"] = step.text
                 replies.append(reply)
     return {"facts": facts, "vocabulary": vocabulary, "replies": replies}
 
@@ -650,6 +719,17 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                     "about sizes, measurements or fit"
                 )
 
+            # One product, one photo -- unless the customer asked for the
+            # colours, which is the only request a gallery answers.
+            gallery = too_many_photos_of_one_product(
+                reply.get("photos_by_product") or {}, bool(reply.get("asked_for_colors"))
+            )
+            if gallery:
+                failures.append(
+                    f"{where}: more than one photo of the same product went out "
+                    f"({gallery}) and the customer never asked for its colours"
+                )
+
             if silent:
                 # A deliberately silent turn: `confirm_order` sends the
                 # confirmation itself. Nothing below applies to no text.
@@ -672,6 +752,21 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
 
             if looks_truncated(text):
                 failures.append(f"{where}: the reply reads as cut off")
+
+            claimed = claimed_a_photo_it_did_not_send(text, photos_out)
+            if claimed:
+                failures.append(
+                    f"{where}: the reply says a photo is on its way and none went "
+                    f"out: {claimed!r}"
+                )
+
+            blamed = photo_claims.blames_the_customer(text)
+            if blamed:
+                failures.append(
+                    f"{where}: the reply blamed the customer's own phone or "
+                    f"connection ({blamed!r}) for a photo that did not arrive -- "
+                    "the picture leaves from here, so the failure is ours"
+                )
 
             dodged = dodged_a_sleeve_question(text)
             if dodged:
