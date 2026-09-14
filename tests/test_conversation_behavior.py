@@ -627,7 +627,16 @@ def test_the_prompt_did_not_become_a_wall_of_text():
     # a real reply to "صباحو" that padded itself with "ومستنيين النهارده حلو",
     # a sentence carrying no information at all; a model told only to be
     # warm writes that, and only an explicit rule stops it.
-    assert 3000 < len(SYSTEM_PROMPT) < 16500
+        #
+        # Raised again (16500 -> 17200) for sleeve length. Same shape once
+        # more: `Product.sleeve` is now a real field the tools filter and
+        # answer on, but "null means nobody recorded it, and that is not
+        # «sleeveless» and not a licence to work it out from the category" is
+        # a rule no tool can enforce -- the tool can only hand over a null.
+        # Three lines, and they are what stop the answer that started this:
+        # the bot telling a customer holding a half-sleeve polo that it had no
+        # data about sleeve length.
+    assert 3000 < len(SYSTEM_PROMPT) < 17400
 
 
 # --------------------------------------------------------------------------

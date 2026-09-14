@@ -12,6 +12,7 @@ from domain.services import (
     catalog,
     runtime_flags,
     shipping,
+    sleeves,
 )
 from domain.services.size_charts import MEASUREMENT_NOTE, get_chart
 
@@ -37,6 +38,16 @@ def get_categories(ctx: ToolContext) -> dict:
     "`colors` lists every colourway the product comes in including sold-out ones -- it describes "
     "the product, it is not an offer; `in_stock_colors` is the only list you may present as "
     "available. Never deny a colour that is in `in_stock_colors`, and never offer one that is not. "
+    "`sleeve` filters by sleeve length -- half, long or sleeveless -- and is how you answer "
+    "'do you have anything half sleeve'. Every product also carries `sleeve` in the result: it is "
+    "half / long / sleeveless, or null meaning nobody has recorded it for that product. Null is "
+    "not 'sleeveless' and it is not an invitation to work it out from the category -- say it is "
+    "not recorded and offer to check. "
+    "When you filter by `sleeve`, the result also carries `sleeve_unrecorded`: the products that "
+    "matched everything else and were dropped only because nobody has recorded their sleeve "
+    "length. If that list is not empty, an empty `products` does NOT mean the shop has none -- it "
+    "means nobody wrote it down for those, and saying 'all our hoodies are long sleeve' is you "
+    "inventing it. Name them as the ones you cannot confirm, and offer to check. "
     "Search for what the customer actually asked for, not for a product name you happen to know. "
     "The result is what you may choose from, not what you should list: for a vague request, offer "
     "two or three that fit and let them narrow it down.",
@@ -45,6 +56,13 @@ def get_categories(ctx: ToolContext) -> dict:
         "style": {"type": "string", "description": "A style facet, e.g. oversized, zip-through."},
         "department": {"type": "string", "description": "unisex or women."},
         "collection": {"type": "string", "description": "Optional; most products have none."},
+        "sleeve": {
+            "type": "string",
+            "enum": list(sleeves.SLEEVES),
+            "description": "Sleeve length: half (also called short sleeve, «نص كم»), long, or "
+            "sleeveless. Use it whenever the customer names one, on its own or beside a category "
+            "-- 'polo نص كم' is category plus sleeve, not a product name.",
+        },
         "query": {"type": "string", "description": "Free text, any language or spelling."},
     },
 )
@@ -54,6 +72,7 @@ def get_products(
     style: str | None = None,
     department: str | None = None,
     collection: str | None = None,
+    sleeve: str | None = None,
     query: str | None = None,
 ) -> dict:
     return catalog.get_products(
@@ -62,6 +81,7 @@ def get_products(
         style=style,
         department=department,
         collection=collection,
+        sleeve=sleeve,
         query=query,
     )
 
@@ -121,7 +141,9 @@ def _not_found(ctx: ToolContext, product_id: str) -> dict:
 
 @tool(
     "get_variants",
-    "Every variant of one product with its variant_id, price and availability. You must call this "
+    "Every variant of one product with its variant_id, price and availability, plus that "
+    "product's `sleeve` -- half, long, sleeveless, or null when nobody has recorded it, which is "
+    "never a reason to work one out from the category. You must call this "
     "before adding anything to a cart -- a variant_id cannot be guessed or constructed. Sold-out "
     "variants are returned too so you can say which combinations exist; `in_stock` is the only "
     "list you may offer from. If you already called this for the same product earlier in this "

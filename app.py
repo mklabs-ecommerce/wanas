@@ -139,6 +139,40 @@ def _ensure_catalog_seeded() -> None:
     )
 
 
+def _backfill_product_sleeves() -> None:
+    """Fill in sleeve length for the products the seed file records one for,
+    on every boot, and only where the database has none.
+
+    Separate from `_ensure_catalog_seeded` above because it has to run on a
+    catalog that is *not* empty -- which is every real deployment. The seed
+    import is a one-time rescue for a blank database; this is a field that did
+    not exist when these eighteen products were first loaded, and a column
+    `domain/schema_drift.py` adds arrives NULL. NULL is what the bot has to
+    answer "I don't have that recorded" to, and answering that about the polo
+    a customer is holding in their hand is what this whole field is for.
+
+    Additive and idempotent, the same contract as everything else in this
+    section: a product whose sleeve is already set -- by the seed on an
+    earlier boot, or by a staff member in the dashboard since -- is never
+    touched, and a product the seed says nothing about stays NULL rather than
+    being guessed at.
+    """
+    from domain.seed.products import backfill_sleeves
+
+    try:
+        with session_scope() as db:
+            result = backfill_sleeves(db)
+    except Exception:
+        log.exception("could not backfill product sleeve lengths")
+        return
+    if result["updated"]:
+        log.warning(
+            "sleeve length filled in for %d product(s) that had none: %s",
+            len(result["updated"]),
+            ", ".join(result["updated"]),
+        )
+
+
 def _published_flat_shipping_fee() -> Decimal | None:
     """The one shipping number this shop publishes without looking anything up.
 
@@ -350,6 +384,7 @@ async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
     _ensure_schema_columns()
     _ensure_catalog_seeded()
+    _backfill_product_sleeves()
     _ensure_shipping_fees_set()
     # The one place domain/services/conversation_reset.py learns how to clear
     # chat history, without domain/ ever importing the assistant layer.

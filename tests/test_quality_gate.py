@@ -327,3 +327,47 @@ def test_a_badly_laid_out_reply_fails_the_gate():
     golden = _run(_reply("confirm_order", 2, "• تيشيرت Boxy WNS Tee — لون Black، السعر 590 جنيه"))
     fresh = _run(_reply("confirm_order", 2, "• تيشيرت Boxy WNS Tee — لون Black — 590 جنيه"))
     assert any("swap" in f for f in check(golden, fresh))
+
+
+# --- sleeve length --------------------------------------------------------
+#
+# The rule exists because a customer asked for «البولو النص كم» and was told
+# the shop had two polos and no published data about sleeve length for either,
+# with an offer to fetch a person -- about a polo that is on the shelf and is
+# half-sleeve. Sleeve length is a catalog field now (`Product.sleeve`), so
+# that sentence is no longer a true one.
+
+
+def test_answering_a_sleeve_question_with_no_data_fails():
+    golden = _run(_reply("sleeve_question", 0, "أيوه، عندنا نص كم: Knitted Polo", ("get_products",)))
+    fresh = _run(
+        _reply(
+            "sleeve_question",
+            0,
+            "عندنا بولو اتنين بس معنديش المعلومة دي عن طول الكم. أحولك لحد من الفريق؟",
+            ("get_products",),
+        )
+    )
+    failures = check(golden, fresh)
+    assert any("sleeve length is a catalog field" in f for f in failures), failures
+
+
+def test_naming_the_sleeve_length_passes():
+    reply = _reply(
+        "sleeve_question", 0, "أيوه، الـ Knitted Polo نص كم. تحب تشوف الألوان؟", ("get_products",)
+    )
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_pleading_ignorance_about_something_else_is_not_this_rule():
+    """A size chart nobody published is a real null and "I don't have it" is
+    the correct answer. The rule only fires when a sleeve word is in the same
+    reply -- otherwise it would ban the honest answer everywhere."""
+    assert quality_gate.dodged_a_sleeve_question("معنديش المعلومة دي عن جدول المقاسات") == ""
+
+
+def test_saying_the_sleeve_is_not_recorded_without_reaching_for_a_handoff():
+    """A product staff genuinely have not filled in still has a null, and the
+    prompt asks the bot to say so. What must not come back is that sentence
+    dressed as "I have no data at all"."""
+    assert quality_gate.dodged_a_sleeve_question("طول الكم مش متسجّل عندنا للقطعة دي، أتأكد وأقولك") == ""

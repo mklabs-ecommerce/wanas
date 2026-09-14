@@ -197,3 +197,16 @@ def test_the_model_spellings_do_not_widen_a_search(seeded):
     ]
     # `zip` on its own is still the whole zip family, not just Zipup.
     assert catalog.get_products(seeded, query="zip")["count"] >= 3
+
+
+def test_a_question_mark_is_not_part_of_the_last_word():
+    """`_NON_WORD` keeps the whole Arabic block, and Arabic's punctuation
+    lives in it -- so «؟» and «،» stayed glued to the word in front of them.
+
+    Every question a customer types ends in one, which made the last word of
+    almost every real query the one word the synonym table could not
+    translate: «نص كم؟» is not «نص كم», and «هودي؟» is not «هودي».
+    """
+    assert normalize("عايز هودي؟") == normalize("عايز هودي")
+    assert normalize("اسود، ولا ابيض؟") == normalize("اسود ولا ابيض")
+    assert matches("WANAS Hoodie Hoodies & Sweatshirts", "عندكم هودي؟") is True

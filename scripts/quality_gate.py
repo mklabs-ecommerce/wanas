@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Nine checks, and each one is a failure mode this repository has already paid
+Ten checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -53,7 +53,11 @@ for at least once:
    both at the send boundary, and this rule keeps them from being written
    in the first place: the dashboard shows staff the unrepaired string, and
    every shape the prompt asks for already renders correctly on its own.
-9. **Photographs still go out.** Only `get_variants` attaches one, so a change
+9. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
+   catalog field, so "I have no data about sleeve length" beside the words
+   «نص كم» is the bot refusing to read something it is holding -- which is
+   exactly the reply that made the field necessary.
+10. **Photographs still go out.** Only `get_variants` attaches one, so a change
    that lets the model answer a product question without calling it can quietly
    stop a clothes shop ever showing the clothes. Judged against the golden run:
    sending fewer is a judgement, sending none is a regression.
@@ -266,6 +270,53 @@ _LATIN_THEN_NUMBER = re.compile(
 )
 
 
+#: The sleeve words, as a reply would write them. Deliberately the shop's own
+#: Arabic plus the English the model falls back to -- this is matched against
+#: what *went out*, not against what the customer typed.
+_SLEEVE_WORDS = (
+    "نص كم", "نُص كم", "نصف كم", "كم قصير", "كم طويل", "من غير كم", "بدون كم",
+    "طول الكم", "half sleeve", "short sleeve", "long sleeve", "sleeveless",
+)
+
+#: "I don't have that information". Every one of these is a sentence the bot
+#: has actually sent, and each of them is correct somewhere -- about a size
+#: chart nobody published, about a colour the shop never made. Beside a sleeve
+#: word it is none of those: sleeve length is a catalog field now, and a reply
+#: that reaches for one of these instead of reading it has fallen back to the
+#: exact answer that made the field necessary.
+_NO_DATA = (
+    "معنديش المعلومة", "معنديش معلومات", "معنديش بيانات", "مش متوفرة عندي",
+    "مفيش معلومات", "مفيش بيانات", "مش موجودة عندي", "مش عارف",
+    "no data", "no information", "not available", "don't have",
+)
+
+
+def dodged_a_sleeve_question(text: str) -> str:
+    """The sentence a reply used to get out of answering about sleeve length.
+
+    A customer asked for «البولو النص كم» and was told the shop has two polos
+    and no published data about sleeve length for either, plus an offer to
+    fetch a person -- about a polo that is on the shelf and is half-sleeve.
+    Two holes behind it: «نص كم» was not in the catalog's vocabulary, and
+    nothing recorded sleeve length at all. Both are closed
+    (`domain/services/sleeves.py`), and this is the rule that keeps them
+    closed: a reply that mentions sleeve length and pleads ignorance in the
+    same breath is the failure coming back.
+
+    Deliberately *not* a ban on "not recorded" in general. A product the shop
+    genuinely has not filled in still has a null, and saying so is the right
+    answer -- what this catches is saying it *and* offering a handoff, which
+    is what turns an answerable question into somebody's afternoon.
+    """
+    lowered = (text or "").lower()
+    if not any(word.lower() in lowered for word in _SLEEVE_WORDS):
+        return ""
+    excuse = next((phrase for phrase in _NO_DATA if phrase.lower() in lowered), "")
+    if not excuse:
+        return ""
+    return excuse
+
+
 def layout_problems(text: str) -> list[str]:
     """Every way a reply is laid out so the customer reads something other
     than what was written.
@@ -379,6 +430,13 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
 
             if looks_truncated(text):
                 failures.append(f"{where}: the reply reads as cut off")
+
+            dodged = dodged_a_sleeve_question(text)
+            if dodged:
+                failures.append(
+                    f"{where}: the reply talked about sleeve length and then said "
+                    f"{dodged!r} -- sleeve length is a catalog field, read it"
+                )
 
             misspelled = misspelled_shop_name(text)
             if misspelled:

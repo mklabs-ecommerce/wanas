@@ -168,6 +168,13 @@ class Product(Base):
     department: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     style: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     collection: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    #: `half`, `long`, `sleeveless` -- or NULL, which means nobody has recorded
+    #: it, not "no sleeves". Shopify has no field for sleeve length, so it sits
+    #: here beside `style` / `department` / `collection` for the same reason
+    #: they do. A customer asking for «البولو النص كم» was told the shop had no
+    #: data about sleeve length on either polo, which was true and is the whole
+    #: point of the column; see `domain/services/sleeves.py`.
+    sleeve: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     size_chart: Mapped[str | None] = mapped_column(String(60), nullable=True)
     #: A chart picture with no published measurements behind it -- what a
     #: staff member uploads off their laptop when creating a product. Held as

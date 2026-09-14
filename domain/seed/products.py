@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from config.settings import DATA_DIR
 from domain.models import Product, Variant
+from domain.services import sleeves
 
 SEED_PATH = DATA_DIR / "products_seed.json"
 
@@ -65,6 +66,7 @@ def import_products(session: Session, path: Path | None = None, *, verify: bool 
         product.department = raw["department"]
         product.style = raw.get("style") or []
         product.collection = raw.get("collection")
+        product.sleeve = sleeves.normalise(raw.get("sleeve"))
         product.size_chart = raw.get("size_chart")
         product.sizes = raw.get("sizes") or []
         product.colors = raw.get("colors") or []
@@ -120,3 +122,44 @@ def import_products(session: Session, path: Path | None = None, *, verify: bool 
             raise SeedError(f"expected {EXPECTED_IN_STOCK} in stock, imported {stats['in_stock']}")
 
     return stats
+
+
+def backfill_sleeves(session: Session, path: Path | None = None) -> dict:
+    """Give the products the seed knows the sleeve length of one, where the
+    database has none.
+
+    `import_products` above only ever runs against an empty catalog
+    (`app._ensure_catalog_seeded`), so adding a field to the seed file reaches
+    a fresh database and nothing else. Production has had these eighteen
+    products since long before `Product.sleeve` existed, and a column added by
+    `domain/schema_drift.py` arrives full of NULLs -- which is precisely the
+    "no published data about sleeve length" answer that made this work
+    necessary, now with the machinery in place to fix it and no data to fix it
+    with.
+
+    **Only where it is NULL.** Staff can set sleeve length from the dashboard,
+    and a boot-time backfill that reasserted the seed's answer every deploy
+    would quietly undo them. NULL means nobody has said; the seed is somebody
+    saying, and only the first time.
+
+    Which products are half-sleeve was settled against the live store by SKU,
+    not by reading titles: `products_seed.json`'s `product_id` is the prefix
+    every one of that product's Shopify SKUs is built from (`_variant_id`), so
+    `knitted-polo` is the Shopify product carrying `knitted-polo-s-olive` and
+    nothing else. `tests/test_sleeves.py` pins the set against the Shopify
+    handles the shop merged those products out of. Anything not on the list --
+    the hoodies, the jackets, the sweatpants, the other polo -- is left NULL
+    on purpose rather than guessed at from its category.
+    """
+    updated: list[str] = []
+    for raw in load_seed(path):
+        wanted = sleeves.normalise(raw.get("sleeve"))
+        if wanted is None:
+            continue
+        product = session.get(Product, raw["product_id"])
+        if product is None or product.sleeve is not None:
+            continue
+        product.sleeve = wanted
+        updated.append(product.product_id)
+    session.flush()
+    return {"updated": updated}

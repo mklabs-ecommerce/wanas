@@ -8,6 +8,7 @@
       "boxy-fit"
     ],
     "collection": null,
+    "sleeve": "half",
     "size_chart": "wns-boxy-tee",
     "sizes": [
       "S",
@@ -228,6 +229,7 @@
       "graphic"
     ],
     "collection": "CAIROKEE MERCH",
+    "sleeve": "half",
     "size_chart": "oversized-graphic-tee",
     "sizes": [
       "S",
@@ -360,6 +362,7 @@
       "graphic"
     ],
     "collection": "CAIROKEE MERCH",
+    "sleeve": "half",
     "size_chart": "oversized-graphic-tee",
     "sizes": [
       "S",
@@ -492,6 +495,7 @@
       "graphic"
     ],
     "collection": null,
+    "sleeve": "half",
     "size_chart": "oversized-graphic-tee",
     "sizes": [
       "S",
@@ -584,6 +588,7 @@
       "ringer"
     ],
     "collection": null,
+    "sleeve": "half",
     "size_chart": "ringer-boxy-tee",
     "sizes": [
       "S",
@@ -858,6 +863,7 @@
       "pullover"
     ],
     "collection": "CAIROKEE MERCH",
+    "sleeve": null,
     "size_chart": "oversized-hoodie",
     "sizes": [
       "S",
@@ -990,6 +996,7 @@
       "crewneck"
     ],
     "collection": "WINTER COLLECTION",
+    "sleeve": null,
     "size_chart": "oversized-crewneck",
     "sizes": [
       "S",
@@ -1194,6 +1201,7 @@
       "pullover"
     ],
     "collection": "WINTER COLLECTION",
+    "sleeve": null,
     "size_chart": "oversized-hoodie",
     "sizes": [
       "S",
@@ -1412,6 +1420,7 @@
       "quarter-zip"
     ],
     "collection": "WINTER COLLECTION",
+    "sleeve": null,
     "size_chart": "quarter-zip",
     "sizes": [
       "S",
@@ -1618,6 +1627,7 @@
       "zip-through"
     ],
     "collection": "WINTER COLLECTION",
+    "sleeve": null,
     "size_chart": "wanas-zip-hoodie",
     "sizes": [
       "S",
@@ -1833,6 +1843,7 @@
       "zip-through"
     ],
     "collection": "WINTER COLLECTION",
+    "sleeve": null,
     "size_chart": "zipup",
     "sizes": [
       "S",
@@ -2039,6 +2050,7 @@
       "knitted"
     ],
     "collection": null,
+    "sleeve": "half",
     "size_chart": "knitted-polo",
     "sizes": [
       "S",
@@ -2327,6 +2339,7 @@
       "oversized"
     ],
     "collection": "WINTER COLLECTION",
+    "sleeve": null,
     "size_chart": "oversized-polo",
     "sizes": [
       "S",
@@ -2543,6 +2556,7 @@
       "lightweight"
     ],
     "collection": null,
+    "sleeve": null,
     "size_chart": "wide-leg-sweatpants",
     "sizes": [
       "S",
@@ -2758,6 +2772,7 @@
       "wide-leg"
     ],
     "collection": "WINTER COLLECTION",
+    "sleeve": null,
     "size_chart": "wide-leg-sweatpants",
     "sizes": [
       "S",
@@ -2978,6 +2993,7 @@
       "worker"
     ],
     "collection": null,
+    "sleeve": null,
     "size_chart": "worker-jacket",
     "sizes": [
       "S",
@@ -3231,6 +3247,7 @@
       "fitted"
     ],
     "collection": null,
+    "sleeve": null,
     "size_chart": "wns-tops",
     "sizes": [
       "S",
@@ -3411,6 +3428,7 @@
       "fitted"
     ],
     "collection": null,
+    "sleeve": null,
     "size_chart": "wns-tops",
     "sizes": [
       "S",

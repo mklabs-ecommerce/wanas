@@ -51,6 +51,14 @@ _LETTER_FOLD = str.maketrans(
 
 #: Anything that is not a letter or a digit becomes a space. Keeps `quarter-zip`
 #: and `quarter zip` from being different searches.
+#:
+#: The Arabic block it deliberately keeps (`؀-ۿ`) contains Arabic's own
+#: punctuation as well as its letters, so `_NON_WORD` alone left «؟» and «،»
+#: glued to the word in front of them -- and «نص كم؟» is a different token
+#: from «نص كم», which is a synonym lookup that silently misses. Every
+#: question a customer types ends in one of these, so the last word of almost
+#: every real query was the one word that could not be translated.
+_ARABIC_PUNCT = re.compile(r"[،-؟٪-٭۔۝]")
 _NON_WORD = re.compile(r"[^\w؀-ۿ]+", re.UNICODE)
 
 
@@ -60,6 +68,7 @@ def normalize(text: str) -> str:
         return ""
     folded = unicodedata.normalize("NFKC", str(text)).lower()
     folded = _DIACRITICS.sub("", folded)
+    folded = _ARABIC_PUNCT.sub(" ", folded)
     folded = folded.translate(_LETTER_FOLD)
     folded = _NON_WORD.sub(" ", folded)
     return " ".join(folded.split())
@@ -180,6 +189,57 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "مطبوع": ("graphic",),
     "رسمه": ("graphic",),
     "برسمه": ("graphic",),
+    # --- sleeve length ----------------------------------------------------
+    # The catalog says "half sleeve" and the customer says «نص كم», and for a
+    # long time neither reached the other: a question about the half-sleeve
+    # polo matched nothing, so the bot answered that it had no data about
+    # sleeve length -- about a polo that is on the shelf and is half-sleeve.
+    # The values on the right are the words `catalog._haystack` now carries
+    # for a product whose `sleeve` is set (`domain/services/sleeves.py`).
+    #
+    # Every spacing and spelling a phone keyboard actually produces is listed
+    # rather than stemmed. «نُص كُم» folds onto «نص كم» in `normalize`, but
+    # «نصكم» typed as one word does not -- a missing space is not a diacritic,
+    # and a customer who leaves it out is asking the same question.
+    "نص كم": ("half sleeve",),
+    "نصكم": ("half sleeve",),
+    "نص كم قصير": ("half sleeve",),
+    "نصف كم": ("half sleeve",),
+    "نصفكم": ("half sleeve",),
+    "نص الكم": ("half sleeve",),
+    "كم قصير": ("half sleeve",),
+    "كمقصير": ("half sleeve",),
+    "هاف": ("half sleeve",),
+    "هاف كم": ("half sleeve",),
+    "هاف سليف": ("half sleeve",),
+    "هافسليف": ("half sleeve",),
+    "half": ("half sleeve",),
+    "half sleeve": ("half sleeve",),
+    "half sleeves": ("half sleeve",),
+    "halfsleeve": ("half sleeve",),
+    "short sleeve": ("half sleeve",),
+    "short sleeves": ("half sleeve",),
+    "shortsleeve": ("half sleeve",),
+    "nos kom": ("half sleeve",),
+    "noskom": ("half sleeve",),
+    "nous kom": ("half sleeve",),
+    "كم طويل": ("long sleeve",),
+    "كمطويل": ("long sleeve",),
+    "كم كامل": ("long sleeve",),
+    "لونج": ("long sleeve",),
+    "لونج سليف": ("long sleeve",),
+    "لونجسليف": ("long sleeve",),
+    "long": ("long sleeve",),
+    "long sleeve": ("long sleeve",),
+    "long sleeves": ("long sleeve",),
+    "longsleeve": ("long sleeve",),
+    "بدون كم": ("sleeveless",),
+    "من غير كم": ("sleeveless",),
+    "مفيش كم": ("sleeveless",),
+    "سليفلس": ("sleeveless",),
+    "sleeveless": ("sleeveless",),
+    "no sleeve": ("sleeveless",),
+    "no sleeves": ("sleeveless",),
     # --- department ------------------------------------------------------
     "حريمي": ("women",),
     "بناتي": ("women",),

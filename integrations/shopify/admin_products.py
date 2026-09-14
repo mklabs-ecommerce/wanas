@@ -45,6 +45,7 @@ from domain.models import (
     StockWaitlistEntry,
     Variant,
 )
+from domain.services import sleeves
 from integrations.shopify import (
     admin_collections,
     catalog as shopify_catalog,
@@ -885,6 +886,7 @@ def create_product(
     collection: str | None,
     size_chart: str | None,
     variants: list[dict],
+    sleeve: str | None = None,
     image_url: str | None = None,
     images: list[dict] | None = None,
     size_chart_file_gid: str | None = None,
@@ -908,6 +910,10 @@ def create_product(
     `size_chart_file_gid` points `custom.size_chart` at a file already in
     Shopify Files (`files.upload_to_files`); `size_chart_url` is that same
     file's url, stored locally so the bot can send it without asking Shopify.
+
+    `sleeve` is half / long / sleeveless, or None for "not recorded" -- the
+    wanas.db-only field `domain/services/sleeves.py` documents. Shopify has
+    no home for it, so like `style` it is mirrored and never pushed.
 
     `collection` is the merchandising label the bot's search reads;
     `collection_gids` additionally puts the product *in* those Shopify
@@ -950,6 +956,7 @@ def create_product(
             department=department,
             style=style,
             collection=collection,
+            sleeve=sleeve,
             size_chart=size_chart,
             variants=variants,
             image_url=image_url,
@@ -989,6 +996,7 @@ def _finish_create(
     department: str,
     style: list[str] | None,
     collection: str | None,
+    sleeve: str | None,
     size_chart: str | None,
     variants: list[dict],
     image_url: str | None,
@@ -1082,6 +1090,7 @@ def _finish_create(
         department=department,
         style=style,
         collection=collection,
+        sleeve=sleeve,
         size_chart=size_chart,
         variants=variants,
         image_url=image_url,
@@ -1106,6 +1115,7 @@ def _mirror_local(
     size_chart: str | None,
     variants: list[dict],
     image_url: str | None,
+    sleeve: str | None = None,
     images: list[dict] | None = None,
     media_by_color: dict[str, dict] | None = None,
     size_chart_url: str | None = None,
@@ -1121,6 +1131,14 @@ def _mirror_local(
     product.department = department
     product.style = list(style or [])
     product.collection = collection
+    #: Absent, not blank. `None` here means the caller said nothing about
+    #: sleeve length and whatever the row already holds stands -- which is
+    #: what stops `product_import` (whose only source is Shopify, and Shopify
+    #: has no such field) from blanking a value staff set in the dashboard
+    #: the next time somebody edits the product in Shopify Admin. To *clear*
+    #: it, pass "" and `sleeves.normalise` folds that back to NULL.
+    if sleeve is not None:
+        product.sleeve = sleeves.normalise(sleeve)
     product.size_chart = size_chart
     product.sizes = summary["sizes"]
     product.colors = summary["colors"]
@@ -1512,6 +1530,7 @@ def update_product(
     style: list[str] | None = None,
     collection: str | None = None,
     collection_gids: list[str] | None = None,
+    sleeve: str | None = None,
     size_chart: str | None = None,
     variant_updates: list[dict] | None = None,
     variant_images: list[dict] | None = None,
@@ -1606,6 +1625,10 @@ def update_product(
         product.style = style
     if collection is not None:
         product.collection = collection
+    if sleeve is not None:
+        # "" clears it back to "not recorded"; omitting the field entirely
+        # leaves it alone, the same contract as every other field here.
+        product.sleeve = sleeves.normalise(sleeve)
     if size_chart is not None:
         product.size_chart = size_chart
 

@@ -5,9 +5,9 @@ checks that what comes back still means the same thing. They have to be the
 same scenarios or a speed-up and the judgement about whether it cost anything
 are not about the same conversations.
 
-They are the six shapes that actually arrive: a greeting, a product question, a
-sizing question, adding to the cart, placing the order, and the shipping
-question -- which is the one with a single correct stored answer and therefore
+They are the seven shapes that actually arrive: a greeting, a product question,
+a sizing question, adding to the cart, placing the order, the sleeve question,
+and the shipping question -- which is the one with a single correct stored answer and therefore
 the one worth watching for a needless trip through the tool loop.
 
 Each step carries the customer's real words (both modes send exactly these) and
@@ -86,7 +86,7 @@ def resolve(session) -> dict:
 
 
 def build(facts: dict) -> list[Scenario]:
-    """The six scenarios, with the resolved ids folded in."""
+    """The seven scenarios, with the resolved ids folded in."""
     product_id = facts["product_id"]
     variant_id = facts["variant_id"]
     name = facts["product_name"]
@@ -213,6 +213,27 @@ def build(facts: dict) -> list[Scenario]:
                     # so requiring `confirm_order` on this step would fail the
                     # correct behaviour.
                 ),
+            ],
+        ),
+        Scenario(
+            # The half-sleeve question, which the shop got wrong in public:
+            # «البولو النص كم» came back as "we have two polos and no published
+            # data about sleeve length for either", plus an offer to fetch a
+            # person -- about a polo that is on the shelf and is half-sleeve.
+            # Pinned here rather than only in a unit test because the failure
+            # was never in the lookup: it was the reply reaching for a handoff
+            # instead of a field. `quality_gate.dodged_a_sleeve_question` is
+            # the rule, this is the conversation it runs on.
+            "sleeve_question",
+            [
+                Step(
+                    "عندكم حاجة نص كم؟",
+                    plan=[
+                        [("get_products", {"sleeve": "half"})],
+                        f"أيوه، عندنا كذا قطعة نص كم، منها تيشيرت {name}. تحب تشوف إيه؟",
+                    ],
+                    expects_tools=("get_products",),
+                )
             ],
         ),
         Scenario(

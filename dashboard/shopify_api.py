@@ -365,6 +365,7 @@ def product_detail(product_gid: str, wanas_staff: str | None = Cookie(default=No
                 "department": local.department,
                 "style": local.style,
                 "collection": local.collection,
+                "sleeve": local.sleeve,
                 "size_chart": local.size_chart,
             }
         else:
@@ -602,6 +603,7 @@ def create_product(payload: dict = Body(...), wanas_staff: str | None = Cookie(d
                 department=payload["department"],
                 style=payload.get("style"),
                 collection=payload.get("collection"),
+                sleeve=payload.get("sleeve"),
                 size_chart=payload.get("size_chart"),
                 variants=payload["variants"],
                 image_url=payload.get("image_url") or None,
@@ -636,6 +638,9 @@ def update_product(
                 style=payload.get("style"),
                 collection=payload.get("collection"),
                 collection_gids=payload.get("collection_gids"),
+                # Present-but-blank clears it; absent leaves it alone. A save
+                # that never opened the sleeve field must not blank it.
+                sleeve=payload.get("sleeve"),
                 size_chart=payload.get("size_chart"),
                 variant_updates=payload.get("variant_updates"),
                 variant_images=payload.get("variant_images"),
