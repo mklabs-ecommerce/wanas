@@ -529,7 +529,9 @@ Taking the median pair, and the other stages as measured:
 | Shopify live read | 419 ms | **0 ms waited** (overlapped) |
 | retry guards fired (dangling promise / truncation / empty / loop cap) | 1 in 27 turns | **0 in 27** |
 
-**End to end, per average reply: 21.3 s → about 9.7 s (−55%).** On the best of
+**End to end, per average reply: 21.3 s → about 9.7 s (−55%)** by the
+benchmark, and **8.69 s (−59%)** on the first real customer turns after the
+deploy — see below. On the best of
 the three runs it is 6.8 s and on the worst 12.4 s — the same reply, the same
 code, a different hour on the same upstream.
 
@@ -554,7 +556,7 @@ three runs. There is nothing left in this repository to optimise. The next
 second has to come from the model, the provider, or the shape of the
 conversation.
 
-### The deploy, and the one number that has to wait for customers
+### The deploy, and the numbers real customers produced
 
 The branch is deployed to Railway (`wanas`, production) and every flag reads as
 intended in the live process: `reasoning {'effort': 'low'}`, debounce
@@ -562,23 +564,97 @@ intended in the live process: `reasoning {'effort': 'low'}`, debounce
 confirmed reaching stdout under the app's own logging config, in the shape
 `scripts/latency_report.py` parses.
 
-What is not here yet is the post-change average **over real customer
-messages**. This shop averages about 3.5 answered turns a day and none has
-arrived since the deploy went out. When they do, two commands produce it with
-no further work:
+The freshest "before" from real customers, for comparison: over the **three
+days** before the deploy, 5 answered WhatsApp turns at **mean 25.48 s, p50
+25.65 s, max 57.79 s** for the agent turn alone — about 32 s end to end,
+against the 60-day mean of 21.3 s. The upstream was having a slow spell, which
+is the same thing paired run C caught, and it is the condition the change
+should be judged under rather than a quiet hour.
+
+They are read back with:
 
 ```bash
 railway logs --service wanas --json | python scripts/latency_report.py -
 railway run --service wanas -- python scripts/prod_turn_latency.py --days 1
 ```
 
-The freshest "before" from real customers is worth recording alongside it,
-because it says how bad the tail had become on the old build: over the **last
-three days**, 5 answered WhatsApp turns, **mean 25.48 s, p50 25.65 s, max
-57.79 s** for the agent turn alone — so about 32 s end to end, against the
-60-day mean of 21.3 s. That is the same upstream slowness the paired run C
-caught (21.5 s before / 11.2 s after), and it is the condition the change
-should be judged under rather than a quiet hour.
+### The real production average, after the deploy
+
+The first real customer turns on the merged build, read with the two commands
+above. Three answered WhatsApp turns, all from one conversation:
+
+```
+turns: 3
+
+TOTAL (ms)
+  total                 n=3  mean=8691  p50=8418  p90=10690  max=10690
+  reply (excl. wait)    n=3  mean=7635  p50=7374  p90= 9646  max= 9646
+
+STAGES (ms, share of all wall-clock)
+  llm                   n=3  mean=6884  p50=6669  p90=8944   79.2%
+  debounce_wait         n=3  mean=1001  p50=1001  p90=1001   11.5%
+  send                  n=3  mean= 644  p50= 610  p90= 731    7.4%
+  record_inbound        n=3  mean=  56  p50=  43  p90=  82    0.6%
+  post_send             n=3  mean=  34                        0.4%
+  session_save          n=3  mean=  30                        0.3%
+  history_load          n=3  mean=  20                        0.2%
+  tools                 n=1  mean=  11                        0.0%
+  webhook_verify        n=3  mean=   0                        0.0%
+  shopify_wait          n=1  mean=   0                        0.0%
+  unattributed                                                0.2%
+```
+
+**21.3 s → 8.69 s on real customer messages: −59%.** Three turns is a small
+sample and is labelled as one, but it is the whole path — Meta's webhook in,
+the debounce, the model, the tools, Meta's send out — measured on real
+messages from a real phone, and it lands inside the range the benchmark
+predicted (6.8 s to 12.4 s).
+
+Every change is visible in it and doing what it was built to do:
+
+* `debounce_wait` is **1,000.6 ms**, not 6,000 — the adaptive window, on a
+  customer nobody had seen fragment.
+* `reasoning_tokens` came back **0, 21, 9** across the four hops, against the
+  40–533 that motivated iteration 2.
+* `shopify_wait` is **0.0 ms** on the one turn that read the catalogue — the
+  prefetch, hidden behind the first model hop exactly as designed.
+* `webhook_verify` is **0.0 ms** and `turn_queue_wait` **0.0 ms**.
+* `llm` is **79.2%** of what the customer waited, and everything this codebase
+  does adds up to about 1.5%.
+
+The replies were read as well as timed. A greeting got a single line back
+("صباح النور 🙂 تحب أساعدك في إيه؟" — the one-line rule the prompt asks for), a
+question about the current offers got a five-item bulleted list with correct
+sale pricing straight from the catalogue ("WANAS Hoodie — من 650 بدل 900"), and
+"what shop is this" got an accurate description of what the shop sells. None
+of the three asked to *see* a product, so none attached a photograph, which is
+correct rather than a regression — `get_variants` was never called. Run
+separately on the deployed build, a sizing question attached the size chart and
+quoted its real measurements.
+
+### A correction the first production line forced
+
+Those numbers are not the ones the first read produced, and the reason is worth
+keeping.
+
+`total_ms` was the duration of the turn *scope*, which opens on the worker
+thread — after the debounce window has closed and after the webhook has written
+the customer's message down. Both of those are time the customer waited and
+neither was in the total. The first real line said 5,883 ms for a turn whose own
+stages summed to 6,942.
+
+Nobody had to notice that by reading it. `scripts/latency_report.py` prints
+what share of the total is unattributed to any stage, and it came out at
+**−13.6%**. A negative share is an accounting error by construction.
+
+So `telemetry.add_before` now counts a pre-scope stage into `total_ms` as well
+as naming it, `reply_ms` carries the scope alone so the two can never be
+conflated again, and a test pins the invariant that no stage may sum past the
+total. `unattributed` on the same three turns is now **+0.2%**.
+
+The benchmark numbers elsewhere in this document are unaffected —
+`scripts/bench_turn.py` does not go through a webhook or a debounce window, so
+its turns had no preamble to lose.
 
 ### What was deliberately not done, and why
 

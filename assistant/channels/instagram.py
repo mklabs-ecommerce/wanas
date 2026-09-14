@@ -1104,7 +1104,12 @@ def _deliver(external_id: str, pending: Pending) -> None:
     adapter's twin for why the scope opens here and not inside the turn."""
     with telemetry.turn(CHANNEL, external_id, batch=len(pending.texts) or 1):
         for name, seconds in pending.ingest.items():
-            telemetry.add(name, seconds)
+            # `add_before`, not `add`: every one of these finished before this
+            # scope opened -- the signature check and the transcript write in
+            # the webhook, and the debounce window on the timer thread -- and
+            # the customer waited all of them. Counting them as ordinary
+            # stages made `total_ms` describe the reply rather than the wait.
+            telemetry.add_before(name, seconds)
         _deliver_turn(external_id, pending)
 
 

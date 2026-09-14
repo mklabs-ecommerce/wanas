@@ -143,10 +143,13 @@ def report(turns: list[dict]) -> dict:
         ],
     }
 
+    replies = [float(t["reply_ms"]) for t in turns if t.get("reply_ms") is not None]
+
     grand_total = sum(totals)
     return {
         "turns": len(turns),
         "total": summarise(totals),
+        "reply": summarise(replies) if replies else None,
         "stages": {
             name: dict(
                 summarise(values),
@@ -182,8 +185,16 @@ def report(turns: list[dict]) -> dict:
 
 #: Stages whose time is already inside another stage, so counting them again
 #: when working out what is unattributed would over-subtract. `shopify` runs
-#: inside `tools`; `llm` is the model hop and stands on its own.
-_NESTED = {"shopify"}
+#: inside `tools`; `shopify_wait` is the part of it a prefetched turn actually
+#: stood still for, and that wait happens inside a tool too. `llm` is the model
+#: hop and stands on its own.
+#:
+#: Getting this list wrong is visible rather than silent, which is the point of
+#: reporting `unattributed` at all: it went **negative** the first time a real
+#: production line was read, and that is how the pre-debounce stages were found
+#: to be missing from `total_ms`. A share below zero is an accounting error by
+#: construction, so it is worth looking at rather than rounding away.
+_NESTED = {"shopify", "shopify_wait"}
 
 
 def _errors(turns: list[dict]) -> dict[str, int]:
@@ -206,6 +217,11 @@ def _row(name: str, stats: dict, share: float | None = None) -> str:
 
 def render(data: dict) -> str:
     out = [f"turns: {data['turns']}", "", "TOTAL (ms)", _row("total", data["total"])]
+    if data.get("reply"):
+        # What the process was answering during, as opposed to what the
+        # customer waited. The gap between the two is the debounce window and
+        # the webhook's own work.
+        out.append(_row("reply (excl. wait)", data["reply"]))
     out += ["", "STAGES (ms, share of all wall-clock)"]
     for name, stats in data["stages"].items():
         out.append(_row(name, stats, stats["share"]))
