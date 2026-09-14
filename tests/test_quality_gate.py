@@ -443,3 +443,54 @@ def test_a_sizing_question_answered_without_a_chart_is_not_a_failure():
     reply = _reply("sizes", 0, "المقاسات S و M و L", ("get_variants",),
                    photos=1, charts=0, expects_photo=True, sizing_question=True)
     assert check(_run(reply), _run(reply)) == []
+
+
+# --- product names it made up ---------------------------------------------
+#
+# From the real conversation this rule was written against: the shop sells a
+# `Lightweight Sweatpant` and the bot called it a `Lightwelson Sweatpant` --
+# six times, over an hour, in every message that mentioned it. The price was
+# right, the colours were right, the Arabic was good, and every other check in
+# this gate passed it.
+
+CATALOG = ["Lightweight", "Sweatpant", "Knitted", "Polo", "Burgundy", "Olive", "Hoodie"]
+
+
+def test_a_near_miss_of_a_product_name_fails():
+    line = "عندنا بنطلون {} رياضي بسعر 650 جنيه بدل 720، وتحب تشوف الألوان؟"
+    golden = _run(_reply("product_question", 0, line.format("Lightweight Sweatpant")))
+    fresh = _run(_reply("product_question", 0, line.format("Lightwelson Sweatpant")))
+    for record in (golden, fresh):
+        record["vocabulary"] = CATALOG
+    failures = check(golden, fresh)
+    assert any("Lightwelson" in f for f in failures), failures
+
+
+def test_the_name_spelled_right_passes():
+    reply = _reply(
+        "product_question",
+        0,
+        "عندنا بنطلون Lightweight Sweatpant رياضي بسعر 650 جنيه بدل 720، تحب تشوف الألوان؟",
+    )
+    record = _run(reply)
+    record["vocabulary"] = CATALOG
+    assert check(record, record) == []
+
+
+def test_ordinary_english_is_not_a_garbled_product_name():
+    """The rule only fires on a near-miss of something we sell. A reply that
+    happens to use an English word must not be failed for it -- a gate that
+    guessed more widely would start failing correct replies."""
+    assert garbled("المقاسات available دلوقتي") == []
+    assert garbled("الدفع cash عند الاستلام") == []
+    assert garbled("عندنا Knitted Polo بلون Burgundy") == []
+
+
+def test_a_word_unrelated_to_the_catalog_is_not_this_rules_business():
+    """Two edits from a catalog word is a garbled catalog word. Something
+    unrelated to anything we sell is the model writing prose."""
+    assert garbled("الشحن بيوصل بالتوصيل السريع express") == []
+
+
+def garbled(text):
+    return quality_gate.garbled_catalog_words(text, CATALOG)

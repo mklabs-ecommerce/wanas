@@ -661,7 +661,12 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # that the tool layer now also enforces -- but the tool can only
         # decide whether to *attach*; only the prompt can stop the model
         # describing a chart it was not sent.
-    assert 3000 < len(SYSTEM_PROMPT) < 18000
+        #
+        # 18000 -> 18300: "copy the product name letter for letter from the
+        # tool result". A real conversation sold a `Lightweight Sweatpant` as
+        # a `Lightwelson Sweatpant`, six times, with everything else about the
+        # reply correct.
+    assert 3000 < len(SYSTEM_PROMPT) < 18300
 
 
 # --------------------------------------------------------------------------

@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Eleven checks, and each one is a failure mode this repository has already paid
+Twelve checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -44,7 +44,14 @@ for at least once:
    saying `Wnas` or offering `WNS` as the shop's name. A customer told the shop
    is called something it is not has been given wrong information about who
    they are buying from.
-8. **Laid out so it reads the way it was written.** Arabic with Latin and
+8. **And no product name it made up.** The brand rule above is one word; this
+   is the other class of the same failure. A real conversation sold a
+   `Lightweight Sweatpant` as a **Lightwelson** Sweatpant -- six times, in
+   every message that mentioned it, with the price and the colours correct
+   beside it. A product name arrives in a tool result and has to come out byte
+   for byte, so a Latin word that is a near-miss of a catalog word is
+   reconstruction from memory and nothing else.
+9. **Laid out so it reads the way it was written.** Arabic with Latin and
    numbers inside it is the normal case here, and two shapes of line come
    out reordered on the phone: one opening with a Latin word takes
    left-to-right direction for the whole line, and a number separated from
@@ -53,17 +60,17 @@ for at least once:
    both at the send boundary, and this rule keeps them from being written
    in the first place: the dashboard shows staff the unrepaired string, and
    every shape the prompt asks for already renders correctly on its own.
-9. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
+10. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
    catalog field, so "I have no data about sleeve length" beside the words
    «نص كم» is the bot refusing to read something it is holding -- which is
    exactly the reply that made the field necessary.
-10. **Photographs still go out.** Judged against the golden run: sending fewer
+11. **Photographs still go out.** Judged against the golden run: sending fewer
    is a judgement, sending none is a regression. And judged absolutely as well,
    on the steps whose reply is about one named garment -- a comparison rule
    cannot catch a shop that has *never* sent a photo, and for a long time this
    one had not: `get_products` attached nothing, so every answer that came out
    of a search arrived as text.
-11. **And the size chart does not.** Not unless the customer asked about sizes,
+12. **And the size chart does not.** Not unless the customer asked about sizes,
    measurements or fit. It used to ride along with every `get_variants` call
    for a product that has a chart, so a question about price or colour was
    answered with a measurements table -- which got worse the moment a product
@@ -82,6 +89,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from sqlalchemy import select  # noqa: E402
 
 from assistant import agent  # noqa: E402
 from assistant.providers import set_provider  # noqa: E402
@@ -245,6 +254,115 @@ def misspelled_shop_name(text: str) -> list[str]:
     ]
 
 
+#: Ordinary English a reply may contain that happens to sit one or two edits
+#: from a catalog word. Kept deliberately short: every entry here is a real
+#: word this shop's replies use, and a longer list would start excusing the
+#: garbles this rule exists to catch.
+_ORDINARY_ENGLISH = frozenset(
+    {
+        "size", "sizes", "small", "medium", "large", "color", "colour", "colors",
+        "colours", "price", "order", "shirt", "shirts", "short", "sleeve",
+        "sleeves", "long", "half", "cash", "online", "free", "new", "sale",
+    }
+)
+
+#: Below this length an edit-distance-1 neighbour is usually a different word
+#: rather than a typo of the same one ("navy"/"nay"), so the scan starts at
+#: names long enough for the comparison to mean something.
+_NAME_MIN = 6
+
+
+def _edits(word: str, target: str) -> int:
+    """Levenshtein distance."""
+    previous = list(range(len(target) + 1))
+    for i, a in enumerate(word, 1):
+        current = [i]
+        for j, b in enumerate(target, 1):
+            current.append(
+                min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a != b))
+            )
+        previous = current
+    return previous[-1]
+
+
+#: How much of a catalog word a garble keeps before it goes wrong. Seven
+#: characters of `Lightweight` survive into `Lightwelson`, which is the shape
+#: of reconstruction: the model remembers how the name starts and invents the
+#: rest. Distance alone does not catch it -- those two are four edits apart,
+#: and a threshold loose enough to include them would flag half of English.
+_PREFIX_MATCH = 6
+
+
+def _is_near_miss(word: str, target: str) -> bool:
+    """`word` looks like a mangled `target` rather than a different word.
+
+    A plural, a singular or any other extension is not a mangling: `Sweatpant`
+    and `Sweatpants` are the same name, and flagging one would fail correct
+    replies. Only a word that *diverges* from a catalog word counts.
+    """
+    if word == target or word.startswith(target) or target.startswith(word):
+        return False
+    if abs(len(word) - len(target)) <= 2 and _edits(word, target) <= 2:
+        return True
+    # Same opening, different word. Requires both to be long enough that a
+    # shared six-character prefix is a fact rather than a coincidence.
+    if len(word) >= 8 and len(target) >= 8:
+        shared = 0
+        for a, b in zip(word, target, strict=False):
+            if a != b:
+                break
+            shared += 1
+        return shared >= _PREFIX_MATCH
+    return False
+
+
+def garbled_catalog_words(text: str, vocabulary) -> list[str]:
+    """Latin words in `text` that are *nearly* a catalog word but are not one.
+
+    The failure this is for, from a real conversation: the shop sells a
+    `Lightweight Sweatpant` and the bot called it a **Lightwelson** Sweatpant
+    -- six times, across an hour, in every message that mentioned it. Every
+    other check passed. The price was right, the colours were right, the
+    Arabic was good, and the customer was being sold a product this shop does
+    not have, by a name nobody could search for.
+
+    A product name is the one part of a reply that is *quoted*, not composed:
+    it arrives in a tool result and has to come out byte for byte. So the test
+    is not "is this word English" but "is this word a near-miss of something
+    in our catalog" -- which is what reconstruction from memory looks like,
+    and almost never what ordinary prose looks like.
+    """
+    known = {w.lower() for w in vocabulary if len(w) >= _NAME_MIN}
+    if not known:
+        return []
+    found = []
+    for word in re.findall(r"[A-Za-z][A-Za-z-]{4,}", text or ""):
+        lowered = word.lower()
+        if lowered in known or lowered in _ORDINARY_ENGLISH:
+            continue
+        near = [k for k in known if _is_near_miss(lowered, k)]
+        if near:
+            found.append(f"{word!r} (did you mean {sorted(near)[0]!r}?)")
+    return found
+
+
+def catalog_vocabulary(session) -> list[str]:
+    """Every Latin word the catalog actually contains, for the rule above."""
+    from domain.models import Product, Variant
+
+    words: set[str] = set()
+    for (name,) in session.execute(select(Product.name)).all():
+        words.update(re.findall(r"[A-Za-z][A-Za-z-]*", name or ""))
+    for (color,) in session.execute(select(Variant.color).distinct()).all():
+        words.update(re.findall(r"[A-Za-z][A-Za-z-]*", color or ""))
+    for (category,) in session.execute(select(Product.category).distinct()).all():
+        words.update(re.findall(r"[A-Za-z][A-Za-z-]*", category or ""))
+    for (raw,) in session.execute(select(Product.style)).all():
+        for style in raw or []:
+            words.update(re.findall(r"[A-Za-z][A-Za-z-]*", style))
+    return sorted(words)
+
+
 def looks_truncated(text: str) -> bool:
     """A reply that stops mid-word or mid-clause.
 
@@ -362,6 +480,7 @@ def run(runs: int, real: bool, only: str) -> dict:
     bench_turn.install_fake_shelf()
     with session_scope() as db:
         facts = bench_scenarios.resolve(db)
+        vocabulary = catalog_vocabulary(db)
     scenarios = bench_scenarios.build(facts)
     if only:
         scenarios = [s for s in scenarios if s.name == only]
@@ -376,7 +495,7 @@ def run(runs: int, real: bool, only: str) -> dict:
                 reply["expects_photo"] = bool(step.expects_photo)
                 reply["sizing_question"] = bool(step.sizing_question)
                 replies.append(reply)
-    return {"facts": facts, "replies": replies}
+    return {"facts": facts, "vocabulary": vocabulary, "replies": replies}
 
 
 def _by_step(record: dict) -> dict[tuple[str, int], list[dict]]:
@@ -468,6 +587,13 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                 failures.append(
                     f"{where}: the reply talked about sleeve length and then said "
                     f"{dodged!r} -- sleeve length is a catalog field, read it"
+                )
+
+            garbled = garbled_catalog_words(text, fresh.get("vocabulary") or [])
+            if garbled:
+                failures.append(
+                    f"{where}: the reply named something the catalog does not have: "
+                    f"{', '.join(garbled)} -- a product name is quoted, not composed"
                 )
 
             misspelled = misspelled_shop_name(text)
