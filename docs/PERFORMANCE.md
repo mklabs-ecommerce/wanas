@@ -495,39 +495,64 @@ a day and the measurement is what says not to.
 
 ## Where the time goes now
 
-Measured the same way as everything above: the six scenarios, 3 runs, 27 real
-turns, run from inside the Railway container against the real model — with the
-reasoning setting flipped back and forth in the same session, so the two
-columns are a paired comparison rather than two runs on different days.
+Measured the same way as everything above: the six scenarios run from inside
+the Railway container against the real model and the real network, with the
+reasoning setting flipped back and forth **in the same session**, so each row
+is a paired comparison rather than two runs on different days.
 
-| | before (as shipped) | after | change |
+It was measured three times, hours apart, and all three are reported because
+the spread is the finding. The upstream that serves this model is several times
+slower at some hours than at others, and a single "after" number picked from a
+good hour would be a number nobody could reproduce.
+
+| paired run | before (as shipped) | after | change |
 |---|---|---|---|
-| **agent turn, mean** | 16,919 ms | **5,629 ms** | **−66.7%** |
-| agent turn, p50 | 14,773 ms | **4,892 ms** | −66.9% |
-| agent turn, p90 | 36,093 ms | 10,152 ms | −71.9% |
-| agent turn, max | 37,765 ms | 11,863 ms | −68.6% |
-| debounce, single message | 6,000 ms | **1,000 ms** | −83.3% |
-| Meta courtesy calls, in front of the window | 196–400 ms | 0 ms | off the path |
-| Shopify live read | 419 ms | **0 ms waited** | overlapped |
-| retry guards fired (dangling promise / truncation / empty / loop cap) | 1 in 27 turns | **0 in 27** | — |
+| A — 27 turns, in-memory shelf | 20,931 ms | 8,536 ms | −59.2% |
+| B — 27 turns, in-memory shelf | 16,919 ms | 5,629 ms | −66.7% |
+| C — 18 turns, **live Shopify**, on the deployed build | 21,461 ms | 11,168 ms | −48.0% |
+| **median of the three** | **20,931 ms** | **8,536 ms** | **−59.2%** |
 
-**End to end, per average reply: 21.3 s → about 6.9 s. p50 about 6.1 s.**
+Run C's "before" (21,461 ms mean, 21,492 p50) lands almost exactly on the
+production baseline read from the transcript (14.81 s agent turn + 6.0 s
+debounce + 0.6 s of Meta = 21.3 s), which is the best evidence available that
+the benchmark measures the same thing production does.
+
+Taking the median pair, and the other stages as measured:
+
+| | before | after |
+|---|---|---|
+| agent turn, mean | 20,931 ms | **8,536 ms** |
+| agent turn, p50 | 19,281 ms | **7,477 ms** |
+| agent turn, p90 | 38,239 ms | 14,198 ms |
+| debounce, single message | 6,000 ms | **1,000 ms** |
+| Meta courtesy calls, in front of the window | 196–400 ms | 0 ms (off the path) |
+| Shopify live read | 419 ms | **0 ms waited** (overlapped) |
+| retry guards fired (dangling promise / truncation / empty / loop cap) | 1 in 27 turns | **0 in 27** |
+
+**End to end, per average reply: 21.3 s → about 9.7 s (−55%).** On the best of
+the three runs it is 6.8 s and on the worst 12.4 s — the same reply, the same
+code, a different hour on the same upstream.
+
 Against the target — an ordinary product question under 10 seconds, and the
-average at less than half of 21.3 s — both are met with room.
+average at less than half of 21.3 s — the product question lands at 7.5 s on
+the median run and 9.5 s on the worst, and the average clears half with about
+a second to spare. Both are met, and neither is met by a wide margin, because
+what is left is not ours.
 
-And the split, which is the answer to "where does it go now":
+The split, which is the answer to "where does it go now":
 
 | stage | cost | share |
 |---|---|---|
-| **the model** | **5.6 s** | **82%** |
-| debounce | 1.0 s | 15% |
-| the Meta send | 0.2 s | 3% |
+| **the model** | **8.5 s** | **88%** |
+| debounce | 1.0 s | 10% |
+| the Meta send | 0.2 s | 2% |
 | Shopify | 0 s waited | 0% |
-| everything this codebase does | 0.02 s | 0.3% |
+| everything this codebase does | 0.02 s | 0.2% |
 
-Inside a turn, `llm` is **99.5%**. There is nothing left in this repository to
-optimise. The next second has to come from the model, the provider, or the
-shape of the conversation.
+Inside a turn, `llm` measured **99.7%**, **99.5%** and **99.9%** across the
+three runs. There is nothing left in this repository to optimise. The next
+second has to come from the model, the provider, or the shape of the
+conversation.
 
 ### What was deliberately not done, and why
 
@@ -547,13 +572,13 @@ shape of the conversation.
 
 ## What is left, and what it would cost
 
-The remaining 82% is the model. Measured on this shop's own system prompt, its
+The remaining 88% is the model. Measured on this shop's own system prompt, its
 19 tool declarations and two real questions — one answered in words, one that
 should produce a tool call — three samples each:
 
 | model | plain-reply hop | tool-call hop | whole benchmark (18 turns) |
 |---|---|---|---|
-| **`z-ai/glm-5.3-flash`** (current) | 1,903 ms | 4,556 ms | 5,629 ms mean / 4,892 p50 |
+| **`z-ai/glm-5.3-flash`** (current) | 1,903 ms | 4,556 ms | 8,536 ms mean / 7,477 p50 (median run) |
 | `google/gemini-3.1-flash-lite` | 2,975 ms | **1,041 ms** | **2,910 ms mean / 3,519 p50** |
 | `inception/mercury-2.5` | **1,420 ms** | 1,351 ms | **2,697 ms mean / 3,352 p50** |
 | `deepseek/deepseek-v4-flash` | 2,288 ms | 2,827 ms | — |
