@@ -14,6 +14,7 @@ what keeps /domain/ free of any import from /assistant/.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from contextlib import asynccontextmanager
 from decimal import Decimal
@@ -138,10 +139,29 @@ def _ensure_catalog_seeded() -> None:
     )
 
 
-#: The flat rate the shop set for every governorate on 2026-08-20. Only ever
-#: applied to a governorate with no fee yet -- staff correcting one later
-#: through the dashboard is never overwritten by a later boot of this.
-_DEFAULT_SHIPPING_FEE = Decimal("110")
+def _published_flat_shipping_fee() -> Decimal | None:
+    """The one shipping number this shop publishes without looking anything up.
+
+    Both `assistant/comment_faq.py` (under a post, in public) and the system
+    prompt answer "how much is delivery" with a flat rate and no tool call --
+    the FAQ module says why: one rate to every governorate, confirmed across
+    ~100 orders, so there is nothing to look up. Parsed out of the published
+    string rather than written down a third time here, because a third copy is
+    a third thing to forget.
+    """
+    from assistant.comment_faq import FAQ_REPLIES
+
+    digits = re.search(r"[0-9]+", FAQ_REPLIES.get("shipping_cost", ""))
+    return Decimal(digits.group(0)) if digits else None
+
+
+#: The flat rate the shop set for every governorate on 2026-08-20, read from
+#: the sentence the shop actually publishes rather than written down again.
+#: It used to be a third copy of the number, beside the public comment answer
+#: and the prompt, with nothing keeping the three in step. Only ever applied
+#: to a governorate with no fee yet -- staff correcting one later through the
+#: dashboard is never overwritten by a later boot of this.
+_DEFAULT_SHIPPING_FEE = _published_flat_shipping_fee() or Decimal("110")
 
 
 def _ensure_shipping_fees_set() -> None:
@@ -285,6 +305,45 @@ def _register_shopify_webhooks() -> None:
     for problem in report["problems"]:
         log.warning("Shopify webhook registration: %s", problem)
 
+
+def _warn_if_shipping_rates_contradict_the_published_fee() -> None:
+    """A customer who is quoted one number and charged another at the door.
+
+    The published rate is a fixed sentence the model repeats without calling
+    anything; the number in the order summary comes from `ShippingRate` through
+    `get_shipping_fee`. Nothing keeps those two in step, so the day someone runs
+    `manage.py set-fee` for one governorate, the bot starts answering "how much
+    is delivery" with a number it will not honour -- and the prompt itself calls
+    being surprised by a bigger number at the door the worst thing that can
+    happen on cash on delivery.
+
+    Boot is the only place both halves are visible at once, so this is where the
+    contradiction gets said out loud. It warns; it does not correct either side,
+    because which one is wrong is a decision about the business.
+    """
+    published = _DEFAULT_SHIPPING_FEE
+    with session_scope() as db:
+        rates = db.query(ShippingRate).all()
+        disagreeing = sorted(
+            (r.governorate, r.fee) for r in rates if r.fee is not None and r.fee != published
+        )
+        unpriced = sorted(r.governorate for r in rates if r.fee is None)
+    if disagreeing:
+        log.warning(
+            "shipping: the published flat rate is %s but %s governorate(s) are "
+            "priced differently (%s). A customer who asks \"how much is delivery\" "
+            "is told the flat rate and charged the stored one.",
+            published,
+            len(disagreeing),
+            ", ".join(f"{name}={fee}" for name, fee in disagreeing[:5]),
+        )
+    if unpriced:
+        log.warning(
+            "shipping: %s governorate(s) have no fee set (%s); an order for one "
+            "of them cannot be confirmed.",
+            len(unpriced),
+            ", ".join(unpriced[:5]),
+        )
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -432,6 +491,7 @@ async def lifespan(_app: FastAPI):
             settings.message_debounce_seconds,
             settings.message_workers,
         )
+    _warn_if_shipping_rates_contradict_the_published_fee()
     if settings.shopify_configured:
         threading.Thread(
             target=_shopify_boot_reconcile,
