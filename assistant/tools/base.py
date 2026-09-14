@@ -703,6 +703,3 @@ def load_all() -> None:
     """Import the tool modules so their decorators run."""
     from assistant.tools import cart_tools, catalog_tools, order_tools, support_tools  # noqa: F401
 
-
-def reset_registry_for_tests() -> None:  # pragma: no cover - test helper
-    REGISTRY.clear()
