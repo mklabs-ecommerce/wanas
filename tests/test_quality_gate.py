@@ -64,6 +64,25 @@ def test_saying_cash_on_delivery_is_not_offering_anything():
     assert check(_run(reply), _run(reply)) == []
 
 
+def test_calling_the_shop_online_is_not_offering_online_payment():
+    """This shop *is* an online shop and the system prompt's own first line
+    says so. The bare word used to fail every reply that described the
+    business -- including the greeting the prompt asks for."""
+    assert quality_gate.offers_another_payment_method("إحنا محل هدوم أونلاين في مصر") == ""
+    assert quality_gate.offers_another_payment_method("محل أونلاين والدفع كاش عند الاستلام") == ""
+
+
+def test_online_next_to_paying_is_still_an_offer():
+    """The verb can govern from an earlier clause of the same sentence."""
+    assert quality_gate.offers_another_payment_method("تقدر تدفع أونلاين") != ""
+    assert (
+        quality_gate.offers_another_payment_method(
+            "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع."
+        )
+        != ""
+    )
+
+
 def test_refusing_a_card_is_not_offering_one():
     """"مش بنقبل فيزا، كاش عند الاستلام بس" is the correct answer to "بتقبلوا
     فيزا؟", and a rule that fails it would push the model towards saying

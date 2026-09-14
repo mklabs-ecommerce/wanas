@@ -116,16 +116,28 @@ def is_egyptian_arabic(text: str) -> tuple[bool, str]:
 #: nothing in the codebase can issue a refund -- so an offer of anything else
 #: is a promise made to a customer who may act on it.
 _OTHER_PAYMENT = (
-    "أونلاين", "اونلاين", "أون لاين", "اون لاين",
     "فيزا", "ڤيزا", "بالفيزا", "كارت", "credit card", "بطاقة",
     "انستاباي", "إنستاباي", "instapay", "فودافون كاش", "محفظة",
     "تحويل بنكي", "paypal", "باي بال", "لينك دفع", "payment link",
 )
 
+#: "Online" is not a payment method here. This shop *is* an online shop and
+#: says so -- the system prompt's own first line calls it «محل هدوم أونلاين» --
+#: so the bare word flagged every correct reply that described the business.
+#: It only means online *payment* next to a word about paying.
+_ONLINE = ("أونلاين", "اونلاين", "أون لاين", "اون لاين", "online")
+_PAYING = ("دفع", "ادفع", "أدفع", "تدفع", "بتدفع", "هتدفع", "سداد", "تسديد", "pay")
+
 #: ...but talking about cash on delivery is exactly right, and some of the
 #: words above appear inside perfectly correct sentences ("مش بنقبل فيزا").
 #: A denial is not an offer.
-_PAYMENT_DENIAL = ("مش", "ما بنقبل", "مابنقبلش", "غير متاح", "بس كاش", "كاش بس", "only cash")
+#: "عند الاستلام" is the cash-on-delivery phrase itself, and deliberately not
+#: the bare word "كاش" -- that one is inside "فودافون كاش", which is a payment
+#: method this shop really cannot take.
+_PAYMENT_DENIAL = (
+    "مش", "ما بنقبل", "مابنقبلش", "غير متاح", "بس كاش", "كاش بس", "only cash",
+    "عند الاستلام",
+)
 
 
 def offers_another_payment_method(text: str) -> str:
@@ -137,17 +149,38 @@ def offers_another_payment_method(text: str) -> str:
     فيزا، كاش عند الاستلام بس" is the correct answer, not a violation.
     """
     lowered = (text or "").lower()
+    clauses = re.split(r"[.\n،؛!?]", text or "")
     for method in _OTHER_PAYMENT:
         if method.lower() not in lowered:
             continue
         # Look at the clause it appears in, not the whole reply: a summary can
         # correctly say "cash on delivery" in one line and nothing about cards
         # in another.
-        for clause in re.split(r"[.\n،؛!?]", text or ""):
+        for clause in clauses:
             if method.lower() in clause.lower() and not any(
                 d.lower() in clause.lower() for d in _PAYMENT_DENIAL
             ):
                 return method
+
+    # "Online" on its own describes the shop, not a way to pay it. It only
+    # means online *payment* when a word about paying governs it -- which may
+    # sit in an earlier clause of the same sentence ("تقدر تدفع كاش عند
+    # الاستلام، أو أونلاين من الموقع": the verb is in the first clause and the
+    # offer is in the second). So the window is the sentence up to and
+    # including the clause the word appears in, while a denial has to be in
+    # that clause itself: "محل أونلاين والدفع كاش عند الاستلام" denies it,
+    # "تدفع كاش عند الاستلام، أو أونلاين" does not.
+    for sentence in re.split(r"[.\n!?]", text or ""):
+        seen: list[str] = []
+        for clause in re.split(r"[،؛]", sentence):
+            seen.append(clause.lower())
+            low = seen[-1]
+            if not any(word in low for word in _ONLINE):
+                continue
+            if any(d.lower() in low for d in _PAYMENT_DENIAL):
+                continue
+            if any(verb in part for part in seen for verb in _PAYING):
+                return "أونلاين"
     return ""
 
 
