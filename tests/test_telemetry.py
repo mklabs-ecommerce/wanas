@@ -14,6 +14,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import time
 
 from common import telemetry
 from config.settings import settings
@@ -153,3 +154,69 @@ def test_the_flag_switches_it_off(caplog, monkeypatch):
             pass
 
     assert _lines(caplog) == []
+
+
+# --------------------------------------------------------------------------
+# what the customer waited, as opposed to what the reply took
+# --------------------------------------------------------------------------
+#
+# The debounce window and the webhook's own work finish on another thread
+# before the turn scope opens. Counting them as ordinary stages made
+# `total_ms` smaller than the stages it contained -- the first real production
+# line reported 5883 ms for a turn whose stages summed to 6942 -- and the
+# report said so by putting `unattributed` below zero.
+
+
+def test_the_total_includes_what_happened_before_the_turn_opened(caplog):
+    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+        telemetry.add_before("debounce_wait", 1.0)
+        telemetry.add_before("record_inbound", 0.08)
+        telemetry.add("llm", 5.0)
+
+    (line,) = _lines(caplog)
+    # The wait is in the total...
+    assert line["total_ms"] >= 1080.0
+    # ...and named as a stage as well, so the report can show where it went.
+    assert line["stages"]["debounce_wait"] == 1000.0
+    assert line["stages"]["record_inbound"] == 80.0
+
+
+def test_the_reply_half_is_reported_separately(caplog):
+    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+        telemetry.add_before("debounce_wait", 1.0)
+
+    (line,) = _lines(caplog)
+    # `reply_ms` is the scope alone and must not have grown by the wait; the
+    # two are never to be conflated again.
+    assert line["reply_ms"] < 500.0
+    assert line["total_ms"] >= 1000.0
+    assert line["total_ms"] > line["reply_ms"]
+
+
+def test_no_stage_can_sum_past_the_total(caplog):
+    """The invariant the negative `unattributed` violated: every stage the turn
+    recorded has to fit inside what the customer waited.
+
+    Timed with real sleeps rather than asserted durations, because that is how
+    a turn actually accrues them -- a stage the scope did not really spend
+    time in would fail this for a reason production never has.
+    """
+    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+        telemetry.add_before("debounce_wait", 1.0)
+        telemetry.add_before("record_inbound", 0.05)
+        with telemetry.stage("history_load"):
+            time.sleep(0.01)
+        with telemetry.llm_hop():
+            time.sleep(0.02)
+        with telemetry.stage("send"):
+            time.sleep(0.01)
+
+    (line,) = _lines(caplog)
+    assert sum(line["stages"].values()) <= line["total_ms"] + 1.0
+    # And the wait really is the bulk of it, which is the point of counting it.
+    assert line["stages"]["debounce_wait"] > line["reply_ms"]
+
+
+def test_add_before_is_a_no_op_outside_a_turn():
+    telemetry.add_before("debounce_wait", 1.0)
+    assert telemetry.current() is None

@@ -88,6 +88,14 @@ class Turn:
     shopify: list[dict] = field(default_factory=list)
     #: Anything the caller wants on the line that is not a duration.
     fields: dict = field(default_factory=dict)
+    #: Time that had already passed before this record existed: the webhook's
+    #: signature check and transcript write, and the debounce window. They
+    #: happen on another thread, minutes of wall clock before the turn opens,
+    #: and the customer waited every millisecond of them -- so they are part
+    #: of the total even though no clock inside this object measured them.
+    #: Kept separately from `stages` because `total_ms` has to add them and
+    #: the "what is unattributed" arithmetic has to not count them twice.
+    preamble: float = 0.0
 
     def add(self, name: str, seconds: float) -> None:
         slot = self.stages.get(name)
@@ -98,13 +106,27 @@ class Turn:
             slot[1] += 1
 
     def line(self) -> dict:
-        total = time.perf_counter() - self.started
+        answered = time.perf_counter() - self.started
         stages = {name: _ms(total_s) for name, (total_s, _) in self.stages.items()}
         counts = {name: n for name, (_, n) in self.stages.items() if n > 1}
         payload: dict = {
             "ch": self.channel,
             "cust": self.customer,
-            "total_ms": _ms(total),
+            # What the customer waited, end to end: the work the webhook did
+            # and the debounce window, plus everything this scope timed.
+            #
+            # `total_ms` used to be the scope alone, and that was wrong in the
+            # direction that flatters: the first real production line reported
+            # 5883 ms for a turn whose own stages summed to 6942, because the
+            # 1000 ms the customer spent in the debounce window and the 82 ms
+            # spent writing their message down had both finished before the
+            # scope opened. The report noticed before anyone else did -- it
+            # put `unattributed` at **-13.6%**, and a negative share is an
+            # accounting error by construction.
+            "total_ms": _ms(self.preamble + answered),
+            # The half this process can still be answering during, kept so the
+            # two are never conflated again.
+            "reply_ms": _ms(answered),
             "stages": stages,
         }
         if counts:
@@ -176,6 +198,22 @@ def add(name: str, seconds: float) -> None:
     record = _current.get()
     if record is not None:
         record.add(name, max(0.0, seconds))
+
+
+def add_before(name: str, seconds: float) -> None:
+    """Record a duration the customer waited *before* this turn opened.
+
+    The webhook's work and the debounce window both finish on another thread
+    before the turn starts, so a scope-relative total silently leaves them
+    out. Counted into `total_ms` as well as named as a stage -- which is the
+    difference between "the reply took 5.9 seconds" and "the customer waited
+    7.0 seconds", and the customer is the one being measured.
+    """
+    record = _current.get()
+    if record is not None:
+        seconds = max(0.0, seconds)
+        record.add(name, seconds)
+        record.preamble += seconds
 
 
 def note(**fields) -> None:
