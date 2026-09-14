@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Seven checks, and each one is a failure mode this repository has already paid
+Eight checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -35,7 +35,13 @@ for at least once:
    made to a customer who may act on it. This rule exists because a candidate
    model measured for a possible swap made exactly that offer on its first run
    through these scenarios, and every other check passed it.
-7. **Photographs still go out.** Only `get_variants` attaches one, so a change
+7. **The shop's name is spelled the one way.** `Wanas Gallery`, short form
+   `Wanas`. The model meets the brand in four surface forms and Arabic writes
+   no short vowels, so «ونس» is literally w-n-s -- which is how a reply ends up
+   saying `Wnas` or offering `WNS` as the shop's name. A customer told the shop
+   is called something it is not has been given wrong information about who
+   they are buying from.
+8. **Photographs still go out.** Only `get_variants` attaches one, so a change
    that lets the model answer a product question without calling it can quietly
    stop a clothes shop ever showing the clothes. Judged against the golden run:
    sending fewer is a judgement, sending none is a regression.
@@ -184,6 +190,51 @@ def offers_another_payment_method(text: str) -> str:
     return ""
 
 
+#: The shop is called Wanas Gallery and the short form is Wanas. Both are
+#: correct and nothing else is.
+SHOP_NAME = frozenset({"Wanas", "WANAS"})
+
+#: The one product name that legitimately contains the brand abbreviated.
+#: Masked out before the scan, so a bare `WNS` elsewhere is still caught --
+#: `WNS` used as a name for the shop *is* the misspelling this rule is for.
+_BOXY_WNS_TEE = re.compile(r"\bBoxy\s+WNS\s+Tee\b", re.IGNORECASE)
+
+#: A Latin word built on the brand's consonant skeleton -- w, then n, then s,
+#: with only vowels between. Catches Wnas, Wans, WNS, Wanass and the lowercase
+#: slug forms, and matches almost nothing else a reply from a clothes shop
+#: contains.
+_BRAND_SHAPED = re.compile(r"\b[Ww][AaEeIiOoUu]*[Nn][AaEeIiOoUu]*[Ss]{1,2}[A-Za-z]*\b")
+
+#: Ordinary English words with the same skeleton. Short list on purpose: these
+#: are the only ones plausible in a reply, and a gate that guessed more widely
+#: would start excusing real misspellings.
+_NOT_THE_BRAND = frozenset({"wins", "wines", "wanes"})
+
+
+def misspelled_shop_name(text: str) -> list[str]:
+    """Every spelling of the shop's name in `text` that is not how it is spelled.
+
+    The brand is the one word in a reply the model cannot get away with
+    reconstructing: a customer who is told the shop is called something it is
+    not has been given wrong information about the thing they are buying from.
+    It is also the word most exposed to reconstruction, because the model sees
+    it in four surface forms -- `Wanas Gallery`, `WANAS Hoodie`, `Boxy WNS Tee`
+    and the Arabic «ونس» -- and Arabic writes no short vowels, so the Arabic
+    form is literally w-n-s.
+
+    Latin only, deliberately. The Arabic «وناس» is an ordinary word ("and
+    people") and a rule that flagged it would fail correct replies; the
+    reported failure was Latin, and this is the half that can be checked
+    without guessing.
+    """
+    masked = _BOXY_WNS_TEE.sub(" ", text or "")
+    return [
+        token
+        for token in _BRAND_SHAPED.findall(masked)
+        if token not in SHOP_NAME and token.lower() not in _NOT_THE_BRAND
+    ]
+
+
 def looks_truncated(text: str) -> bool:
     """A reply that stops mid-word or mid-clause.
 
@@ -284,6 +335,13 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
 
             if looks_truncated(text):
                 failures.append(f"{where}: the reply reads as cut off")
+
+            misspelled = misspelled_shop_name(text)
+            if misspelled:
+                failures.append(
+                    f"{where}: the reply spelled the shop's name "
+                    f"{sorted(set(misspelled))} -- it is Wanas Gallery"
+                )
 
         if not golden_replies:
             continue

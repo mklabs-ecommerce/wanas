@@ -185,3 +185,73 @@ def test_a_silent_turn_is_not_judged_on_its_words():
     golden = _run(_reply("confirm_order", 2, "", ("confirm_order",)))
     fresh = _run(_reply("confirm_order", 2, "", ("confirm_order",)))
     assert check(golden, fresh) == []
+
+
+# --- the shop's own name --------------------------------------------------
+#
+# The model meets the brand in four surface forms -- `Wanas Gallery`, `WANAS
+# Hoodie`, `Boxy WNS Tee` and the Arabic «ونس» -- and Arabic writes no short
+# vowels, so the Arabic form is literally w-n-s. That is the whole mechanism
+# behind a reply that calls the shop `Wnas` or `WNS`.
+
+
+def test_the_shop_name_spelled_correctly_passes():
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    assert check(golden, fresh) == []
+
+
+def test_the_short_form_is_also_correct():
+    golden = _run(_reply("greeting", 0, "أهلاً بيك"))
+    fresh = _run(_reply("greeting", 0, "دي من ماركة Wanas، وعندنا منها كل المقاسات. تحب تشوفها؟"))
+    assert not [f for f in check(golden, fresh) if "shop's name" in f]
+
+
+def test_the_product_name_prefix_is_not_a_misspelling():
+    """`WANAS Hoodie` is the product's real name and is on the label."""
+    golden = _run(_reply("sizes", 0, "هودي WANAS Hoodie متوفر عندنا دلوقتي بكل المقاسات"))
+    fresh = _run(_reply("sizes", 0, "هودي WANAS Hoodie متوفر عندنا دلوقتي بمقاس L وكمان مقاس M"))
+    assert not [f for f in check(golden, fresh) if "shop's name" in f]
+
+
+def test_boxy_wns_tee_is_a_product_not_a_misspelling():
+    """The one product name that legitimately contains the brand abbreviated.
+    It is masked out before the scan; a bare `WNS` anywhere else is not."""
+    golden = _run(_reply("product_question", 0, "عندنا دلوقتي تيشيرت Boxy WNS Tee بسعر كويس قوي"))
+    fresh = _run(_reply("product_question", 0, "دي اللي عندنا دلوقتي: • تيشيرت Boxy WNS Tee — 450 جنيه. تحب تشوف حاجة تانية؟"))
+    assert not [f for f in check(golden, fresh) if "shop's name" in f]
+
+
+def test_wns_offered_as_the_shop_name_fails():
+    """The failure the rule is named for: the abbreviation floating free of the
+    product name and being used as the shop."""
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في WNS، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    assert any("shop's name" in f and "WNS" in f for f in check(golden, fresh))
+
+
+def test_the_vowelless_transliteration_fails():
+    """`Wnas` is «ونس» read back letter by letter."""
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Wnas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    assert any("Wnas" in f for f in check(golden, fresh))
+
+
+def test_a_reordered_transliteration_fails():
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Wans Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    assert any("Wans" in f for f in check(golden, fresh))
+
+
+def test_a_leaked_product_slug_fails():
+    """A slug in a reply is the model reading tool arguments back to the
+    customer, and it carries the brand lowercased."""
+    golden = _run(_reply("product_question", 0, "عندنا دلوقتي هودي WANAS Hoodie بكل المقاسات المتاحة"))
+    fresh = _run(_reply("product_question", 0, "المنتج wanas-hoodie متاح عندنا دلوقتي بكل المقاسات"))
+    assert any("shop's name" in f for f in check(golden, fresh))
+
+
+def test_an_ordinary_english_word_is_not_the_brand():
+    """`wins` has the same consonant skeleton and is not a misspelling."""
+    assert quality_gate.misspelled_shop_name("he wins") == []
+    assert quality_gate.misspelled_shop_name("Wanas Gallery") == []
