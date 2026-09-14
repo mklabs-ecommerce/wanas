@@ -1095,3 +1095,11 @@ def test_a_multi_product_search_carries_no_chart_even_on_a_sizing_question(ctx):
     ctx.history.append({"role": "user", "content": "المقاسات إيه؟"})
     call(ctx, "get_products", category="T-Shirts")
     assert charts(ctx) == []
+
+
+def test_the_prompt_pins_the_order_sizes_are_recited_in():
+    """`common/sizes.py` fixes the order the model is *handed* its sizes in.
+    It cannot fix the order the model recites them in once it regroups them by
+    colour, which the real model does -- and which produced "مقاس S ... مقاس M
+    ... مقاس XL ... مقاس L" from a correctly ordered payload."""
+    assert "S قبل M قبل L قبل XL" in SYSTEM_PROMPT
