@@ -604,6 +604,16 @@ tests/                   pytest suite (flat, one test_<module>.py per
   now means only "unreachable"; `orders.edit_refusal` tells a permission gap,
   a Shopify refusal, an out-of-stock and an outage apart, and the dashboard
   says which in Arabic.
+- **And no error code reaches a screen as a code.** `ERROR_REASONS` in
+  `dashboard/dashboard.html` maps every `{"error": ...}` the API can answer
+  with to an Arabic sentence, and the mapping lives behind `toastError` and
+  `errorBanner` rather than at the call sites — it was wired into the two
+  queue approve buttons only, while the other twenty-six surfaces rendered
+  `ApiError.message`, which for every JSON refusal *is* the code
+  («الإضافة مانفذتش store_permission»). An unmapped code becomes a readable
+  sentence and a `console.warn`, never the key itself.
+  `tests/test_dashboard_errors.py` fails if a code the API can return has no
+  sentence, or if anything in the rendering path reaches for `err.message`.
 
 ## Shopify
 

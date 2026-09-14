@@ -33,8 +33,23 @@ something looks wrong.
       asks for that one and the merchant-managed pair does not cover it -- the order drawer
       says so in place of the button, and `fulfill` refuses with
       `fulfillment_scope_missing`, rather than either one failing as an
-      outage. A missing write scope shows up as a `store_unavailable`
-      (config) refusal from the dashboard action that needed it, not a crash.
+      outage.
+- [ ] **`write_order_edits`.** Its own line because it shipped missing and
+      nothing said so for weeks. Every edit to a *placed* order begins with
+      `orderEditBegin` -- approving an item swap, approving an item add,
+      changing a line's quantity -- and without this scope all three come
+      back `ACCESS_DENIED`, forever, however many times staff press the
+      button. `read_orders`/`write_orders` do **not** imply it. Ticking it in
+      the app's Configuration is not enough on its own: save the
+      configuration, reinstall the app, and use the *new* token. Verify
+      rather than assume -- `integrations/shopify/scopes.py` is read at boot,
+      logged at ERROR, and reported on `/health` as `shopify_missing_scopes`,
+      so the deployment answers this question itself. A reinstall that did
+      not actually save the checkbox issues a new token with the same old
+      scopes, which looks like success and is not.
+      A missing write scope now shows up as `store_permission` -- naming the
+      scope -- rather than the `store_unavailable` it used to be confused
+      with, which read as an outage and invited a pointless retry.
       `scripts/shopify_size_charts.py` uploads the size-chart diagrams to
       Shopify Files, which `write_products` already covers -- it says so
       plainly if a store's token does not. Deleting a file is the other half
