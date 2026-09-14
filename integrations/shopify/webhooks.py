@@ -53,6 +53,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.settings import settings
@@ -141,11 +142,26 @@ async def inbound(request: Request, background: BackgroundTasks) -> Response:
 
 
 def _claim(event_id: str) -> bool:
+    """True when this delivery is ours to process, False when it is a duplicate.
+
+    The `IntegrityError` branch is the same race
+    `assistant/runtime.py::_already_processed` handles for Meta, and it is the
+    one the check-then-insert above cannot close on its own: two deliveries of
+    the same event can both find no row and both try to write one. Without it
+    the loser raised out of the endpoint, so Shopify got a 500 for a delivery
+    that was in fact handled perfectly by the winner -- and Shopify counts 5xx
+    replies towards taking the subscription away, which is how tracking
+    messages stop firing with nothing obviously broken.
+    """
     with session_scope() as session:
         if session.get(WebhookEvent, event_id) is not None:
             return False
         session.add(WebhookEvent(platform_message_id=event_id))
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError:
+            session.rollback()
+            return False
     return True
 
 

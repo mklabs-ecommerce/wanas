@@ -12,6 +12,7 @@ tests as the status changes are.
 from __future__ import annotations
 
 import base64
+import contextlib
 import dataclasses
 import hashlib
 import hmac
@@ -369,3 +370,66 @@ def test_a_product_already_known_is_not_imported_twice(post, seeded, shopify):
 
 def test_a_product_webhook_with_no_id_is_accepted_and_ignored(post, seeded):
     assert post("products/create", {"status": "active"}).status_code == 200
+
+
+# --------------------------------------------------------------------------
+# Two deliveries of the same event, racing
+# --------------------------------------------------------------------------
+#
+# Check-then-insert cannot close this on its own: both copies find no row and
+# both try to write one. `assistant/runtime.py::_already_processed` has always
+# handled it for Meta; this side raised instead, so the loser answered Shopify
+# with a 500 for a delivery the winner had handled correctly -- and Shopify
+# counts 5xx replies towards removing the subscription, which is how tracking
+# messages stop firing with nothing obviously broken.
+
+
+def test_claiming_the_same_delivery_twice_reads_as_a_duplicate(seeded):
+    seeded.rollback()
+    event = "shopify:raced-delivery"
+    assert hook._claim(event) is True
+    assert hook._claim(event) is False
+
+
+def test_a_row_that_appears_after_the_check_is_caught_rather_than_raised(seeded, monkeypatch):
+    """The real race: the competing row lands *between* the existence check and
+    the insert, so only the database can refuse it.
+
+    Driven by making the flush raise rather than by opening a second
+    connection -- on SQLite the competing write would just block on the write
+    lock this session already holds, which is the deadlock the `placed`
+    fixture above warns about. What is under test is the branch, not the
+    engine's locking.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    seeded.rollback()
+    real_scope = hook.session_scope
+
+    class _Loser:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def flush(self, *args, **kwargs):
+            raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+
+    @contextlib.contextmanager
+    def losing_scope():
+        with real_scope() as session:
+            yield _Loser(session)
+
+    monkeypatch.setattr(hook, "session_scope", losing_scope)
+    assert hook._claim("shopify:simultaneous") is False
+
+
+def test_a_duplicate_delivery_is_answered_200_not_500(post, placed):
+    """What Shopify actually sees. A delivery that was simply already handled
+    must never come back as a 5xx."""
+    body = order_body(placed)
+    first = post("orders/cancelled", body, delivery_id="repeat-1")
+    second = post("orders/cancelled", body, delivery_id="repeat-1")
+    assert first.status_code == 200
+    assert second.status_code == 200
