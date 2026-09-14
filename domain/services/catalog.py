@@ -67,19 +67,17 @@ def get_categories(session: Session) -> dict:
     #: Only the values actually recorded on a product. A facet offered but
     #: empty is a filter the model will use and get nothing back from, which
     #: reads to the customer as "we don't have any".
-    sleeve_values = [
-        row[0]
-        for row in session.execute(
-            select(Product.sleeve).where(Product.sleeve.is_not(None)).distinct()
-        )
-    ]
+    sleeve_values = {
+        sleeves.effective(row[0], row[1])
+        for row in session.execute(select(Product.sleeve, Product.category))
+    }
 
     return {
         "categories": categories,
         "styles": sorted(styles),
         "departments": departments,
         "collections": collections,
-        "sleeves": [s for s in sleeves.SLEEVES if s in set(sleeve_values)],
+        "sleeves": [s for s in sleeves.SLEEVES if s in sleeve_values],
     }
 
 
@@ -180,10 +178,10 @@ def _product_summary(product: Product, live_map=None) -> dict:
         "style": list(product.style or []),
         "department": product.department,
         "collection": product.collection,
-        # `half`, `long`, `sleeveless`, or null for "nobody recorded it".
-        # Null is never a licence to infer one from the category -- see
-        # domain/services/sleeves.py.
-        "sleeve": product.sleeve,
+        # `half`, `long` or `sleeveless` -- never null. A product that
+        # somehow reaches here unset is answered from its category rather than
+        # with a shrug; see `sleeves.effective`.
+        "sleeve": sleeves.effective(product.sleeve, product.category),
         # The full run including sold-out ones: these describe the product,
         # they are not an offer. get_variants decides what can be offered.
         "colors": list(product.colors or []),
@@ -223,7 +221,7 @@ def _haystack(product: Product) -> str:
             # «نص كم» reaches here as `half sleeve` (search_terms), so the
             # words have to be in the text being searched or the fold has
             # nothing to land on.
-            sleeves.SEARCH_TEXT.get(product.sleeve or "", ""),
+            sleeves.SEARCH_TEXT.get(sleeves.effective(product.sleeve, product.category), ""),
             product.description or "",
         ]
     )
@@ -315,17 +313,15 @@ def get_products(
     if query:
         products = [p for p in products if _matches_query(p, query)]
 
-    #: Applied last, and in Python, so the products it drops can be counted.
-    #: Folded through `sleeves.normalise` rather than compared raw: the model
-    #: picks the wording of this argument itself and sends "short sleeve" as
-    #: readily as "half". An unrecognised word filters nothing away, which is
-    #: the safe direction -- the alternative is answering "we have none" about
-    #: a shelf full of them.
-    unrecorded: list[Product] = []
+    #: Applied last, and in Python, so it compares the same effective value
+    #: the payload goes on to quote. Folded through `sleeves.normalise` rather
+    #: than compared raw: the model picks the wording of this argument itself
+    #: and sends "short sleeve" as readily as "half". An unrecognised word
+    #: filters nothing away, which is the safe direction -- the alternative is
+    #: answering "we have none" about a shelf full of them.
     wanted = sleeves.normalise(sleeve) if sleeve else None
     if wanted is not None:
-        unrecorded = [p for p in products if p.sleeve is None]
-        products = [p for p in products if p.sleeve == wanted]
+        products = [p for p in products if sleeves.effective(p.sleeve, p.category) == wanted]
 
     live_map = shopify_catalog.live_map()
     summaries = [_product_summary(p, live_map) for p in products]
@@ -345,17 +341,11 @@ def get_products(
             "images": images,
             "color_images": color_images,
         }
-    if wanted is not None:
-        # The difference between "we don't sell one" and "nobody has written
-        # it down". Filtering on sleeve and handing back a bare empty list
-        # made those two the same answer, and the model -- asked for a
-        # half-sleeve hoodie -- closed the gap itself with "all our hoodies
-        # are long sleeve". Nothing in the catalog says that. Sleeve length is
-        # unrecorded on every hoodie, which is a different sentence and the
-        # only true one.
-        result["sleeve_unrecorded"] = [
-            {"product_id": p.product_id, "name": p.name} for p in unrecorded
-        ]
+    # No `sleeve_unrecorded` any more, and its absence is the point. It
+    # existed to tell "we don't sell one" apart from "nobody wrote it down",
+    # which was a real distinction while products could be unset. They cannot
+    # be: every product answers `half`, `long` or `sleeveless`, so an empty
+    # result under a sleeve filter now means exactly what it says.
     return result
 
 
@@ -479,8 +469,8 @@ def get_variants(session: Session, product_id: str) -> dict | None:
         "description": product.description,
         # The answer to "is this one half sleeve?" -- a property of the
         # product, so it rides with every variant read rather than needing a
-        # search. Null means not recorded; say so, never infer it.
-        "sleeve": product.sleeve,
+        # search. Always one of the three; never null.
+        "sleeve": sleeves.effective(product.sleeve, product.category),
         "has_size_chart": product.size_chart is not None or product.size_chart_image is not None,
         # Sold-out variants are returned too, so the bot can say "XL only comes
         # in Black" rather than pretending the combination never existed.

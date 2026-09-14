@@ -1135,13 +1135,24 @@ def _mirror_local(
     product.style = list(style or [])
     product.collection = collection
     #: Absent, not blank. `None` here means the caller said nothing about
-    #: sleeve length and whatever the row already holds stands -- which is
+    #: sleeve length, and whatever the row already holds stands -- which is
     #: what stops `product_import` (whose only source is Shopify, and Shopify
-    #: has no such field) from blanking a value staff set in the dashboard
-    #: the next time somebody edits the product in Shopify Admin. To *clear*
-    #: it, pass "" and `sleeves.normalise` folds that back to NULL.
+    #: has no such field) from blanking a value staff set in the dashboard the
+    #: next time somebody edits the product in Shopify Admin.
+    #:
+    #: A product that has no value *yet* is a different case, and it is the
+    #: one `product_import` actually hits: a brand new product, mirrored from
+    #: a store that cannot tell us. It gets its category's answer rather than
+    #: a NULL, because a NULL is what the bot used to say "I don't know" to.
+    #: Never `half` -- the half-sleeve list is closed and nothing may join it
+    #: without a person saying so.
     if sleeve is not None:
-        product.sleeve = sleeves.normalise(sleeve)
+        # `effective`, not `normalise`: a blank or unrecognised value must not
+        # land as NULL. There is no "unrecorded" state to fall back to any
+        # more -- that is the state the bot used to say "I don't know" to.
+        product.sleeve = sleeves.effective(sleeve, category)
+    elif product.sleeve is None:
+        product.sleeve = sleeves.for_category(category)
     product.size_chart = size_chart
     product.sizes = summary["sizes"]
     product.colors = summary["colors"]
@@ -1629,9 +1640,12 @@ def update_product(
     if collection is not None:
         product.collection = collection
     if sleeve is not None:
-        # "" clears it back to "not recorded"; omitting the field entirely
-        # leaves it alone, the same contract as every other field here.
-        product.sleeve = sleeves.normalise(sleeve)
+        # Omitting the field leaves it alone, the same contract as every other
+        # field here. A blank or unrecognised value does *not* clear it to
+        # NULL any more -- there is no such state to clear to -- it falls back
+        # to the category's answer, so a save can never leave a product the
+        # bot has to shrug about.
+        product.sleeve = sleeves.effective(sleeve, category or product.category)
     if size_chart is not None:
         product.size_chart = size_chart
 

@@ -69,10 +69,12 @@ for at least once:
    both at the send boundary, and this rule keeps them from being written
    in the first place: the dashboard shows staff the unrepaired string, and
    every shape the prompt asks for already renders correctly on its own.
-12. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
-   catalog field, so "I have no data about sleeve length" beside the words
-   «نص كم» is the bot refusing to read something it is holding -- which is
-   exactly the reply that made the field necessary.
+12. **A sleeve question is answered, not deflected -- ever.** `Product.sleeve`
+   is total: half, long or sleeveless, for every product. So beside the words
+   «نص كم», *any* profession of ignorance fails -- «مش متسجّل» included, which
+   this rule used to allow because it used to be true. It is not reachable any
+   more, and a reply that produces it has invented a state the catalog does
+   not have.
 13. **Photographs still go out.** Judged against the golden run: sending fewer
    is a judgement, sending none is a regression. And judged absolutely as well,
    on the steps whose reply is about one named garment -- a comparison rule
@@ -410,19 +412,27 @@ _LATIN_THEN_NUMBER = re.compile(
 #: what *went out*, not against what the customer typed.
 _SLEEVE_WORDS = (
     "نص كم", "نُص كم", "نصف كم", "كم قصير", "كم طويل", "من غير كم", "بدون كم",
-    "طول الكم", "half sleeve", "short sleeve", "long sleeve", "sleeveless",
+    "طول الكم", "الكم", "half sleeve", "short sleeve", "long sleeve", "sleeveless",
 )
 
-#: "I don't have that information". Every one of these is a sentence the bot
-#: has actually sent, and each of them is correct somewhere -- about a size
-#: chart nobody published, about a colour the shop never made. Beside a sleeve
-#: word it is none of those: sleeve length is a catalog field now, and a reply
-#: that reaches for one of these instead of reading it has fallen back to the
-#: exact answer that made the field necessary.
+#: "I don't know" in every shape a reply has reached for. All of these were
+#: once defensible: the column was nullable, and a product nobody had
+#: classified genuinely had no answer. That is no longer true -- every product
+#: resolves to half, long or sleeveless, and `sleeves.effective` makes that
+#: hold even for a row still sitting NULL -- so beside a sleeve word, each one
+#: of them is the bot refusing to read something it is holding.
+#:
+#: «مش متسجّل» is on this list on purpose, and it is the addition that matters.
+#: It used to be the *correct* answer and this rule explicitly allowed it. It
+#: is unreachable now, and a reply that produces it has invented a state the
+#: catalog does not have.
 _NO_DATA = (
     "معنديش المعلومة", "معنديش معلومات", "معنديش بيانات", "مش متوفرة عندي",
-    "مفيش معلومات", "مفيش بيانات", "مش موجودة عندي", "مش عارف",
-    "no data", "no information", "not available", "don't have",
+    "مفيش معلومات", "مفيش بيانات", "مش موجودة عندي", "مش عارف", "مش عارفة",
+    "مش متسجّل", "مش متسجل", "غير مسجل", "مش مسجل", "مش مسجّل",
+    "لسه متسجلش", "لسه متسجّلش", "محدش سجل", "محدش سجّل",
+    "أتأكد من الفريق", "اتأكد من الفريق", "أحولك", "احولك", "أحوّلك",
+    "no data", "no information", "not available", "don't have", "not recorded",
 )
 
 
@@ -432,24 +442,54 @@ def dodged_a_sleeve_question(text: str) -> str:
     A customer asked for «البولو النص كم» and was told the shop has two polos
     and no published data about sleeve length for either, plus an offer to
     fetch a person -- about a polo that is on the shelf and is half-sleeve.
-    Two holes behind it: «نص كم» was not in the catalog's vocabulary, and
-    nothing recorded sleeve length at all. Both are closed
-    (`domain/services/sleeves.py`), and this is the rule that keeps them
-    closed: a reply that mentions sleeve length and pleads ignorance in the
-    same breath is the failure coming back.
 
-    Deliberately *not* a ban on "not recorded" in general. A product the shop
-    genuinely has not filled in still has a null, and saying so is the right
-    answer -- what this catches is saying it *and* offering a handoff, which
-    is what turns an answerable question into somebody's afternoon.
+    The first fix gave the catalog a `sleeve` field and left it unset for
+    anything outside the half-sleeve list, which moved the same sentence
+    rather than removing it: every hoodie, jacket and sweatpant then answered
+    "nobody has recorded that". That is worse than the original bug, because
+    it is the shop saying it does not know what it sells, about most of what
+    it sells.
+
+    So the field is total now -- half, long or sleeveless, for every product,
+    with `sleeves.effective` covering even a row that is still NULL -- and
+    this rule is total to match. Beside a sleeve word, *any* profession of
+    ignorance fails, including the "not recorded" phrasing that used to be the
+    right answer and that this rule used to let through.
     """
     lowered = (text or "").lower()
     if not any(word.lower() in lowered for word in _SLEEVE_WORDS):
         return ""
-    excuse = next((phrase for phrase in _NO_DATA if phrase.lower() in lowered), "")
-    if not excuse:
-        return ""
-    return excuse
+    return next((phrase for phrase in _NO_DATA if phrase.lower() in lowered), "")
+
+
+#: Claims that the shop does not stock a whole *line* of things -- a section,
+#: a department, a category. Deliberately not the narrow denials ("we're out
+#: of olive", "no half-sleeve hoodie"): those are answers to a lookup, and are
+#: often correct. These are statements about what the business sells, and the
+#: model has no way to know one without asking.
+_SECTION_DENIALS = (
+    "مفيش قسم", "مافيش قسم", "مفيش عندنا قسم", "مش عندنا قسم",
+    "مش بنبيع", "مابنبيعش", "مبنبيعش", "مفيش نوع",
+    "we don't sell", "we do not sell", "no section", "we don't have a section",
+)
+
+
+def denies_a_whole_section(text: str) -> str:
+    """The phrase in which a reply told a customer this shop has no such line.
+
+    From the audited conversation: a customer asked for «حريمي» -- womenswear
+    -- and was told «مفيش قسم حريمي لوحده», with no tool called in the turn.
+    The shop has a women's department with two products in it, and
+    `search_terms` already maps «حريمي» onto `women`, so the lookup that would
+    have answered it correctly was one call away and simply never happened.
+
+    That is the most expensive shape of answering from memory: a price quoted
+    from memory is checked at the door, but a customer told the shop does not
+    sell what they came for leaves, and nothing about the conversation looks
+    like a failure afterwards.
+    """
+    lowered = (text or "").lower()
+    return next((phrase for phrase in _SECTION_DENIALS if phrase.lower() in lowered), "")
 
 
 #: Above this, two replies are the same reply. Not 1.0: the model re-words a
@@ -484,36 +524,6 @@ def repeats_the_previous_reply(text: str, previous: str) -> float:
     if not now or not before:
         return 0.0
     return difflib.SequenceMatcher(None, before, now).ratio()
-
-
-#: Claims that the shop does not stock a whole *line* of things -- a section,
-#: a department, a category. Deliberately not the narrow denials ("we're out
-#: of olive", "no half-sleeve hoodie"): those are answers to a lookup, and are
-#: often correct. These are statements about what the business sells, and the
-#: model has no way to know one without asking.
-_SECTION_DENIALS = (
-    "مفيش قسم", "مافيش قسم", "مفيش عندنا قسم", "مش عندنا قسم",
-    "مش بنبيع", "مابنبيعش", "مبنبيعش", "مفيش نوع",
-    "we don't sell", "we do not sell", "no section", "we don't have a section",
-)
-
-
-def denies_a_whole_section(text: str) -> str:
-    """The phrase in which a reply told a customer this shop has no such line.
-
-    From the audited conversation: a customer asked for «حريمي» -- womenswear
-    -- and was told «مفيش قسم حريمي لوحده», with no tool called in the turn.
-    The shop has a women's department with two products in it, and
-    `search_terms` already maps «حريمي» onto `women`, so the lookup that would
-    have answered it correctly was one call away and simply never happened.
-
-    That is the most expensive shape of answering from memory: a price quoted
-    from memory is checked at the door, but a customer told the shop does not
-    sell what they came for leaves, and nothing about the conversation looks
-    like a failure afterwards.
-    """
-    lowered = (text or "").lower()
-    return next((phrase for phrase in _SECTION_DENIALS if phrase.lower() in lowered), "")
 
 
 def layout_problems(text: str) -> list[str]:

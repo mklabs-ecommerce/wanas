@@ -383,11 +383,25 @@ def test_pleading_ignorance_about_something_else_is_not_this_rule():
     assert quality_gate.dodged_a_sleeve_question("معنديش المعلومة دي عن جدول المقاسات") == ""
 
 
-def test_saying_the_sleeve_is_not_recorded_without_reaching_for_a_handoff():
-    """A product staff genuinely have not filled in still has a null, and the
-    prompt asks the bot to say so. What must not come back is that sentence
-    dressed as "I have no data at all"."""
-    assert quality_gate.dodged_a_sleeve_question("طول الكم مش متسجّل عندنا للقطعة دي، أتأكد وأقولك") == ""
+def test_saying_the_sleeve_is_not_recorded_now_fails_too():
+    """This used to pass, and used to be right: a product nobody had
+    classified genuinely had no answer, so «مش متسجّل» was the honest reply.
+
+    Leaving products unset is what produced that sentence for every hoodie,
+    jacket and sweatpant in the shop -- the shop saying it does not know what
+    it sells, about most of what it sells. `Product.sleeve` is total now, so
+    the state this sentence describes cannot be reached and a reply that
+    produces it has invented it.
+    """
+    assert quality_gate.dodged_a_sleeve_question("طول الكم مش متسجّل عندنا للقطعة دي، أتأكد وأقولك")
+
+
+def test_the_correct_answer_for_a_product_that_is_not_half_sleeve_passes():
+    """Plainly no, plus what the shop does have. That is the whole behaviour
+    this rule is protecting."""
+    assert quality_gate.dodged_a_sleeve_question(
+        "لأ، الهودي ده كم طويل — بس عندنا نص كم: تيشيرت Ringer Tee وبولو Knitted Polo"
+    ) == ""
 
 
 # --- photographs, judged on their own terms -------------------------------
@@ -586,3 +600,30 @@ def test_a_narrow_denial_is_not_this_rule():
     of the business does not exist, which the model cannot know unasked."""
     assert quality_gate.denies_a_whole_section("للأسف اللون الزيتي خلص دلوقتي") == ""
     assert quality_gate.denies_a_whole_section("مفيش هودي نص كم متسجّل عندنا") == ""
+
+
+def test_the_bench_counts_a_chart_from_the_label_dict_not_its_repr():
+    """The rule above can only fail a chart the bench actually counted, and
+    for a while it counted none.
+
+    `attachment_labels` maps a path to the dict `tools.base._chart_label`
+    builds -- wording, product, colour -- and reading it as a bare string made
+    every count zero. The "no chart nobody asked for" rule was green on every
+    real run because nothing ever reached it, which is the one way a gate rule
+    fails that a gate cannot tell you about.
+    """
+    from scripts import bench_turn
+
+    class _Reply:
+        attachments = ["a.jpg", "chart.png"]
+        attachment_labels = {
+            "a.jpg": {"label": "Boxy WNS Tee (Black)", "product_id": "boxy-wns-tee"},
+            "chart.png": {"label": "Boxy WNS Tee size chart", "product_id": "boxy-wns-tee"},
+        }
+
+    assert bench_turn.count_charts(_Reply()) == 1
+    # And the flattened shape the channel adapters produce.
+    _Reply.attachment_labels = {"chart.png": "Boxy WNS Tee size chart"}
+    assert bench_turn.count_charts(_Reply()) == 1
+    _Reply.attachment_labels = {}
+    assert bench_turn.count_charts(_Reply()) == 0

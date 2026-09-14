@@ -92,6 +92,26 @@ class PlannedProvider(LLMProvider):
         raise NotImplementedError
 
 
+def count_charts(reply) -> int:
+    """How many of a reply's attachments were the size chart.
+
+    `attachment_labels` maps a path to the dict `tools.base._chart_label`
+    builds -- wording, product, colour -- and an earlier version of this read
+    it as a bare string. That made the count zero on every real run, which
+    silently disarmed the gate's "no chart nobody asked for" rule instead of
+    failing it: the one way a rule can break that a gate cannot report.
+
+    Both shapes are accepted, because the channel adapters flatten the dict to
+    its wording and the harness does not.
+    """
+    labels = (getattr(reply, "attachment_labels", None) or {}).values()
+    return sum(
+        1
+        for label in labels
+        if str(label.get("label") if isinstance(label, dict) else label).endswith("size chart")
+    )
+
+
 def run_scenario(
     scenario: bench_scenarios.Scenario, *, provider: PlannedProvider | None, real: bool
 ) -> list[dict]:
@@ -135,11 +155,7 @@ def run_scenario(
                 # so a single count cannot tell the gate about either.
                 # Labelled by `tools.base._chart_label`, which is the only
                 # place a chart attachment is ever named.
-                "charts": sum(
-                    1
-                    for label in (reply.attachment_labels or {}).values()
-                    if str(label).endswith("size chart")
-                ),
+                "charts": count_charts(reply),
                 "error": reply.error,
                 "seconds": time.perf_counter() - started,
             }
