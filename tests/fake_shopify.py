@@ -360,6 +360,28 @@ class FakeShopify:
                 entry["qty"] -= delta
             order["lines"][sku] = int(quantity)
 
+    def add_line(self, shopify_order_id, to_variant_id, quantity, *, note=None):
+        """Put one more line on the order, and take nothing off.
+
+        The fake's half of the rule the real `add_line` is written to: there
+        is no `from_sku` parameter to get wrong, so no test of the add path
+        can accidentally exercise a removal.
+        """
+        self._guard()
+        to_sku = str(to_variant_id).rsplit("/", 1)[-1]
+        with self._lock:
+            order = self.orders.get(shopify_order_id)
+            if order is None:
+                raise self._orders.OrderRejected(f"no order {shopify_order_id}")
+            target = self.shelf.get(to_sku)
+            if target is None:
+                raise self._orders.OrderRejected(f"{to_sku}: not on Shopify")
+            if target["tracked"] and target["qty"] < int(quantity):
+                raise self._orders.OrderRejected(f"{to_sku}: insufficient inventory")
+            if target["tracked"]:
+                target["qty"] -= int(quantity)
+            order["lines"][to_sku] = order["lines"].get(to_sku, 0) + int(quantity)
+
     def swap_line(self, shopify_order_id, from_sku, to_variant_id, quantity, *, note=None):
         self._guard()
         to_sku = str(to_variant_id).rsplit("/", 1)[-1]
@@ -1229,6 +1251,7 @@ class FakeShopify:
         monkeypatch.setattr(shopify_orders, "try_cancel", self.try_cancel)
         monkeypatch.setattr(shopify_orders, "set_line_quantity", self.set_line_quantity)
         monkeypatch.setattr(shopify_orders, "swap_line", self.swap_line)
+        monkeypatch.setattr(shopify_orders, "add_line", self.add_line)
         monkeypatch.setattr(shopify_admin_customers, "list_customers", self.list_customers)
         monkeypatch.setattr(shopify_admin_customers, "get_customer", self.get_customer)
         monkeypatch.setattr(shopify_admin_orders, "list_orders", self.list_orders)

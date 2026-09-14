@@ -122,6 +122,8 @@ domain/                  persistence + business rules; no vendor HTTP calls,
                             `request_human` handoff -- a handoff *pauses*
                             the conversation, so nobody is answering that
                             customer until a person opens the dashboard.
+                            every `item_swap` *and* `item_add` (a customer
+                            waiting on a decision only a person can make).
                             One reason is left out and it is the loud one:
                             `order_confirmed` fires on every sale, and an
                             address carrying it is an address that gets
@@ -271,6 +273,15 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              whole transcript, so the turn knows which
                              message it is about
   media.py                  voice notes and photos (see docs/MEDIA.md)
+  order_change_claims.py    and what a reply says it *filed*, checked against
+                             what it filed. One level up from photo_claims and
+                             the same failure shape: the words are the model's
+                             and the queue row is the tool layer's, so a reply
+                             saying «نضيف قطعة» went out beside a swap that
+                             would have taken a garment off the order. The
+                             tools return `filed`; a reply describing the other
+                             action is regenerated, then replaced with a
+                             sentence that names neither
   photo_claims.py           what a reply *says* about photographs, checked
                              against what it is actually sending. The words
                              are the model's and the pictures are the tool
@@ -556,6 +567,16 @@ tests/                   pytest suite (flat, one test_<module>.py per
   (carry Shopify order id/number columns), `ShippingRate`, `Staff`,
   `StaffQueueItem` (human-handoff / item-swap / alert queues),
   `WebhookEvent` (idempotency).
+- **A post-order request has a `kind`, and the kind is the decision.**
+  `item_swap` replaces a line (something comes *off* the order); `item_add`
+  adds one and removes nothing; changing or removing a quantity is neither --
+  `modify_order_quantity` applies immediately and writes no queue row at all.
+  `item_add` exists because it did not: `item_swap` was the only post-order
+  request type there was, so "ضيفه على نفس الأوردر" was filed as a
+  replacement, naming a garment the customer still wanted as the thing to
+  remove. Each kind has its own tool, its own dashboard card and its own
+  approve route (`approve-swap` / `approve-add`), and each route refuses an
+  item of the other kind rather than coercing it.
 
 ## Shopify
 

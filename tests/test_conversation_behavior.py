@@ -705,7 +705,16 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # now, but only the prompt can hold the line between offering something
         # as an *alternative* and offering it as the thing that was asked for
         # -- and only the prompt can list what the shop does and does not sell.
-    assert 3000 < len(SYSTEM_PROMPT) < 21500
+        #
+        # 21500 -> 22200: adding a piece to an existing order versus swapping
+        # one. The tools now differ structurally -- `request_item_add` has no
+        # `from_variant_id` to name, so it *cannot* remove anything -- and the
+        # turn refuses a reply that describes the other one. Neither of those
+        # can pick between them: only the prompt can say which customer
+        # sentence is which, and that the honest move when it cannot tell is
+        # one short question. «ينفع اضيفه علي نفس الاوردر اللي فات» was filed
+        # as "remove the Knitted Polo, put the Heart Top in its place".
+    assert 3000 < len(SYSTEM_PROMPT) < 22200
 
 
 # --------------------------------------------------------------------------

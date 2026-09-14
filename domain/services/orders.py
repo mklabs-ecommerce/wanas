@@ -22,6 +22,7 @@ from domain.models import (
     Client,
     Order,
     OrderFeedback,
+    OrderItem,
     OrderStatus,
     Variant,
     utcnow,
@@ -1029,6 +1030,141 @@ def apply_swap(session: Session, order: Order, from_variant_id: str, to_variant_
     if inventory.breached_threshold(session, to_variant_id):
         notifications.low_stock_breach(session, replacement)
     notifications.order_modified(session, order, f"swap {from_variant_id} → {to_variant_id}")
+    return order_payload(order)
+
+
+def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int = 1) -> dict:
+    """Staff approving an *add* from the review queue.
+
+    The sibling of `apply_swap`, and a separate function for the reason the
+    queue kind is separate: this one must not be able to take anything off
+    the order. There is no `from_variant_id` to get wrong, and no line is
+    written to except the one being created (or, when the customer asks for
+    a second of something already on the order, the one it merges into --
+    two lines of the same variant on one order is a packing slip nobody can
+    read).
+
+    Same division of labour as everywhere else: Shopify holds the order and
+    the stock, so when there is a Shopify order the edit goes there and the
+    local rows follow; an order placed before the move still claims its own
+    stock through `inventory.decrement`.
+    """
+    if not order.modifiable:
+        return {"error": "not_modifiable", "status": order.status}
+    quantity = int(quantity)
+    if quantity < 1 or quantity > 10:
+        return {"error": "bad_arguments", "detail": "quantity must be between 1 and 10"}
+
+    addition = session.get(Variant, to_variant_id)
+    if addition is None:
+        return {"error": "variant_not_found", "variant_id": to_variant_id}
+
+    existing = next((i for i in order.items if i.variant_id == to_variant_id), None)
+
+    receipts: list[dict] = []
+    nested = session.begin_nested()
+    try:
+        if order.shopify_order_id:
+            live = shopify_catalog.try_fetch_one(to_variant_id)
+            if live is None:
+                raise Refusal({"error": "store_unavailable"})
+            if live.tracked and live.stock_qty < quantity:
+                raise Refusal({"error": "insufficient_stock", "available": live.stock_qty})
+            try:
+                if existing is not None:
+                    # Already a line -- this is a quantity change on Shopify's
+                    # side, and `set_line_quantity` is the mutation that says
+                    # so. Adding a duplicate line would leave two rows for one
+                    # garment and a total nobody can check at the door.
+                    shopify_orders.set_line_quantity(
+                        order.shopify_order_id,
+                        to_variant_id,
+                        existing.quantity + quantity,
+                        note=f"{order.order_id}: +{quantity} × {to_variant_id}",
+                    )
+                else:
+                    shopify_orders.add_line(
+                        order.shopify_order_id,
+                        live.shopify_id,
+                        quantity,
+                        note=f"{order.order_id}: + {to_variant_id}",
+                    )
+            except shopify_orders.OrderRejected as exc:
+                if exc.is_out_of_stock:
+                    raise Refusal({"error": "insufficient_stock", "available": 0}) from exc
+                log.error("Shopify refused the addition to %s: %s", order.order_id, exc)
+                raise Refusal({"error": "store_unavailable"}) from exc
+            except (
+                shopify_catalog.ShopifyUnavailable,
+                shopify_catalog.ShopifyConfigError,
+            ) as exc:
+                log.warning("Could not add to %s: %s", order.order_id, exc)
+                raise Refusal({"error": "store_unavailable"}) from exc
+
+            # Shopify moved the stock as part of the edit; this only keeps the
+            # local rows readable.
+            inventory.record_sold(session, to_variant_id, quantity)
+        else:
+            result = inventory.decrement(
+                session, to_variant_id, quantity, order_ref=order.order_id
+            )
+            if not result.ok:
+                if result.reason in ("store_unavailable", "not_on_shopify"):
+                    raise Refusal({"error": "store_unavailable"})
+                raise Refusal({"error": "insufficient_stock", "available": result.available})
+            if result.receipt:
+                receipts.append(result.receipt)
+
+        # Shopify's price for the addition, for the same reason a new order
+        # uses it: the packing slip has to match what the shop is charging.
+        live_price = shopify_catalog.try_fetch_one(to_variant_id)
+        if existing is not None:
+            existing.quantity += quantity
+        else:
+            session.add(
+                OrderItem(
+                    order_id=order.order_id,
+                    variant_id=addition.variant_id,
+                    product_name=addition.product.name,
+                    size=addition.size,
+                    color=addition.color,
+                    length=addition.length,
+                    quantity=quantity,
+                    unit_price=to_decimal(live_price.price if live_price else addition.price),
+                    unit_original_price=to_decimal(
+                        live_price.original_price if live_price else addition.original_price
+                    ),
+                )
+            )
+        session.flush()
+        session.refresh(order)
+
+        recompute_totals(order)
+        order.modification_log = list(order.modification_log or []) + [
+            {
+                "at": utcnow().isoformat(),
+                "channel": "dashboard",
+                "change": "item_add",
+                "to": to_variant_id,
+                "quantity": quantity,
+                "new_total": money(order.total),
+            }
+        ]
+        session.flush()
+        nested.commit()
+        receipts.clear()
+    except Refusal as refusal:
+        nested.rollback()
+        return refusal.payload
+    except Exception:
+        nested.rollback()
+        raise
+    finally:
+        inventory.return_receipts(receipts, order.order_id)
+
+    if inventory.breached_threshold(session, to_variant_id):
+        notifications.low_stock_breach(session, addition)
+    notifications.order_modified(session, order, f"add {quantity} × {to_variant_id}")
     return order_payload(order)
 
 

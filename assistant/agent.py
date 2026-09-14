@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from assistant import (
     context,
     messages as msg,
+    order_change_claims,
     photo_claims,
     quoting,
     session as session_store,
@@ -390,6 +391,33 @@ BLAME_FALLBACK = (
     "تحب أوصّلك بحد من الفريق يبعتهالك حالًا؟"
 )
 
+#: What the model is told when its reply describes one post-order request and
+#: the queue holds the other. Written so there is nothing to negotiate: the
+#: queue item is the fact, and the sentence has to be rewritten to match it --
+#: never the other way round, because the row is already committed and a staff
+#: member will act on it.
+_CHANGE_NUDGE = (
+    "\n\n"
+    "تنبيه داخلي: اللي اتسجل فعلاً للفريق ({filed}) مش هو اللي ردك قاله "
+    "({said}). الطلب اللي اتبعت هو الحقيقة، وحد من الفريق هينفّذه زي ما هو "
+    "مكتوب. اكتب الرد تاني بحيث يوصف بالظبط اللي اتسجل: "
+    "«{describe}». متقولش حاجة تانية."
+)
+
+#: Arabic for each filed kind, for the nudge and for the fallback below.
+_CHANGE_WORDS = {
+    "item_add": "إننا نضيف القطعة الجديدة على الأوردر من غير ما نشيل أي حاجة",
+    "item_swap": "إننا نبدّل القطعة اللي على الأوردر بالقطعة الجديدة",
+}
+
+#: The last resort. It says only what is certainly true of both kinds -- the
+#: request is with the team and nothing has happened yet -- rather than name
+#: an action the reply has already shown the model cannot name correctly.
+CHANGE_FALLBACK = (
+    "طلبك وصل للفريق وحد هيراجعه ويأكدلك، ولسه مافيش حاجة اتغيرت في الأوردر. "
+    "تحب أقولك بالظبط اللي اتبعت؟"
+)
+
 
 def _describe(named: list[str], count: int) -> str:
     """The undelivered photos, as something that can go into a prompt line.
@@ -432,6 +460,12 @@ class AgentReply:
     #: Tool names called this turn, in order. Logged, and what the tests and
     #: the chat harness read.
     tool_calls: list[str] = field(default_factory=list)
+    #: The post-order request kinds this turn wrote to the staff queue
+    #: (`item_add` / `item_swap`), in the tools' own words. Carried out of the
+    #: turn so the words the customer got can be checked against the row a
+    #: staff member will act on -- by `assistant/order_change_claims.py`
+    #: inside the turn, and by `scripts/quality_gate.py` after it.
+    filed: list[str] = field(default_factory=list)
     error: str | None = None
     #: True when the turn deliberately produced no text because the customer
     #: has already been answered by another path -- today only the order
@@ -584,6 +618,9 @@ def run_turn(
         history=history,
     )
     called: list[str] = []
+    #: The post-order request kinds this turn filed -- see
+    #: `assistant/order_change_claims.py`.
+    filed_kinds: list[str] = []
     promise_retries = 0
     truncation_retries = 0
     # The customer sent a picture of their own this turn, so every mention of
@@ -627,7 +664,9 @@ def run_turn(
             if settings.chatbot_debug:
                 text_out = f"{text_out}\n[debug] {exc.kind}: {exc}"
             session_store.save(db, channel, external_id, history, merge_since=base)
-            return AgentReply(text=text_out, error=exc.kind, tool_calls=called)
+            return AgentReply(
+                text=text_out, error=exc.kind, tool_calls=called, filed=list(filed_kinds)
+            )
         except Exception as exc:
             # Anything the provider did not classify -- a bug in translation, a
             # library raising something unexpected. It must still be logged
@@ -640,7 +679,9 @@ def run_turn(
             if settings.chatbot_debug:
                 text_out = f"{text_out}\n[debug] {type(exc).__name__}: {exc}"
             session_store.save(db, channel, external_id, history, merge_since=base)
-            return AgentReply(text=text_out, error="provider_crash", tool_calls=called)
+            return AgentReply(
+                text=text_out, error="provider_crash", tool_calls=called, filed=list(filed_kinds)
+            )
 
         if not reply.tool_calls:
             if reply.text and _is_truncated(reply):
@@ -683,6 +724,7 @@ def run_turn(
                     attachment_labels=ctx.attachment_labels,
                     interactive=ctx.interactive,
                     tool_calls=called,
+                    filed=list(filed_kinds),
                     error="truncated",
                 )
 
@@ -720,6 +762,50 @@ def run_turn(
                 customer_sent_a_photo=customer_sent_a_photo,
             )
 
+            # ...and one level up from a photograph: whether the reply
+            # describes the request this turn actually filed. An addition
+            # reported as a swap is a garment the customer still wants coming
+            # off his order, with the bot's own sentence saying otherwise.
+            filed = order_change_claims.filed_kind(filed_kinds)
+            change_mismatch = order_change_claims.mismatch(text_out, filed)
+            if change_mismatch:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s described a different request from the one "
+                        "it filed (%s), retry %d/%d",
+                        channel,
+                        external_id,
+                        change_mismatch,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}" + _CHANGE_NUDGE.format(
+                        filed=filed,
+                        said=change_mismatch,
+                        describe=_CHANGE_WORDS[filed],
+                    )
+                    continue
+                log.error(
+                    "provider %s kept describing the wrong request for %s/%s (%s); "
+                    "sending the neutral confirmation instead",
+                    provider.name,
+                    channel,
+                    external_id,
+                    change_mismatch,
+                )
+                history.append(msg.assistant(CHANGE_FALLBACK, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=CHANGE_FALLBACK,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                    error="order_change_mismatch",
+                )
+
             if blamed:
                 if promise_retries < _PROMISE_RETRY_LIMIT:
                     log.warning(
@@ -749,6 +835,7 @@ def run_turn(
                     attachment_labels=ctx.attachment_labels,
                     interactive=ctx.interactive,
                     tool_calls=called,
+                    filed=list(filed_kinds),
                     error="blamed_the_customer",
                 )
 
@@ -809,6 +896,7 @@ def run_turn(
                     attachment_labels=ctx.attachment_labels,
                     interactive=ctx.interactive,
                     tool_calls=called,
+                    filed=list(filed_kinds),
                     error="image_promise" if image_promise else "dangling_promise",
                 )
 
@@ -831,6 +919,7 @@ def run_turn(
                 attachment_labels=ctx.attachment_labels,
                 interactive=ctx.interactive,
                 tool_calls=called,
+                filed=list(filed_kinds),
             )
 
         if _is_truncated(reply) and truncation_retries < _TRUNCATION_RETRY_LIMIT:
@@ -869,6 +958,10 @@ def run_turn(
             called.append(name)
             with telemetry.tool_call(name):
                 content = call_tool(ctx, name, call.get("arguments"))
+            # What this turn actually wrote to the staff queue, in the tool's
+            # own words. Read back below against what the reply says it wrote.
+            if isinstance(content, dict) and content.get("filed"):
+                filed_kinds.append(str(content["filed"]))
             log.info("tool %s(%s) -> %s", name, call.get("arguments"), list(content)[:4])
             results.append(msg.tool_result(call.get("id", name), name, content))
         history.append(msg.tool_results(results))
@@ -891,6 +984,7 @@ def run_turn(
                 attachment_labels=ctx.attachment_labels,
                 interactive=ctx.interactive,
                 tool_calls=called,
+                filed=list(filed_kinds),
                 silent=True,
             )
 
@@ -905,5 +999,6 @@ def run_turn(
         attachment_labels=ctx.attachment_labels,
         interactive=ctx.interactive,
         tool_calls=called,
+        filed=list(filed_kinds),
         error="loop_cap",
     )

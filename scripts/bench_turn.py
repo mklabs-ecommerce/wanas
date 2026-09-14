@@ -169,6 +169,10 @@ def run_scenario(
                 "step": index,
                 "text": reply.text or "",
                 "tool_calls": list(reply.tool_calls),
+                # The staff-queue rows this turn wrote, in the tools' own
+                # words. Rules 19 and 20 compare them against what the
+                # customer was asked and what the reply then said.
+                "filed": list(getattr(reply, "filed", []) or []),
                 # How many pictures actually went out. Only `get_variants`
                 # attaches one, so this is the number that says whether a
                 # change which let the model answer *without* calling it has

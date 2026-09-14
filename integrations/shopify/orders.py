@@ -626,6 +626,43 @@ mutation($id: ID!, $variantId: ID!, $quantity: Int!) {
 """
 
 
+def add_line(
+    shopify_order_id: str,
+    to_variant_id: str,
+    quantity: int,
+    *,
+    note: str | None = None,
+) -> None:
+    """Add one more line to a placed order, touching nothing already on it.
+
+    The other half of `swap_line`, and deliberately not a call to it with an
+    empty `from_sku`: a swap has to find an existing line and set it to zero,
+    and a function that silently skips that step when its argument is missing
+    is a function one wrong argument away from removing the wrong garment.
+    Shopify moves the inventory as part of committing the edit, exactly as it
+    does for a swap -- the caller must not also decrement.
+    """
+    client = get_client()
+
+    begun = client(EDIT_BEGIN, {"id": shopify_order_id}).get("orderEditBegin") or {}
+    _errors_of(begun, "orderEditBegin")
+    calculated_id = ((begun.get("calculatedOrder") or {}).get("id"))
+    if not calculated_id:
+        raise ShopifyUnavailable("Shopify opened no edit session")
+
+    added = client(
+        EDIT_ADD_VARIANT,
+        {"id": calculated_id, "variantId": to_variant_id, "quantity": int(quantity)},
+    ).get("orderEditAddVariant")
+    _errors_of(added, "orderEditAddVariant")
+
+    committed = client(
+        EDIT_COMMIT,
+        {"id": calculated_id, "notify": False, "note": note or "Item added by staff"},
+    ).get("orderEditCommit")
+    _errors_of(committed, "orderEditCommit")
+
+
 def swap_line(
     shopify_order_id: str,
     from_sku: str,

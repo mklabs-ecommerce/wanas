@@ -65,6 +65,13 @@ class Step:
     #: is a request for two pictures, one per product, and it was answered with
     #: every colourway of both.
     asked_for_colors: bool = False
+    #: The post-order request this step must file -- "item_add" or
+    #: "item_swap". A customer asking to *add* a piece to an order must not
+    #: produce a swap: `item_swap` was for a while the only post-order request
+    #: type there was, so an addition was filed as a replacement, naming a
+    #: garment the customer still wanted as the thing to remove. Rule 19 in
+    #: `quality_gate.py` reads this.
+    expects_filed: str = ""
 
 
 @dataclass

@@ -110,6 +110,23 @@ paid for at least once:
    it does not. Offering the tees is right; offering them without first saying
    we have no shirts is what makes it a wrong answer.
 
+19. **An add is filed as an add.** A customer asking for a piece *as well as*
+   what they already ordered must produce an `item_add`, never an `item_swap`.
+   For a while `item_swap` was the only post-order request type there was, so
+   «ينفع اضيفه علي نفس الاوردر اللي فات» was filed as "remove the Knitted Polo
+   (Olive, XL), put the Heart Top (Black, S) in its place" -- against a line
+   the customer had never mentioned and still wanted, one staff click from
+   leaving his order. The reverse fails too: a genuine swap filed as an add
+   leaves the old garment on the order and bills for both.
+20. **And the reply says what was filed.** The same conversation answered
+   «عشان نضيف عليه قطعة جديدة، فبعتلهم الطلب» while a swap sat in the queue.
+   The words are the model's and the filing is the tool layer's, so the two
+   are checked against each other -- `assistant/order_change_claims.py`, the
+   same rule the turn itself enforces before sending. A reply that describes
+   an action the queue does not hold is worse than no reply: the customer has
+   been told, in writing, that the thing about to happen to their order is
+   not the thing about to happen to their order.
+
 Exit code 0 means keep the change; 1 means revert it.
 """
 
@@ -125,7 +142,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from assistant import agent, photo_claims  # noqa: E402
+from assistant import agent, order_change_claims, photo_claims  # noqa: E402
 from assistant.providers import set_provider  # noqa: E402
 from domain.db import session_scope  # noqa: E402
 from domain.services import garments  # noqa: E402
@@ -145,6 +162,7 @@ FALLBACKS = (
     agent.IMAGE_PROMISE_FALLBACK,
     agent.PARTIAL_IMAGE_FALLBACK,
     agent.BLAME_FALLBACK,
+    agent.CHANGE_FALLBACK,
 )
 
 _ARABIC_INDIC = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
@@ -699,6 +717,7 @@ def run(runs: int, real: bool, only: str) -> dict:
                 reply["expects_photo"] = bool(step.expects_photo)
                 reply["sizing_question"] = bool(step.sizing_question)
                 reply["asked_for_colors"] = bool(step.asked_for_colors)
+                reply["expects_filed"] = step.expects_filed
                 # What the customer actually typed. The vocabulary rule below
                 # is about the gap between the question and the answer -- a
                 # customer asking for a garment this shop does not sell -- and
@@ -754,6 +773,22 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
             missing_tools = [t for t in reply.get("expects_tools") or [] if t not in reply["tool_calls"]]
             if missing_tools:
                 failures.append(f"{where}: did not call {', '.join(missing_tools)}")
+
+            # Rule 19: what the customer asked for is what went in the queue.
+            filed_kinds = list(reply.get("filed") or [])
+            wanted = reply.get("expects_filed") or ""
+            if wanted and filed_kinds != [wanted]:
+                failures.append(
+                    f"{where}: the customer asked for {wanted} and the queue got "
+                    f"{filed_kinds or ['nothing']}"
+                )
+
+            # Rule 20: and the reply describes that and not the other one.
+            said_wrong = order_change_claims.mismatch(
+                text, order_change_claims.filed_kind(filed_kinds)
+            )
+            if said_wrong:
+                failures.append(f"{where}: the reply describes the wrong request ({said_wrong})")
 
             # Judged on its own terms, not against the golden run. The
             # golden-comparison rule further down catches a *regression* in

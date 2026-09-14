@@ -1,7 +1,18 @@
 """Ordering and after-the-order tools.
 
 confirm_order, get_my_orders, modify_order_quantity, cancel_order,
-get_return_terms, request_item_swap, submit_feedback.
+get_return_terms, request_item_swap, request_item_add, submit_feedback.
+
+**Adding and swapping are two tools because they are two things.** For a
+while `request_item_swap` was the only post-order request type there was, so
+"ينفع اضيفه على نفس الاوردر اللي فات" -- add this piece to the order I already
+placed -- had no shape of its own to go into, and went into the swap: filed as
+"take the Knitted Polo off, put the Heart Top on", against a line the customer
+had never mentioned and still wanted. One staff click from a garment leaving
+an order. The two tools now differ by the thing that matters: `from_variant_id`
+is required on a swap and does not exist on an add, so an add *cannot* name
+something to remove. Where the customer's wording could be either, neither
+tool is the safe guess -- ask which, in one short question.
 
 The status rule lives here, not in the prompt: modify and cancel check the
 order's status themselves and refuse a shipped order regardless of how the
@@ -23,7 +34,7 @@ from __future__ import annotations
 from assistant.tools.base import ToolContext, tool
 from domain.models import OrderStatus, Variant
 from domain.services import orders
-from domain.services.notifications import item_swap_requested
+from domain.services.notifications import item_add_requested, item_swap_requested
 
 
 @tool(
@@ -155,10 +166,13 @@ def get_return_terms(ctx: ToolContext, order_id: str | None = None) -> dict:
 
 @tool(
     "request_item_swap",
-    "Queue a request to swap one item on an order for a different one. This never applies the swap "
-    "-- staff check stock for the replacement and decide. Tell the customer someone will confirm; "
-    "do not imply it is done. to_variant_id is optional when the customer only described what they "
-    "want.",
+    "Queue a request to REPLACE one item on an order with a different one -- the item named by "
+    "from_variant_id comes OFF the order. Only for a customer who wants to change something they "
+    "already ordered («بدل», «غيّر المقاس», «ارجعوا دي وابعتوا دي»). If they want a piece IN "
+    "ADDITION to what they ordered, use request_item_add instead; filing an addition as a swap "
+    "takes a garment they still want off their order. This never applies the swap -- staff check "
+    "stock for the replacement and decide. Tell the customer someone will confirm the SWAP; do not "
+    "imply it is done. to_variant_id is optional when the customer only described what they want.",
     properties={
         "order_id": {"type": "string"},
         "from_variant_id": {"type": "string", "description": "The line they want to replace."},
@@ -201,7 +215,69 @@ def request_item_swap(
         },
         summary,
     )
-    return {"queued": True, "request_id": request_id}
+    return {"queued": True, "request_id": request_id, "filed": "item_swap"}
+
+
+@tool(
+    "request_item_add",
+    "Queue a request to ADD another item to an existing order, leaving everything already on it "
+    "alone. Use this whenever the customer wants a piece *as well as* what they already ordered "
+    "-- «ضيفه على نفس الأوردر», «عايز كمان...», «ينفع أزود». Never request_item_swap for this: a "
+    "swap takes an item OFF the order. This never applies the addition -- staff check stock and "
+    "decide. Tell the customer someone will confirm the ADDITION; do not say anything about "
+    "replacing or swapping, and do not imply it is done. to_variant_id is optional when the "
+    "customer only described what they want.",
+    properties={
+        "order_id": {"type": "string"},
+        "to_variant_id": {"type": "string", "description": "Optional; the piece to add, if known."},
+        "quantity": {"type": "integer", "description": "How many, 1-10. Defaults to 1."},
+        "note": {"type": "string", "description": "What the customer said they want."},
+    },
+    required=("order_id",),
+)
+def request_item_add(
+    ctx: ToolContext,
+    order_id: str,
+    to_variant_id: str | None = None,
+    quantity: int | None = None,
+    note: str | None = None,
+) -> dict:
+    order = orders.find_order_for_identity(ctx.session, ctx.channel, ctx.external_id, order_id)
+    if order is None:
+        return {"error": "order_not_found", "order_id": order_id}
+
+    quantity = 1 if quantity is None else int(quantity)
+    if quantity < 1 or quantity > 10:
+        return {"error": "bad_arguments", "detail": "quantity must be between 1 and 10"}
+
+    addition = ctx.session.get(Variant, to_variant_id) if to_variant_id else None
+    if to_variant_id and addition is None:
+        return {"error": "variant_not_found", "variant_id": to_variant_id}
+
+    summary = f"{order.order_id}: add "
+    if addition is not None:
+        summary += f"{addition.product.name} ({addition.color}, {addition.size})"
+    else:
+        summary += note or "an item the customer described"
+    if quantity != 1:
+        summary += f" ×{quantity}"
+
+    request_id = item_add_requested(
+        ctx.session,
+        order,
+        {
+            "channel": ctx.channel,
+            "external_id": ctx.external_id,
+            "to_variant_id": to_variant_id,
+            "quantity": quantity,
+            "note": note,
+        },
+        summary,
+    )
+    # What was actually filed, in the words the reply has to match. The turn
+    # is checked against this before it is sent -- see
+    # `assistant/order_change_claims.py`.
+    return {"queued": True, "request_id": request_id, "filed": "item_add"}
 
 
 @tool(

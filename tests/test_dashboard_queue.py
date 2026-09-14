@@ -19,7 +19,7 @@ from domain.services import (
     carts,
     orders,
 )
-from domain.services.notifications import item_swap_requested
+from domain.services.notifications import item_add_requested, item_swap_requested
 
 SECRET = "test-dashboard-secret"
 VARIANT_A = "wanas-hoodie-s-olive"
@@ -200,3 +200,144 @@ def test_approving_a_swap_out_of_stock_leaves_the_queue_item_open(logged_in, bot
 def test_approving_an_unknown_queue_item_is_refused(logged_in):
     res = logged_in.post("/dashboard/api/queue/SWAP-999999/approve-swap")
     assert res.status_code == 409
+
+
+# --------------------------------------------------------------------------
+# item_add -- the request type that did not exist.
+#
+# «ينفع اضيفه علي نفس الاوردر اللي فات» went into the only shape there was,
+# and came out as "remove the Knitted Polo (Olive, XL), put the Heart Top
+# (Black, S) in its place" -- against a line the customer had never mentioned
+# and still wanted. Every test here pins one half of "an add is an add": it
+# gets its own kind, its own route, its own button, and approving it never
+# takes anything off the order.
+# --------------------------------------------------------------------------
+
+
+def test_an_add_request_is_its_own_kind(logged_in, bot_order, seeded):
+    item_add_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111",
+         "to_variant_id": VARIANT_B, "quantity": 1},
+        f"{bot_order.order_id}: add request",
+    )
+    seeded.commit()
+
+    items = logged_in.get("/dashboard/api/queue?kind=item_add").json()["items"]
+    assert [i["kind"] for i in items] == ["item_add"]
+    assert items[0]["queue_id"].startswith("ADD-")
+    # and it carries no from_variant_id at all: there is nothing to remove.
+    assert "from_variant_id" not in items[0]["payload"]
+
+
+def test_approving_an_add_puts_the_line_on_and_takes_nothing_off(logged_in, bot_order, seeded):
+    queue_id = item_add_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111",
+         "to_variant_id": VARIANT_B, "quantity": 1},
+        "add",
+    )
+    before = {i.variant_id for i in bot_order.items}
+    seeded.commit()
+
+    res = logged_in.post(f"/dashboard/api/queue/{queue_id}/approve-add")
+    assert res.status_code == 200, res.text
+
+    seeded.expire_all()
+    order = seeded.get(Order, bot_order.order_id)
+    after = {i.variant_id for i in order.items}
+    # The whole point: the original line is still there.
+    assert before <= after
+    assert VARIANT_B in after
+
+
+def test_approving_an_add_recalculates_the_total(logged_in, bot_order, seeded):
+    was = bot_order.total
+    queue_id = item_add_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111", "to_variant_id": VARIANT_B},
+        "add",
+    )
+    seeded.commit()
+
+    payload = logged_in.post(f"/dashboard/api/queue/{queue_id}/approve-add").json()
+    seeded.expire_all()
+    assert seeded.get(Order, bot_order.order_id).total > was
+    assert payload["order_id"] == bot_order.order_id
+
+
+def test_asking_for_a_second_of_something_already_on_the_order_merges(logged_in, bot_order, seeded):
+    """Two lines of one variant is a packing slip nobody can read."""
+    queue_id = item_add_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111",
+         "to_variant_id": VARIANT_A, "quantity": 1},
+        "one more of the same",
+    )
+    seeded.commit()
+
+    assert logged_in.post(f"/dashboard/api/queue/{queue_id}/approve-add").status_code == 200
+    seeded.expire_all()
+    order = seeded.get(Order, bot_order.order_id)
+    lines = [i for i in order.items if i.variant_id == VARIANT_A]
+    assert len(lines) == 1
+    assert lines[0].quantity == 2
+
+
+def test_approve_swap_refuses_an_add_item(logged_in, bot_order, seeded):
+    """The guard that makes the two kinds mean something: a staff click on one
+    route can never apply the other kind's action."""
+    queue_id = item_add_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111", "to_variant_id": VARIANT_B},
+        "add",
+    )
+    seeded.commit()
+    res = logged_in.post(
+        f"/dashboard/api/queue/{queue_id}/approve-swap", json={"to_variant_id": VARIANT_B}
+    )
+    assert res.status_code == 409
+
+
+def test_approve_add_refuses_a_swap_item(logged_in, bot_order, seeded):
+    item_swap_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111",
+         "from_variant_id": VARIANT_A, "to_variant_id": VARIANT_B},
+        "swap",
+    )
+    seeded.commit()
+    queue_id = logged_in.get("/dashboard/api/queue?kind=item_swap").json()["items"][0]["queue_id"]
+    assert logged_in.post(f"/dashboard/api/queue/{queue_id}/approve-add").status_code == 409
+
+
+def test_an_add_with_no_item_named_is_refused_rather_than_guessed(logged_in, bot_order, seeded):
+    queue_id = item_add_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111", "note": "الهودي الأسود"},
+        "add something the customer described",
+    )
+    seeded.commit()
+    res = logged_in.post(f"/dashboard/api/queue/{queue_id}/approve-add")
+    assert res.status_code == 400
+    assert res.json()["error"] == "bad_arguments"
+
+
+def test_a_genuine_swap_still_swaps(logged_in, bot_order, seeded):
+    """The reverse case. Nothing about giving "add" its own shape may change
+    what a real swap does: the named line comes off, the replacement goes on."""
+    item_swap_requested(
+        seeded, bot_order,
+        {"channel": "whatsapp", "external_id": "201555000111",
+         "from_variant_id": VARIANT_A, "to_variant_id": VARIANT_B},
+        "swap",
+    )
+    seeded.commit()
+    queue_id = logged_in.get("/dashboard/api/queue?kind=item_swap").json()["items"][0]["queue_id"]
+
+    assert logged_in.post(f"/dashboard/api/queue/{queue_id}/approve-swap").status_code == 200
+    seeded.expire_all()
+    order = seeded.get(Order, bot_order.order_id)
+    variants = {i.variant_id for i in order.items}
+    assert VARIANT_A not in variants
+    assert VARIANT_B in variants

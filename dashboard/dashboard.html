@@ -1664,7 +1664,15 @@ const EN = {
   "سؤال متكرر": "FAQ",
   "مفيش حاجة مستنية منك دلوقتي": "Nothing is waiting on you right now",
   "مفيش صلاحيات لسه": "No permissions yet",
-  "مفيش طلب تبديل ولا تنبيه مستني مراجعة": "No swap request or alert awaiting review",
+"مفيش طلب تبديل ولا إضافة ولا تنبيه مستني مراجعة": "No swap request, addition or alert is waiting for review",
+  "طلب إضافة": "Add-an-item request",
+  "وافق على الإضافة": "Approve the addition",
+  "القطعة المطلوب إضافتها": "Item to add",
+  "SKU القطعة": "Item SKU",
+  "الزبون عايز القطعة دي زيادة على أوردره. مفيش حاجة هتتشال.": "The customer wants this item in addition to their order. Nothing will be removed.",
+  "كلام الزبون": "The customer's words",
+  "القطعة اتضافت": "The item was added",
+  "الإضافة مانفذتش": "The addition didn't go through",
   "مفيش طلبات": "No orders",
   "مفيش طلبات بالفلتر ده": "No orders match this filter",
   "مفيش طلبات في الفترة دي": "No orders in this period",
@@ -5884,15 +5892,20 @@ VIEWS.queue = {
     const body = $("#queueBody");
     if (!this.items.length) {
       body.innerHTML = "";
-      body.append(emptyState(tr("القايمة فاضية"), tr("مفيش طلب تبديل ولا تنبيه مستني مراجعة"), "check"));
+      body.append(emptyState(tr("القايمة فاضية"), tr("مفيش طلب تبديل ولا إضافة ولا تنبيه مستني مراجعة"), "check"));
       return;
     }
     body.innerHTML = this.items.map((item) => {
       const swap = item.kind === "item_swap";
+      // An add is its own card with its own words and its own button, not a
+      // swap card with "from" left blank: the whole difference between them
+      // is whether a garment comes off the order, and that has to be the
+      // first thing a staff member reads.
+      const add = item.kind === "item_add";
       const payload = item.payload || {};
       return `<section class="card" data-qid="${esc(item.queue_id)}">
         <div class="card-head">
-          ${chipHTML(swap ? tr("طلب تبديل") : tr("تنبيه"), swap ? "clay" : "amber", swap ? "ring" : "dot")}
+          ${chipHTML(swap ? tr("طلب تبديل") : add ? tr("طلب إضافة") : tr("تنبيه"), swap ? "clay" : add ? "sage" : "amber", swap || add ? "ring" : "dot")}
           <h2>${esc(reasonLabel(item.reason))}</h2>
           <span class="sub">${esc(dateTime(item.created_at))}</span>
         </div>
@@ -5905,9 +5918,19 @@ VIEWS.queue = {
             <div><label class="lbl">إلى مقاس</label>
               <input class="inp num" data-to="${esc(item.queue_id)}" value="${esc(payload.to_variant_id || "")}" placeholder="SKU البديل"></div>
           </div>` : ""}
+          ${add ? TR`<p class="sub" style="margin-top:var(--s-3)">الزبون عايز القطعة دي زيادة على أوردره. مفيش حاجة هتتشال.</p>
+          <div class="grid g-2" style="margin-top:var(--s-2)">
+            <div><label class="lbl">القطعة المطلوب إضافتها</label>
+              <input class="inp num" data-to="${esc(item.queue_id)}" value="${esc(payload.to_variant_id || "")}" placeholder="SKU القطعة"></div>
+            <div><label class="lbl">الكمية</label>
+              <input class="inp num" type="number" min="1" max="10" data-qty="${esc(item.queue_id)}" value="${esc(payload.quantity || 1)}"></div>
+          </div>` : ""}
+          ${add && payload.note ? TR`<div class="kv" style="margin-top:var(--s-2)"><span class="k">كلام الزبون</span>
+            <span class="v">${esc(payload.note)}</span></div>` : ""}
           <div class="row" style="margin-top:var(--s-4)">
             ${swap ? TR`<button class="btn primary" type="button" data-approve="${esc(item.queue_id)}">${icon("check", 15)} وافق على التبديل</button>` : ""}
-            <button class="btn" type="button" data-resolve="${esc(item.queue_id)}">${swap ? tr("ارفض واقفل") : tr("تمام، اتفهم")}</button>
+            ${add ? TR`<button class="btn primary" type="button" data-approve-add="${esc(item.queue_id)}">${icon("check", 15)} وافق على الإضافة</button>` : ""}
+            <button class="btn" type="button" data-resolve="${esc(item.queue_id)}">${swap || add ? tr("ارفض واقفل") : tr("تمام، اتفهم")}</button>
           </div>
         </div>
       </section>`;
@@ -5928,6 +5951,21 @@ VIEWS.queue = {
       });
       if (result.__error) { b.disabled = false; return toastError(result.__error, tr("التبديل مانفذش")); }
       toast(tr("التبديل اتعمل"), tr("المخزون والطلب اتحدثوا"));
+      this.load();
+    }));
+    $$("[data-approve-add]").forEach((b) => b.addEventListener("click", async () => {
+      const id = b.dataset.approveAdd;
+      const to = $(`[data-to="${id}"]`);
+      const qty = $(`[data-qty="${id}"]`);
+      b.disabled = true;
+      const body = {};
+      if (to && to.value.trim()) body.to_variant_id = to.value.trim();
+      if (qty && qty.value.trim()) body.quantity = Number(qty.value.trim());
+      const result = await api(`/dashboard/api/queue/${encodeURIComponent(id)}/approve-add`, {
+        method: "POST", quiet: true, body,
+      });
+      if (result.__error) { b.disabled = false; return toastError(result.__error, tr("الإضافة مانفذتش")); }
+      toast(tr("القطعة اتضافت"), tr("المخزون والطلب اتحدثوا"));
       this.load();
     }));
   },

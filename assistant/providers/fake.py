@@ -205,9 +205,19 @@ class RehearsalProvider(LLMProvider):
             )
         if match := re.match(r"^cancel\s+(\S+)$", lowered):
             return call("cancel_order", {"order_id": match.group(1).upper()})
+        if match := re.match(r"^add-to\s+(\S+)\s+(\S+)(?:\s+(\d+))?$", text, re.IGNORECASE):
+            return call(
+                "request_item_add",
+                {
+                    "order_id": match.group(1).upper(),
+                    "to_variant_id": match.group(2),
+                    "quantity": int(match.group(3) or 1),
+                },
+            )
         if match := re.match(r"^swap\s+(\S+)\s+(\S+)(?:\s+(.*))?$", text, re.IGNORECASE):
             return call(
                 "request_item_swap",
+                "request_item_add",
                 {
                     "order_id": match.group(1).upper(),
                     "from_variant_id": match.group(2),
@@ -324,6 +334,11 @@ class RehearsalProvider(LLMProvider):
             return f"{content['order_id']} اتلغى."
         if name == "request_item_swap":
             return f"طلب التبديل وصل ({content['request_id']}) — حد من الفريق هيأكدلك."
+        if name == "request_item_add":
+            # Says "add", because an add was filed. The wording is checked
+            # against the filing before it is sent -- see
+            # `assistant/order_change_claims.py`.
+            return f"طلب إضافة القطعة وصل ({content['request_id']}) — حد من الفريق هيأكدلك."
         if name == "submit_feedback":
             return "تسلم! التقييم اتسجل."
         if name == "request_human":
