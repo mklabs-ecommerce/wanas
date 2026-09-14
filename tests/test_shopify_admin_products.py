@@ -682,9 +682,14 @@ def test_one_size_can_go_on_its_own(seeded, shopify):
 
 def test_the_products_own_size_list_catches_up(seeded, shopify):
     """`Product.sizes` is what the bot answers "what sizes do you have" with.
-    Left alone it would keep offering the one that just went."""
+    Left alone it would keep offering the one that just went.
+
+    Smallest first, not alphabetically -- `sorted` on the bare strings gives
+    M before S, which is the order the model then recites them in. See
+    `common/sizes.py`.
+    """
     result = _fresh_product(seeded)
-    assert seeded.get(Product, result["product_id"]).sizes == ["M", "S"]
+    assert seeded.get(Product, result["product_id"]).sizes == ["S", "M"]
 
     sap.delete_variant(seeded, "throwaway-tee-m-olive")
 

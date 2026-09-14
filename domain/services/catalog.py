@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from common.money import money
+from common.sizes import in_order, sort_key
 from domain.models import Product, Variant
 from domain.services import search_terms, sleeves
 from integrations.shopify import catalog as shopify_catalog
@@ -186,7 +187,7 @@ def _product_summary(product: Product, live_map=None) -> dict:
         # The full run including sold-out ones: these describe the product,
         # they are not an offer. get_variants decides what can be offered.
         "colors": list(product.colors or []),
-        "sizes": list(product.sizes or []),
+        "sizes": in_order(product.sizes or []),
         "lengths": list(product.lengths or []),
         # min and max of the variants' *current* prices, computed here rather
         # than read from the product row. The WANAS Hoodie is 650 in black and
@@ -464,7 +465,12 @@ def get_variants(session: Session, product_id: str) -> dict | None:
         return None
 
     live_map = shopify_catalog.live_map()
-    variants = sorted(product.variants, key=lambda v: (v.color or "", v.length or "", v.size))
+    # Size order, not alphabetical order. `sorted` on the bare string gives
+    # L, M, S, XL, which is the order the model then recited them in -- see
+    # `common/sizes.py`.
+    variants = sorted(
+        product.variants, key=lambda v: (v.color or "", v.length or "", sort_key(v.size))
+    )
     stock = {v.variant_id: _overlay(v, live_map).stock_qty for v in variants}
     images, color_images = _overlay_images(product, variants, live_map)
     return {

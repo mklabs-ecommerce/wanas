@@ -33,6 +33,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from common.sizes import in_order
 from config.settings import settings
 from domain.models import (
     CartItem,
@@ -324,7 +325,9 @@ def _summarize(variants: list[dict]) -> dict:
     prices = [Decimal(str(v["price"])) for v in variants]
     originals = [Decimal(str(v.get("original_price", v["price"]))) for v in variants]
     return {
-        "sizes": sorted({v["size"] for v in variants if v.get("size")}),
+        # Size order, not alphabetical -- otherwise every product created here
+        # is stored as L, M, S, XL and reads that way for the rest of its life.
+        "sizes": in_order({v["size"] for v in variants if v.get("size")}),
         "colors": sorted({v["color"] for v in variants if v.get("color")}),
         "lengths": sorted({v["length"] for v in variants if v.get("length")}),
         "price": min(prices) if prices else Decimal("0"),
