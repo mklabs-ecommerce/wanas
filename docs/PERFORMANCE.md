@@ -554,6 +554,32 @@ three runs. There is nothing left in this repository to optimise. The next
 second has to come from the model, the provider, or the shape of the
 conversation.
 
+### The deploy, and the one number that has to wait for customers
+
+The branch is deployed to Railway (`wanas`, production) and every flag reads as
+intended in the live process: `reasoning {'effort': 'low'}`, debounce
+1.0 / 6.0 / 15.0, adaptive on, prefetch on, latency log on. A turn line was
+confirmed reaching stdout under the app's own logging config, in the shape
+`scripts/latency_report.py` parses.
+
+What is not here yet is the post-change average **over real customer
+messages**. This shop averages about 3.5 answered turns a day and none has
+arrived since the deploy went out. When they do, two commands produce it with
+no further work:
+
+```bash
+railway logs --service wanas --json | python scripts/latency_report.py -
+railway run --service wanas -- python scripts/prod_turn_latency.py --days 1
+```
+
+The freshest "before" from real customers is worth recording alongside it,
+because it says how bad the tail had become on the old build: over the **last
+three days**, 5 answered WhatsApp turns, **mean 25.48 s, p50 25.65 s, max
+57.79 s** for the agent turn alone — so about 32 s end to end, against the
+60-day mean of 21.3 s. That is the same upstream slowness the paired run C
+caught (21.5 s before / 11.2 s after), and it is the condition the change
+should be judged under rather than a quiet hour.
+
 ### What was deliberately not done, and why
 
 * **The debounce was not cut below one second.** The evidence that justified
