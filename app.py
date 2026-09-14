@@ -411,11 +411,27 @@ async def lifespan(_app: FastAPI):
             "DASHBOARD_SESSION_SECRET is not set: /dashboard cannot log anyone "
             "in, so a paused conversation has no way back to the customer."
         )
-    log.info(
-        "inbound messages: debounce %.1fs across %s workers",
-        settings.message_debounce_seconds,
-        settings.message_workers,
-    )
+    # Both numbers, because with the adaptive window on they are different
+    # questions and only one of them is what most customers actually wait.
+    # Reporting the patient window alone read as "the debounce is still 6
+    # seconds" to anyone checking the boot log after the latency work, when
+    # the first message of a batch has been waiting `first` for a while.
+    if settings.adaptive_debounce:
+        log.info(
+            "inbound messages: debounce %.1fs, or %.1fs for a conversation not "
+            "seen to write in fragments (adaptive, batch capped at %.1fs), "
+            "across %s workers",
+            settings.message_debounce_seconds,
+            min(settings.message_debounce_first_seconds, settings.message_debounce_seconds),
+            settings.message_debounce_max_seconds,
+            settings.message_workers,
+        )
+    else:
+        log.info(
+            "inbound messages: debounce %.1fs across %s workers (adaptive off)",
+            settings.message_debounce_seconds,
+            settings.message_workers,
+        )
     if settings.shopify_configured:
         threading.Thread(
             target=_shopify_boot_reconcile,
