@@ -1,0 +1,139 @@
+{
+  "facts": {
+    "product_id": "boxy-wns-tee",
+    "product_name": "Boxy WNS Tee",
+    "variant_id": "boxy-wns-tee-l-grey",
+    "color": "Grey",
+    "size": "L",
+    "price": "590",
+    "category": "T-Shirts"
+  },
+  "replies": [
+    {
+      "scenario": "greeting",
+      "step": 0,
+      "text": "أهلاً بيك في وناس جاليري. تحب أساعدك في إيه؟",
+      "tool_calls": [],
+      "attachments": 0,
+      "error": null,
+      "seconds": 0.014639600005466491,
+      "expects_tools": [],
+      "expects_text": []
+    },
+    {
+      "scenario": "product_question",
+      "step": 0,
+      "text": "تيشيرت Boxy WNS Tee متاح عندنا بسعر 590 جنيه. تحب تشوف المقاسات؟",
+      "tool_calls": [
+        "get_products"
+      ],
+      "attachments": 0,
+      "error": null,
+      "seconds": 0.010576100001344457,
+      "expects_tools": [
+        "get_products"
+      ],
+      "expects_text": [
+        "590"
+      ]
+    },
+    {
+      "scenario": "sizes",
+      "step": 0,
+      "text": "متاح مقاس L بسعر 590 جنيه.",
+      "tool_calls": [
+        "get_products",
+        "get_variants"
+      ],
+      "attachments": 2,
+      "error": null,
+      "seconds": 0.012031000005663373,
+      "expects_tools": [],
+      "expects_text": [
+        "L"
+      ]
+    },
+    {
+      "scenario": "add_to_cart",
+      "step": 0,
+      "text": "تمام، متوفر منه مقاس L بلون Grey بسعر 590 جنيه. تحب أحطهولك في السلة؟",
+      "tool_calls": [
+        "get_products",
+        "get_variants"
+      ],
+      "attachments": 2,
+      "error": null,
+      "seconds": 0.00993200000084471,
+      "expects_tools": [
+        "get_variants"
+      ],
+      "expects_text": []
+    },
+    {
+      "scenario": "add_to_cart",
+      "step": 1,
+      "text": "اتحط في السلة. تحب تكمل الطلب؟",
+      "tool_calls": [
+        "add_to_cart"
+      ],
+      "attachments": 0,
+      "error": null,
+      "seconds": 0.008594600003561936,
+      "expects_tools": [],
+      "expects_text": []
+    },
+    {
+      "scenario": "confirm_order",
+      "step": 0,
+      "text": "تمام، متوفر منه مقاس L بلون Grey بسعر 590 جنيه.",
+      "tool_calls": [
+        "get_products",
+        "get_variants"
+      ],
+      "attachments": 2,
+      "error": null,
+      "seconds": 0.009838999991188757,
+      "expects_tools": [],
+      "expects_text": []
+    },
+    {
+      "scenario": "confirm_order",
+      "step": 1,
+      "text": "اتحط في السلة. ابعتلي الاسم والعنوان والمحافظة والتليفون.",
+      "tool_calls": [
+        "add_to_cart"
+      ],
+      "attachments": 0,
+      "error": null,
+      "seconds": 0.00630500000261236,
+      "expects_tools": [],
+      "expects_text": []
+    },
+    {
+      "scenario": "confirm_order",
+      "step": 2,
+      "text": "",
+      "tool_calls": [
+        "confirm_order"
+      ],
+      "attachments": 0,
+      "error": null,
+      "seconds": 0.023908400005893782,
+      "expects_tools": [],
+      "expects_text": []
+    },
+    {
+      "scenario": "shipping_question",
+      "step": 0,
+      "text": "الشحن للقاهرة ٦٠ جنيه وبيوصل خلال ٢ لـ٤ أيام.",
+      "tool_calls": [
+        "get_shipping_fee"
+      ],
+      "attachments": 0,
+      "error": null,
+      "seconds": 0.005675099993823096,
+      "expects_tools": [],
+      "expects_text": []
+    }
+  ]
+}

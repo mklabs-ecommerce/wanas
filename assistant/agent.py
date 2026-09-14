@@ -32,6 +32,7 @@ from assistant.tools.base import (
     load_all,
     tool_specs,
 )
+from common import telemetry
 from config.settings import settings
 
 log = logging.getLogger("wanas.agent")
@@ -483,13 +484,15 @@ def run_turn(
 ) -> AgentReply:
     provider = provider or get_provider()
     specs = tool_specs()
+    telemetry.note(loop_cap=settings.tool_loop_cap)
     # The surface shapes the prompt: WhatsApp's wording stays byte-identical
     # to what it has always been; Instagram gets its own lines (see
     # assistant/prompt.py). `system_extra` is appended for one turn only and
     # is never stored -- today the resume paragraph
     # (`assistant/recovery.py::RESUME_INSTRUCTION`), which the turn after this
     # one must not still be reading.
-    system_prompt = build_system_prompt(system_extra, channel=channel)
+    with telemetry.stage("prompt_build"):
+        system_prompt = build_system_prompt(system_extra, channel=channel)
 
     # The messages this turn is about were already written to the transcript
     # when they arrived, so staff could see the conversation before the bot
@@ -501,10 +504,11 @@ def run_turn(
     # the loop is still running (the order confirmation does), and without
     # this bookmark the save at the end of the turn would overwrite it. See
     # `assistant/session.py::save`.
-    base = session_store.stored_length(db, channel, external_id)
-    history = session_store.drop_provisional(
-        session_store.load(db, channel, external_id), recorded_ids
-    )
+    with telemetry.stage("history_load"):
+        base = session_store.stored_length(db, channel, external_id)
+        history = session_store.drop_provisional(
+            session_store.load(db, channel, external_id), recorded_ids
+        )
     sent_images = _sent_images(history)
 
     refers_to = None
@@ -515,8 +519,9 @@ def run_turn(
         # the live slice, because a customer may well reply to something said
         # before the current context window opened. Resolved here rather than
         # in the adapter so every channel that can quote gets it for free.
-        transcript = session_store.transcript(db, channel, external_id)
-        text = quoting.annotate(text, transcript, reply_to)
+        with telemetry.stage("quote_resolve"):
+            transcript = session_store.transcript(db, channel, external_id)
+            text = quoting.annotate(text, transcript, reply_to)
         # And, when the quote landed on a photo, which product that photo was
         # of -- stored on the message so `tools.base.last_product` sees the
         # customer pointing at a jacket as the conversation moving to the
@@ -562,14 +567,17 @@ def run_turn(
             # gets one silent retry thirty seconds later before either of the
             # `except` clauses below ever sees it -- see
             # `_generate_with_retry`. Only a *second* failure reaches them.
-            reply = _generate_with_retry(
-                provider,
-                system_prompt,
-                context.for_model(history),
-                specs,
-                channel=channel,
-                external_id=external_id,
-            )
+            with telemetry.stage("context_build"):
+                model_history = context.for_model(history)
+            with telemetry.llm_hop():
+                reply = _generate_with_retry(
+                    provider,
+                    system_prompt,
+                    model_history,
+                    specs,
+                    channel=channel,
+                    external_id=external_id,
+                )
         except ProviderError as exc:
             # A rate limit is transient and worth telling the customer about.
             # An auth or configuration failure is a deployment problem that no
@@ -772,7 +780,8 @@ def run_turn(
         for call in reply.tool_calls:
             name = call.get("name", "")
             called.append(name)
-            content = call_tool(ctx, name, call.get("arguments"))
+            with telemetry.tool_call(name):
+                content = call_tool(ctx, name, call.get("arguments"))
             log.info("tool %s(%s) -> %s", name, call.get("arguments"), list(content)[:4])
             results.append(msg.tool_result(call.get("id", name), name, content))
         history.append(msg.tool_results(results))

@@ -544,6 +544,14 @@ def _handle(
     # inside the tools so the snapshot cannot outlive the message: the next one
     # asks Shopify again.
     with shopify_catalog.turn_scope():
+        # The shelf read is ~440 ms and used to be spent wherever the first
+        # catalog tool asked for it -- which is after the model has already
+        # said which tool to call. Started here it overlaps the first model
+        # hop, which is several times longer, so the snapshot is waiting by
+        # the time anything wants it. Still one read per message, still thrown
+        # away with the turn: `add_to_cart` decides whether a sale may happen
+        # on what this says, and a cache would let a sold-out size be sold.
+        shopify_catalog.prefetch()
         reply = agent.run_turn(
             db,
             channel,

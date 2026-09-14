@@ -243,3 +243,255 @@ def test_one_conversation_is_still_answered_one_turn_at_a_time():
         dispatcher.shutdown()
 
     assert max(overlaps) == 1
+
+
+# --------------------------------------------------------------------------
+# the adaptive window
+# --------------------------------------------------------------------------
+#
+# The window costs every reply its full length, and 249 of 254 measured
+# production turns were a single message -- so 98% of replies were paying six
+# seconds to catch the other 2%. These pin both halves of the fix: a lone
+# message waits the short window, and a customer who really is writing in
+# fragments gets the long one back, measured from their newest message exactly
+# as before.
+
+
+def test_a_single_message_waits_the_short_window():
+    seen: list[float] = []
+    started = time.monotonic()
+    dispatcher = MessageDispatcher(
+        lambda key, item: seen.append(time.monotonic() - started),
+        debounce_seconds=1.0,
+        first_debounce_seconds=0.1,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["الشحن كام؟"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert len(seen) == 1
+    assert seen[0] < 0.6, f"a lone message waited {seen[0]:.2f}s, not the short window"
+
+
+def test_a_second_fragment_buys_back_the_full_window():
+    """The moment a batch is more than one message it behaves exactly as it
+    always did: the full window, measured from the newest fragment."""
+    handled: list[str] = []
+    dispatcher = MessageDispatcher(
+        lambda key, item: handled.append(item.text),
+        debounce_seconds=0.5,
+        first_debounce_seconds=0.1,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        time.sleep(0.05)
+        dispatcher.submit("2010", Pending(texts=["أسود"]))
+        # Well past the short window, comfortably inside the long one.
+        time.sleep(0.3)
+        dispatcher.submit("2010", Pending(texts=["لارج"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert handled == ["عايز هودي\nأسود\nلارج"]
+
+
+def test_a_batch_never_waits_past_the_ceiling():
+    """A fixed window could not be extended, so it needed no ceiling. An
+    adaptive one can, and a customer typing one word every few seconds must
+    not be able to hold their own reply open indefinitely."""
+    handled: list[str] = []
+    dispatcher = MessageDispatcher(
+        lambda key, item: handled.append(item.text),
+        debounce_seconds=0.4,
+        first_debounce_seconds=0.05,
+        max_batch_seconds=0.5,
+        adaptive=True,
+    )
+    started = time.monotonic()
+    try:
+        for word in ("عايز", "هودي", "أسود", "لارج", "دلوقتي"):
+            dispatcher.submit("2010", Pending(texts=[word]))
+            time.sleep(0.15)
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert handled, "the batch was never released"
+    assert time.monotonic() - started < 2.0
+    # Everything said still reaches the turn: the ceiling ends the *wait*, it
+    # does not throw a fragment away.
+    assert "عايز" in handled[0]
+
+
+def test_the_flag_restores_the_old_fixed_window():
+    seen: list[float] = []
+    started = time.monotonic()
+    dispatcher = MessageDispatcher(
+        lambda key, item: seen.append(time.monotonic() - started),
+        debounce_seconds=0.4,
+        first_debounce_seconds=0.05,
+        adaptive=False,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["الشحن كام؟"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert seen[0] >= 0.35, "with the flag off a lone message must still wait the full window"
+
+
+def test_the_short_window_can_never_exceed_the_full_one():
+    """A misconfiguration must not be able to make the adaptive window slower
+    than the fixed one it replaced."""
+    dispatcher = MessageDispatcher(
+        lambda key, item: None,
+        debounce_seconds=0.2,
+        first_debounce_seconds=5.0,
+        adaptive=True,
+    )
+    try:
+        assert dispatcher._wait_for(Pending(fragments=1, first_seen=time.perf_counter())) <= 0.2
+    finally:
+        dispatcher.shutdown()
+
+
+def test_a_conversation_that_fragments_is_remembered():
+    """Writing in pieces is a habit of a person, not a property of a message.
+    A conversation that has done it once starts patient every time after --
+    which is the whole reason everyone else's first window can be a second."""
+    waits: list[float] = []
+    started = [time.monotonic()]
+
+    def handler(key, item):
+        waits.append(time.monotonic() - started[0])
+
+    dispatcher = MessageDispatcher(
+        handler, debounce_seconds=0.6, first_debounce_seconds=0.05, adaptive=True
+    )
+    try:
+        # First conversation of theirs: two fragments, so the batch itself
+        # buys the long window and the habit is noted.
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        time.sleep(0.02)
+        dispatcher.submit("2010", Pending(texts=["أسود"]))
+        assert dispatcher.wait_idle(5)
+
+        # A later, single message from the same customer waits the long
+        # window without having to prove anything.
+        started[0] = time.monotonic()
+        waits.clear()
+        time.sleep(0.05)
+        dispatcher.submit("2010", Pending(texts=["وكمان لارج"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert waits and waits[0] >= 0.5, f"a known fragmenter waited only {waits[0]:.2f}s"
+
+
+def test_a_stranger_still_gets_the_short_window():
+    waits: list[float] = []
+    started = time.monotonic()
+    dispatcher = MessageDispatcher(
+        lambda key, item: waits.append(time.monotonic() - started),
+        debounce_seconds=0.6,
+        first_debounce_seconds=0.05,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        time.sleep(0.02)
+        dispatcher.submit("2010", Pending(texts=["أسود"]))
+        assert dispatcher.wait_idle(5)
+        # A *different* customer learns nothing from that one.
+        started = time.monotonic()
+        waits.clear()
+        dispatcher.submit("2020", Pending(texts=["الشحن كام؟"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert waits and waits[0] < 0.4
+
+
+def test_writing_again_right_after_a_reply_counts_as_fragmenting():
+    """The window closing early on someone is itself the evidence. Their next
+    message arrives moments after the batch was released, which is what a
+    split thought looks like from here -- and it must not happen to them
+    twice."""
+    waits: list[float] = []
+    dispatcher = MessageDispatcher(
+        lambda key, item: waits.append(time.monotonic()),
+        debounce_seconds=0.6,
+        first_debounce_seconds=0.05,
+        adaptive=True,
+    )
+    try:
+        dispatcher.submit("2010", Pending(texts=["عايز هودي"]))
+        assert dispatcher.wait_idle(5)
+        # Straight after the first batch ran: the rest of what they were
+        # saying. This one should be waited on properly.
+        marker = time.monotonic()
+        dispatcher.submit("2010", Pending(texts=["أسود لارج"]))
+        assert dispatcher.wait_idle(5)
+    finally:
+        dispatcher.shutdown()
+
+    assert len(waits) == 2
+    assert waits[1] - marker >= 0.5
+
+
+def test_the_fragment_memory_does_not_grow_without_bound():
+    """One entry per customer who has ever written, kept for the life of the
+    process, is the same slow leak the conversation locks were fixed for."""
+    from assistant import dispatcher as dispatcher_module
+
+    dispatcher = MessageDispatcher(lambda key, item: None, debounce_seconds=0.01)
+    try:
+        now = time.perf_counter()
+        for index in range(dispatcher_module._FRAGMENTER_MEMORY + 500):
+            dispatcher._note_fragmenter(f"c{index}", now)
+        assert len(dispatcher._fragmenters) <= dispatcher_module._FRAGMENTER_MEMORY
+    finally:
+        dispatcher.shutdown()
+
+
+# --------------------------------------------------------------------------
+# work the reply does not wait for
+# --------------------------------------------------------------------------
+
+
+def test_offthread_work_runs_and_never_raises(caplog):
+    """A read receipt that fails must cost a log line and nothing else. The
+    whole premise is that this work does not matter enough to block on, so it
+    does not matter enough to break a turn either."""
+    import logging as _logging
+
+    from common import offthread
+
+    done = threading.Event()
+    offthread.run_later("a test", done.set)
+    assert done.wait(5)
+
+    with caplog.at_level(_logging.WARNING, logger="wanas.offthread"):
+        failed = threading.Event()
+
+        def boom():
+            failed.set()
+            raise RuntimeError("meta said no")
+
+        offthread.run_later("a failing test", boom)
+        assert failed.wait(5)
+        # Give the guard a moment to log after the callable raised.
+        for _ in range(50):
+            if any("a failing test" in r.getMessage() for r in caplog.records):
+                break
+            time.sleep(0.02)
+
+    assert any("a failing test" in record.getMessage() for record in caplog.records)

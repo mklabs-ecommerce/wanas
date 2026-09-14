@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import ssl
 import threading
 import time
 import urllib.error
 import urllib.request
 
+from common import telemetry
 from config.settings import settings
 
 try:
@@ -70,6 +72,27 @@ REQUEST_TIMEOUT = 8.0
 _THROTTLE_FLOOR = 200
 
 
+_NAMED_OPERATION = re.compile(r"(?:query|mutation)\s+(\w+)")
+_FIRST_FIELD = re.compile(r"\{\s*(\w+)")
+
+
+def _operation_name(query: str) -> str:
+    """What to call this GraphQL document on the turn's timing line.
+
+    Its own operation name when it has one; otherwise the first field the
+    top-level selection set asks for, because most of the documents here are
+    anonymous (`query($cursor: String) { productVariants... }`) and
+    "query" told apart from "query" is no measurement at all. "graphql" for
+    anything neither shape can read -- a vague label beats an exception, and
+    an instrument may never be what breaks a sale.
+    """
+    match = _NAMED_OPERATION.search(query or "")
+    if match:
+        return match.group(1)
+    field = _FIRST_FIELD.search(query or "")
+    return field.group(1) if field else "graphql"
+
+
 class ShopifyClient:
     """Minimal GraphQL client, safe to share across threads.
 
@@ -107,6 +130,13 @@ class ShopifyClient:
     # ----------------------------------------------------------------------
 
     def __call__(self, query: str, variables: dict | None = None) -> dict:
+        # Named so the per-turn line can say *which* Shopify call cost the
+        # time. A turn that reads the shelf and one that places an order are
+        # both "shopify" until the operation has a name on it.
+        with telemetry.shopify_call(_operation_name(query)):
+            return self._call(query, variables)
+
+    def _call(self, query: str, variables: dict | None = None) -> dict:
         if not self.configured:
             raise ShopifyConfigError(
                 "SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN must be set in .env"

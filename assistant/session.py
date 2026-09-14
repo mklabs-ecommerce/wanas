@@ -27,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assistant.messages import ASSISTANT, RECEIPT_ORDER, USER
+from common import telemetry
 from common.timeutil import as_aware
 from config.settings import settings
 from domain.models import UNREADABLE_HISTORY, SessionRow, utcnow
@@ -203,6 +204,18 @@ def save(
     read at. Given one, anything written to the row since then is folded back
     in rather than overwritten -- see `_merge_interleaved`.
     """
+    with telemetry.stage("session_save"):
+        return _save(session, channel, external_id, history, merge_since=merge_since)
+
+
+def _save(
+    session: Session,
+    channel: str,
+    external_id: str,
+    history: list[dict],
+    *,
+    merge_since: int | None = None,
+) -> list[dict]:
     if merge_since is not None:
         row = session.get(SessionRow, (channel, external_id))
         if row is not None:

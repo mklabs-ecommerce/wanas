@@ -406,3 +406,103 @@ def test_the_next_turn_reads_the_shelf_again(seeded, monkeypatch):
             catalog.get_products(seeded, query="hoodie")
 
     assert len(calls) == 3
+
+
+# --------------------------------------------------------------------------
+# the prefetch
+# --------------------------------------------------------------------------
+#
+# The shelf read is ~440 ms from the Railway container and used to be spent
+# wherever the first catalog tool asked for it -- which is *after* the model
+# has already come back saying which tool to call. Started when the turn opens
+# it overlaps the first model hop, which is several times longer.
+#
+# What must not change is what it is: one read per message, thrown away with
+# the turn. `catalog.live_stock` reads through this and `add_to_cart` decides
+# whether a sale may happen on what it says, so a snapshot that outlived its
+# turn would let a sold-out size be sold.
+
+
+def test_the_prefetch_is_still_one_read_per_turn(seeded, monkeypatch):
+    calls = []
+    monkeypatch.setattr(shopify_catalog, "try_fetch_all", lambda: calls.append(1) or {})
+
+    with shopify_catalog.turn_scope():
+        shopify_catalog.prefetch()
+        catalog.get_products(seeded, query="hoodie")
+        catalog.get_variants(seeded, "wanas-hoodie")
+        catalog.get_products(seeded, category="T-Shirts")
+
+    assert len(calls) == 1
+
+
+def test_a_prefetched_snapshot_is_what_the_tools_read(seeded, monkeypatch):
+    """Not merely "a read happened" -- the numbers the customer is quoted have
+    to be the prefetched ones."""
+    shelf = {"wanas-hoodie-s-olive": live("wanas-hoodie-s-olive", 111, 7)}
+    monkeypatch.setattr(shopify_catalog, "try_fetch_all", lambda: shelf)
+
+    with shopify_catalog.turn_scope():
+        shopify_catalog.prefetch()
+        payload = catalog.get_variants(seeded, "wanas-hoodie")
+
+    olive = next(v for v in payload["variants"] if v["variant_id"] == "wanas-hoodie-s-olive")
+    assert olive["price"] == 111
+
+
+def test_the_next_turn_still_reads_the_shelf_again_with_prefetch(seeded, monkeypatch):
+    calls = []
+    monkeypatch.setattr(shopify_catalog, "try_fetch_all", lambda: calls.append(1) or {})
+
+    for _ in range(3):
+        with shopify_catalog.turn_scope():
+            shopify_catalog.prefetch()
+            catalog.get_products(seeded, query="hoodie")
+
+    assert len(calls) == 3
+
+
+def test_a_prefetch_that_fails_degrades_exactly_as_a_lazy_one_does(seeded, monkeypatch):
+    """`try_fetch_all` answers None rather than raising, and collecting it from
+    a future must not turn that into an exception on the turn's thread."""
+    monkeypatch.setattr(shopify_catalog, "try_fetch_all", lambda: None)
+
+    with shopify_catalog.turn_scope():
+        shopify_catalog.prefetch()
+        payload = catalog.get_variants(seeded, "wanas-hoodie")
+
+    # wanas.db's own numbers, which is the documented fallback.
+    assert payload["variants"]
+
+
+def test_the_flag_turns_the_prefetch_off(seeded, monkeypatch):
+    import dataclasses
+
+    from config.settings import settings as live
+
+    monkeypatch.setattr(
+        shopify_catalog, "settings", dataclasses.replace(live, shopify_prefetch=False)
+    )
+    calls = []
+    monkeypatch.setattr(shopify_catalog, "try_fetch_all", lambda: calls.append(1) or {})
+
+    with shopify_catalog.turn_scope():
+        shopify_catalog.prefetch()
+        assert calls == [], "the prefetch must not have started a read"
+        catalog.get_products(seeded, query="hoodie")
+
+    assert len(calls) == 1
+
+
+def test_a_primed_snapshot_still_wins_over_the_prefetch(seeded, monkeypatch):
+    """`prime` is how the tests and the verification script inject a shelf.
+    A prefetch must not be able to overwrite one."""
+    calls = []
+    monkeypatch.setattr(shopify_catalog, "try_fetch_all", lambda: calls.append(1) or {})
+
+    with shopify_catalog.turn_scope():
+        shopify_catalog.prime(None)
+        shopify_catalog.prefetch()
+        catalog.get_products(seeded, query="hoodie")
+
+    assert calls == []

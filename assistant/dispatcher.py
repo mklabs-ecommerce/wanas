@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -36,6 +37,12 @@ from dataclasses import dataclass, field
 from config.settings import settings
 
 log = logging.getLogger("wanas.dispatcher")
+
+#: How many conversations the fragment memory holds before it starts pruning.
+#: Comfortably above this shop's whole customer list; the cap is there so the
+#: dict cannot grow without bound on a process that runs for weeks, not
+#: because anyone expects to reach it.
+_FRAGMENTER_MEMORY = 5000
 
 
 @dataclass
@@ -65,6 +72,28 @@ class Pending:
     #: conversation is visible immediately without reading twice afterwards.
     recorded_ids: set[str] = field(default_factory=set)
     extras: dict = field(default_factory=dict)
+    #: What the webhook spent on this message before it was queued, by stage
+    #: name, in seconds -- signature check, media download, `record_inbound`,
+    #: the read receipt. Measured in the adapter and carried here because the
+    #: turn it belongs to runs on another thread minutes of wall clock later,
+    #: and the one line per turn has to be able to say so. Summed across a
+    #: merged batch: three fragments cost three ingests.
+    ingest: dict[str, float] = field(default_factory=dict)
+    #: `time.perf_counter()` when the first and the most recent fragment of
+    #: this batch arrived. The difference between `last_seen` and the moment
+    #: the handler starts is the debounce wait the customer actually paid,
+    #: which is not the same as the configured window once a second message
+    #: has pushed the deadline out.
+    first_seen: float = 0.0
+    last_seen: float = 0.0
+    #: How many platform messages this batch has collected. 1 is the ordinary
+    #: case by a very long way -- 249 of 254 measured turns -- and it is what
+    #: the adaptive window below keys on.
+    fragments: int = 0
+
+    def spent(self, name: str, seconds: float) -> None:
+        """Note ingest-side time against this message."""
+        self.ingest[name] = self.ingest.get(name, 0.0) + max(0.0, seconds)
 
     def merge(self, other: Pending) -> None:
         self.texts.extend(other.texts)
@@ -77,6 +106,11 @@ class Pending:
         self.reply_to.update(other.reply_to)
         self.recorded_ids |= other.recorded_ids
         self.extras.update(other.extras)
+        for name, seconds in other.ingest.items():
+            self.ingest[name] = self.ingest.get(name, 0.0) + seconds
+        self.first_seen = min(t for t in (self.first_seen, other.first_seen) if t) or 0.0
+        self.last_seen = max(self.last_seen, other.last_seen)
+        self.fragments += other.fragments
 
     @property
     def text(self) -> str:
@@ -165,11 +199,35 @@ class MessageDispatcher:
         *,
         debounce_seconds: float | None = None,
         max_workers: int | None = None,
+        adaptive: bool | None = None,
+        first_debounce_seconds: float | None = None,
+        max_batch_seconds: float | None = None,
     ):
         self._handler = handler
         self._debounce = (
             settings.message_debounce_seconds if debounce_seconds is None else debounce_seconds
         )
+        self._adaptive = settings.adaptive_debounce if adaptive is None else adaptive
+        self._first_debounce = (
+            settings.message_debounce_first_seconds
+            if first_debounce_seconds is None
+            else first_debounce_seconds
+        )
+        self._max_batch = (
+            settings.message_debounce_max_seconds
+            if max_batch_seconds is None
+            else max_batch_seconds
+        )
+        #: Conversations that have been seen writing in fragments, and when.
+        #: They get the long window from their *first* message rather than
+        #: having to prove it again every time -- see `_wait_for`. Bounded and
+        #: pruned by age, because an unbounded dict keyed on customer is the
+        #: same slow leak `_release_conversation_lock` exists to stop.
+        self._fragmenters: dict[str, float] = {}
+        #: When each conversation's last batch was handed to the handler, so a
+        #: message arriving hard on the heels of one can be recognised as the
+        #: rest of a thought rather than a new one.
+        self._last_release: dict[str, float] = {}
         self._pending: dict[str, Pending] = {}
         self._timers: dict[str, threading.Timer] = {}
         #: One conversation is answered one message at a time. Without this a
@@ -201,6 +259,17 @@ class MessageDispatcher:
         That is what the test suite wants -- assert on the outcome right after
         the request -- and it is never what production wants.
         """
+        # Stamped here rather than in the adapter so every channel gets it for
+        # free, and so the clock that measures the wait is the same one that
+        # ends it. `first_seen` survives a merge; `last_seen` is what the wait
+        # is actually measured from, because a second fragment pushes the
+        # deadline out and the customer pays from *their last* message.
+        now = time.perf_counter()
+        if not item.first_seen:
+            item.first_seen = now
+        item.last_seen = now
+        item.fragments = max(1, item.fragments)
+
         if self._debounce <= 0:
             self._run(key, item)
             return
@@ -208,13 +277,25 @@ class MessageDispatcher:
         with self._lock:
             existing = self._pending.get(key)
             if existing is None:
+                # Nothing buffered, so this opens a batch. If the previous one
+                # was released moments ago, this message is almost certainly
+                # the rest of what they were saying and the window closed too
+                # early on them -- remember that, so it does not happen to
+                # this customer again.
+                released = self._last_release.get(key)
+                if released is not None and now - released <= self._fragment_memory_window:
+                    self._note_fragmenter(key, now)
                 self._pending[key] = item
                 # Counted once per *conversation* that owes a reply, not once
                 # per fragment: a rescheduled timer must not leave a second
                 # outstanding count that nothing will ever release.
                 self._mark_busy()
             else:
+                # A second message inside the window: this conversation writes
+                # in fragments, and every later batch of theirs should start
+                # patient rather than learn it again.
                 existing.merge(item)
+                self._note_fragmenter(key, now)
 
             timer = self._timers.pop(key, None)
             if timer is not None:
@@ -222,10 +303,106 @@ class MessageDispatcher:
                 # first fragment of a sentence.
                 timer.cancel()
 
-            timer = threading.Timer(self._debounce, self._release, args=(key,))
+            pending = self._pending[key]
+            timer = threading.Timer(self._wait_for(pending, key), self._release, args=(key,))
             timer.daemon = True
             self._timers[key] = timer
             timer.start()
+
+    @property
+    def _fragment_memory_window(self) -> float:
+        """How soon after a batch was released a new message still counts as
+        the rest of the same thought.
+
+        Deliberately generous: being wrong in this direction costs one
+        customer a few seconds of patience they did not need, and being wrong
+        in the other direction is the split reply this whole mechanism exists
+        to avoid.
+        """
+        return max(self._debounce, settings.message_fragment_memory_seconds)
+
+    def _note_fragmenter(self, key: str, now: float) -> None:
+        """Remember that this conversation writes in pieces.
+
+        Pruned by age and capped, because a dict keyed on customer that only
+        ever grows is the same invisible leak `_release_conversation_lock`
+        exists to stop -- slow, unbounded, and only ever noticed as a process
+        that grows for weeks. Called with `self._lock` held.
+        """
+        self._fragmenters[key] = now
+        if len(self._fragmenters) <= _FRAGMENTER_MEMORY:
+            return
+        cutoff = now - settings.message_fragment_memory_ttl_seconds
+        self._fragmenters = {k: t for k, t in self._fragmenters.items() if t > cutoff}
+        if len(self._fragmenters) > _FRAGMENTER_MEMORY:
+            # Still too many even after the age prune: keep the most recent.
+            keep = sorted(self._fragmenters.items(), key=lambda kv: -kv[1])[:_FRAGMENTER_MEMORY]
+            self._fragmenters = dict(keep)
+
+    def _knows_fragmenter(self, key: str, now: float) -> bool:
+        seen = self._fragmenters.get(key)
+        return seen is not None and now - seen <= settings.message_fragment_memory_ttl_seconds
+
+    def _wait_for(self, item: Pending, key: str = "") -> float:
+        """How long this batch waits for the customer's next message.
+
+        The window exists because customers type in fragments, and that is
+        still true. What was not true is that it should cost the same on every
+        message: 249 of 254 measured production turns were a *single* message,
+        so the fixed six seconds was paid in full by 98% of turns to catch the
+        other 2%. Six seconds is also 28% of a twenty-one-second reply, which
+        made it the second most expensive thing in the whole path and the only
+        one nothing outside this process had a say in.
+
+        **And the 2% are not a random 2%.** Writing in fragments is a habit of
+        a person, not a property of a message, so a conversation that has done
+        it once is remembered and starts patient every time after -- which is
+        what lets the default for everyone else be a second rather than the
+        two it had to be when the short window was the only thing standing
+        between a fragmenting customer and a split reply. The rare case is
+        better served than it was *and* the common one is faster.
+
+        So the wait is short until a second fragment proves it is needed, and
+        then it is exactly what it always was:
+
+        * one message, from a conversation not known to fragment ->
+          `MESSAGE_DEBOUNCE_FIRST_SECONDS` (1 s).
+        * one message, from a conversation that has fragmented before, or that
+          wrote again within seconds of its last batch being answered ->
+          the full window.
+        * two or more -> `MESSAGE_DEBOUNCE_SECONDS` (6 s), measured from the
+          newest one, which is byte-for-byte the old behaviour. A customer who
+          is *actually* writing in pieces gets the same patience they always
+          did; the deadline for their second fragment lands at the same wall
+          clock second as before.
+        * and never past `MESSAGE_DEBOUNCE_MAX_SECONDS` (15 s) from the first
+          fragment, so someone typing one word every five seconds cannot hold
+          a batch open indefinitely -- which the old fixed window could not do
+          either, and which becomes reachable once the window extends.
+
+        The cost is real and worth naming: a customer whose second fragment
+        arrives between 2 and 6 seconds after the first now gets two turns
+        instead of one. That is an extra model call and a reply that reads as
+        two messages rather than one -- not a wrong answer, and the
+        conversation lock still serialises them. Against it: four seconds off
+        98% of replies. `ADAPTIVE_DEBOUNCE=0` restores the old window exactly.
+        """
+        if not self._adaptive:
+            return self._debounce
+
+        # The short wait is never longer than the full one. Adaptive must not
+        # be able to make a single message *slower* than the fixed window it
+        # replaced, and a caller that pins a short `debounce_seconds` (the
+        # tests do) means that number, not the production default.
+        first = min(self._first_debounce, self._debounce)
+        patient = item.fragments > 1 or (key and self._knows_fragmenter(key, time.perf_counter()))
+        wait = self._debounce if patient else first
+        if self._max_batch > 0 and item.first_seen:
+            age = time.perf_counter() - item.first_seen
+            # Never negative: a batch already past the ceiling runs now rather
+            # than scheduling a timer in the past.
+            wait = min(wait, max(0.05, self._max_batch - age))
+        return max(0.05, wait)
 
     def _release(self, key: str) -> None:
         with self._lock:
@@ -246,7 +423,24 @@ class MessageDispatcher:
 
     def _run(self, key: str, item: Pending) -> None:
         lock = self._conversation_lock(key)
+        queued = time.perf_counter()
+        with self._lock:
+            # When this conversation was last handed to the handler. A message
+            # arriving just after it is the rest of a thought whose window
+            # closed early -- see `submit`.
+            self._last_release[key] = queued
+            if len(self._last_release) > _FRAGMENTER_MEMORY:
+                cutoff = queued - self._fragment_memory_window
+                self._last_release = {k: t for k, t in self._last_release.items() if t > cutoff}
         with lock:
+            # Everything between the customer's last message and the handler
+            # starting: the debounce window itself, plus however long this
+            # conversation waited behind its own previous turn. Separated
+            # because the first is a tuning decision and the second is
+            # contention, and they are fixed by completely different things.
+            if item.last_seen:
+                item.spent("debounce_wait", queued - item.last_seen)
+            item.spent("turn_queue_wait", time.perf_counter() - queued)
             try:
                 self._handler(key, item)
             except Exception:

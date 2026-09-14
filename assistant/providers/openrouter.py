@@ -82,6 +82,7 @@ from assistant.providers.base import (
     normalise_chart_reading,
 )
 from assistant.providers.gemini import mask_key
+from common import telemetry
 from config.settings import settings
 
 log = logging.getLogger("wanas.provider.openrouter")
@@ -334,6 +335,38 @@ class OpenRouterProvider(LLMProvider):
         routing["require_parameters"] = True
         return routing
 
+    @staticmethod
+    def _reasoning() -> dict | None:
+        """How much of the completion budget this model may spend thinking.
+
+        Measured, because the comment above says reasoning is mandatory here
+        and that turned out to be true of *disabling* it and nothing else.
+        Against this shop's own prompt and tools, three samples each:
+
+            baseline (no reasoning field)   median 5698 ms, 49-120 reasoning tokens
+            reasoning {"effort": "low"}     median 4647 ms, 0 reasoning tokens
+            reasoning {"effort": "minimal"} median 5389 ms, 0
+            reasoning {"max_tokens": 128}   median 4778 ms, 0
+            reasoning {"enabled": false}    HTTP 400, "Reasoning is mandatory
+                                            for this endpoint and cannot be
+                                            disabled."
+
+        So the endpoint refuses to be told *not* to think and accepts being
+        told how hard, and on this model "low" means none at all. That is 92%
+        of the generated tokens on an ordinary shop turn -- the reply itself
+        is 30 to 45 tokens and the thinking was 50 to 120 -- which is why it
+        is worth roughly a fifth of every round trip.
+
+        It is a setting rather than a constant because the thing being traded
+        away is judgement, and judgement is what `scripts/quality_gate.py`
+        checks. `OPENROUTER_REASONING_EFFORT=` (blank) sends no `reasoning`
+        field at all, which is byte-for-byte the request this made before.
+        """
+        effort = (settings.openrouter_reasoning_effort or "").strip().lower()
+        if not effort or effort == "default":
+            return None
+        return {"effort": effort}
+
     def _build_payload(self, system_prompt: str, history: list[dict], tools: list) -> dict:
         payload: dict = {
             "model": self.model,
@@ -341,6 +374,9 @@ class OpenRouterProvider(LLMProvider):
             "temperature": 0.3,
             "max_tokens": self.CHAT_MAX_TOKENS,
         }
+        reasoning = self._reasoning()
+        if reasoning:
+            payload["reasoning"] = reasoning
         routing = self._routing()
         if routing:
             payload["provider"] = routing
@@ -351,7 +387,8 @@ class OpenRouterProvider(LLMProvider):
     # -- request ----------------------------------------------------------
 
     def generate(self, system_prompt: str, history: list[dict], tools: list) -> ModelReply:
-        response = self._post(self._build_payload(system_prompt, history, tools))
+        payload = self._build_payload(system_prompt, history, tools)
+        response = self._post(payload)
 
         if response.status_code == 429:
             raise ProviderError(
@@ -371,7 +408,24 @@ class OpenRouterProvider(LLMProvider):
                 f"openrouter error {response.status_code} on model {self.model!r}: {response.text[:500]}"
             )
 
-        return self._parse(response.json())
+        data = response.json()
+        # Which upstream stack served this one, and what it cost. Both come
+        # back on every response and neither was being read: without them a
+        # slow turn cannot be told apart from a slow *provider*, and
+        # `_routing`'s order was chosen for quality with no measurement of
+        # what each candidate does to the tail. Attached to the model hop
+        # `assistant/agent.py` already has open -- see `common/telemetry.py`.
+        usage = data.get("usage") or {}
+        details = usage.get("completion_tokens_details") or {}
+        telemetry.note_llm(
+            upstream=data.get("provider"),
+            model=data.get("model"),
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+            reasoning_tokens=details.get("reasoning_tokens"),
+            cached_tokens=(usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+        )
+        return self._parse(data)
 
     def _headers(self) -> dict[str, str]:
         headers = {

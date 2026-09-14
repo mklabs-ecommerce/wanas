@@ -26,10 +26,13 @@ from __future__ import annotations
 
 import contextvars
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
 
+from common import telemetry
+from config.settings import settings
 from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
@@ -259,6 +262,11 @@ def try_fetch_all() -> dict[str, LiveVariant] | None:
 # across turns is exactly the staleness this work exists to remove.
 
 _UNSET = object()
+
+#: Where `prefetch` runs the read. Small: it is one short HTTP call per turn,
+#: and the dispatcher already caps how many turns run at once.
+_prefetch_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="wanas-shelf")
+
 _turn_cache: contextvars.ContextVar = contextvars.ContextVar("wanas_shopify_turn", default=_UNSET)
 #: Whether a turn is actually open. Without this, caching outside one would
 #: never expire -- there would be no `reset` to end it -- and the first read
@@ -267,16 +275,58 @@ _turn_cache: contextvars.ContextVar = contextvars.ContextVar("wanas_shopify_turn
 _in_turn: contextvars.ContextVar = contextvars.ContextVar("wanas_shopify_in_turn", default=False)
 
 
+#: The read started before anything asked for it, so the first model hop pays
+#: for it instead of the tool that needs it. Same ContextVar discipline as the
+#: cache above: a future belongs to one turn on one thread.
+_turn_future: contextvars.ContextVar = contextvars.ContextVar(
+    "wanas_shopify_turn_future", default=None
+)
+
+
 @contextmanager
 def turn_scope():
     """Wraps the handling of one inbound message."""
     cache_token = _turn_cache.set(_UNSET)
     turn_token = _in_turn.set(True)
+    future_token = _turn_future.set(None)
     try:
         yield
     finally:
         _turn_cache.reset(cache_token)
         _in_turn.reset(turn_token)
+        _turn_future.reset(future_token)
+
+
+def prefetch() -> None:
+    """Start this turn's live read now, so the model hop pays for it.
+
+    The shelf read is ~440 ms from the Railway container, and it used to be
+    spent where the first catalog tool asked for it -- which is *after* the
+    model has already come back saying which tool to call, i.e. squarely on
+    the critical path. Started here it overlaps the first model round trip
+    (~2.4 s), which is several times longer, so by the time any tool wants the
+    snapshot it is already sitting there.
+
+    This is not a cache and deliberately not one. The snapshot is still read
+    once per message and thrown away with the turn, so "live per message"
+    means exactly what it meant before -- which matters, because
+    `catalog.live_stock` reads through this and `add_to_cart` decides whether
+    a sale may happen on what it says. A 30-second cache would have been
+    cheaper and would have let a sold-out size be sold.
+
+    What it does cost is a Shopify call on turns that would never have made
+    one -- a greeting, a thank-you. At this shop's volume that is far below
+    anything `_respect_throttle` reacts to, but it is a real doubling and
+    `SHOPIFY_PREFETCH=0` is the way out of it.
+    """
+    if not settings.shopify_prefetch or _turn_cache.get() is not _UNSET:
+        return
+    if _turn_future.get() is not None:
+        return
+    try:
+        _turn_future.set(_prefetch_pool.submit(try_fetch_all))
+    except RuntimeError:  # pragma: no cover - pool shutting down
+        pass
 
 
 def live_map() -> dict[str, LiveVariant] | None:
@@ -290,7 +340,23 @@ def live_map() -> dict[str, LiveVariant] | None:
     if cached is not _UNSET:
         return cached
 
-    result = try_fetch_all()
+    # `prefetch` may have started this read when the turn opened. Almost always
+    # finished by now -- the model hop it was overlapped with is several times
+    # longer -- so collecting it is not a wait. `try_fetch_all` answers None
+    # rather than raising either way, so nothing new can come out of here that
+    # could not come out of calling it directly.
+    future = _turn_future.get()
+    if future is None:
+        result = try_fetch_all()
+    else:
+        # Timed separately and deliberately. A prefetched read happens on
+        # another thread, so it leaves the turn's line with no `shopify` stage
+        # at all -- which reads as "the shelf was free" when what actually
+        # happened is "the shelf was paid for somewhere else". `shopify_wait`
+        # is the honest number: how long this turn stood still for it, which
+        # should be close to zero and is the thing to watch if it stops being.
+        with telemetry.stage("shopify_wait"):
+            result = future.result()
     if _in_turn.get():
         # Only inside a turn. Outside one -- the dashboard, a script, a test --
         # there is nothing that will ever clear it, so caching would hand a

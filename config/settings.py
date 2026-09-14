@@ -103,6 +103,13 @@ class Settings:
     #: which only surfaces later as an auth failure far from its cause.
     openrouter_api_key: str
 
+    #: How hard the conversation model may think before answering, as
+    #: OpenRouter's `reasoning.effort`. Blank sends no `reasoning` field at
+    #: all, which is the request this made before the setting existed. See
+    #: `OpenRouterProvider._reasoning` for the measurements behind the
+    #: default.
+    openrouter_reasoning_effort: str
+
     #: Which upstream providers OpenRouter may serve the conversation model
     #: from, most preferred first (provider slugs, comma-separated).
     #:
@@ -198,9 +205,42 @@ class Settings:
     #: 0 processes each message on arrival, in the caller's thread, which is
     #: what the tests want.
     message_debounce_seconds: float
+    #: What the *first* message of a batch waits, before a second one has
+    #: proved the customer is writing in fragments. 249 of 254 measured
+    #: production turns were one message, so the full window above was paid by
+    #: 98% of turns to catch the other 2% -- and it was 28% of the whole
+    #: reply. See `MessageDispatcher._wait_for`.
+    message_debounce_first_seconds: float
+    #: The ceiling on a batch's total age, however many fragments extend it.
+    #: Unreachable with a fixed window; reachable once the window extends.
+    message_debounce_max_seconds: float
+    #: How soon after a batch was answered a new message from the same
+    #: conversation still reads as the rest of the same thought rather than a
+    #: new one. Evidence that this customer writes in fragments.
+    message_fragment_memory_seconds: float
+    #: How long that evidence is kept. Writing in pieces is a habit of a
+    #: person, so it is worth remembering across a whole day of conversations
+    #: -- it is what lets the window for everyone else be a single second.
+    message_fragment_memory_ttl_seconds: float
+    #: 0 restores the old fixed window exactly, with no deploy.
+    adaptive_debounce: bool
     #: Threads that run agent turns. One conversation is always serial; this
     #: caps how many *different* conversations run at once.
     message_workers: int
+
+    #: One line of JSON per turn saying where its wall-clock time went
+    #: (`common/telemetry.py`). On by default: it carries no message text and
+    #: no customer identifier beyond a short hash, it costs one log line per
+    #: reply, and production is the only place the real numbers exist. Set
+    #: LATENCY_LOG=0 to silence it.
+    latency_log: bool
+
+    #: Whether the live Shopify read is started when the turn opens rather
+    #: than when the first catalog tool asks for it -- ~440 ms that then
+    #: overlaps the first model hop instead of following it. Not a cache: the
+    #: snapshot is still per message, which is what `add_to_cart` depends on.
+    #: Costs a Shopify call on turns that would never have made one.
+    shopify_prefetch: bool
 
     #: How sure the vision pass has to be before a photo is treated as "this
     #: product". Below it the reading is only used to ask a better question.
@@ -459,6 +499,7 @@ def load_settings() -> Settings:
         comment_classifier_model=_first_env("COMMENT_CLASSIFIER_MODEL", default=""),
         llm_debug_payload=_bool("LLM_DEBUG_PAYLOAD", False),
         openrouter_api_key=_first_env("OPENROUTER_API_KEY", default=""),
+        openrouter_reasoning_effort=os.getenv("OPENROUTER_REASONING_EFFORT", "low").strip(),
         openrouter_providers=_csv(
             "OPENROUTER_PROVIDERS", default="z-ai,deepinfra,novita"
         ),
@@ -492,7 +533,14 @@ def load_settings() -> Settings:
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),
         max_quantity_per_line=_int("MAX_QUANTITY_PER_LINE", 10),
         message_debounce_seconds=_float("MESSAGE_DEBOUNCE_SECONDS", 6.0),
+        message_debounce_first_seconds=_float("MESSAGE_DEBOUNCE_FIRST_SECONDS", 1.0),
+        message_debounce_max_seconds=_float("MESSAGE_DEBOUNCE_MAX_SECONDS", 15.0),
+        message_fragment_memory_seconds=_float("MESSAGE_FRAGMENT_MEMORY_SECONDS", 20.0),
+        message_fragment_memory_ttl_seconds=_float("MESSAGE_FRAGMENT_MEMORY_TTL_SECONDS", 86400.0),
+        adaptive_debounce=_bool("ADAPTIVE_DEBOUNCE", True),
         message_workers=_int("MESSAGE_WORKERS", 8),
+        latency_log=_bool("LATENCY_LOG", True),
+        shopify_prefetch=_bool("SHOPIFY_PREFETCH", True),
         image_match_confidence=_float("IMAGE_MATCH_CONFIDENCE", 0.6),
         voice_notes_enabled=_bool("VOICE_NOTES_ENABLED", True),
         image_understanding_enabled=_bool("IMAGE_UNDERSTANDING_ENABLED", True),
