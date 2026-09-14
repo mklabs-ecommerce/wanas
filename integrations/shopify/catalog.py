@@ -117,6 +117,25 @@ def _to_decimal(raw) -> Decimal:
         return Decimal("0")
 
 
+def _price_or_none(raw) -> Decimal | None:
+    """A price, or None when Shopify did not give a usable one.
+
+    Deliberately not `_to_decimal`. `compareAtPrice` is null on everything that
+    is not discounted and zero is the right reading there, so folding a missing
+    value onto zero is correct for that field. For `price` it is the opposite:
+    a missing field, an unparseable one and a saved zero all mean "there is no
+    number to quote here", and zero is a number the rest of the app will
+    happily use.
+    """
+    if raw in (None, ""):
+        return None
+    try:
+        value = Decimal(str(raw))
+    except (ArithmeticError, TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 def _node_to_live(node: dict) -> LiveVariant | None:
     sku = (node.get("sku") or "").strip()
     if not sku:
@@ -125,7 +144,21 @@ def _node_to_live(node: dict) -> LiveVariant | None:
         # skipped and reported rather than matched approximately.
         return None
 
-    price = _to_decimal(node.get("price"))
+    price = _price_or_none(node.get("price"))
+    if price is None:
+        # Shopify was reached and this variant is in the response, but with no
+        # price anyone can quote. It is left out of the live map rather than
+        # carried at zero, because zero does not stay a display problem:
+        # `services/orders.py` bills `unit_price` straight off this row, so a
+        # zero here places a real cash-on-delivery order for nothing.
+        #
+        # "Not on the shelf we can see" is a case both callers already handle
+        # deliberately -- the browse path falls back to wanas.db's own numbers,
+        # and the order path refuses with `store_unavailable` rather than
+        # guessing. Both are better than a free hoodie.
+        log.warning("%s has no usable price on Shopify; left out of the live map", sku)
+        return None
+
     compare = _to_decimal(node.get("compareAtPrice"))
     product = node.get("product") or {}
     inventory_item = node.get("inventoryItem") or {}

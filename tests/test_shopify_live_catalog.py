@@ -506,3 +506,76 @@ def test_a_primed_snapshot_still_wins_over_the_prefetch(seeded, monkeypatch):
         catalog.get_products(seeded, query="hoodie")
 
     assert calls == []
+
+
+# --------------------------------------------------------------------------
+# A variant Shopify priced at nothing
+# --------------------------------------------------------------------------
+#
+# `price` folded a missing field, an unparseable one and a saved zero all onto
+# Decimal("0"), and the overlay quoted it. Zero does not stay a display
+# problem: `services/orders.py` bills `unit_price` straight off the live row,
+# so it would have placed a real cash-on-delivery order for nothing.
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param({}, id="field absent from the response"),
+        pytest.param({"price": None}, id="null"),
+        pytest.param({"price": ""}, id="empty"),
+        pytest.param({"price": "not-a-number"}, id="unparseable"),
+        pytest.param({"price": "0.00"}, id="saved as zero"),
+    ],
+)
+def test_a_variant_with_no_usable_price_is_left_out_of_the_live_map(raw):
+    node = {
+        "sku": "boxy-wns-tee-l-black",
+        "id": "gid://shopify/ProductVariant/1",
+        "inventoryItem": {"id": "gid://shopify/InventoryItem/1", "tracked": True},
+        "inventoryQuantity": 5,
+        "product": {"status": "ACTIVE"},
+        **raw,
+    }
+    assert shopify_catalog._node_to_live(node) is None
+
+
+def test_a_normal_price_still_comes_through():
+    node = {
+        "sku": "boxy-wns-tee-l-black",
+        "id": "gid://shopify/ProductVariant/1",
+        "inventoryItem": {"id": "gid://shopify/InventoryItem/1", "tracked": True},
+        "inventoryQuantity": 5,
+        "product": {"status": "ACTIVE"},
+        "price": "590.00",
+    }
+    assert shopify_catalog._node_to_live(node).price == Decimal("590.00")
+
+
+def test_a_null_compare_at_price_is_still_just_no_discount():
+    """The other field keeps folding onto zero, and should: `compareAtPrice`
+    is null on everything that is not discounted."""
+    node = {
+        "sku": "boxy-wns-tee-l-black",
+        "id": "gid://shopify/ProductVariant/1",
+        "inventoryItem": {"id": "gid://shopify/InventoryItem/1", "tracked": True},
+        "inventoryQuantity": 5,
+        "product": {"status": "ACTIVE"},
+        "price": "590.00",
+        "compareAtPrice": None,
+    }
+    variant = shopify_catalog._node_to_live(node)
+    assert variant.original_price == Decimal("590.00")
+    assert variant.on_sale is False
+
+
+def test_the_customer_is_quoted_the_local_price_not_zero(seeded, turn):
+    """Browse path: falling back to wanas.db's number is the documented
+    behaviour for a variant Shopify does not show, and it is a far better
+    answer than "free"."""
+    variant = seeded.query(Variant).filter_by(variant_id="boxy-wns-tee-l-black").one()
+    local_price = variant.price
+    shopify_catalog.prime({})
+    priced = catalog._overlay(variant, shopify_catalog.live_map())
+    assert priced.price == local_price
+    assert priced.price > 0
