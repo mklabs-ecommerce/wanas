@@ -494,3 +494,55 @@ def test_a_word_unrelated_to_the_catalog_is_not_this_rules_business():
 
 def garbled(text):
     return quality_gate.garbled_catalog_words(text, CATALOG)
+
+
+# --- saying the last reply again ------------------------------------------
+#
+# From the audited conversation: the bot listed two sweatpants and asked
+# "photos, or sizes?". The customer answered «الاتنين» -- both -- and the bot
+# sent the same two lines back with "which of the two?" under them.
+
+
+def _two_step(first, second):
+    return _run(
+        _reply("add_to_cart", 0, first, ("get_variants",)),
+        _reply("add_to_cart", 1, second),
+    )
+
+
+LISTED = (
+    "عندنا نوعين سويت بانتس:\n"
+    "• بنطلون Lightweight Sweatpant — السعر 650 جنيه بدل 720\n"
+    "• بنطلون WANAS Sweatpant — السعر 650 جنيه بدل 1000\n"
+    "تحب تشوف صور ولا تعرف المقاسات؟"
+)
+
+
+def test_saying_the_previous_reply_again_fails():
+    again = LISTED.replace("تحب تشوف صور ولا تعرف المقاسات؟", "تحب نوعي أنهي؟")
+    record = _two_step(LISTED, again)
+    failures = check(record, record)
+    assert any("the previous one said again" in f for f in failures), failures
+
+
+def test_actually_answering_the_follow_up_passes():
+    answered = (
+        "تمام، دي الصور والمقاسات:\n"
+        "• بنطلون Lightweight Sweatpant — مقاسات S و M و L\n"
+        "• بنطلون WANAS Sweatpant — مقاس S و M بس\n"
+        "تحب أضيف واحد للسلة؟"
+    )
+    record = _two_step(LISTED, answered)
+    assert check(record, record) == []
+
+
+def test_a_short_natural_reply_is_not_a_repeat():
+    """Two turns can both be brief and warm without being the same message.
+    A rule that failed that would push the bot towards padding."""
+    record = _two_step("تمام، اتحط في السلة 🙂", "تمام، اتحط كمان واحد.")
+    assert check(record, record) == []
+
+
+def test_the_rule_needs_a_previous_reply_to_compare_against():
+    assert quality_gate.repeats_the_previous_reply("أي كلام", "") == 0.0
+    assert quality_gate.repeats_the_previous_reply("", "أي كلام") == 0.0

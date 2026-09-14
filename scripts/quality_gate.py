@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Twelve checks, and each one is a failure mode this repository has already paid
+Thirteen checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -51,7 +51,12 @@ for at least once:
    beside it. A product name arrives in a tool result and has to come out byte
    for byte, so a Latin word that is a near-miss of a catalog word is
    reconstruction from memory and nothing else.
-9. **Laid out so it reads the way it was written.** Arabic with Latin and
+9. **It does not say the last reply again.** A reply that repeats the one
+   before it has not used the message in between. The audited conversation
+   listed two sweatpants and asked "photos, or sizes?"; the customer answered
+   «الاتنين» and got the same two lines back with "which of the two?" under
+   them.
+10. **Laid out so it reads the way it was written.** Arabic with Latin and
    numbers inside it is the normal case here, and two shapes of line come
    out reordered on the phone: one opening with a Latin word takes
    left-to-right direction for the whole line, and a number separated from
@@ -60,17 +65,17 @@ for at least once:
    both at the send boundary, and this rule keeps them from being written
    in the first place: the dashboard shows staff the unrepaired string, and
    every shape the prompt asks for already renders correctly on its own.
-10. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
+11. **A sleeve question is answered, not deflected.** `Product.sleeve` is a
    catalog field, so "I have no data about sleeve length" beside the words
    «نص كم» is the bot refusing to read something it is holding -- which is
    exactly the reply that made the field necessary.
-11. **Photographs still go out.** Judged against the golden run: sending fewer
+12. **Photographs still go out.** Judged against the golden run: sending fewer
    is a judgement, sending none is a regression. And judged absolutely as well,
    on the steps whose reply is about one named garment -- a comparison rule
    cannot catch a shop that has *never* sent a photo, and for a long time this
    one had not: `get_products` attached nothing, so every answer that came out
    of a search arrived as text.
-12. **And the size chart does not.** Not unless the customer asked about sizes,
+13. **And the size chart does not.** Not unless the customer asked about sizes,
    measurements or fit. It used to ride along with every `get_variants` call
    for a product that has a chart, so a question about price or colour was
    answered with a measurements table -- which got worse the moment a product
@@ -443,6 +448,40 @@ def dodged_a_sleeve_question(text: str) -> str:
     return excuse
 
 
+#: Above this, two replies are the same reply. Not 1.0: the model re-words a
+#: line or drops a bullet while saying the identical thing, and "nearly all of
+#: it again" is the failure -- an exact-match rule would miss every real
+#: instance of it.
+_REPEAT_RATIO = 0.85
+
+
+def repeats_the_previous_reply(text: str, previous: str) -> float:
+    """How much of the previous reply this one says again, 0.0 to 1.0.
+
+    From the audited conversation. The bot listed two sweatpants and asked
+    "photos, or sizes?"; the customer answered «الاتنين» -- both -- and the
+    bot replied with the *same two lines again* and asked which of the two
+    products they meant. The customer had answered a question about photos and
+    sizes and was handed back the list they were already looking at.
+
+    A reply that repeats the one before it has, by definition, not used the
+    message in between. Whatever the customer said, the answer cannot be the
+    previous answer -- if they asked for something the bot cannot do, it says
+    so; if they were unclear, it asks something *new*. Saying it all again is
+    the one response that carries no information at all.
+
+    Compared on the text as written, whitespace folded, because that is what
+    the customer reads.
+    """
+    import difflib
+
+    now = " ".join((text or "").split())
+    before = " ".join((previous or "").split())
+    if not now or not before:
+        return 0.0
+    return difflib.SequenceMatcher(None, before, now).ratio()
+
+
 def layout_problems(text: str) -> list[str]:
     """Every way a reply is laid out so the customer reads something other
     than what was written.
@@ -511,9 +550,17 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
     golden_steps = _by_step(golden)
     fresh_steps = _by_step(fresh)
 
+    #: The previous step's reply in each scenario, for the repeat rule below.
+    previous_text: dict[str, str] = {}
+
     for key, fresh_replies in sorted(fresh_steps.items()):
         where = f"{key[0]}[{key[1]}]"
         golden_replies = golden_steps.get(key) or []
+
+        said_before = previous_text.get(key[0], "")
+        latest = next((r.get("text") or "" for r in reversed(fresh_replies) if r.get("text")), "")
+        if latest:
+            previous_text[key[0]] = latest
 
         for reply in fresh_replies:
             text = reply.get("text") or ""
@@ -602,6 +649,13 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                     f"{where}: the reply spelled the shop's name "
                     f"{sorted(set(misspelled))} -- it is Wanas Gallery"
                 )
+            ratio = repeats_the_previous_reply(text, said_before)
+            if ratio >= _REPEAT_RATIO:
+                failures.append(
+                    f"{where}: the reply is {ratio:.0%} the previous one said again -- "
+                    "the customer's message in between changed nothing"
+                )
+
             for problem in layout_problems(text):
                 failures.append(f"{where}: {problem}")
 

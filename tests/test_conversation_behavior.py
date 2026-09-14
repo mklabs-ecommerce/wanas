@@ -666,7 +666,11 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # tool result". A real conversation sold a `Lightweight Sweatpant` as
         # a `Lightwelson Sweatpant`, six times, with everything else about the
         # reply correct.
-    assert 3000 < len(SYSTEM_PROMPT) < 18300
+        #
+        # 18300 -> 18700: "never send your previous reply again", and
+        # "«الاتنين» answering your own two-option question means both". The
+        # audited conversation did exactly the opposite of each, in one turn.
+    assert 3000 < len(SYSTEM_PROMPT) < 18700
 
 
 # --------------------------------------------------------------------------
