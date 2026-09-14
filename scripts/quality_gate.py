@@ -29,12 +29,15 @@ for at least once:
    truncation and promise fallbacks are all *correct* behaviour for a broken
    turn and all mean the customer did not get an answer. A benchmark that got
    faster because more turns fell back is the exact trap this closes.
-6. **Cash on delivery, and nothing else.** This shop takes cash at the door and
-   has no other way to be paid, which is why nothing in it can issue a refund.
-   A reply offering to take payment online is a promise the shop cannot keep,
-   made to a customer who may act on it. This rule exists because a candidate
-   model measured for a possible swap made exactly that offer on its first run
-   through these scenarios, and every other check passed it.
+6. **Only the two ways this shop can actually be paid.** Cash at the door, or
+   online through the website -- 43eb403 settled that pair after the prompt and
+   `assistant/comment_faq.py` had been answering the question differently
+   depending on whether it was asked in a DM or in a comment, and the prompt now
+   requires the sentence verbatim. Anything else -- a card in the chat, InstaPay,
+   a wallet, a payment link -- is a promise the shop cannot keep, made to a
+   customer who may act on it. This rule exists because a candidate model
+   measured for a possible swap offered exactly that on its first run through
+   these scenarios, and every other check passed it.
 7. **The shop's name is spelled the one way.** `Wanas Gallery`, short form
    `Wanas`. The model meets the brand in four surface forms and Arabic writes
    no short vowels, so «ونس» is literally w-n-s -- which is how a reply ends up
@@ -126,22 +129,27 @@ def is_egyptian_arabic(text: str) -> tuple[bool, str]:
     return True, ""
 
 
-#: Ways of saying "you can pay online / by card / by wallet", which this shop
-#: cannot do. Cash on delivery is the only payment it takes -- that is why
-#: nothing in the codebase can issue a refund -- so an offer of anything else
-#: is a promise made to a customer who may act on it.
+#: The ways of paying this shop cannot take. It takes two -- cash at the door,
+#: and the website's own online checkout -- and nothing in the codebase can
+#: issue a refund against either, so an offer of a third is a promise made to a
+#: customer who may act on it.
 _OTHER_PAYMENT = (
     "فيزا", "ڤيزا", "بالفيزا", "كارت", "credit card", "بطاقة",
     "انستاباي", "إنستاباي", "instapay", "فودافون كاش", "محفظة",
     "تحويل بنكي", "paypal", "باي بال", "لينك دفع", "payment link",
 )
 
-#: "Online" is not a payment method here. This shop *is* an online shop and
-#: says so -- the system prompt's own first line calls it «محل هدوم أونلاين» --
-#: so the bare word flagged every correct reply that described the business.
-#: It only means online *payment* next to a word about paying.
-_ONLINE = ("أونلاين", "اونلاين", "أون لاين", "اون لاين", "online")
-_PAYING = ("دفع", "ادفع", "أدفع", "تدفع", "بتدفع", "هتدفع", "سداد", "تسديد", "pay")
+#: "Online" is deliberately not in that list, and this is the one entry worth
+#: explaining. It used to be, and it made the gate fail the shop's own correct
+#: answer twice over: this *is* an online shop and says so (the prompt's first
+#: line calls it «محل هدوم أونلاين»), and paying online through the website is
+#: a real option here. The prompt requires that sentence verbatim --
+#: «بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع» -- since 43eb403, which
+#: settled it after the prompt and `assistant/comment_faq.py` had been telling
+#: customers different things depending on whether they asked in a DM or in a
+#: comment. A gate that fails the answer the prompt mandates is testing the
+#: wrong thing, so the list above is now only the methods the shop genuinely
+#: cannot take.
 
 #: ...but talking about cash on delivery is exactly right, and some of the
 #: words above appear inside perfectly correct sentences ("مش بنقبل فيزا").
@@ -177,25 +185,6 @@ def offers_another_payment_method(text: str) -> str:
             ):
                 return method
 
-    # "Online" on its own describes the shop, not a way to pay it. It only
-    # means online *payment* when a word about paying governs it -- which may
-    # sit in an earlier clause of the same sentence ("تقدر تدفع كاش عند
-    # الاستلام، أو أونلاين من الموقع": the verb is in the first clause and the
-    # offer is in the second). So the window is the sentence up to and
-    # including the clause the word appears in, while a denial has to be in
-    # that clause itself: "محل أونلاين والدفع كاش عند الاستلام" denies it,
-    # "تدفع كاش عند الاستلام، أو أونلاين" does not.
-    for sentence in re.split(r"[.\n!?]", text or ""):
-        seen: list[str] = []
-        for clause in re.split(r"[،؛]", sentence):
-            seen.append(clause.lower())
-            low = seen[-1]
-            if not any(word in low for word in _ONLINE):
-                continue
-            if any(d.lower() in low for d in _PAYMENT_DENIAL):
-                continue
-            if any(verb in part for part in seen for verb in _PAYING):
-                return "أونلاين"
     return ""
 
 

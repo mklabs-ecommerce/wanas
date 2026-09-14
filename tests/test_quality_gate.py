@@ -45,13 +45,13 @@ def check(golden, fresh, *, drift=True):
 # gate passed it.
 
 
-def test_offering_online_payment_fails():
+def test_offering_a_card_fails():
     golden = _run(_reply("confirm_order", 2, "الإجمالي 650 جنيه كاش عند الاستلام", ("confirm_order",)))
     fresh = _run(
         _reply(
             "confirm_order",
             2,
-            "الإجمالي 650 جنيه. بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع.",
+            "الإجمالي 650 جنيه. تقدر تدفع بالفيزا لو تحب.",
             ("confirm_order",),
         )
     )
@@ -72,15 +72,16 @@ def test_calling_the_shop_online_is_not_offering_online_payment():
     assert quality_gate.offers_another_payment_method("محل أونلاين والدفع كاش عند الاستلام") == ""
 
 
-def test_online_next_to_paying_is_still_an_offer():
-    """The verb can govern from an earlier clause of the same sentence."""
-    assert quality_gate.offers_another_payment_method("تقدر تدفع أونلاين") != ""
-    assert (
-        quality_gate.offers_another_payment_method(
-            "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع."
-        )
-        != ""
-    )
+def test_the_sentence_the_prompt_mandates_passes_the_gate():
+    """The guard that matters on this rule: paying online through the website
+    is a real option here, and the prompt requires this sentence word for word
+    (43eb403). A gate that failed it would be testing the wrong thing -- and it
+    did, from the day that commit landed until this one."""
+    from assistant.prompt import SYSTEM_PROMPT
+
+    mandated = "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع"
+    assert mandated in SYSTEM_PROMPT
+    assert quality_gate.offers_another_payment_method(mandated) == ""
 
 
 def test_refusing_a_card_is_not_offering_one():
