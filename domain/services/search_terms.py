@@ -98,7 +98,15 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "تيشرت": ("tee", "t-shirts", "t shirt", "tshirt"),
     "تشيرت": ("tee", "t-shirts", "t shirt", "tshirt"),
     "تيشيرتات": ("tee", "t-shirts"),
-    "قميص": ("tee", "polo", "shirts"),
+    # «قميص» is deliberately **absent**. In Egyptian it is a button-up shirt,
+    # a garment this shop does not sell, and it used to sit here mapped onto
+    # ("tee", "polo", "shirts") -- so «فيه قمصان» was answered «أيوه، عندنا
+    # تيشيرتات كتير» with four t-shirts under it. That mapping is Modern
+    # Standard Arabic, where قميص is the generic upper-body garment; Egyptian
+    # does not work that way and the shop writes Egyptian. It lives in
+    # `domain/services/garments.py::NOT_SOLD` now, which answers "we don't
+    # have those" and offers the tees as an alternative rather than as a
+    # translation.
     "tshirt": ("tee", "t-shirts"),
     "tee": ("tee", "t-shirts"),
     "هودي": ("hoodie", "hoodies"),
@@ -140,6 +148,31 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "كاروهات": ("knitted",),
     "تريكو": ("knitted",),
     "كنزه": ("crewneck", "sweatshirts"),
+    # The Egyptian names for things on the shelf that nothing here could find.
+    # Each of these is a garment this shop really sells, under a word a
+    # customer really types, and every one of them returned *nothing* --
+    # which is the same wrong answer as the قميص bug seen from the other side:
+    # the shop denying something it has.
+    "فانله": ("tee", "t-shirts"),
+    "فانيله": ("tee", "t-shirts"),
+    "فنله": ("tee", "t-shirts"),
+    "فانلات": ("tee", "t-shirts"),
+    "تي شيرت": ("tee", "t-shirts"),
+    "تي شرت": ("tee", "t-shirts"),
+    "بلوفر": ("sweatshirts", "crewneck", "hoodie"),
+    "بلوڤر": ("sweatshirts", "crewneck", "hoodie"),
+    "بلوفرات": ("sweatshirts", "crewneck"),
+    "بولوفر": ("sweatshirts", "crewneck"),
+    "سويتر": ("sweatshirts", "crewneck"),
+    "سوتر": ("sweatshirts", "crewneck"),
+    "كنزات": ("crewneck", "sweatshirts"),
+    "بنطال": ("sweatpant", "joggers"),
+    "بنطرون": ("sweatpant", "joggers"),
+    "بنطرونات": ("sweatpant", "joggers"),
+    "بناطيل": ("sweatpant", "joggers"),
+    "چاكت": ("jacket", "jackets"),
+    "جاكيتات": ("jacket", "jackets"),
+    "جواكيت": ("jacket", "jackets"),
     # --- colours ---------------------------------------------------------
     "اسود": ("black",),
     "سوده": ("black",),

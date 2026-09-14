@@ -133,7 +133,21 @@ domain/                  persistence + business rules; no vendor HTTP calls,
                             order, else variant, since the stock and order
                             reasons carry no customer at all),
                             search_terms.py (Arabic +
-                            franco catalog-search vocabulary), conversation_reset.py
+                            franco catalog-search vocabulary — Egyptian, not
+                            Modern Standard: «فانلة» is a tee, «بلوفر» a
+                            sweatshirt, «بنطرون» a sweatpant, and «قميص» is a
+                            button-up shirt with no entry here at all),
+                            garments.py (the other half of that vocabulary:
+                            the Egyptian names for garments the shop does
+                            **not** sell, each with the categories worth
+                            offering instead. «قميص» used to map onto
+                            tee/polo, which is an MSA equivalence, so «فيه
+                            قمصان» was answered «أيوه، عندنا تيشيرتات كتير».
+                            `get_products` refuses the word now and returns
+                            `garment_not_sold` with a separate `alternatives`
+                            list — separate so nothing can be presented as the
+                            thing that was asked for. A word may never be in
+                            both halves), conversation_reset.py
                             (calls back into the assistant layer via a
                             registered callback, never a direct import --
                             see that module's docstring)

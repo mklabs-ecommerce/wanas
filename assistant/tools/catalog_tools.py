@@ -12,6 +12,7 @@ from config.settings import settings
 from domain.models import Product
 from domain.services import (
     catalog,
+    garments,
     runtime_flags,
     shipping,
     sleeves,
@@ -46,6 +47,14 @@ def get_categories(ctx: ToolContext) -> dict:
     "know a product's sleeve length and never offer to check with the team -- the answer is in "
     "front of you. An empty result under a `sleeve` filter means the shop genuinely has none of "
     "that kind; say so and offer what it does have. "
+    "`garment_not_sold` means the customer named a garment this shop does not stock at all -- a "
+    "قميص (a button-up shirt, which is NOT a تيشيرت), a تراكسوت set, a شورت, a جزمة, a بدلة. Say "
+    "plainly that we do not have it, using `garment` -- the customer's own word -- and then offer "
+    "`alternatives` **as a different thing**: 'مفيش قمصان عندنا، بس عندنا تيشيرتات وبولو لو "
+    "تحب تشوفهم'. Never present an alternative as the thing they asked for, never rename it, and "
+    "never say 'أيوه عندنا' to a garment_not_sold. `products` is empty on purpose: there is "
+    "nothing here that answers their question. An empty `alternatives` means there is nothing "
+    "close either -- say so and stop. "
     "Search for what the customer actually asked for, not for a product name you happen to know. "
     "The result is what you may choose from, not what you should list: for a vague request, offer "
     "two or three that fit and let them narrow it down.",
@@ -74,6 +83,9 @@ def get_products(
     sleeve: str | None = None,
     query: str | None = None,
 ) -> dict:
+    refused = _garment_we_do_not_sell(ctx, query, category)
+    if refused is not None:
+        return refused
     result = catalog.get_products(
         ctx.session,
         category=category,
@@ -94,6 +106,57 @@ def get_products(
         if chart:
             result["_size_chart_image"] = chart
     return result
+
+
+#: How many alternatives a refusal carries. Two or three, the same number the
+#: prompt asks for anywhere else -- the point is to offer something, not to
+#: answer "do you have shirts?" with the catalog.
+_ALTERNATIVE_LIMIT = 3
+
+
+def _garment_we_do_not_sell(
+    ctx: ToolContext, query: str | None, category: str | None
+) -> dict | None:
+    """The shop does not sell what was asked for -- said so, with alternatives.
+
+    From a real conversation:
+
+        customer: «فيه قمصان»
+        bot:      «أيوه، عندنا تيشيرتات كتير:» + four t-shirts
+
+    In Egyptian a قميص is a button-up shirt and a تيشيرت is not one. The word
+    was in the search vocabulary mapped onto `tee`/`polo`, so the search found
+    t-shirts and the model, reading a list of hits, said yes. Nothing in the
+    result told it the customer had asked for something else.
+
+    Now the lookup is short-circuited before it can find a near-enough match:
+    the payload says the garment is not stocked, names it back in the
+    customer's own word, and carries a *separate* list of what the shop does
+    have, read from the database like any other answer. Separate is the whole
+    design -- `products` is empty, so there is nothing to present as the thing
+    they asked for, and `alternatives` cannot be mistaken for it.
+
+    Both the free text and the category argument are read, because the model
+    passes the customer's word through either one.
+    """
+    found = garments.not_sold(" ".join(part for part in (query, category) if part))
+    if found is None:
+        return None
+    label, categories = found
+    alternatives: list[dict] = []
+    for name in categories:
+        rows = catalog.get_products(ctx.session, category=name).get("products") or []
+        for row in rows[: _ALTERNATIVE_LIMIT - len(alternatives)]:
+            alternatives.append(row)
+        if len(alternatives) >= _ALTERNATIVE_LIMIT:
+            break
+    return {
+        "error": "garment_not_sold",
+        "garment": label,
+        "products": [],
+        "count": 0,
+        "alternatives": alternatives,
+    }
 
 
 #: Words that are *about* sizing rather than words that name a size. A chart

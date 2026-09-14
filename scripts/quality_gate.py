@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Seventeen checks, and each one is a failure mode this repository has already
+Eighteen checks, and each one is a failure mode this repository has already
 paid for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -102,6 +102,13 @@ paid for at least once:
    product's colours. Asked "photos of which of the two?", the customer
    answered «الاتنين» and received every colourway of both -- a screenful of
    notifications in answer to a two-word message that asked for two pictures.
+18. **And it answers the garment that was asked for.** «فيه قمصان» came back
+   «أيوه، عندنا تيشيرتات كتير» with four t-shirts under it. In Egyptian a قميص
+   is a button-up shirt, a تيشيرت is not one, and this shop sells no shirts --
+   so that is the shop saying yes to something it does not have. Rule 9 with
+   the sign flipped: that one denies what the shop has, this one affirms what
+   it does not. Offering the tees is right; offering them without first saying
+   we have no shirts is what makes it a wrong answer.
 
 Exit code 0 means keep the change; 1 means revert it.
 """
@@ -121,6 +128,7 @@ from sqlalchemy import select  # noqa: E402
 from assistant import agent, photo_claims  # noqa: E402
 from assistant.providers import set_provider  # noqa: E402
 from domain.db import session_scope  # noqa: E402
+from domain.services import garments  # noqa: E402
 from scripts import bench_scenarios, bench_turn  # noqa: E402
 
 #: Every sentence that means "the turn did not answer". All of them are the
@@ -589,6 +597,56 @@ def too_many_photos_of_one_product(counts: dict, asked_for_colors: bool) -> str:
     return ", ".join(over)
 
 
+#: Saying yes. Any of these beside a garment the shop does not sell is the
+#: failure this rule is for -- the customer asked for X, X is not on the shelf,
+#: and the reply opened by confirming it before listing something else.
+_AFFIRMATIONS = (
+    "أيوه", "ايوه", "أيوة", "ايوة", "اه عندنا", "آه عندنا", "طبعا", "طبعاً",
+    "عندنا كتير", "اكيد", "أكيد", "yes", "sure", "of course",
+)
+
+#: Saying no. One of these has to be in the reply -- the customer is owed the
+#: plain sentence before anything is offered as a substitute.
+_DENIALS = (
+    "مفيش", "ما فيش", "مافيش", "معندناش", "معنداش", "مش بنبيع", "مابنبيعش",
+    "مبنبيعش", "مش عندنا", "مش متوفر", "للأسف", "للأسف", "مش من اللي بنبيعه",
+    "we don't have", "we do not have", "we don't sell", "we do not sell",
+)
+
+
+def offered_a_garment_they_did_not_ask_for(customer: str, reply: str) -> str:
+    """The reply answered a garment we do not sell as though we did.
+
+    From a real conversation:
+
+        customer: «فيه قمصان»
+        bot:      «أيوه، عندنا تيشيرتات كتير:» + four t-shirts
+
+    In Egyptian a قميص is a button-up shirt. A تيشيرت is not one, this shop
+    sells no shirts, and «أيوه عندنا» is the shop saying yes to something it
+    does not have and then handing over four of something else underneath that
+    yes. It is the `مفيش قسم حريمي` failure with the sign flipped: that one
+    denied what the shop has, this one affirms what it does not.
+
+    The rule is deliberately about the *plain sentence*, not about the
+    alternatives. Offering the t-shirts is right and is what the tool's
+    `alternatives` exist for; offering them without first saying we have no
+    shirts is what turns an honest answer into a wrong one. So a reply fails
+    when it names no denial at all, and fails harder when it opens with a yes.
+    """
+    found = garments.not_sold(customer or "")
+    if found is None:
+        return ""
+    label = found[0]
+    lowered = (reply or "").lower()
+    affirmed = next((word for word in _AFFIRMATIONS if word.lower() in lowered), "")
+    if affirmed and not any(word.lower() in lowered for word in _DENIALS):
+        return f"opened with {affirmed!r} about {label}"
+    if not any(word.lower() in lowered for word in _DENIALS):
+        return f"never said we have no {label}"
+    return ""
+
+
 def layout_problems(text: str) -> list[str]:
     """Every way a reply is laid out so the customer reads something other
     than what was written.
@@ -788,6 +846,16 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                     f"{where}: the reply spelled the shop's name "
                     f"{sorted(set(misspelled))} -- it is Wanas Gallery"
                 )
+            renamed = offered_a_garment_they_did_not_ask_for(
+                reply.get("customer_text") or "", text
+            )
+            if renamed:
+                failures.append(
+                    f"{where}: the customer asked for a garment this shop does not "
+                    f"sell and the reply {renamed} -- the nearest thing renamed is "
+                    "not an answer"
+                )
+
             denial = denies_a_whole_section(text)
             if denial and not reply["tool_calls"]:
                 failures.append(

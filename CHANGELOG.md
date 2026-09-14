@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased — قميص is not a تيشيرت
+
+    customer: «فيه قمصان»
+    bot:      «أيوه، عندنا تيشيرتات كتير:» + four t-shirts
+
+In Egyptian a قميص is a button-up shirt -- collar, placket, buttons -- and a
+تيشيرت is not one. This shop sells no shirts, so that reply is the shop saying
+yes to something it does not have and then handing over four of something else
+underneath the yes.
+
+- **The vocabulary layer had the wrong equivalence in it.**
+  `search_terms.py` carried `"قميص": ("tee", "polo", "shirts")`, which is
+  Modern Standard Arabic -- there قميص is the generic upper-body garment, and a
+  t-shirt can be called قميص قصير الأكمام. Egyptian does not work that way, and
+  the shop writes Egyptian. The entry is gone, with the reason written where it
+  used to be.
+
+- **A garment we do not sell now has somewhere to live.**
+  `domain/services/garments.py::NOT_SOLD` holds the Egyptian names for the
+  things this shop does not stock -- shirts, a tracksuit set, shorts, jeans,
+  shoes, a suit, bags, caps, socks, dresses -- each with the categories worth
+  offering instead, or an empty tuple where there is genuinely nothing close
+  (offering a hoodie to someone asking for trainers is the same sentence
+  again). `get_products` short-circuits on one and returns `garment_not_sold`
+  with the customer's own word and a **separate** `alternatives` list:
+  `products` stays empty, so there is nothing for the model to present as the
+  thing that was asked for. The bare English `shirt`/`shirts` is handled too --
+  the model translates before it calls the tool -- without catching `T-Shirts`
+  or `Polo Shirts`, which are two of the six things the shop does sell.
+
+- **And a garment we do sell is findable by the name people use for it.** The
+  same failure with the sign flipped: «فانلة», «فانيلة», «بلوفر», «سويتر»,
+  «كنزات», «بنطال», «بنطرون», «بناطيل», «جواكيت» and «تي شيرت» all returned
+  nothing at all. They are in the synonym table now.
+
+- **Gate rule 18**: a reply to a customer who named a garment this shop does
+  not sell fails unless it says so plainly -- and fails whether it opens with
+  «أيوه» or simply lists the nearest thing without ever mentioning that the
+  thing they asked for is not stocked. A new benchmark scenario,
+  `a_garment_we_do_not_sell`, is the conversation itself.
+
 ## Unreleased — The bot told a customer a photo had arrived, three times
 
 A customer was shown two sweatpants and asked which one they wanted a photo

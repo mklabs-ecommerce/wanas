@@ -5,12 +5,13 @@ checks that what comes back still means the same thing. They have to be the
 same scenarios or a speed-up and the judgement about whether it cost anything
 are not about the same conversations.
 
-They are the eight shapes that actually arrive: a greeting, a product question,
+They are the nine shapes that actually arrive: a greeting, a product question,
 a sizing question, adding to the cart, placing the order, the sleeve question,
 "photos of both" -- the two-word answer that used to produce a gallery of every
-colourway of two products under a sentence claiming two pictures -- and the
-shipping question, which is the one with a single correct stored answer and
-therefore the one worth watching for a needless trip through the tool loop.
+colourway of two products under a sentence claiming two pictures -- a garment
+the shop does not sell, and the shipping question, which is the one with a
+single correct stored answer and therefore the one worth watching for a
+needless trip through the tool loop.
 
 Each step carries the customer's real words (both modes send exactly these) and
 a `plan`: what the fake provider should do for that step, as the hops a
@@ -109,7 +110,7 @@ def resolve(session) -> dict:
 
 
 def build(facts: dict) -> list[Scenario]:
-    """The eight scenarios, with the resolved ids folded in."""
+    """The nine scenarios, with the resolved ids folded in."""
     product_id = facts["product_id"]
     variant_id = facts["variant_id"]
     name = facts["product_name"]
@@ -299,6 +300,27 @@ def build(facts: dict) -> list[Scenario]:
                     ],
                     expects_tools=("get_variants",),
                 ),
+            ],
+        ),
+        Scenario(
+            # «فيه قمصان» -- answered «أيوه، عندنا تيشيرتات كتير» with four
+            # t-shirts under it. In Egyptian a قميص is a button-up shirt and a
+            # تيشيرت is not one, and this shop sells no shirts, so that reply
+            # is the shop saying yes to something it does not have. The plan
+            # below is the honest answer: say we have none, then offer the
+            # tees as a different thing. Rule 18 in `quality_gate.py` fails
+            # anything that skips the first half.
+            "a_garment_we_do_not_sell",
+            [
+                Step(
+                    "فيه قمصان؟",
+                    plan=[
+                        [("get_products", {"query": "قمصان"})],
+                        "معلش، مفيش قمصان عندنا خالص — إحنا بنبيع تيشيرتات وبولو "
+                        "وهوديز بس. تحب أوريك التيشيرتات؟",
+                    ],
+                    expects_tools=("get_products",),
+                )
             ],
         ),
         Scenario(

@@ -698,7 +698,14 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # tell them to restart WhatsApp". The tool layer enforces the counting;
         # nothing but the prompt can stop a sentence claiming a delivery that
         # did not happen, or handing our failure to the customer to debug.
-    assert 3000 < len(SYSTEM_PROMPT) < 20000
+        #
+        # 20000 -> 21500: the garment vocabulary. «قميص» is a button-up shirt
+        # in Egyptian and this shop sells none; it was answered «أيوه، عندنا
+        # تيشيرتات كتير» with four t-shirts under it. The tool refuses the word
+        # now, but only the prompt can hold the line between offering something
+        # as an *alternative* and offering it as the thing that was asked for
+        # -- and only the prompt can list what the shop does and does not sell.
+    assert 3000 < len(SYSTEM_PROMPT) < 21500
 
 
 # --------------------------------------------------------------------------
