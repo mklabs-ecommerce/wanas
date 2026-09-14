@@ -3,6 +3,8 @@ get_size_chart, get_shipping_fee, ask_governorate."""
 
 from __future__ import annotations
 
+import re
+
 from assistant import interactive
 from assistant.tools.base import ToolContext, last_product, tool
 from common.money import money
@@ -75,7 +77,7 @@ def get_products(
     sleeve: str | None = None,
     query: str | None = None,
 ) -> dict:
-    return catalog.get_products(
+    result = catalog.get_products(
         ctx.session,
         category=category,
         style=style,
@@ -84,6 +86,68 @@ def get_products(
         sleeve=sleeve,
         query=query,
     )
+    # Same rule `get_variants` follows, through the other door. A search that
+    # lands on one product and a customer who asked about sizing is the sizing
+    # answer, whichever tool produced it -- and the model reaches for the
+    # search first, so without this a "what sizes does it come in?" answered in
+    # one hop arrived with no chart at all.
+    only = result.get("_photo_of")
+    if isinstance(only, dict) and asked_about_sizing(ctx):
+        chart = _chart_image(ctx.session, only["product_id"])
+        if chart:
+            result["_size_chart_image"] = chart
+    return result
+
+
+#: Words that are *about* sizing rather than words that name a size. A chart
+#: answers "which size am I?", and nothing else -- «عايز مقاس L» has already
+#: answered it.
+_SIZING_WORDS = (
+    "مقاس", "مقاسات", "سايز", "قياس", "قياسات", "جدول",
+    "size", "sizes", "sizing", "measurement", "measurements", "chart",
+    "fit", "فيت", "يضبط", "هيضبط", "مظبوط", "يجيلي", "هيجيلي", "واسع", "ضيق",
+)
+
+#: A message naming one of these has *chosen* a size, not asked about one.
+#: Matched on word boundaries so «Large» counts and «Olive» does not contain
+#: an "l" that fires it.
+_NAMED_SIZES = (
+    "s", "m", "l", "xl", "xxl", "xs", "small", "medium", "large",
+    "سمول", "ميديم", "لارج", "اكس",
+)
+
+_WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+
+def asked_about_sizing(ctx: ToolContext) -> bool:
+    """Did the customer's own last message ask about sizes, measurements or fit?
+
+    The size chart used to ride along with **every** `get_variants` call for a
+    product that has one, so a question about price, colour or availability
+    came back with a measurements table nobody asked for. That was tolerable
+    only while `get_variants` was rare; now that a reply about a product is
+    supposed to carry its photo, it would fire on nearly every product answer.
+
+    Decided from what the customer actually wrote, not from an argument the
+    model chooses -- the same shape as `_governorate_already_given` below.
+    A model-set flag is a model-set flag: it would be right most of the time
+    and wrong exactly when the model was already confused.
+
+    Naming a size is not asking about sizing. «عايز مقاس L» is a decision, and
+    answering a decision with a measurements chart reads as not having listened.
+    """
+    text = next(iter(_recent_customer_text(ctx)), "")
+    if not text:
+        return False
+    lowered = text.lower()
+    if not any(word in lowered for word in _SIZING_WORDS):
+        return False
+    words = {w.lower() for w in _WORD.findall(text)}
+    #: `جدول` / `chart` / `measurements` are unambiguous -- a customer who says
+    #: those is asking for the chart whatever else the message names.
+    if any(word in lowered for word in ("جدول", "chart", "قياسات", "measurement")):
+        return True
+    return not (words & set(_NAMED_SIZES))
 
 
 def _chart_image(session, product_id: str) -> str | None:
@@ -213,13 +277,21 @@ def get_variants(
     payload = catalog.get_variants(ctx.session, product_id)
     if payload is None:
         return _not_found(ctx, product_id)
-    if payload.get("has_size_chart"):
+    if payload.get("has_size_chart") and asked_about_sizing(ctx):
         # Internal, popped before the model sees it: the runtime sends the
         # chart, the model does not get to decide to. This is the tool that
         # produces the size list, so coupling the picture to it is what makes
         # "the sizes are S/M/L" and "here is the chart" one message instead of
         # two -- the second of which the model kept describing without ever
         # calling get_size_chart, so no picture was ever sent.
+        #
+        # **Only when the sizing question was actually asked.** It used to ride
+        # along with every call, which was survivable while `get_variants` was
+        # something the model reached for rarely; a question about price or
+        # colour came back with a measurements table nobody wanted. Now that a
+        # reply about a product is meant to carry that product's photo, this
+        # call is the ordinary case and an unconditional chart would be on
+        # nearly every answer in the shop.
         payload["_size_chart_image"] = _chart_image(ctx.session, product_id)
     if more_images:
         payload["_more_images"] = True

@@ -129,6 +129,17 @@ def run_scenario(
                 # change which let the model answer *without* calling it has
                 # quietly stopped the customer seeing the product.
                 "attachments": len(reply.attachments or []),
+                # And how many of them were the size chart rather than the
+                # garment. The two are opposite failures -- too few product
+                # photos, and a measurements table on a reply about price --
+                # so a single count cannot tell the gate about either.
+                # Labelled by `tools.base._chart_label`, which is the only
+                # place a chart attachment is ever named.
+                "charts": sum(
+                    1
+                    for label in (reply.attachment_labels or {}).values()
+                    if str(label).endswith("size chart")
+                ),
                 "error": reply.error,
                 "seconds": time.perf_counter() - started,
             }

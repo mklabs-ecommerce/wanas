@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Ten checks, and each one is a failure mode this repository has already paid
+Eleven checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -57,10 +57,18 @@ for at least once:
    catalog field, so "I have no data about sleeve length" beside the words
    «نص كم» is the bot refusing to read something it is holding -- which is
    exactly the reply that made the field necessary.
-10. **Photographs still go out.** Only `get_variants` attaches one, so a change
-   that lets the model answer a product question without calling it can quietly
-   stop a clothes shop ever showing the clothes. Judged against the golden run:
-   sending fewer is a judgement, sending none is a regression.
+10. **Photographs still go out.** Judged against the golden run: sending fewer
+   is a judgement, sending none is a regression. And judged absolutely as well,
+   on the steps whose reply is about one named garment -- a comparison rule
+   cannot catch a shop that has *never* sent a photo, and for a long time this
+   one had not: `get_products` attached nothing, so every answer that came out
+   of a search arrived as text.
+11. **And the size chart does not.** Not unless the customer asked about sizes,
+   measurements or fit. It used to ride along with every `get_variants` call
+   for a product that has a chart, so a question about price or colour was
+   answered with a measurements table -- which got worse the moment a product
+   reply started carrying its photo, because that made the call the ordinary
+   case rather than the rare one.
 
 Exit code 0 means keep the change; 1 means revert it.
 """
@@ -365,6 +373,8 @@ def run(runs: int, real: bool, only: str) -> dict:
                 step = scenario.steps[reply["step"]]
                 reply["expects_tools"] = list(step.expects_tools)
                 reply["expects_text"] = list(step.expects_text)
+                reply["expects_photo"] = bool(step.expects_photo)
+                reply["sizing_question"] = bool(step.sizing_question)
                 replies.append(reply)
     return {"facts": facts, "replies": replies}
 
@@ -407,6 +417,28 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
             missing_tools = [t for t in reply.get("expects_tools") or [] if t not in reply["tool_calls"]]
             if missing_tools:
                 failures.append(f"{where}: did not call {', '.join(missing_tools)}")
+
+            # Judged on its own terms, not against the golden run. The
+            # golden-comparison rule further down catches a *regression* in
+            # photographs; it cannot catch a shop that has never sent one,
+            # and for most of this set's history it had not -- `get_products`
+            # attached nothing, so a product answered from a search arrived as
+            # text. Four of five live product conversations carried no picture.
+            photos_out = (reply.get("attachments") or 0) - (reply.get("charts") or 0)
+            if reply.get("expects_photo") and photos_out <= 0:
+                failures.append(
+                    f"{where}: the reply is about one garment and sent no photo of it"
+                )
+
+            # The opposite failure, and the reason the count above subtracts.
+            # The size chart used to ride along with every `get_variants` call
+            # for a product that has one, so a question about price, colour or
+            # shipping came back with a measurements table nobody asked for.
+            if (reply.get("charts") or 0) and not reply.get("sizing_question"):
+                failures.append(
+                    f"{where}: a size chart went out and the customer never asked "
+                    "about sizes, measurements or fit"
+                )
 
             if silent:
                 # A deliberately silent turn: `confirm_order` sends the

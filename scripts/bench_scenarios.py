@@ -47,6 +47,15 @@ class Step:
     #: Substrings the reply must contain (a price, a size) -- filled in from
     #: the resolved catalog, so the gate checks facts and not phrasing.
     expects_text: tuple[str, ...] = ()
+    #: This step's reply is about one named garment, so it has to show it. Not
+    #: judged against the golden run: a clothes shop answering about a product
+    #: in words alone is wrong on its own terms, however consistently it does
+    #: it.
+    expects_photo: bool = False
+    #: The customer asked about sizes, measurements or fit here. The size
+    #: chart may only ride along on a step with this set -- everywhere else an
+    #: attached chart is a table nobody asked for.
+    sizing_question: bool = False
 
 
 @dataclass
@@ -107,6 +116,7 @@ def build(facts: dict) -> list[Scenario]:
                     ],
                     expects_tools=("get_products",),
                     expects_text=(facts["price"],),
+                    expects_photo=True,
                 )
             ],
         ),
@@ -127,6 +137,8 @@ def build(facts: dict) -> list[Scenario]:
                     # which the "golden called a tool, this run called none"
                     # rule in `quality_gate.py` is what defends.
                     expects_text=(facts["size"],),
+                    expects_photo=True,
+                    sizing_question=True,
                 )
             ],
         ),
@@ -150,6 +162,7 @@ def build(facts: dict) -> list[Scenario]:
                         f"بسعر {facts['price']} جنيه. تحب أحطهولك في السلة؟",
                     ],
                     expects_tools=("get_variants",),
+                    expects_photo=True,
                 ),
                 Step(
                     "أيوه حطهولي",

@@ -17,16 +17,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts import quality_gate  # noqa: E402
 
 
-def _reply(scenario, step, text, tools=(), photos=0, error=None, expects_tools=(), expects_text=()):
+def _reply(
+    scenario,
+    step,
+    text,
+    tools=(),
+    photos=0,
+    error=None,
+    expects_tools=(),
+    expects_text=(),
+    charts=0,
+    expects_photo=False,
+    sizing_question=False,
+):
     return {
         "scenario": scenario,
         "step": step,
         "text": text,
         "tool_calls": list(tools),
+        # `attachments` is everything that went out; `charts` is how many of
+        # those were the size chart rather than the garment.
         "attachments": photos,
+        "charts": charts,
         "error": error,
         "expects_tools": list(expects_tools),
         "expects_text": list(expects_text),
+        "expects_photo": expects_photo,
+        "sizing_question": sizing_question,
     }
 
 
@@ -371,3 +388,58 @@ def test_saying_the_sleeve_is_not_recorded_without_reaching_for_a_handoff():
     prompt asks the bot to say so. What must not come back is that sentence
     dressed as "I have no data at all"."""
     assert quality_gate.dodged_a_sleeve_question("طول الكم مش متسجّل عندنا للقطعة دي، أتأكد وأقولك") == ""
+
+
+# --- photographs, judged on their own terms -------------------------------
+#
+# The golden-comparison rule above catches a regression. It cannot catch a
+# shop that has never sent a photo at all, and for a long time this one had
+# not: `get_products` attached nothing, so every product answer that came out
+# of a search -- which is most of them -- arrived as text.
+
+
+def test_a_product_answer_with_no_photo_fails_even_if_the_golden_had_none():
+    reply = _reply("product_question", 0, "تيشيرت Ringer Tee بـ 580 جنيه", ("get_products",),
+                   photos=0, expects_photo=True)
+    failures = check(_run(reply), _run(reply))
+    assert any("sent no photo of it" in f for f in failures), failures
+
+
+def test_a_product_answer_with_a_photo_passes():
+    reply = _reply("product_question", 0, "تيشيرت Ringer Tee بـ 580 جنيه", ("get_products",),
+                   photos=1, expects_photo=True)
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_a_size_chart_alone_does_not_count_as_showing_the_garment():
+    """One attachment, and it is the measurements table. The customer still
+    has not seen the thing they are buying."""
+    reply = _reply("product_question", 0, "تيشيرت Ringer Tee بـ 580 جنيه", ("get_variants",),
+                   photos=1, charts=1, expects_photo=True, sizing_question=True)
+    failures = check(_run(reply), _run(reply))
+    assert any("sent no photo of it" in f for f in failures), failures
+
+
+# --- and the size chart that nobody asked for -----------------------------
+
+
+def test_a_size_chart_on_a_price_question_fails():
+    reply = _reply("product_question", 0, "تيشيرت Ringer Tee بـ 580 جنيه", ("get_variants",),
+                   photos=2, charts=1, expects_photo=True)
+    failures = check(_run(reply), _run(reply))
+    assert any("never asked about sizes" in f for f in failures), failures
+
+
+def test_a_size_chart_on_a_sizing_question_passes():
+    reply = _reply("sizes", 0, "المقاسات S و M و L", ("get_variants",),
+                   photos=2, charts=1, expects_photo=True, sizing_question=True)
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_a_sizing_question_answered_without_a_chart_is_not_a_failure():
+    """The chart rides along once per conversation, so the second sizing
+    question correctly carries none. This rule is about charts that go out,
+    never about charts that do not."""
+    reply = _reply("sizes", 0, "المقاسات S و M و L", ("get_variants",),
+                   photos=1, charts=0, expects_photo=True, sizing_question=True)
+    assert check(_run(reply), _run(reply)) == []

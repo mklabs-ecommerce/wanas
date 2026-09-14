@@ -60,6 +60,18 @@ def ctx(seeded):
     return ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
 
 
+def asked_about_sizes(ctx, text="المقاسات إيه؟"):
+    """Put a sizing question in the history, the way a real turn would.
+
+    The size chart rides along with `get_variants` only when the customer
+    actually asked about sizing -- decided from their own last message, not
+    from an argument the model picks. A `ToolContext` built straight in a test
+    has an empty history, which correctly reads as "nobody asked".
+    """
+    ctx.history.append({"role": "user", "content": text})
+    return ctx
+
+
 # --------------------------------------------------------------------------
 # H. Product images -- the one that was actually broken
 # --------------------------------------------------------------------------
@@ -225,6 +237,7 @@ def test_the_size_chart_rides_along_with_the_sizes(ctx):
     get_size_chart. Every product has a chart and every chart file exists, so
     nothing was missing except the call. The sizes come out of get_variants,
     so the chart comes with them and the model has nothing to remember."""
+    asked_about_sizes(ctx)
     call(ctx, "get_variants", product_id="wanas-hoodie")
     assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
     assert photos(ctx), "and the product photo is still there"
@@ -233,6 +246,7 @@ def test_the_size_chart_rides_along_with_the_sizes(ctx):
 def test_the_chart_is_not_sent_again_later_in_the_conversation(ctx):
     """A chart is the same picture every time. It rides along once; after
     that the customer already has it."""
+    asked_about_sizes(ctx)
     call(ctx, "get_variants", product_id="wanas-hoodie")
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
@@ -246,6 +260,7 @@ def test_asking_for_the_chart_outright_still_re_sends_it(ctx):
     """`get_size_chart` forces the attachment. Asking to see it again is
     asking to see it again, and the once-per-conversation rule above is about
     a chart nobody asked for."""
+    asked_about_sizes(ctx)
     call(ctx, "get_variants", product_id="wanas-hoodie")
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
@@ -286,6 +301,7 @@ def test_a_chart_picture_with_no_measurements_still_rides_along(ctx):
     product.size_chart_image = "data/size-charts/uploaded.png"
     ctx.session.flush()
 
+    asked_about_sizes(ctx)
     call(ctx, "get_variants", product_id="wanas-hoodie")
     assert "data/size-charts/uploaded.png" in ctx.attachments
 
@@ -636,7 +652,16 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # Three lines, and they are what stop the answer that started this:
         # the bot telling a customer holding a half-sleeve polo that it had no
         # data about sleeve length.
-    assert 3000 < len(SYSTEM_PROMPT) < 17400
+        #
+        # And again (17400 -> 17800) for photographs. "A reply about a product
+        # goes out with that product's picture" replaced a rule that said the
+        # opposite, and "«عايز مقاس L» is a choice, not a question about
+        # sizing" is the sentence that keeps a measurements chart off a reply
+        # nobody asked one of. Both are judgements about the customer's intent
+        # that the tool layer now also enforces -- but the tool can only
+        # decide whether to *attach*; only the prompt can stop the model
+        # describing a chart it was not sent.
+    assert 3000 < len(SYSTEM_PROMPT) < 18000
 
 
 # --------------------------------------------------------------------------
@@ -910,3 +935,149 @@ def test_the_prompt_treats_request_human_as_the_last_resort():
     section = SYSTEM_PROMPT.split("# التحويل لموظف")[1]
     assert "آخر حل" in section
     assert "أيوه" in section
+
+
+# --------------------------------------------------------------------------
+# Photographs: too few of the right ones, and one wrong one
+# --------------------------------------------------------------------------
+
+
+def test_a_search_that_lands_on_one_product_sends_its_photo(ctx):
+    """A clothes shop answering about a garment in words alone.
+
+    `get_products` attached nothing, so every reply that answered from a
+    search -- which is most of them, since the model reaches for the search
+    first -- arrived as text. Measured against the live model: five product
+    conversations, four of them with no picture at all.
+
+    A single match *is* an answer about that product, so it carries the
+    product's photo the same way `get_variants` does.
+    """
+    call(ctx, "get_products", query="Ringer Tee")
+    assert len(photos(ctx)) == 1
+
+
+def test_a_search_that_lands_on_several_products_sends_none(ctx):
+    """Six results is a list to choose from, not six garments to show. One
+    product's photos per reply -- the budget is the point, not a side effect."""
+    result = call(ctx, "get_products", category="T-Shirts")
+    assert result["count"] > 1
+    assert photos(ctx) == []
+
+
+def test_the_search_photo_does_not_reach_the_model_as_a_path(ctx):
+    """It steers the attachment and nothing else. A path in the payload is a
+    path the model eventually writes into a reply."""
+    result = call(ctx, "get_products", query="Ringer Tee")
+    assert "_photo_of" not in result
+    assert all("images" not in p for p in result["products"])
+    assert photos(ctx), "and it still attached one"
+
+
+def test_the_same_product_found_twice_is_not_photographed_twice(ctx):
+    """The existing budget, reached through the new door. A customer who asks
+    two questions about one product gets one picture."""
+    call(ctx, "get_products", query="Ringer Tee")
+    ctx.sent_images.update(ctx.attachments)
+    ctx.attachments.clear()
+
+    call(ctx, "get_products", query="Ringer Tee")
+    assert photos(ctx) == []
+
+
+def test_a_search_never_invents_a_photo_for_a_product_without_one(ctx):
+    """No photo is a correct outcome; a wrong one never is."""
+    from domain.models import Product
+
+    product = ctx.session.get(Product, "wanas-hoodie")
+    product.images = []
+    product.color_images = {}
+    ctx.session.flush()
+
+    call(ctx, "get_products", query="WANAS Hoodie")
+    assert photos(ctx) == []
+
+
+def test_a_price_question_gets_a_photo_and_no_size_chart(ctx):
+    """Both halves of the same complaint in one turn: the customer should see
+    the garment, and should not be handed a measurements table they never
+    asked for."""
+    ctx.history.append({"role": "user", "content": "الهودي ده بكام؟"})
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert len(photos(ctx)) == 1
+    assert charts(ctx) == []
+
+
+def test_a_colour_question_gets_no_size_chart(ctx):
+    ctx.history.append({"role": "user", "content": "عندكم منه لون أسود؟"})
+    call(ctx, "get_variants", product_id="wanas-hoodie", color="Black")
+    assert charts(ctx) == []
+
+
+def test_a_shipping_question_gets_no_size_chart(ctx):
+    ctx.history.append({"role": "user", "content": "الشحن كام وبيوصل امتى؟"})
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert charts(ctx) == []
+
+
+def test_choosing_a_size_is_not_asking_about_sizing(ctx):
+    """«عايز مقاس L» has already answered "which size am I?". Answering a
+    decision with a measurements chart reads as not having listened."""
+    ctx.history.append({"role": "user", "content": "عايز مقاس L من الهودي ده"})
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert charts(ctx) == []
+    assert photos(ctx), "the product photo is a different question"
+
+
+def test_asking_about_fit_is_asking_about_sizing(ctx):
+    ctx.history.append({"role": "user", "content": "هيضبط عليا؟"})
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
+
+
+def test_asking_for_the_chart_by_name_beats_everything_else_in_the_message(ctx):
+    """«ابعتلي جدول المقاسات لمقاس L» names a size *and* asks for the chart.
+    The explicit ask wins -- it is not ambiguous, it is a request."""
+    ctx.history.append({"role": "user", "content": "ابعتلي جدول المقاسات لمقاس L"})
+    call(ctx, "get_variants", product_id="wanas-hoodie")
+    assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
+
+
+def test_a_sizing_question_answered_by_the_search_still_gets_the_chart(ctx):
+    """The model reaches for `get_products` first, and often answers a sizing
+    question in that one hop -- the size list is in the search result.
+
+    Caught live: "Boxy WNS Tee بيجي مقاسات إيه؟" was answered correctly and
+    with no chart at all, because only `get_variants` had ever attached one.
+    """
+    ctx.history.append({"role": "user", "content": "Boxy WNS Tee بيجي مقاسات إيه؟"})
+    call(ctx, "get_products", query="Boxy WNS Tee")
+    assert charts(ctx) == ["data/size-charts/wns-boxy-tee.png"]
+    assert photos(ctx), "and the garment itself is still shown"
+
+
+def test_the_search_chart_is_labelled_with_the_product_it_belongs_to(ctx):
+    """A search result carries no product name of its own, so the chart used
+    to go out unlabelled -- and a customer replying to it resolved to no
+    product at all."""
+    ctx.history.append({"role": "user", "content": "المقاسات إيه؟"})
+    call(ctx, "get_products", query="Boxy WNS Tee")
+    chart = charts(ctx)[0]
+    label = ctx.attachment_labels[chart]
+    assert label["product_id"] == "boxy-wns-tee"
+    assert label["label"].endswith("size chart")
+
+
+def test_the_search_does_not_carry_a_chart_when_nobody_asked(ctx):
+    ctx.history.append({"role": "user", "content": "Boxy WNS Tee بكام؟"})
+    call(ctx, "get_products", query="Boxy WNS Tee")
+    assert charts(ctx) == []
+    assert len(photos(ctx)) == 1
+
+
+def test_a_multi_product_search_carries_no_chart_even_on_a_sizing_question(ctx):
+    """Whose chart would it be? A list of six products has no one product to
+    quote measurements for, and picking one is the wrong-chart answer."""
+    ctx.history.append({"role": "user", "content": "المقاسات إيه؟"})
+    call(ctx, "get_products", category="T-Shirts")
+    assert charts(ctx) == []

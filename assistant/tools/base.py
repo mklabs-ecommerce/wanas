@@ -471,18 +471,35 @@ def call_tool(ctx: ToolContext, name: str, arguments: dict | None) -> dict:
     more_images = bool(result.pop("_more_images", False))
     color = result.pop("_image_color", None)
     chart_image = result.pop("_size_chart_image", None)
+    # A search that resolved to exactly one product carries that product's
+    # photos here rather than in `products[0]`, so they reach the attachment
+    # budget without reaching the model as paths for it to describe. Popped
+    # before `_collect_images` runs on it, for the same reason.
+    photo_of = result.pop("_photo_of", None)
     # The *resolved* id, so a photo attached by an implicitly-resolved call is
     # labelled with the product it actually came from.
     _collect_images(
         ctx, result, more_images=more_images, color=color, product_id=arguments.get("product_id")
     )
+    if isinstance(photo_of, dict):
+        _collect_images(ctx, photo_of, color=color, product_id=photo_of.get("product_id"))
     # After the product photo, and deliberately *not* forced: a chart is the
     # same picture every time, so the cross-conversation `sent_images` check
     # is exactly the rule wanted here -- it rides along the first time a
     # product's sizes come up and never again. An explicit get_size_chart
     # still forces it, because asking for it again is asking to see it again.
     if isinstance(chart_image, str) and chart_image:
-        ctx.attach(chart_image, label=_chart_label(result, arguments.get("product_id")))
+        # A chart from `get_products` has no product name in the result
+        # itself -- the search payload is a list -- so the single match that
+        # earned the chart is what names it. Without this the chart goes out
+        # unlabelled, and a customer replying to it resolves to no product.
+        named = result if (result.get("name") or result.get("title")) else (photo_of or result)
+        ctx.attach(
+            chart_image,
+            label=_chart_label(
+                named, (photo_of or {}).get("product_id") or arguments.get("product_id")
+            ),
+        )
     return result
 
 

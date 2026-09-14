@@ -329,6 +329,21 @@ def get_products(
     live_map = shopify_catalog.live_map()
     summaries = [_product_summary(p, live_map) for p in products]
     result = {"products": summaries, "count": len(summaries)}
+    if len(products) == 1:
+        # A search that lands on exactly one product *is* an answer about that
+        # product, and a clothes shop answering one in words alone is the one
+        # thing it cannot afford. The photos ride under an internal key the
+        # tool layer pops, so they steer the attachment without ever reaching
+        # the model as paths to describe -- and only for a single match,
+        # because a browse across six products is a list, not a showing.
+        only = products[0]
+        images, color_images = _overlay_images(only, list(only.variants), live_map)
+        result["_photo_of"] = {
+            "product_id": only.product_id,
+            "name": only.name,
+            "images": images,
+            "color_images": color_images,
+        }
     if wanted is not None:
         # The difference between "we don't sell one" and "nobody has written
         # it down". Filtering on sleeve and handing back a bare empty list
