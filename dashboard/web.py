@@ -37,6 +37,7 @@ stays scoped to auth and conversations, unchanged by any of that growth.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Cookie, Query, Request
@@ -46,7 +47,9 @@ from sqlalchemy import and_, or_, select
 from assistant import messages as msg, session as session_store
 from assistant.display import display_history, supports_receipts
 from assistant.media_serving import resolve_servable_path
+from common.events import after_commit
 from common.identifiers import is_phone_number
+from common.timeutil import as_aware
 from config.settings import settings
 from dashboard.guard import require_permission
 from domain.db import session_scope
@@ -553,12 +556,44 @@ def reply(
     return JSONResponse({"ok": True})
 
 
+def _staff_replied_since(db, channel: str, external_id: str, handoff) -> bool:
+    """Whether a person has written to this customer since the handoff opened.
+
+    Read off the transcript rather than tracked on the queue item: the reply
+    route already records staff messages with `by="staff"`, and a second
+    source of truth for "did anybody answer" is a second thing to get wrong.
+    """
+    opened = handoff.created_at
+    for message in session_store.transcript(db, channel, external_id):
+        if message.get("by") != "staff":
+            continue
+        stamp = message.get("at")
+        if not stamp or opened is None:
+            # An older message with no timestamp: treat it as a reply rather
+            # than risk a duplicate line to somebody a person already answered.
+            return True
+        try:
+            if datetime.fromisoformat(stamp) >= as_aware(opened):
+                return True
+        except ValueError:
+            return True
+    return False
+
+
 @router.post("/api/conversations/{channel}/{external_id}/release")
 def release(channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Hand control back to the bot -- whichever way staff took it: a
     handoff (resolves the queue item too, for the "false alarm, no reply
-    needed" case) or a manual takeover (nothing else to clear). No message
-    goes out; the next thing the customer sends is what the bot answers."""
+    needed" case) or a manual takeover (nothing else to clear).
+
+    **A handoff nobody answered now gets a closing line.** `request_human`
+    tells the customer «حد هيتواصل معاه» and pauses the conversation;
+    releasing it without ever replying used to keep neither half of that --
+    the bot silently resumed and the customer was left waiting for a person
+    who had already decided not to write. One short line closes it. A
+    takeover, or a handoff a staff member *did* reply to, says nothing: the
+    customer has heard from a person and a second line would be noise.
+    """
     with session_scope() as db:
         staff, refused = _inbox_guard(db, wanas_staff)
         if refused is not None:
@@ -568,9 +603,15 @@ def release(channel: str, external_id: str, wanas_staff: str | None = Cookie(def
             return JSONResponse({"error": "not_paused"}, status_code=409)
 
         handoff = _open_handoffs(db).get((channel, external_id))
+        plan = None
         if handoff is not None:
             queues.resolve(db, handoff.queue_id, staff.staff_id)
+            if not _staff_replied_since(db, channel, external_id, handoff):
+                plan = notifications.record_handoff_closed(db, channel, external_id)
         identities.unpause(db, channel, external_id)
+        # After the commit, like every other outbound: the line above is
+        # already in the transcript and rolls back with the release if it does.
+        after_commit(db, lambda: notifications.deliver_request_resolution(plan))
 
     return JSONResponse({"ok": True})
 

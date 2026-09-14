@@ -21,14 +21,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 
+from common.events import after_commit
 from dashboard.guard import require_permission
 from domain.db import session_scope
-from domain.models import Order, QueueKind, QueueStatus, StaffQueueItem
-from domain.services import orders as orders_service, queues
+from domain.models import Order, QueueKind, QueueStatus, StaffQueueItem, Variant
+from domain.services import notifications, orders as orders_service, queues
 
 router = APIRouter(prefix="/dashboard/api/queue", tags=["dashboard-queue"])
 
 _KINDS = (QueueKind.ITEM_SWAP.value, QueueKind.ITEM_ADD.value, QueueKind.ALERT.value)
+
+#: The kinds a customer is waiting on an answer to. Every resolution of one of
+#: these reaches them; an `alert` has nobody behind it and stays silent.
+_CUSTOMER_FACING_KINDS = (QueueKind.ITEM_SWAP.value, QueueKind.ITEM_ADD.value)
 
 
 def _item_payload(item: StaffQueueItem) -> dict:
@@ -61,16 +66,67 @@ def list_queue(
     return JSONResponse(result)
 
 
+def _describe(db, item: StaffQueueItem) -> str:
+    """What the customer called the thing they asked for, for the message
+    that tells them what happened to it. Their own words if the request
+    carried none, never a SKU -- `heart-top-s-black` means nothing to the
+    person who asked for a black Heart Top in S."""
+    payload = item.payload or {}
+    variant_id = payload.get("to_variant_id")
+    variant = db.get(Variant, variant_id) if variant_id else None
+    if variant is not None:
+        parts = [variant.product.name, variant.color, variant.size]
+        return " ".join(str(p) for p in parts if p)
+    return str(payload.get("note") or "").strip() or "القطعة"
+
+
+def _tell_the_customer(db, item: StaffQueueItem, outcome: str, **kwargs) -> None:
+    """Write the customer's line now, send it once this transaction commits.
+
+    Both halves matter. The line goes in inside the transaction so a
+    resolution that rolls back takes its own message with it; the send waits
+    for the commit because the committing connection still holds the write
+    lock -- the same split as `notifications.record_status_push` /
+    `deliver_status_push`.
+    """
+    if outcome == "failed":
+        # Staff pressed the button three times against the missing
+        # `write_order_edits` scope. Three identical "we are looking into it"
+        # messages is its own failure, so the holding line goes out once per
+        # request and the flag rides on the item that caused it.
+        payload = dict(item.payload or {})
+        if payload.get("pending_notice_sent"):
+            return
+        payload["pending_notice_sent"] = True
+        item.payload = payload
+
+    order = db.get(Order, item.order_id) if item.order_id else None
+    plan = notifications.record_request_resolution(
+        db, item, outcome, order=order, item_label=_describe(db, item), **kwargs
+    )
+    after_commit(db, lambda: notifications.deliver_request_resolution(plan))
+
+
 @router.post("/{queue_id}/resolve")
 def resolve_queue_item(queue_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
-    """The generic close: an alert acknowledged, or a swap request declined."""
+    """The generic close: an alert acknowledged, or a post-order request
+    declined.
+
+    A declined request now *tells the customer*. It did not, and that was the
+    worst of the three failures this round: he asked to add a piece, the bot
+    told him the team would confirm, staff pressed reject, and he heard
+    nothing ever again. An alert has no customer behind it and stays silent.
+    """
     with session_scope() as db:
         staff, refused = require_permission(db, wanas_staff, "queue")
         if refused is not None:
             return refused
+        pending = db.get(StaffQueueItem, queue_id)
         item = queues.resolve(db, queue_id, staff.staff_id, status=QueueStatus.REJECTED.value)
         if item is None:
             return JSONResponse({"error": "not_open"}, status_code=409)
+        if pending is not None and pending.kind in _CUSTOMER_FACING_KINDS:
+            _tell_the_customer(db, pending, "rejected")
     return JSONResponse({"ok": True})
 
 
@@ -108,9 +164,13 @@ def approve_add(
 
         result = orders_service.apply_add(db, order, to_variant_id, quantity)
         if "error" in result:
+            # The queue item stays open, and the customer is told we are on
+            # it rather than left watching a promise expire.
+            _tell_the_customer(db, item, "failed")
             return JSONResponse(result, status_code=409)
 
         queues.resolve(db, queue_id, staff.staff_id)
+        _tell_the_customer(db, item, "approved")
     return JSONResponse(result)
 
 
@@ -146,7 +206,9 @@ def approve_swap(
 
         result = orders_service.apply_swap(db, order, from_variant_id, to_variant_id)
         if "error" in result:
+            _tell_the_customer(db, item, "failed")
             return JSONResponse(result, status_code=409)
 
         queues.resolve(db, queue_id, staff.staff_id)
+        _tell_the_customer(db, item, "approved")
     return JSONResponse(result)

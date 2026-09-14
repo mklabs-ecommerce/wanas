@@ -577,6 +577,33 @@ tests/                   pytest suite (flat, one test_<module>.py per
   remove. Each kind has its own tool, its own dashboard card and its own
   approve route (`approve-swap` / `approve-add`), and each route refuses an
   item of the other kind rather than coercing it.
+- **And every resolution of one reaches the customer.** The bot promises «حد
+  هيأكدلك» when it files a request; approving, rejecting or failing to apply
+  it used to say nothing at all, so a customer who asked for something heard
+  the promise and then silence. `notifications.record_request_resolution` /
+  `deliver_request_resolution` are the same split as the status push --
+  the line goes into `sessions` inside the transaction that decides it,
+  deliverability is `window_open`'s call, an undeliverable one is recorded
+  `delivered=False` beside a `resolution_undelivered` alert, and the send
+  waits for the commit. A failed apply keeps the queue item **open** and
+  sends a holding line once, not once per press. `record_handoff_closed` is
+  the same closure for a `request_human` released without a reply; a
+  conversation a staff member *did* answer is released quietly.
+- **Whether an alert reason emails is a decision, written down.**
+  `alert_email.MAILED_ALERT_REASONS` and `SILENT_ALERT_REASONS` together
+  cover every reason, and a reason in neither is **mailed and logged**, never
+  dropped: `order_status_comment` was raised in production, listed nowhere,
+  and reached nobody, because an allow-list makes "nobody added it" look
+  exactly like "somebody excluded it". `tests/test_alert_email.py` reads
+  every `reason=` literal off the source and fails on one with no decision.
+- **A Shopify scope is a feature, and a missing one is silent.**
+  `integrations/shopify/scopes.py` reports at boot and on `/health`
+  (`shopify_missing_scopes`) — `shopify_configured` was true while
+  `write_order_edits` was missing, so every swap/add/quantity approval failed
+  with `ACCESS_DENIED` and staff read the word `store_unavailable`. That word
+  now means only "unreachable"; `orders.edit_refusal` tells a permission gap,
+  a Shopify refusal, an out-of-stock and an outage apart, and the dashboard
+  says which in Arabic.
 
 ## Shopify
 

@@ -839,6 +839,200 @@ def order_cancelled(session: Session, order: Order, *, by: str = "customer") -> 
     )
 
 
+# --------------------------------------------------------------------------
+# Telling the customer what the team decided.
+#
+# `request_item_add` and `request_item_swap` both promise «حد هيأكدلك». For a
+# while nothing kept that promise: staff approved, rejected or failed to apply
+# a request and the customer heard *nothing at all*. He asked for something,
+# was told the team would confirm, and then silence -- which is worse than a
+# refusal, because a refusal he can act on.
+#
+# Split into record/deliver for the same reason `record_status_push` is:
+# the line the dashboard reads has to be written inside the transaction that
+# decides it (and roll back with it), while the send has to wait until that
+# transaction has committed and let go of the write lock.
+# --------------------------------------------------------------------------
+
+#: What each outcome says, per queue kind. Written out rather than assembled
+#: from fragments: these are the sentences a customer reads about their own
+#: money, and a template hole filled with the wrong noun is how «ضفنا» ends up
+#: describing a swap.
+_RESOLUTION_TEXT = {
+    (QueueKind.ITEM_ADD.value, "approved"): (
+        "تمام ✅ ضفنا {item} على أوردرك {order}. "
+        "الإجمالي الجديد {total} جنيه، وهيتشحن مع نفس الأوردر."
+    ),
+    (QueueKind.ITEM_ADD.value, "rejected"): (
+        "معلش، مقدرناش نضيف {item} على أوردرك {order}. "
+        "تحب تطلبها في أوردر جديد؟"
+    ),
+    (QueueKind.ITEM_SWAP.value, "approved"): (
+        "تمام ✅ بدّلنا القطعة في أوردرك {order} بـ{item}. "
+        "الإجمالي الجديد {total} جنيه، وهيتشحن زي ما هو متفق."
+    ),
+    (QueueKind.ITEM_SWAP.value, "rejected"): (
+        "معلش، مقدرناش نعمل التبديل في أوردرك {order}. "
+        "أوردرك زي ما هو، وتحب تطلب القطعة الجديدة لوحدها؟"
+    ),
+}
+
+#: The one outcome that is not an ending. It goes out so the customer is not
+#: left waiting in silence, and the queue item stays open.
+_RESOLUTION_PENDING = (
+    "طلبك على أوردر {order} لسه معانا وبنشوفه — هنرد عليك أول ما يتظبط. "
+    "معلش على التأخير."
+)
+
+#: Why, in customer language, inserted as its own sentence rather than into a
+#: hole in the one above -- a reason we do not have must leave no trace at
+#: all, not a dangling dash. Staff see the technical code; the customer gets
+#: the one sentence that is both true and useful to them, and a code with no
+#: entry here says nothing rather than leaking `store_permission` at somebody
+#: who is waiting for a hoodie.
+_RESOLUTION_REASONS = {
+    "insufficient_stock": "المقاس ده خلص من المخزن.",
+    "store_refused": "الأوردر بقى في مرحلة مش بتسمح بالتعديل.",
+    "not_modifiable": "الأوردر اتشحن خلاص.",
+}
+
+
+@dataclass(frozen=True)
+class ResolutionPlan:
+    """One resolution's message, and whether it can actually arrive."""
+
+    channel: str
+    recipient: str
+    text: str
+    window_open: bool
+    template: str | None = None
+
+    @property
+    def deliverable(self) -> bool:
+        return bool(self.text) and (self.window_open or bool(self.template))
+
+
+def record_request_resolution(
+    session: Session,
+    item,
+    outcome: str,
+    *,
+    order: Order | None = None,
+    item_label: str = "",
+    reason_code: str = "",
+) -> ResolutionPlan | None:
+    """Write the customer's line for a post-order request that was decided.
+
+    Returns the plan to hand to `deliver_request_resolution` after the commit,
+    or None when there is nobody to tell (a queue item with no channel, which
+    is every alert and every stock-raised item).
+    """
+    channel = (item.channel or "").strip()
+    recipient = (item.external_id or "").strip()
+    if not channel or not recipient:
+        return None
+
+    order_ref = customer_reference(order) if order is not None else (item.order_id or "")
+    if outcome == "failed":
+        text = _RESOLUTION_PENDING.format(order=order_ref)
+    else:
+        template_text = _RESOLUTION_TEXT.get((item.kind, outcome))
+        if template_text is None:
+            return None
+        text = template_text.format(
+            item=item_label or "القطعة",
+            order=order_ref,
+            total=money(order.total) if order is not None else "",
+        )
+        why = _RESOLUTION_REASONS.get(reason_code)
+        if why and outcome == "rejected":
+            # Before the offer of a new order, so the sentence reads as an
+            # explanation and not as an excuse tacked on at the end.
+            head, _, tail = text.partition(". ")
+            text = f"{head}. {why} {tail}" if tail else f"{text} {why}"
+
+    plan = ResolutionPlan(
+        channel=channel,
+        recipient=recipient,
+        text=text,
+        window_open=window_open(session, channel, recipient),
+    )
+    _record(channel, recipient, text, db=session, delivered=plan.deliverable)
+    if not plan.deliverable:
+        # Same shape as an undeliverable status push: the line is in the
+        # thread marked undelivered, and a person is told to phone.
+        queues.enqueue(
+            session,
+            kind=QueueKind.ALERT.value,
+            reason="resolution_undelivered",
+            summary=(
+                f"{order_ref}: the customer was never told what happened to their "
+                f"request ({item.kind} {outcome}) -- their last message to "
+                f"{recipient} on {channel} is over 24h old and no approved template "
+                "is configured. Call them."
+            ),
+            order_id=item.order_id,
+            channel=channel,
+            external_id=recipient,
+            payload={"text": text, "outcome": outcome, "window_open": False},
+        )
+        log.warning(
+            "queue item %s resolved as %s but the customer cannot be told "
+            "(outside the 24h window); a staff alert was raised instead",
+            item.queue_id,
+            outcome,
+        )
+    return plan
+
+
+#: What a handoff that nobody answered says on the way out. `request_human`
+#: tells the customer «حد هيتواصل معاه», and releasing the conversation
+#: without a reply used to break that promise in silence -- the bot simply
+#: resumed and the customer never learned that anything had happened. Short on
+#: purpose: staff decided no answer was needed, so this says the conversation
+#: is open again, not that a question was answered.
+HANDOFF_CLOSED_TEXT = "رجعنا معاك ✅ لو لسه محتاج أي حاجة قوللي وأنا تحت أمرك."
+
+
+def record_handoff_closed(session: Session, channel: str, external_id: str) -> ResolutionPlan | None:
+    """The customer's line for a handoff released without a reply.
+
+    Same split as `record_request_resolution`, and the same reason for
+    existing: a promise was made and something has to close it.
+    """
+    plan = ResolutionPlan(
+        channel=channel,
+        recipient=external_id,
+        text=HANDOFF_CLOSED_TEXT,
+        window_open=window_open(session, channel, external_id),
+    )
+    if not plan.deliverable:
+        # No alert here, deliberately. The customer is not waiting on a
+        # decision -- staff have already judged that nothing needed saying --
+        # and the bot answers the next thing they send. Raising an alert for
+        # every quiet release would be the noise that gets alerts filtered.
+        log.info(
+            "handoff for %s/%s released outside the 24h window; no closing message sent",
+            channel,
+            external_id,
+        )
+        return None
+    _record(channel, external_id, plan.text, db=session)
+    return plan
+
+
+def deliver_request_resolution(plan: ResolutionPlan | None) -> None:
+    """The outbound half. Sends only -- the transcript line is already
+    written. Safe to call from an after-commit hook, and raises nothing: the
+    decision has already been applied and must not be undone by a send."""
+    if plan is None or not plan.deliverable or plan.channel not in _senders:
+        return
+    try:
+        get_sender(plan.channel).send_text(plan.recipient, plan.text)
+    except Exception:
+        log.exception("could not send the resolution message to %s", plan.recipient)
+
+
 def item_add_requested(session: Session, order: Order, payload: dict, summary: str) -> str:
     """A customer wants a *further* item on an order they already placed.
 

@@ -415,12 +415,38 @@ def test_release_returns_control_to_the_bot_after_a_manual_takeover(logged_in, s
 
 
 def test_release_resolves_the_handoff_item_too(logged_in, seeded, outbox):
+    """...and closes it with the customer.
+
+    This used to assert `outbox == []`, and that silence was the bug one
+    level along from the post-order requests: `request_human` tells the
+    customer «حد هيتواصل معاه» and pauses the conversation, so releasing it
+    without ever replying left them waiting for a person who had already
+    decided not to write. One short line closes the promise. A *takeover*
+    release still says nothing -- see the test above -- because no promise
+    was made there.
+    """
     make_paused(seeded)
 
     res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release")
     assert res.status_code == 200
     assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is False
     assert queues.open_items(seeded, QueueKind.HANDOFF.value) == []
+    assert [m.text for m in outbox] == [notifications.HANDOFF_CLOSED_TEXT]
+
+
+def test_a_handoff_a_person_already_answered_is_released_quietly(logged_in, seeded, outbox):
+    """The other half of the rule. The customer has heard from a person, so a
+    second line saying "we are back" is noise, not closure."""
+    make_paused(seeded)
+    logged_in.post(
+        f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reply",
+        json={"text": "أهلاً، أنا من الفريق — تحت أمرك."},
+    )
+    outbox.clear()
+
+    assert logged_in.post(
+        f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/release"
+    ).status_code == 200
     assert outbox == []
 
 
