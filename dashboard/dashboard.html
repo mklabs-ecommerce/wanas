@@ -1666,6 +1666,15 @@ const EN = {
   "مفيش صلاحيات لسه": "No permissions yet",
 "مفيش طلب تبديل ولا إضافة ولا تنبيه مستني مراجعة": "No swap request, addition or alert is waiting for review",
   "طلب إضافة": "Add-an-item request",
+  "المقاس ده خلص من المخزن. جرّب مقاس أو لون تاني، أو اقفل الطلب واعتذر للزبون.": "That size is out of stock. Try another size or colour, or close the request and apologise to the customer.",
+  "توكن شوبيفاي ناقصه صلاحية تعديل الأوردرات. لازم تتظبط من إعدادات التطبيق في شوبيفاي — الإعادة مش هتنفع من غيرها.": "The Shopify token is missing the order-edit permission (write_order_edits). Grant it on the app in Shopify — retrying will not work until you do.",
+  "شوبيفاي رفض التعديل — غالباً الأوردر اتشحن أو اتقفل خلاص.": "Shopify refused the edit — the order has most likely shipped or been closed.",
+  "الأوردر ده مابقاش قابل للتعديل — اتشحن أو اتلغى.": "This order can no longer be edited (shipped or cancelled).",
+  "القطعة دي مش موجودة في الكتالوج.": "That item is not in the catalogue.",
+  "مش ينفع تشيل آخر قطعة في الأوردر — الغِ الأوردر بدل كده.": "You cannot remove the last item on an order — cancel the order instead.",
+  "ماقدرناش نوصل لشوبيفاي دلوقتي. الطلب لسه مفتوح، جرّب تاني بعد شوية.": "We could not reach Shopify just now. The request is still open — try again shortly.",
+  "ناقص بيانات في الطلب — اكتب SKU القطعة والكمية.": "The request is missing details — enter the item SKU and quantity.",
+  "سبب غير معروف": "Unknown reason",
   "وافق على الإضافة": "Approve the addition",
   "القطعة المطلوب إضافتها": "Item to add",
   "SKU القطعة": "Item SKU",
@@ -2106,6 +2115,40 @@ function toast(title, detail = "", tone = "ok", ttl = 4200) {
 
 const toastError = (err, what) =>
   toast(what, err && err.message ? err.message : "", "bad", 6000);
+
+/* Why an order edit did not happen, in a sentence a person can act on.
+
+   `store_unavailable` used to be the answer to every one of these. It names
+   nothing and it suggests waiting, so when production was missing the
+   `write_order_edits` scope -- a failure that could never have succeeded --
+   staff pressed the button three times and the request sat there. Each entry
+   here says what happened *and* what to do about it. The queue item is
+   deliberately left open in every case, so the retry is real once the cause
+   is gone. */
+const EDIT_FAILURE_REASONS = {
+  insufficient_stock: tr("المقاس ده خلص من المخزن. جرّب مقاس أو لون تاني، أو اقفل الطلب واعتذر للزبون."),
+  store_permission: tr("توكن شوبيفاي ناقصه صلاحية تعديل الأوردرات. لازم تتظبط من إعدادات التطبيق في شوبيفاي — الإعادة مش هتنفع من غيرها."),
+  store_refused: tr("شوبيفاي رفض التعديل — غالباً الأوردر اتشحن أو اتقفل خلاص."),
+  not_modifiable: tr("الأوردر ده مابقاش قابل للتعديل — اتشحن أو اتلغى."),
+  variant_not_found: tr("القطعة دي مش موجودة في الكتالوج."),
+  would_empty_order: tr("مش ينفع تشيل آخر قطعة في الأوردر — الغِ الأوردر بدل كده."),
+  store_unavailable: tr("ماقدرناش نوصل لشوبيفاي دلوقتي. الطلب لسه مفتوح، جرّب تاني بعد شوية."),
+  bad_arguments: tr("ناقص بيانات في الطلب — اكتب SKU القطعة والكمية."),
+};
+
+function editFailureText(err) {
+  const known = err && EDIT_FAILURE_REASONS[err.code];
+  /* The scope Shopify named rides outside the sentence. Inside it, the Latin
+     parenthetical splits the Arabic run into two translation keys -- and it
+     is the one detail whoever fixes this in Shopify Admin actually needs. */
+  if (known && err.code === "store_permission" && err.body && err.body.scope) {
+    return `${known} — ${err.body.scope}`;
+  }
+  if (known) return known;
+  /* Never swallow an unrecognised code: showing it beats showing nothing,
+     because the log is the only other place it exists. */
+  return (err && (err.body && err.body.detail)) || (err && err.message) || tr("سبب غير معروف");
+}
 
 /* --------------------------------------------------------------------------
    overlays: scrim, drawer, modal — one focus trap, one Esc handler
@@ -5949,7 +5992,10 @@ VIEWS.queue = {
       const result = await api(`/dashboard/api/queue/${encodeURIComponent(b.dataset.approve)}/approve-swap`, {
         method: "POST", quiet: true, body: to && to.value.trim() ? { to_variant_id: to.value.trim() } : {},
       });
-      if (result.__error) { b.disabled = false; return toastError(result.__error, tr("التبديل مانفذش")); }
+      if (result.__error) {
+        b.disabled = false;
+        return toast(tr("التبديل مانفذش"), editFailureText(result.__error), "bad", 9000);
+      }
       toast(tr("التبديل اتعمل"), tr("المخزون والطلب اتحدثوا"));
       this.load();
     }));
@@ -5964,7 +6010,10 @@ VIEWS.queue = {
       const result = await api(`/dashboard/api/queue/${encodeURIComponent(id)}/approve-add`, {
         method: "POST", quiet: true, body,
       });
-      if (result.__error) { b.disabled = false; return toastError(result.__error, tr("الإضافة مانفذتش")); }
+      if (result.__error) {
+        b.disabled = false;
+        return toast(tr("الإضافة مانفذتش"), editFailureText(result.__error), "bad", 9000);
+      }
       toast(tr("القطعة اتضافت"), tr("المخزون والطلب اتحدثوا"));
       this.load();
     }));

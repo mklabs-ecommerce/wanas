@@ -49,6 +49,28 @@ class ShopifyConfigError(RuntimeError):
     telling apart from ShopifyUnavailable so it is not retried forever."""
 
 
+class ShopifyAccessDenied(ShopifyUnavailable):
+    """The token is valid and lacks the scope this call needs.
+
+    A subclass, so every existing `except ShopifyUnavailable` keeps working
+    and nothing starts crashing on a case it used to absorb -- but callers
+    that can say something useful about it now can. It is *not* transient and
+    retrying never helps: the fix is granting the scope on the app and
+    reinstalling it, which a person does in Shopify Admin.
+
+    This is not hypothetical. `write_order_edits` was missing in production,
+    so every order edit -- a swap approval, an add approval, a quantity
+    change -- came back `ACCESS_DENIED` from `orderEditBegin` and reached
+    staff as the word `store_unavailable`, which names nothing and suggests
+    waiting. Staff pressed the button three times.
+    """
+
+    #: The scope Shopify named, when it named one.
+    def __init__(self, message: str, scope: str = ""):
+        super().__init__(message)
+        self.scope = scope
+
+
 # --------------------------------------------------------------------------
 # config
 # --------------------------------------------------------------------------
@@ -91,6 +113,32 @@ def _operation_name(query: str) -> str:
         return match.group(1)
     field = _FIRST_FIELD.search(query or "")
     return field.group(1) if field else "graphql"
+
+
+#: Shopify reports a missing scope as an ordinary GraphQL error with
+#: `extensions.code == "ACCESS_DENIED"`, and names the scope in
+#: `requiredAccess` ("Requires `write_order_edits` access scope."). Read out
+#: here rather than pattern-matched on the message text at each call site.
+_SCOPE_NAME = re.compile(r"`([a-z_]+)`")
+
+
+def _denied_scope(errors: list) -> str | None:
+    """The scope name if this failure is a permission one, else None.
+
+    Returns `""` for an access denial that names no scope -- falsy is not the
+    signal, `None` is, because "denied but unnamed" still must not be read as
+    a transient outage.
+    """
+    for error in errors or []:
+        if not isinstance(error, dict):
+            continue
+        extensions = error.get("extensions") or {}
+        if extensions.get("code") != "ACCESS_DENIED":
+            continue
+        required = str(extensions.get("requiredAccess") or "")
+        match = _SCOPE_NAME.search(required)
+        return match.group(1) if match else ""
+    return None
 
 
 class ShopifyClient:
@@ -205,8 +253,16 @@ class ShopifyClient:
             raise ShopifyUnavailable(last_error)
 
         if payload.get("errors"):
-            message = json.dumps(payload["errors"])[:400]
+            errors = payload["errors"]
+            message = json.dumps(errors)[:400]
             log.warning("Shopify GraphQL error: %s", message)
+            scope = _denied_scope(errors)
+            if scope is not None:
+                # Told apart from every other failure because the answer is
+                # different: nothing here will ever succeed until somebody
+                # grants the scope, so a caller must not present it as "try
+                # again in a minute".
+                raise ShopifyAccessDenied(message, scope)
             raise ShopifyUnavailable(message)
 
         self._note_cost(payload)

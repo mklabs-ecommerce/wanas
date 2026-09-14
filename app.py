@@ -379,6 +379,18 @@ def _warn_if_shipping_rates_contradict_the_published_fee() -> None:
             ", ".join(unpriced[:5]),
         )
 
+def _check_shopify_scopes() -> list[str]:
+    """Report the Shopify permissions this deployment lacks. Never raises: a
+    permission check must not be what stops the app from booting."""
+    try:
+        from integrations.shopify import scopes
+
+        return scopes.log_scope_check()
+    except Exception:
+        log.exception("could not check the Shopify access scopes")
+        return []
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
@@ -405,6 +417,13 @@ async def lifespan(_app: FastAPI):
     # was configured, and its alerts still went nowhere -- but "can an alert
     # actually leave here and arrive". See `client.check_transport`.
     log_transport_check()
+    # ...and the same question of Shopify. `shopify_configured` only says a
+    # token is set; production had one, and lacked `write_order_edits`, so
+    # every swap/add/quantity approval was impossible and the only trace was
+    # an ACCESS_DENIED in a log. A permission gap is a deployment fault that
+    # no retry fixes, so it is said at boot rather than discovered by a staff
+    # member pressing a button three times.
+    _check_shopify_scopes()
     # The one place the WhatsApp client becomes the Notification service's
     # sender. Until it does, everything still works against the LogSender.
     register_outbound_sender()
@@ -548,6 +567,8 @@ def health() -> dict:
 
     token_expires_at = instagram_token.expires_at()
     _mail_check = check_transport()
+    from integrations.shopify import scopes as shopify_scopes
+
     return {
         "status": "ok",
         "llm_provider": settings.llm_provider,
@@ -565,6 +586,10 @@ def health() -> dict:
             token_expires_at.isoformat() if token_expires_at else None
         ),
         "shopify_configured": settings.shopify_configured,
+        # The question `shopify_configured` cannot answer: a token was set
+        # and order edits were impossible. Empty is good; empty is also what
+        # an unreadable scope list reports, since an unknown is not a finding.
+        "shopify_missing_scopes": shopify_scopes.missing(),
         "shopify_webhooks_configured": settings.shopify_webhooks_configured,
         "voice_notes": settings.voice_notes_enabled,
         "image_understanding": settings.image_understanding_enabled,

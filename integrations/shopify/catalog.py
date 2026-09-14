@@ -34,10 +34,16 @@ from decimal import Decimal
 from common import telemetry
 from config.settings import settings
 from integrations.shopify.client import (
+    ShopifyAccessDenied,
     ShopifyConfigError,
     ShopifyUnavailable,
     get_client,
 )
+
+#: Re-exported on purpose: `domain/services/orders.py` reads every Shopify
+#: failure through this module, so the new access-denied case has to be
+#: reachable by the same name as the two it joins.
+__all__ = ["ShopifyAccessDenied", "ShopifyConfigError", "ShopifyUnavailable"]
 
 log = logging.getLogger("wanas.shopify.catalog")
 

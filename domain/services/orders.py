@@ -53,6 +53,44 @@ class Refusal(Exception):
         self.payload = payload
 
 
+def edit_refusal(exc: Exception, order: Order, what: str) -> Refusal:
+    """One reading of every way a Shopify *order edit* can fail.
+
+    The three edit paths -- `modify_quantity`, `apply_swap`, `apply_add` --
+    each used to collapse everything that was not out-of-stock into
+    `store_unavailable`. That word names nothing and, worse, suggests waiting:
+    production was missing the `write_order_edits` scope, so every approval
+    came back `ACCESS_DENIED` from `orderEditBegin`, staff read "store
+    unavailable", and pressed the button again. Three times, on one request,
+    against a failure that would never have succeeded.
+
+    So the distinctions a person can act on are kept:
+
+    * `insufficient_stock` -- somebody else took it; wait or pick another size.
+    * `store_permission` -- the token lacks a scope. Never transient, and the
+      scope name travels with it so nobody has to go and read a log.
+    * `store_refused` -- Shopify itself said no (an order already fulfilled or
+      closed is the usual one), with its own sentence attached.
+    * `store_unavailable` -- kept for what it actually means: unreachable.
+    """
+    if isinstance(exc, shopify_orders.OrderRejected) and exc.is_out_of_stock:
+        return Refusal({"error": "insufficient_stock", "available": 0})
+    if isinstance(exc, shopify_catalog.ShopifyAccessDenied):
+        log.error(
+            "Cannot %s on %s: the Shopify Admin token is missing the %s scope. "
+            "Grant it on the app and reinstall -- retrying will never work.",
+            what,
+            order.order_id,
+            exc.scope or "required",
+        )
+        return Refusal({"error": "store_permission", "scope": exc.scope})
+    if isinstance(exc, shopify_orders.OrderRejected):
+        log.error("Shopify refused to %s on %s: %s", what, order.order_id, exc)
+        return Refusal({"error": "store_refused", "detail": str(exc)[:300]})
+    log.warning("Could not %s on %s: %s", what, order.order_id, exc)
+    return Refusal({"error": "store_unavailable"})
+
+
 def order_payload(order: Order) -> dict:
     return {
         "order_id": order.order_id,
@@ -662,17 +700,12 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
                     note=f"{order.order_id}: {previous} → {quantity}",
                 )
                 edited_on_shopify = True
-            except shopify_orders.OrderRejected as exc:
-                if exc.is_out_of_stock:
-                    raise Refusal({"error": "insufficient_stock", "available": 0}) from exc
-                log.error("Shopify refused the edit to %s: %s", order.order_id, exc)
-                raise Refusal({"error": "store_unavailable"}) from exc
             except (
+                shopify_orders.OrderRejected,
                 shopify_catalog.ShopifyUnavailable,
                 shopify_catalog.ShopifyConfigError,
             ) as exc:
-                log.warning("Could not edit %s on Shopify: %s", order.order_id, exc)
-                raise Refusal({"error": "store_unavailable"}) from exc
+                raise edit_refusal(exc, order, "change the quantity") from exc
 
             if delta > 0:
                 inventory.record_sold(session, variant_id, delta)
@@ -960,17 +993,12 @@ def apply_swap(session: Session, order: Order, from_variant_id: str, to_variant_
                     quantity,
                     note=f"{order.order_id}: {from_variant_id} → {to_variant_id}",
                 )
-            except shopify_orders.OrderRejected as exc:
-                if exc.is_out_of_stock:
-                    raise Refusal({"error": "insufficient_stock", "available": 0}) from exc
-                log.error("Shopify refused the swap on %s: %s", order.order_id, exc)
-                raise Refusal({"error": "store_unavailable"}) from exc
             except (
+                shopify_orders.OrderRejected,
                 shopify_catalog.ShopifyUnavailable,
                 shopify_catalog.ShopifyConfigError,
             ) as exc:
-                log.warning("Could not swap on %s: %s", order.order_id, exc)
-                raise Refusal({"error": "store_unavailable"}) from exc
+                raise edit_refusal(exc, order, "swap the item") from exc
 
             # Shopify moved the stock as part of the edit; these only keep the
             # local rows readable.
@@ -1089,17 +1117,12 @@ def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int 
                         quantity,
                         note=f"{order.order_id}: + {to_variant_id}",
                     )
-            except shopify_orders.OrderRejected as exc:
-                if exc.is_out_of_stock:
-                    raise Refusal({"error": "insufficient_stock", "available": 0}) from exc
-                log.error("Shopify refused the addition to %s: %s", order.order_id, exc)
-                raise Refusal({"error": "store_unavailable"}) from exc
             except (
+                shopify_orders.OrderRejected,
                 shopify_catalog.ShopifyUnavailable,
                 shopify_catalog.ShopifyConfigError,
             ) as exc:
-                log.warning("Could not add to %s: %s", order.order_id, exc)
-                raise Refusal({"error": "store_unavailable"}) from exc
+                raise edit_refusal(exc, order, "add the item") from exc
 
             # Shopify moved the stock as part of the edit; this only keeps the
             # local rows readable.
