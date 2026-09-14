@@ -130,10 +130,15 @@ HANDOFF_REASONS = (
 #: vanish without a trace; `classifier_unavailable` is what keeps a provider
 #: outage from meaning silent loss, now that an unclassifiable comment is
 #: dropped rather than DMed.
+#: `turn_crashed` and `order_status_comment` were both raised in production
+#: while listed nowhere here. The second one cost an alert: it is not in
+#: `alert_email.MAILED_ALERT_REASONS` either, and the old `reason in <set>`
+#: test made "nobody listed it" indistinguishable from "somebody excluded it".
+#: `tests/test_alert_email.py` now fails on a reason with no decision.
 ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancelled", "swap_requested",
-                 "add_requested",
+                 "add_requested", "turn_crashed", "order_status_comment",
                  "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed",
-                 "status_push_undelivered",
+                 "status_push_undelivered", "resolution_undelivered",
                  "instagram_reply_delivery_failed", "instagram_token_refresh_failed", "comment_flood",
                  "negative_comment", "customer_complaint", "spam_comment", "classifier_unavailable")
 

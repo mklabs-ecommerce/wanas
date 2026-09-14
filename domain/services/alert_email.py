@@ -67,6 +67,9 @@ MAILED_ALERT_REASONS = frozenset(
         "confirmation_delivery_failed",
         "status_push_undelivered",
         "proactive_outreach_failed",
+        # A customer who asked for something, was told the team would
+        # confirm, and cannot now be told what the team decided.
+        "resolution_undelivered",
         # -- an order changing after the fact, and the shelf running out ---
         # Not "the bot went wrong" like the two groups above; these are the
         # ordinary business events the owner asked to see anyway, because
@@ -74,8 +77,51 @@ MAILED_ALERT_REASONS = frozenset(
         "order_modified",
         "order_cancelled",
         "low_stock",
+        # -- a public question the DM budget could not answer ------------
+        # `order_status_comment` is raised when someone asks about their
+        # order in a public comment. It used to be in no list at all: raised
+        # in `assistant/channels/instagram.py`, declared nowhere, and
+        # therefore silent -- which is the whole reason the decision table
+        # below exists. It belongs in the inbox because it is
+        # `public_reply_without_dm`: when the DM budget is spent the customer
+        # gets a public line and *no answer*, and a person has to finish it.
+        "order_status_comment",
+        # -- a post-order request waiting on a person --------------------
+        # These two ride on their own kinds (`_ALWAYS_MAILED_KINDS`), so
+        # they never reach the reason test in practice. They are stated
+        # anyway: they are declared alert reasons, and a reason that is
+        # mailed in fact but undecided on paper is exactly the ambiguity the
+        # rest of this table exists to remove.
+        "swap_requested",
+        "add_requested",
     }
 )
+
+#: And the reasons deliberately kept out of the inbox, each beside the reason
+#: why. Silence is a decision, so it is written down rather than left to the
+#: absence of an entry above -- an alert nobody is told about is the most
+#: expensive kind of bug this file can have, and "nobody added it to the set"
+#: and "somebody decided against it" used to look identical.
+SILENT_ALERT_REASONS = {
+    "order_confirmed": (
+        "fires on every successful sale, which is the outcome this whole "
+        "system exists to produce. An address carrying it is an address the "
+        "owner filters, and filtering it costs every alert above."
+    ),
+    "spam_comment": (
+        "the shop's own response to spam is to do nothing -- there is no "
+        "decision for a person to make, and a misclassified customer is "
+        "caught by `negative_comment`/`customer_complaint` instead."
+    ),
+}
+
+#: Every reason this file has an opinion about. A reason that reaches
+#: `should_mail` and is in neither half is a reason nobody decided about, and
+#: it is mailed *and* logged rather than dropped -- see `should_mail`.
+#: `tests/test_alert_email.py` fails if any reason raised anywhere in the
+#: codebase is missing from here, so adding a queue reason cannot silently
+#: skip the inbox.
+ALERT_REASON_DECISIONS = frozenset(MAILED_ALERT_REASONS | set(SILENT_ALERT_REASONS))
 
 #: Read as a subject-line prefix, so the owner can tell at a glance from the
 #: phone's lock screen which of the three kinds this is.
@@ -90,12 +136,14 @@ _SUBJECT_PREFIX = {
     "instagram_token_refresh_failed": "Instagram token",
     "confirmation_delivery_failed": "Undelivered confirmation",
     "status_push_undelivered": "Undelivered order update",
+    "resolution_undelivered": "Customer never told the outcome",
     "proactive_outreach_failed": "Undelivered notice",
     "order_modified": "Order changed",
     "order_cancelled": "Order cancelled",
     "low_stock": "Low stock",
     "swap_requested": "Item swap requested",
     "add_requested": "Item add requested",
+    "order_status_comment": "Order-status question",
 }
 
 _Mailer = Callable[[str, str], bool]
@@ -155,24 +203,51 @@ class _Snapshot:
         )
 
 
-def should_mail(kind: str, reason: str | None) -> bool:
-    """Two of the three kinds are mailed whole, and one is filtered.
-
-    A **handoff** always: it pauses a conversation, so a customer is sitting
-    there unanswered until someone picks it up. An **item swap** always too --
-    it is a customer waiting on a decision only a person can make, and the
-    order does not move until someone makes it. An **alert** only if its
-    reason is on the list above, which is where `order_confirmed` is kept out.
-    """
-    if kind in (
+#: The kinds that are mailed whole, whatever their reason. Each one is a
+#: customer who is *waiting*: a handoff pauses the conversation outright, and
+#: a swap or an add sits there until a person presses a button. Reason-level
+#: filtering would be the wrong tool -- there is no version of these that is
+#: routine.
+_ALWAYS_MAILED_KINDS = frozenset(
+    {
         QueueKind.HANDOFF.value,
         QueueKind.ITEM_SWAP.value,
         QueueKind.ITEM_ADD.value,
-    ):
+    }
+)
+
+
+def should_mail(kind: str, reason: str | None) -> bool:
+    """Whether this queue item wakes the owner.
+
+    Three kinds are mailed whole (`_ALWAYS_MAILED_KINDS`); an alert is mailed
+    if its reason says so.
+
+    **An undecided reason is mailed, not dropped.** It used to be
+    `reason in MAILED_ALERT_REASONS`, so a reason nobody had added -- which is
+    what `order_status_comment` was, raised in production and listed nowhere
+    -- read exactly like a reason somebody had deliberately excluded, and went
+    to nobody. The default is now the loud direction: an unknown reason is
+    mailed and logged, so the failure mode of forgetting is one email too many
+    rather than an alert that never existed. `SILENT_ALERT_REASONS` is the
+    only way to be quiet, and it costs a sentence saying why.
+    """
+    if kind in _ALWAYS_MAILED_KINDS:
         return True
-    if kind == QueueKind.ALERT.value:
-        return (reason or "") in MAILED_ALERT_REASONS
-    return False
+    if kind != QueueKind.ALERT.value:
+        return False
+    reason = reason or ""
+    if reason in MAILED_ALERT_REASONS:
+        return True
+    if reason in SILENT_ALERT_REASONS:
+        return False
+    log.warning(
+        "alert reason %r has no entry in MAILED_ALERT_REASONS or "
+        "SILENT_ALERT_REASONS; mailing it rather than dropping it. Add it to "
+        "domain/services/alert_email.py",
+        reason,
+    )
+    return True
 
 
 # --------------------------------------------------------------------------

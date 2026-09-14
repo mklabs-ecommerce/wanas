@@ -93,11 +93,16 @@ def test_a_confirmed_order_stays_in_the_dashboard():
     assert alert_email.should_mail(QueueKind.ALERT.value, "order_confirmed") is False
 
 
-def test_an_unknown_alert_reason_is_not_mailed():
-    """The list is an allow-list, so a reason added elsewhere later does not
-    start mailing the owner by accident -- it has to be put here on purpose."""
-    assert alert_email.should_mail(QueueKind.ALERT.value, "some_new_reason") is False
-    assert alert_email.should_mail(QueueKind.ALERT.value, None) is False
+def test_an_unknown_alert_reason_is_mailed_not_dropped():
+    """This assertion used to run the other way, and that is what the bug
+    was. An allow-list sounds prudent until you notice what it does when
+    somebody forgets: `order_status_comment` was raised in production,
+    appeared in no list, and reached nobody -- indistinguishable from a
+    reason deliberately excluded. The failure mode of forgetting is now one
+    email too many. Deliberate silence lives in `SILENT_ALERT_REASONS`, and
+    costs a sentence saying why."""
+    assert alert_email.should_mail(QueueKind.ALERT.value, "some_new_reason") is True
+    assert alert_email.should_mail(QueueKind.ALERT.value, None) is True
 
 
 def test_a_handoff_is_mailed_whatever_its_reason():
@@ -793,3 +798,107 @@ def test_resend_logs_the_message_id_it_was_given(monkeypatch, caplog):
     with caplog.at_level("INFO", logger="wanas.mail.resend"):
         assert resend.send_email("subject", "body") is True
     assert "msg-42" in "\n".join(r.getMessage() for r in caplog.records)
+
+
+# --------------------------------------------------------------------------
+# Coverage. `order_status_comment` was raised in production, listed in neither
+# `ALERT_REASONS` nor `MAILED_ALERT_REASONS`, and therefore mailed to nobody
+# -- because the old test was `reason in MAILED_ALERT_REASONS`, which cannot
+# tell "somebody decided against this" from "nobody has heard of it". These
+# two make adding a queue reason without deciding about it a failing build.
+# --------------------------------------------------------------------------
+
+
+def _reasons_raised_in_the_codebase() -> set[str]:
+    """Every `reason=` literal that reaches `queues.enqueue`, read off the
+    source rather than listed by hand -- a list maintained beside the one it
+    is checking would go stale in the same commit."""
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    found: set[str] = set()
+    for path in root.rglob("*.py"):
+        # Relative to the repo root, never the absolute path: this repository
+        # is worked on in git worktrees under `.claude/worktrees/...`, so
+        # matching on `path.parts` excluded every file in the tree and the
+        # scan quietly returned nothing -- a coverage test that passes because
+        # it looked at no code is worse than not having one.
+        parts = path.relative_to(root).parts
+        if parts[0] in ("tests", "scripts") or parts[0].startswith("."):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):  # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if name != "enqueue":
+                continue
+            for keyword in node.keywords:
+                if (
+                    keyword.arg == "reason"
+                    and isinstance(keyword.value, ast.Constant)
+                    and isinstance(keyword.value.value, str)
+                ):
+                    found.add(keyword.value.value)
+    return found
+
+
+def test_every_reason_raised_in_the_code_has_an_explicit_decision():
+    """The one that would have caught `order_status_comment`."""
+    from domain.services.alert_email import ALERT_REASON_DECISIONS
+
+    undecided = sorted(_reasons_raised_in_the_codebase() - ALERT_REASON_DECISIONS)
+    assert not undecided, (
+        "these queue reasons are raised in the code and appear in neither "
+        "MAILED_ALERT_REASONS nor SILENT_ALERT_REASONS, so nobody has decided "
+        "whether the owner hears about them -- add each to "
+        "domain/services/alert_email.py:\n" + "\n".join(f"  {r!r}" for r in undecided)
+    )
+
+
+def test_every_declared_alert_reason_has_an_explicit_decision():
+    """And the same for the declared list, which is what the dashboard and
+    the docs read."""
+    from domain.models import ALERT_REASONS
+    from domain.services.alert_email import ALERT_REASON_DECISIONS
+
+    undecided = sorted(set(ALERT_REASONS) - ALERT_REASON_DECISIONS)
+    assert not undecided, f"declared but undecided: {undecided}"
+
+
+def test_a_reason_nobody_decided_about_is_mailed_and_logged_not_dropped(caplog):
+    """The default is the loud direction. Forgetting an entry must cost one
+    email too many, never an alert that silently never existed."""
+    from domain.models import QueueKind
+    from domain.services.alert_email import should_mail
+
+    with caplog.at_level("WARNING", logger="wanas.alert_email"):
+        assert should_mail(QueueKind.ALERT.value, "a_reason_invented_by_this_test") is True
+    assert "has no entry" in "\n".join(r.getMessage() for r in caplog.records)
+
+
+def test_a_deliberately_silent_reason_stays_silent_and_says_why():
+    from domain.models import QueueKind
+    from domain.services.alert_email import SILENT_ALERT_REASONS, should_mail
+
+    for reason, why in SILENT_ALERT_REASONS.items():
+        assert should_mail(QueueKind.ALERT.value, reason) is False
+        # The sentence is the point: silence with no stated reason is what
+        # `order_status_comment` looked like.
+        assert len(why) > 40, reason
+
+
+def test_a_post_order_request_always_reaches_the_owner():
+    """A swap and an add both pause a customer on a decision only a person
+    can make, so neither is ever reason-filtered."""
+    from domain.models import QueueKind
+    from domain.services.alert_email import should_mail
+
+    for kind in (QueueKind.ITEM_ADD.value, QueueKind.ITEM_SWAP.value, QueueKind.HANDOFF.value):
+        assert should_mail(kind, "anything at all") is True
+        assert should_mail(kind, None) is True
