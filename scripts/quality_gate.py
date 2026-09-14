@@ -9,7 +9,7 @@ lets an optimisation be kept or reverted without anyone reading the Arabic:
 a change that makes the bot faster and slightly wrong is not a speed-up, and
 "slightly wrong" in a shop means a price, a size or a stock claim.
 
-Eight checks, and each one is a failure mode this repository has already paid
+Nine checks, and each one is a failure mode this repository has already paid
 for at least once:
 
 1. **The same tools were called.** A reply that stops calling `get_variants`
@@ -41,7 +41,16 @@ for at least once:
    saying `Wnas` or offering `WNS` as the shop's name. A customer told the shop
    is called something it is not has been given wrong information about who
    they are buying from.
-8. **Photographs still go out.** Only `get_variants` attaches one, so a change
+8. **Laid out so it reads the way it was written.** Arabic with Latin and
+   numbers inside it is the normal case here, and two shapes of line come
+   out reordered on the phone: one opening with a Latin word takes
+   left-to-right direction for the whole line, and a number separated from
+   a Latin word by a dash or a comma swaps places with it -- «لون Black —
+   590 جنيه» is displayed «لون 590 — Black جنيه». `common/bidi.py` repairs
+   both at the send boundary, and this rule keeps them from being written
+   in the first place: the dashboard shows staff the unrepaired string, and
+   every shape the prompt asks for already renders correctly on its own.
+9. **Photographs still go out.** Only `get_variants` attaches one, so a change
    that lets the model answer a product question without calling it can quietly
    stop a clothes shop ever showing the clothes. Judged against the golden run:
    sending fewer is a judgement, sending none is a regression.
@@ -248,6 +257,52 @@ def looks_truncated(text: str) -> bool:
     return stripped.endswith(("،", ",", ":", "؛", "-", "و")) or stripped.endswith("...")
 
 
+#: A line's first strong character decides the direction of the whole line
+#: (UAX #9, rule P2), so a line opening with a Latin word is laid out
+#: left-to-right in the middle of a right-to-left message. A leading bullet
+#: or dash is neutral and does not count, which is why it is stripped first.
+#: A leading *digit* is fine and is deliberately not flagged: digits are not
+#: strong, so «2 قطع» still takes its direction from the Arabic after it.
+_LINE_LEAD = re.compile(r"^[\s\u2022*\u2013\u2014-]*(.)")
+
+#: A Latin word, a neutral separator, then a digit -- with no Arabic in
+#: between to anchor it. The neutral takes the paragraph's right-to-left
+#: direction and the two swap, so «لون Black — 590 جنيه» is *displayed*
+#: «لون 590 — Black جنيه»: the customer reads the price where the colour is.
+#: A plain space is not a separator here and is not flagged -- «مقاس L 590»
+#: lays out correctly, because a digit directly after a Latin letter takes
+#: that letter's direction (rule W7).
+_LATIN_THEN_NUMBER = re.compile(
+    r"([A-Za-z][A-Za-z0-9]*)\s*([\u2014\u2013,\u060c:;-])\s*([0-9\u0660-\u0669\u06f0-\u06f9])"
+)
+
+
+def layout_problems(text: str) -> list[str]:
+    """Every way a reply is laid out so the customer reads something other
+    than what was written.
+
+    Both of these are checked on the *stored* text, before `common/bidi.py`
+    lays it out at the send boundary. That is deliberate twice over: the
+    dashboard shows staff this exact string with no bidi pass on it, and text
+    that needs no repair is better than text that got repaired -- every shape
+    the prompt asks for renders correctly on its own, and every shape it
+    forbids does not.
+    """
+    problems: list[str] = []
+    for line in (text or "").splitlines():
+        if not line.strip():
+            continue
+        lead = _LINE_LEAD.match(line)
+        if lead and _LATIN_LETTER.match(lead.group(1)):
+            problems.append(f"a line starts with a Latin word: {line.strip()[:48]!r}")
+        hit = _LATIN_THEN_NUMBER.search(line)
+        if hit:
+            problems.append(
+                f"{hit.group(1)!r} is followed straight by a number across "
+                f"{hit.group(2)!r} -- they swap on the phone"
+            )
+    return problems
+
 def run(runs: int, real: bool, only: str) -> dict:
     provider = None
     if real:
@@ -342,6 +397,8 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                     f"{where}: the reply spelled the shop's name "
                     f"{sorted(set(misspelled))} -- it is Wanas Gallery"
                 )
+            for problem in layout_problems(text):
+                failures.append(f"{where}: {problem}")
 
         if not golden_replies:
             continue

@@ -255,3 +255,74 @@ def test_an_ordinary_english_word_is_not_the_brand():
     """`wins` has the same consonant skeleton and is not a misspelling."""
     assert quality_gate.misspelled_shop_name("he wins") == []
     assert quality_gate.misspelled_shop_name("Wanas Gallery") == []
+
+
+# --- layout -----------------------------------------------------------------
+#
+# Both shapes below were measured in a browser by each character's x-position,
+# on the unshaped string the dashboard shows staff. The canonical shapes render
+# correctly with no bidi pass at all; the forbidden ones do not.
+
+
+def test_the_canonical_shapes_are_not_flagged():
+    for line in (
+        "تيشيرت Boxy WNS Tee — السعر 590 جنيه",
+        "الألوان المتاحة: Black و Grey و Olive",
+        "المقاسات المتاحة: S و M و L و XL",
+        "• مقاس L — عرض 61 سم، طول 71 سم",
+        "• تيشيرت Boxy WNS Tee — مقاس L، لون Black، السعر 590 جنيه",
+        "• الشحن للقاهرة — 60 جنيه",
+        "• الإجمالي — 650 جنيه كاش عند الاستلام",
+        "التوصيل بياخد من 2 لـ 4 أيام",
+    ):
+        assert quality_gate.layout_problems(line) == [], line
+
+
+def test_a_line_opening_with_a_latin_word_fails():
+    """First strong character decides the whole line's direction, so this one
+    is laid out left-to-right among right-to-left neighbours."""
+    assert quality_gate.layout_problems("Boxy WNS Tee متوفر بـ 590 جنيه")
+
+
+def test_a_bullet_does_not_excuse_a_latin_opening():
+    """The bullet is neutral, so `• L — ...` still opens on the Latin size."""
+    assert quality_gate.layout_problems("• L — عرض 61 سم، طول 71 سم")
+
+
+def test_a_number_straight_after_a_latin_word_fails():
+    """«لون Black — 590 جنيه» is displayed «لون 590 — Black جنيه»: the customer
+    reads the price where the colour is."""
+    problems = quality_gate.layout_problems("• تيشيرت Boxy WNS Tee — لون Black — 590 جنيه")
+    assert any("swap" in p for p in problems), problems
+
+
+def test_an_arabic_comma_between_them_is_the_same_failure():
+    assert quality_gate.layout_problems("لون Black، 590 جنيه")
+
+
+def test_an_arabic_word_between_them_is_correct():
+    """This is the whole point of the rule: one Arabic word anchors the
+    number, and the line reads the way it was written."""
+    assert quality_gate.layout_problems("• تيشيرت Boxy WNS Tee — لون Black، السعر 590 جنيه") == []
+
+
+def test_a_plain_space_is_not_a_separator():
+    """A digit directly after a Latin letter takes that letter's direction, so
+    «مقاس L 590 جنيه» lays out correctly and must not be failed."""
+    assert quality_gate.layout_problems("مقاس L 590 جنيه") == []
+
+
+def test_a_leading_digit_is_not_flagged():
+    """Digits are not strong characters, so the line still takes its direction
+    from the Arabic after them."""
+    assert quality_gate.layout_problems("2 قطع من تيشيرت Boxy WNS Tee") == []
+
+
+def test_a_hyphen_inside_a_product_name_is_not_a_separator():
+    assert quality_gate.layout_problems("هودي WANAS Zip-Hoodie متاح دلوقتي") == []
+
+
+def test_a_badly_laid_out_reply_fails_the_gate():
+    golden = _run(_reply("confirm_order", 2, "• تيشيرت Boxy WNS Tee — لون Black، السعر 590 جنيه"))
+    fresh = _run(_reply("confirm_order", 2, "• تيشيرت Boxy WNS Tee — لون Black — 590 جنيه"))
+    assert any("swap" in f for f in check(golden, fresh))
