@@ -1024,6 +1024,80 @@ def test_an_empty_routing_var_means_empty_not_default(monkeypatch):
     assert load_settings().openrouter_providers == ("z-ai", "deepinfra", "novita")
 
 
+def test_a_media_call_is_routed_too(captured, provider):
+    """A voice note asks for temperature 0.0 and is just as capable of being
+    handed to a stack that drops it -- and a transcript sampled at 1.0 does
+    not read as broken, it reads as different words."""
+    captured["queue"].append(text_reply("الشحن كام؟"))
+    provider.transcribe(b"audio-bytes", "audio/ogg")
+
+    body = captured["sent"][0]["body"]
+    assert body["temperature"] == 0.0
+    assert body["provider"]["require_parameters"] is True
+    assert body["provider"]["allow_fallbacks"] is True
+
+
+def test_a_media_call_does_not_inherit_the_chat_models_upstreams(captured, provider):
+    """`order` and `quantizations` were chosen for the chat model. Naming
+    z-ai as the preferred upstream for a Gemini media id describes nothing,
+    and a quantization filter for a model whose hosts publish different ones
+    can empty the candidate set."""
+    captured["queue"].append(text_reply("x"))
+    provider.transcribe(b"audio-bytes", "audio/ogg")
+
+    routing = captured["sent"][0]["body"]["provider"]
+    assert "order" not in routing
+    assert "quantizations" not in routing
+
+
+def test_every_call_that_leaves_this_provider_carries_routing(captured, provider):
+    """Five call sites, one enforcement point. The one that forgets is the one
+    that silently loses its temperature."""
+    captured["queue"].extend(
+        [
+            text_reply("t"),
+            text_reply('{"product_id": null, "category": null, "colors": [], "note": ""}'),
+            text_reply('{"category": "positive", "reason": ""}'),
+        ]
+    )
+    provider.transcribe(b"a", "audio/ogg")
+    provider.inspect_image(b"img", "image/jpeg", catalog=[])
+    provider.classify_comment("حلو اوي")
+
+    for request in captured["sent"]:
+        assert request["body"]["provider"]["require_parameters"] is True
+
+
+def test_the_classifier_on_the_chat_model_gets_the_chat_routing(captured, monkeypatch):
+    """Blank COMMENT_CLASSIFIER_MODEL means the chat model, and the chat
+    model's own upstream preference applies to it."""
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(settings, openrouter_api_key=KEY, comment_classifier_model=""),
+    )
+    captured["queue"].append(text_reply('{"category": "positive", "reason": ""}'))
+    OpenRouterProvider(api_key=KEY).classify_comment("حلو اوي")
+
+    assert captured["sent"][0]["body"]["provider"]["order"] == ["z-ai", "deepinfra", "novita"]
+
+
+def test_turning_routing_off_turns_it_off_for_media_too(captured, monkeypatch):
+    monkeypatch.setattr(
+        openrouter_module,
+        "settings",
+        dataclasses.replace(
+            settings,
+            openrouter_api_key=KEY,
+            openrouter_providers=(),
+            openrouter_quantizations=(),
+        ),
+    )
+    captured["queue"].append(text_reply("t"))
+    OpenRouterProvider(api_key=KEY).transcribe(b"a", "audio/ogg")
+    assert "provider" not in captured["sent"][0]["body"]
+
+
 # -- reasoning blocks across a tool loop ------------------------------------
 
 

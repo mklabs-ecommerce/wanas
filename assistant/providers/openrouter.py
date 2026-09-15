@@ -286,7 +286,7 @@ class OpenRouterProvider(LLMProvider):
     #: half-written sentence must never be sent whatever the budget was.
     CHAT_MAX_TOKENS = 8192
 
-    def _routing(self) -> dict | None:
+    def _routing(self, model: str | None = None) -> dict | None:
         """Which upstreams OpenRouter may serve this model from.
 
         **A model id is not a serving stack.** OpenRouter routes one id across
@@ -323,7 +323,26 @@ class OpenRouterProvider(LLMProvider):
         Returns None when nothing is configured, which leaves OpenRouter's
         default behaviour exactly as it was -- the tests that pin the payload
         shape for a bare provider keep passing, and a deployment can opt out.
+
+        **`model` is the model the payload actually names, not always the
+        conversation model.** Voice notes, photos, size-chart readings and the
+        comment classifier ride this same endpoint on their own ids, and the
+        `order`/`quantizations` lists above were chosen for the chat model --
+        naming z-ai as the preferred upstream for a Gemini media id is a
+        filter that describes nothing, and pinning quantizations for a model
+        whose hosts publish different ones can empty the candidate set. So a
+        different model gets the half that is about correctness rather than
+        preference: `require_parameters`, which is what stops a stack that
+        does not implement `temperature` from being handed one and dropping
+        it. A transcript sampled at that stack's 1.0 instead of the 0.0 asked
+        for is the same failure as a garbled reply, one layer earlier -- and
+        it does not read as broken, it reads as different words.
         """
+        if model is not None and model != self.model:
+            if not (settings.openrouter_providers or settings.openrouter_quantizations):
+                return None
+            return {"allow_fallbacks": True, "require_parameters": True}
+
         routing: dict = {}
         if settings.openrouter_providers:
             routing["order"] = list(settings.openrouter_providers)
@@ -377,9 +396,6 @@ class OpenRouterProvider(LLMProvider):
         reasoning = self._reasoning()
         if reasoning:
             payload["reasoning"] = reasoning
-        routing = self._routing()
-        if routing:
-            payload["provider"] = routing
         if tools:
             payload["tools"] = [self._schema(spec) for spec in tools]
         return payload
@@ -440,6 +456,15 @@ class OpenRouterProvider(LLMProvider):
 
     def _post(self, payload: dict, *, timeout: float | None = None) -> httpx.Response:
         url = f"{BASE_URL}/chat/completions"
+
+        # Routing is attached here rather than at each call site, because
+        # there are five of them and the one that forgets is the one that
+        # silently loses its `temperature`. Every request that leaves this
+        # file is filtered to upstreams that implement what it sends.
+        if "provider" not in payload:
+            routing = self._routing(payload.get("model"))
+            if routing:
+                payload["provider"] = routing
 
         if settings.llm_debug_payload:
             # Off by default. The API key travels in the Authorization header,
