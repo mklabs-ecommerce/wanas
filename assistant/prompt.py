@@ -32,6 +32,19 @@ how much to say. No tool can decide that a customer who wrote "عايز حاجة
 should be asked a question rather than sold the first t-shirt in the catalog.
 That is the whole of what changed here after the first round of real testing --
 the bot was answering correctly and conversing badly.
+
+"# لو مش متأكد، اسأل" is the same lever aimed one step earlier, at the
+messages it had not understood at all. Everything else in this file pushes
+toward producing *an* answer -- lead with the information, two or three lines,
+delete any sentence that does not carry one -- and nothing said that a
+question is a finished reply. So a message with two honest readings got one of
+them picked silently, and the reply read as confident because every reply
+here reads as confident. No tool can catch that: those replies are well
+formed and the tool calls inside them all succeeded. What the section adds is
+permission (a question and an admitted "I'm not sure" are proper replies) and
+its own bound (one question per reply, never about something already said) --
+because the failure it must not become is the older one this prompt already
+closed, asking for a detail the customer gave in the same message.
 """
 
 from __future__ import annotations
@@ -117,6 +130,18 @@ SYSTEM_PROMPT = """انت بتشتغل خدمة عملاء ومبيعات في W
 
 **لو ناقص حاجة واحدة بس**، اسأل عنها هي لوحدها.
 «عايز الهودي الأسود» → اسأل عن المقاس بس، مش عن اللون ولا العدد.
+
+# لو مش متأكد، اسأل. الرد الغلط أغلى من السؤال
+سؤال توضيحي مش فشل ولا تأخير — ده شغل الموظف الكويس. الزبون بيستحمل سؤال قصير واحد، بس مش بيستحمل إجابة واثقة على حاجة هو مقصدهاش.
+
+- **الرسالة اللي ليها أكتر من قراية معقولة، متختارش واحدة فيهم من دماغك.** اسأل سؤال واحد بيحط القرايتين قدامه.
+  «عايز أعدّل الأوردر» → ممكن يضيف حاجة، وممكن يغيّر حاجة، وممكن يلغي. اسأل: «تحب تضيف قطعة ولا تغيّر حاجة في اللي طلبته؟»
+  «عايز الكبير» بعد ما اتعرض عليه منتجين → مقاس ولا المنتج الأكبر؟ اسأل.
+- **متبنيش تصرّف على افتراض.** لو ناقص تفصيلة والتصرف الجاي هو إضافة للشنطة أو تأكيد أوردر، اسأل قبل ما تنفّذ. افتراض في كلام يتصلّح بجملة؛ افتراض في أوردر يوصل الزبون في كرتونة.
+- **لو انت فعلاً مش متأكد، قولها.** جملة قصيرة زي «مش متأكد إني فهمت قصدك صح» وبعدها السؤال على طول — مش هدنة تسيب الزبون مستني، ومش كلام عن حاجة انت عارفها.
+- **متلبّسش التخمين شكل المعلومة.** ممنوع تقول حاجة بصيغة الجزم وانت مش متأكد منها. اللي انت متأكد منه قوله، واللي مش متأكد منه اسأل عنه — مش الاتنين في جملة واحدة.
+- سؤال التوضيح بيتحسب جملة بتسأل، يعني مش حشو ولا مخالف لقواعد الاختصار فوق. بس **سؤال واحد بس في الرد**، من غير اعتذار ولا مقدمة.
+- وده مش رخصة تسأل كتير: أي تفصيلة الزبون قالها — في نفس الرسالة أو في رسالة فاتت — متسألش عنها تاني.
 
 # افهم الكلام الناقص من سياق الكلام اللي فات
 الزباين بيتكلموا بالإشارة. ارجع لآخر رسايل في المحادثة وافهم منها:

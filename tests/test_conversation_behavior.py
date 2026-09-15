@@ -546,6 +546,61 @@ def test_the_prompt_forbids_answering_a_broad_request_with_one_product():
     assert "اسأل سؤال واحد خفيف يضيّق الاختيار" in SYSTEM_PROMPT
 
 
+SECTION = "# لو مش متأكد، اسأل"
+
+
+def test_the_prompt_makes_a_clarifying_question_a_proper_reply():
+    """The bot answered confidently through a message it had not understood,
+    because everything else in this prompt pushes it to produce *an* answer --
+    lead with the information, keep it short, no filler. Nothing said a
+    question is a finished reply, so a guess was the only thing that looked
+    like one."""
+    section = SYSTEM_PROMPT.split(SECTION)[1]
+    assert "سؤال توضيحي مش فشل" in section
+    assert "بتتحسب جملة بتسأل" in section.replace("بيتحسب", "بتتحسب")
+
+
+def test_the_prompt_answers_an_ambiguous_message_with_a_question_not_a_pick():
+    """Two readings is not a coin toss. «عايز أعدّل الأوردر» is add, swap or
+    cancel, and picking one silently is how a customer ends up with a garment
+    taken *off* the order they meant to grow."""
+    section = SYSTEM_PROMPT.split(SECTION)[1]
+    assert "متختارش واحدة فيهم من دماغك" in section
+    assert "عايز أعدّل الأوردر" in section
+
+
+def test_the_prompt_forbids_acting_on_an_assumption():
+    """An assumption in a sentence costs a sentence; an assumption in
+    `add_to_cart` or `confirm_order` arrives at the customer's door."""
+    section = SYSTEM_PROMPT.split(SECTION)[1]
+    assert "متبنيش تصرّف على افتراض" in section
+
+
+def test_the_prompt_lets_the_bot_say_it_is_not_sure():
+    """Out loud, in one ordinary sentence, with the question right behind it
+    -- not as a hedge left hanging, and not over something it does know."""
+    section = SYSTEM_PROMPT.split(SECTION)[1]
+    assert "مش متأكد إني فهمت قصدك صح" in section
+    assert "متلبّسش التخمين شكل المعلومة" in section
+
+
+def test_asking_more_is_still_bounded():
+    """Permission to ask is not permission to interrogate: one question per
+    reply, and never about something already said. Without this the fix for
+    "it guesses" becomes the older bug this prompt already closed -- asking
+    for a detail the customer gave in the same message."""
+    section = SYSTEM_PROMPT.split(SECTION)[1]
+    assert "سؤال واحد بس في الرد" in section
+    assert "متسألش عنها تاني" in section
+
+
+def test_the_clarifying_section_comes_before_the_context_rules():
+    """Order matters in a prompt this long: understanding is the thing the
+    reply is built on, so it sits with the other comprehension rules rather
+    than after the ordering flow."""
+    assert SYSTEM_PROMPT.index(SECTION) < SYSTEM_PROMPT.index("# الشراء")
+
+
 @pytest.mark.parametrize(
     "phrase",
     ["هل ترغب في", "هل تريد أن", "يرجى", "وجدت المنتجات التالية", "ماذا تريد أن أفعل؟"],
@@ -714,7 +769,16 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # sentence is which, and that the honest move when it cannot tell is
         # one short question. «ينفع اضيفه علي نفس الاوردر اللي فات» was filed
         # as "remove the Knitted Polo, put the Heart Top in its place".
-    assert 3000 < len(SYSTEM_PROMPT) < 22200
+        #
+        # 22200 -> 23100: asking instead of guessing. Everything else in this
+        # prompt pushes toward producing *an* answer -- lead with the
+        # information, two or three lines, delete any sentence that does not
+        # carry one -- and nothing said that a question is a finished reply.
+        # So a message with two readings got one of them picked silently, and
+        # a message it had not understood got a confident answer anyway. The
+        # tools cannot see this: every one of those replies is well-formed and
+        # every tool call in it succeeded.
+    assert 3000 < len(SYSTEM_PROMPT) < 23100
 
 
 # --------------------------------------------------------------------------
