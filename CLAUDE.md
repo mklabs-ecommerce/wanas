@@ -703,7 +703,15 @@ tests/                   pytest suite (flat, one test_<module>.py per
   (`_routing` in `openrouter.py`), and the `require_parameters` filter they
   turn on is the part that matters — it makes `temperature` a setting rather
   than a suggestion. Fallbacks stay on: this excludes stacks that answer
-  badly, it does not make one provider a single point of failure.
+  badly, it does not make one provider a single point of failure. The
+  `provider` block is attached in `_post`, not at each call site: there are
+  five of them (chat, transcribe, inspect_image, read_size_chart,
+  classify_comment) and the one that forgets is the one that silently loses
+  its `temperature` -- a transcript sampled at 1.0 does not read as broken, it
+  reads as different words. A call naming a *different* model (the media
+  model, a separate classifier model) gets `require_parameters` only: the
+  `order`/`quantizations` lists were chosen for the chat model, and applied to
+  another id they filter on nothing or filter everything out.
 - **A reply that hit the token ceiling is never sent.** `finish_reason`
   (`length` / `max_tokens` / Gemini's `MAX_TOKENS`) is the *only* signal that
   a reply stopped mid-sentence — the text reads as ordinary Arabic right up to
