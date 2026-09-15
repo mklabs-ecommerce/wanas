@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,6 +25,7 @@ from domain.models import (
     OrderFeedback,
     OrderItem,
     OrderStatus,
+    QueueKind,
     Variant,
     utcnow,
 )
@@ -32,6 +34,7 @@ from domain.services import (
     identities,
     inventory,
     notifications,
+    queues,
 )
 from domain.services.ids import next_order_id
 from domain.services.shipping import get_fee, resolve as resolve_governorate
@@ -51,6 +54,67 @@ class Refusal(Exception):
     def __init__(self, payload: dict):
         super().__init__(payload.get("error", "refused"))
         self.payload = payload
+
+
+#: Anything under a piastre is Shopify rounding, not a disagreement.
+_TOTAL_TOLERANCE = Decimal("0.01")
+
+
+def check_total_against_shopify(session: Session, order: Order, what: str) -> None:
+    """After an edit, does Shopify's total still say what we tell the customer?
+
+    It did not, and nobody found out from the software. `orderCreate` is sent
+    no `taxLines`, so every order this shop creates carries none -- but
+    `orderEditAddVariant` runs Shopify's own tax engine. Adding a 580.00
+    garment to order #1040 produced a GST line of 81.20: the customer was told
+    1189.00, Shopify recorded 1270.20, and cash on delivery is collected
+    against Shopify's number. An 81.20 surprise at the door, from a message
+    the bot sent in good faith.
+
+    Which of the two numbers is *right* is the shop's decision and not this
+    function's -- it only refuses to let them disagree quietly. The edit has
+    already been applied and is not undone: a mismatch is money, but so is
+    rolling back a change the customer has been told about. It raises the
+    alert and says both numbers.
+    """
+    if not order.shopify_order_id:
+        return
+    reading = shopify_orders.current_total(order.shopify_order_id)
+    if reading is None:
+        return
+    remote_total, remote_tax = reading
+    local_total = to_decimal(order.total)
+    if abs(remote_total - local_total) <= _TOTAL_TOLERANCE:
+        return
+
+    log.error(
+        "order %s: after %s Shopify says %s but we say %s (tax %s) -- the customer "
+        "was told our number and the courier collects Shopify's",
+        order.order_id,
+        what,
+        remote_total,
+        local_total,
+        remote_tax,
+    )
+    queues.enqueue(
+        session,
+        kind=QueueKind.ALERT.value,
+        reason="order_total_mismatch",
+        summary=(
+            f"{notifications.customer_reference(order)}: after {what}, Shopify's total is "
+            f"{money(remote_total)} but the customer was told {money(local_total)}. "
+            f"Cash on delivery collects Shopify's number"
+            + (f" (it added {money(remote_tax)} tax)." if remote_tax else ".")
+        ),
+        order_id=order.order_id,
+        channel=order.source_channel,
+        payload={
+            "shopify_total": money(remote_total),
+            "our_total": money(local_total),
+            "shopify_tax": money(remote_tax),
+            "change": what,
+        },
+    )
 
 
 def edit_refusal(exc: Exception, order: Order, what: str) -> Refusal:
@@ -782,6 +846,7 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
         if variant is not None:
             notifications.low_stock_breach(session, variant)
 
+    check_total_against_shopify(session, order, "a quantity change")
     notifications.order_modified(session, order, f"{variant_id} {previous} → {quantity}")
     return order_payload(order)
 
@@ -1057,6 +1122,7 @@ def apply_swap(session: Session, order: Order, from_variant_id: str, to_variant_
 
     if inventory.breached_threshold(session, to_variant_id):
         notifications.low_stock_breach(session, replacement)
+    check_total_against_shopify(session, order, "a swap")
     notifications.order_modified(session, order, f"swap {from_variant_id} → {to_variant_id}")
     return order_payload(order)
 
@@ -1187,6 +1253,7 @@ def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int 
 
     if inventory.breached_threshold(session, to_variant_id):
         notifications.low_stock_breach(session, addition)
+    check_total_against_shopify(session, order, "an add")
     notifications.order_modified(session, order, f"add {quantity} × {to_variant_id}")
     return order_payload(order)
 

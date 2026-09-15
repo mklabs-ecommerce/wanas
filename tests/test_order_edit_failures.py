@@ -257,3 +257,102 @@ def test_a_failure_is_not_cached_as_success(monkeypatch):
     monkeypatch.setattr(scopes, "_cached", None)
     assert scopes.missing(refresh=True) == []
     assert scopes.missing() == ["write_orders"]
+
+
+# --------------------------------------------------------------------------
+# ...and the edit that worked, and still cost the customer 81.20.
+#
+# The first add to land on production did everything right except the one
+# thing nobody was checking. `orderCreate` is sent no `taxLines`, so every
+# order this shop creates carries none -- but `orderEditAddVariant` runs
+# Shopify's own tax engine, which put GST 14% (81.20) on a 580.00 garment
+# added to order #1040. The customer had been told 1189.00. Shopify recorded
+# 1270.20. Cash on delivery collects Shopify's number.
+# --------------------------------------------------------------------------
+
+
+def _totals(remote: str, tax: str = "0"):
+    from decimal import Decimal
+
+    return lambda _id: (Decimal(remote), Decimal(tax))
+
+
+def test_a_total_shopify_disagrees_with_raises_an_alert(order, seeded, monkeypatch):
+    from domain.models import QueueKind
+    from domain.services import queues
+
+    monkeypatch.setattr(shopify_orders, "current_total", _totals("1270.20", "81.20"))
+    orders.check_total_against_shopify(seeded, order, "an add")
+
+    alerts = [
+        item
+        for item in queues.open_items(seeded, QueueKind.ALERT.value)
+        if item.reason == "order_total_mismatch"
+    ]
+    assert len(alerts) == 1, "the disagreement was not raised"
+    # Both numbers, because the point is that they differ. `common.money`
+    # renders these as numbers, not fixed-point strings -- house style, so a
+    # reply reads "650" rather than "650.00".
+    assert "1270.2" in alerts[0].summary
+    assert str(order.total) not in alerts[0].summary.split("told ")[0]
+    assert alerts[0].payload["shopify_tax"] == 81.2
+    assert alerts[0].payload["shopify_total"] == 1270.2
+
+
+def test_totals_that_agree_raise_nothing(order, seeded, monkeypatch):
+    from domain.models import QueueKind
+    from domain.services import queues
+
+    monkeypatch.setattr(shopify_orders, "current_total", _totals(str(order.total)))
+    orders.check_total_against_shopify(seeded, order, "an add")
+    assert not [
+        i
+        for i in queues.open_items(seeded, QueueKind.ALERT.value)
+        if i.reason == "order_total_mismatch"
+    ]
+
+
+def test_a_rounding_difference_is_not_a_disagreement(order, seeded, monkeypatch):
+    """Shopify rounds; a piastre is not an argument at the door."""
+    from decimal import Decimal
+
+    from domain.models import QueueKind
+    from domain.services import queues
+
+    monkeypatch.setattr(
+        shopify_orders, "current_total", _totals(str(Decimal(order.total) + Decimal("0.01")))
+    )
+    orders.check_total_against_shopify(seeded, order, "an add")
+    assert not [
+        i
+        for i in queues.open_items(seeded, QueueKind.ALERT.value)
+        if i.reason == "order_total_mismatch"
+    ]
+
+
+def test_an_unreadable_total_is_not_reported_as_a_mismatch(order, seeded, monkeypatch):
+    """"We could not ask" is not "they disagree" -- the same rule the scope
+    check follows."""
+    from domain.models import QueueKind
+    from domain.services import queues
+
+    monkeypatch.setattr(shopify_orders, "current_total", lambda _id: None)
+    orders.check_total_against_shopify(seeded, order, "an add")
+    assert not [
+        i
+        for i in queues.open_items(seeded, QueueKind.ALERT.value)
+        if i.reason == "order_total_mismatch"
+    ]
+
+
+def test_the_check_runs_on_every_edit_path(order, seeded, monkeypatch):
+    """A quantity change and a swap edit the same order the same way."""
+    import domain.services.orders as orders_module
+
+    seen = []
+    monkeypatch.setattr(
+        orders_module, "check_total_against_shopify", lambda s, o, what: seen.append(what)
+    )
+    orders.apply_add(seeded, order, VARIANT_B, 1)
+    orders.modify_quantity(seeded, order, VARIANT_A, 2)
+    assert seen == ["an add", "a quantity change"], seen

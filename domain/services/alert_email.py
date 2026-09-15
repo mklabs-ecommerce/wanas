@@ -77,6 +77,10 @@ MAILED_ALERT_REASONS = frozenset(
         "order_modified",
         "order_cancelled",
         "low_stock",
+        # The order says one number and the customer was told another. Cash
+        # on delivery collects Shopify's, so this is an argument at the door
+        # that nobody else is going to notice first.
+        "order_total_mismatch",
         # -- a public question the DM budget could not answer ------------
         # `order_status_comment` is raised when someone asks about their
         # order in a public comment. It used to be in no list at all: raised
@@ -139,6 +143,7 @@ _SUBJECT_PREFIX = {
     "resolution_undelivered": "Customer never told the outcome",
     "proactive_outreach_failed": "Undelivered notice",
     "order_modified": "Order changed",
+    "order_total_mismatch": "Order total disagrees",
     "order_cancelled": "Order cancelled",
     "low_stock": "Low stock",
     "swap_requested": "Item swap requested",

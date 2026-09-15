@@ -604,6 +604,16 @@ tests/                   pytest suite (flat, one test_<module>.py per
   now means only "unreachable"; `orders.edit_refusal` tells a permission gap,
   a Shopify refusal, an out-of-stock and an outage apart, and the dashboard
   says which in Arabic.
+- **And an edit must not change what the order comes to behind the
+  customer's back.** `orderCreate` is sent no `taxLines`, so every order this
+  shop creates carries none — but `orderEditAddVariant` runs Shopify's own
+  tax engine, which put GST 14% (81.20) on a 580.00 garment added to order
+  #1040: the customer was told 1189.00, Shopify recorded 1270.20, and cash on
+  delivery collects Shopify's number. `orders.check_total_against_shopify`
+  reads the total back after every edit and raises `order_total_mismatch`
+  (mailed) naming both numbers. It does **not** pick a winner — which of the
+  two is right is the shop's decision, and the edit is never rolled back,
+  because the customer has already been told about it.
 - **And no error code reaches a screen as a code.** `ERROR_REASONS` in
   `dashboard/dashboard.html` maps every `{"error": ...}` the API can answer
   with to an Arabic sentence, and the mapping lives behind `toastError` and

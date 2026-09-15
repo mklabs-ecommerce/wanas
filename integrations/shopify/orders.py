@@ -25,7 +25,9 @@ the local write fails the Shopify order is cancelled to compensate.
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
+from common.money import to_decimal
 from integrations.shopify.client import (  # noqa: F401  (re-exported)
     ShopifyConfigError,
     ShopifyUnavailable,
@@ -624,6 +626,44 @@ mutation($id: ID!, $variantId: ID!, $quantity: Int!) {
   }
 }
 """
+
+
+ORDER_TOTAL = """
+query($id: ID!) {
+  order(id: $id) {
+    name
+    currentTotalPriceSet { shopMoney { amount } }
+    currentTotalTaxSet { shopMoney { amount } }
+  }
+}
+"""
+
+
+def current_total(shopify_order_id: str) -> tuple[Decimal, Decimal] | None:
+    """What Shopify says this order now comes to, and how much of it is tax.
+
+    Read *after* an edit, because an edit is the one moment the two records
+    can diverge. `orderCreate` is sent no `taxLines`, so every order this shop
+    creates carries none -- but `orderEditAddVariant` runs Shopify's own tax
+    engine, which put a GST line of 81.20 on a 580.00 garment added to order
+    #1040. The customer had been told 1189.00; Shopify said 1270.20, and on
+    cash on delivery the courier collects Shopify's number.
+
+    Returns None rather than raising: this is a check on a change that has
+    already been applied, and a failed read must not undo it.
+    """
+    try:
+        data = get_client()(ORDER_TOTAL, {"id": shopify_order_id})
+    except Exception:
+        log.warning("could not read back the total for %s", shopify_order_id, exc_info=True)
+        return None
+    order = (data or {}).get("order") or {}
+    try:
+        total = to_decimal(order["currentTotalPriceSet"]["shopMoney"]["amount"])
+        tax = to_decimal(order["currentTotalTaxSet"]["shopMoney"]["amount"])
+    except (KeyError, TypeError):
+        return None
+    return total, tax
 
 
 def add_line(

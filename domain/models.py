@@ -139,6 +139,7 @@ ALERT_REASONS = ("order_confirmed", "low_stock", "order_modified", "order_cancel
                  "add_requested", "turn_crashed", "order_status_comment",
                  "confirmation_delivery_failed", "reply_delivery_failed", "proactive_outreach_failed",
                  "status_push_undelivered", "resolution_undelivered",
+                 "order_total_mismatch",
                  "instagram_reply_delivery_failed", "instagram_token_refresh_failed", "comment_flood",
                  "negative_comment", "customer_complaint", "spam_comment", "classifier_unavailable")
 
