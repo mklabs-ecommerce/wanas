@@ -416,7 +416,14 @@ def create_order(
         raise ShopifyUnavailable("Shopify returned no order")
 
     log.info("Created Shopify order %s for %s", created.get("name"), reference)
-    return {"id": created["id"], "name": created.get("name") or ""}
+    return {
+        "id": created["id"],
+        "name": created.get("name") or "",
+        # Read once, here, so `place_order` can check what it is about to tell
+        # the customer against what Shopify actually recorded -- without a
+        # second call back to ask.
+        "total": _money(created, "totalPriceSet"),
+    }
 
 
 def cancel_order(shopify_order_id: str, *, reason: str = "CUSTOMER", restock: bool = True) -> None:
@@ -548,7 +555,13 @@ mutation($calculatedOrderId: ID!, $lineItemId: ID!, $quantity: Int!, $restock: B
 EDIT_COMMIT = """
 mutation($id: ID!, $notify: Boolean!, $note: String) {
   orderEditCommit(id: $id, notifyCustomer: $notify, staffNote: $note) {
-    order { id name }
+    order {
+      id
+      name
+      totalPriceSet { shopMoney { amount } }
+      subtotalPriceSet { shopMoney { amount } }
+      totalShippingPriceSet { shopMoney { amount } }
+    }
     userErrors { field message }
   }
 }
@@ -563,9 +576,39 @@ def _errors_of(block: dict, key: str) -> None:
         raise OrderRejected(message, errors)
 
 
+def _money(block: dict, key: str) -> Decimal | None:
+    try:
+        return to_decimal(block[key]["shopMoney"]["amount"])
+    except (KeyError, TypeError):
+        return None
+
+
+def _totals_from_commit(committed: dict) -> dict | None:
+    """What Shopify says the order now comes to, straight off the commit
+    response -- no extra round trip needed to learn it.
+
+    `total` is the one that matters; `subtotal`/`shipping` are included when
+    Shopify sends them, and left out rather than guessed at when it doesn't.
+    Returns None when even the total is missing, which the caller reads as
+    "nothing to write, fall back to the local number".
+    """
+    order = (committed or {}).get("order") or {}
+    total = _money(order, "totalPriceSet")
+    if total is None:
+        return None
+    out = {"total": total}
+    subtotal = _money(order, "subtotalPriceSet")
+    if subtotal is not None:
+        out["subtotal"] = subtotal
+    shipping = _money(order, "totalShippingPriceSet")
+    if shipping is not None:
+        out["shipping"] = shipping
+    return out
+
+
 def set_line_quantity(
     shopify_order_id: str, sku: str, quantity: int, *, note: str | None = None
-) -> None:
+) -> dict | None:
     """Change one line's quantity on a placed order, by SKU.
 
     `restock=True` on a decrease is what returns the difference to the shelf;
@@ -615,6 +658,7 @@ def set_line_quantity(
         },
     ).get("orderEditCommit")
     _errors_of(committed, "orderEditCommit")
+    return _totals_from_commit(committed)
 
 
 EDIT_ADD_VARIANT = """
@@ -672,7 +716,7 @@ def add_line(
     quantity: int,
     *,
     note: str | None = None,
-) -> None:
+) -> dict | None:
     """Add one more line to a placed order, touching nothing already on it.
 
     The other half of `swap_line`, and deliberately not a call to it with an
@@ -701,6 +745,7 @@ def add_line(
         {"id": calculated_id, "notify": False, "note": note or "Item added by staff"},
     ).get("orderEditCommit")
     _errors_of(committed, "orderEditCommit")
+    return _totals_from_commit(committed)
 
 
 def swap_line(
@@ -710,7 +755,7 @@ def swap_line(
     quantity: int,
     *,
     note: str | None = None,
-) -> None:
+) -> dict | None:
     """Replace one line with a different variant, in a single edit session.
 
     Both halves are committed together on purpose. Two separate edits would
@@ -756,6 +801,7 @@ def swap_line(
         {"id": calculated_id, "notify": False, "note": note or "Item swap approved by staff"},
     ).get("orderEditCommit")
     _errors_of(committed, "orderEditCommit")
+    return _totals_from_commit(committed)
 
 
 def try_cancel(shopify_order_id: str, *, reason: str = "OTHER") -> bool:

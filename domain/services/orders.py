@@ -60,8 +60,10 @@ class Refusal(Exception):
 _TOTAL_TOLERANCE = Decimal("0.01")
 
 
-def check_total_against_shopify(session: Session, order: Order, what: str) -> None:
-    """After an edit, does Shopify's total still say what we tell the customer?
+def _raise_total_mismatch_alert(
+    session: Session, order: Order, what: str, remote_total: Decimal, remote_tax: Decimal = Decimal(0)
+) -> None:
+    """Does Shopify's total still say what we are about to tell the customer?
 
     It did not, and nobody found out from the software. `orderCreate` is sent
     no `taxLines`, so every order this shop creates carries none -- but
@@ -77,12 +79,6 @@ def check_total_against_shopify(session: Session, order: Order, what: str) -> No
     rolling back a change the customer has been told about. It raises the
     alert and says both numbers.
     """
-    if not order.shopify_order_id:
-        return
-    reading = shopify_orders.current_total(order.shopify_order_id)
-    if reading is None:
-        return
-    remote_total, remote_tax = reading
     local_total = to_decimal(order.total)
     if abs(remote_total - local_total) <= _TOTAL_TOLERANCE:
         return
@@ -115,6 +111,66 @@ def check_total_against_shopify(session: Session, order: Order, what: str) -> No
             "change": what,
         },
     )
+
+
+def check_total_against_shopify(session: Session, order: Order, what: str) -> None:
+    """The live-query form of `_raise_total_mismatch_alert`, for a caller with
+    no totals of its own to compare -- `advance_status` and anything else that
+    is not itself an edit commit. An edit path that already has Shopify's
+    totals from its own `orderEditCommit` response should compare against
+    those directly instead of paying for a second round trip here.
+    """
+    if not order.shopify_order_id:
+        return
+    reading = shopify_orders.current_total(order.shopify_order_id)
+    if reading is None:
+        return
+    remote_total, remote_tax = reading
+    _raise_total_mismatch_alert(session, order, what, remote_total, remote_tax)
+
+
+def sync_from_admin_edit(
+    session: Session,
+    order: Order,
+    *,
+    total: Decimal,
+    subtotal: Decimal | None = None,
+    shipping: Decimal | None = None,
+) -> bool:
+    """An edit made directly in Shopify Admin -- not through any tool here --
+    changed what this order comes to. Shopify has already applied it; this
+    only catches the local row up, the same way `_apply_remote_totals` does
+    for an edit this codebase made itself. `session` is unused directly but
+    kept for symmetry with every other write in this module, which all take
+    the session they are about to flush against.
+
+    Returns whether the total actually moved, so `integrations/shopify/
+    webhooks.py::_handle_updated` only logs when something did.
+    """
+    changed = abs(to_decimal(order.total) - total) > _TOTAL_TOLERANCE
+    order.total = total
+    if subtotal is not None:
+        order.subtotal = subtotal
+    if shipping is not None:
+        order.shipping_fee = shipping
+    return changed
+
+
+def _apply_remote_totals(order: Order, totals: dict | None) -> None:
+    """Overwrite the locally recomputed total with what Shopify's own edit
+    commit said it now comes to -- the only number the courier will collect
+    against. `recompute_totals` still runs first so `subtotal`/`total` are
+    never left stale when Shopify's response is missing a field; this just
+    lets Shopify's numbers win when it sent them.
+    """
+    if not totals:
+        return
+    if "subtotal" in totals:
+        order.subtotal = totals["subtotal"]
+    if "shipping" in totals:
+        order.shipping_fee = totals["shipping"]
+    if "total" in totals:
+        order.total = totals["total"]
 
 
 def edit_refusal(exc: Exception, order: Order, what: str) -> Refusal:
@@ -591,7 +647,7 @@ def place_order(
         # Guarded, so that a failure to tell anyone about the order can never
         # be reported to the customer as a failure to place it.
         stage = "notifications"
-        _post_order_notifications(session, order, decremented)
+        _post_order_notifications(session, order, decremented, remote)
 
         # The durable point. Until this returns, the order lives in an open
         # transaction that anything later in the turn -- another tool, the
@@ -649,7 +705,9 @@ def place_order(
     return payload
 
 
-def _post_order_notifications(session: Session, order: Order, decremented: list[tuple[str, int]]) -> None:
+def _post_order_notifications(
+    session: Session, order: Order, decremented: list[tuple[str, int]], remote: dict | None = None
+) -> None:
     """Staff alerts and the customer's confirmation, in their own savepoint.
 
     Every line of this is bookkeeping *about* an order that has already been
@@ -666,6 +724,15 @@ def _post_order_notifications(session: Session, order: Order, decremented: list[
             variant = session.get(Variant, variant_id)
             if variant is not None and inventory.breached_threshold(session, variant_id):
                 notifications.low_stock_breach(session, variant)
+        # `orderCreate` carries no tax lines, so this is not the mismatch an
+        # edit can produce -- but the confirmation is about to read out
+        # `order.total`, and a check that only ever runs after an edit would
+        # miss a disagreement on the very first message. Best-effort: a
+        # missing `total` (a malformed response `create_order` would already
+        # have raised on) is read as "nothing to compare", not a mismatch.
+        remote_total = (remote or {}).get("total")
+        if remote_total is not None:
+            _raise_total_mismatch_alert(session, order, "placing the order", remote_total)
         notifications.order_confirmed(session, order)
         nested.commit()
     except Exception:
@@ -744,6 +811,7 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
 
     receipts: list[dict] = []
     edited_on_shopify = False
+    remote_totals: dict | None = None
     nested = session.begin_nested()
     try:
         if order.shopify_order_id:
@@ -757,7 +825,7 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
                 if available < delta:
                     raise Refusal({"error": "insufficient_stock", "available": available})
             try:
-                shopify_orders.set_line_quantity(
+                remote_totals = shopify_orders.set_line_quantity(
                     order.shopify_order_id,
                     variant_id,
                     quantity,
@@ -798,6 +866,7 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
             session.flush()
 
         recompute_totals(order)
+        _apply_remote_totals(order, remote_totals)
         order.modification_log = list(order.modification_log or []) + [
             {
                 "at": utcnow().isoformat(),
@@ -1040,6 +1109,7 @@ def apply_swap(session: Session, order: Order, from_variant_id: str, to_variant_
 
     receipts: list[dict] = []
     quantity = item.quantity
+    remote_totals: dict | None = None
     nested = session.begin_nested()
     try:
         if order.shopify_order_id:
@@ -1051,7 +1121,7 @@ def apply_swap(session: Session, order: Order, from_variant_id: str, to_variant_
                     {"error": "insufficient_stock", "available": replacement_live.stock_qty}
                 )
             try:
-                shopify_orders.swap_line(
+                remote_totals = shopify_orders.swap_line(
                     order.shopify_order_id,
                     from_variant_id,
                     replacement_live.shopify_id,
@@ -1098,6 +1168,7 @@ def apply_swap(session: Session, order: Order, from_variant_id: str, to_variant_
         session.flush()
 
         recompute_totals(order)
+        _apply_remote_totals(order, remote_totals)
         order.modification_log = list(order.modification_log or []) + [
             {
                 "at": utcnow().isoformat(),
@@ -1127,16 +1198,19 @@ def apply_swap(session: Session, order: Order, from_variant_id: str, to_variant_
     return order_payload(order)
 
 
-def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int = 1) -> dict:
-    """Staff approving an *add* from the review queue.
+def _add_variant(
+    session: Session, order: Order, to_variant_id: str, quantity: int, *, channel: str, what: str
+) -> dict:
+    """Add `quantity` of `to_variant_id` to `order`, or merge it into an
+    existing line. Shared by `apply_add` (staff, from the review queue) and
+    `add_item` (the customer's own `add_item_to_order` tool) -- the mechanics
+    are identical, and only who gets named in the modification log differs.
 
-    The sibling of `apply_swap`, and a separate function for the reason the
-    queue kind is separate: this one must not be able to take anything off
-    the order. There is no `from_variant_id` to get wrong, and no line is
-    written to except the one being created (or, when the customer asks for
-    a second of something already on the order, the one it merges into --
-    two lines of the same variant on one order is a packing slip nobody can
-    read).
+    This must not be able to take anything off the order. There is no
+    `from_variant_id` to get wrong, and no line is written to except the one
+    being created (or, when the customer asks for a second of something
+    already on the order, the one it merges into -- two lines of the same
+    variant on one order is a packing slip nobody can read).
 
     Same division of labour as everywhere else: Shopify holds the order and
     the stock, so when there is a Shopify order the edit goes there and the
@@ -1156,6 +1230,7 @@ def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int 
     existing = next((i for i in order.items if i.variant_id == to_variant_id), None)
 
     receipts: list[dict] = []
+    remote_totals: dict | None = None
     nested = session.begin_nested()
     try:
         if order.shopify_order_id:
@@ -1170,14 +1245,14 @@ def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int 
                     # side, and `set_line_quantity` is the mutation that says
                     # so. Adding a duplicate line would leave two rows for one
                     # garment and a total nobody can check at the door.
-                    shopify_orders.set_line_quantity(
+                    remote_totals = shopify_orders.set_line_quantity(
                         order.shopify_order_id,
                         to_variant_id,
                         existing.quantity + quantity,
                         note=f"{order.order_id}: +{quantity} × {to_variant_id}",
                     )
                 else:
-                    shopify_orders.add_line(
+                    remote_totals = shopify_orders.add_line(
                         order.shopify_order_id,
                         live.shopify_id,
                         quantity,
@@ -1229,10 +1304,11 @@ def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int 
         session.refresh(order)
 
         recompute_totals(order)
+        _apply_remote_totals(order, remote_totals)
         order.modification_log = list(order.modification_log or []) + [
             {
                 "at": utcnow().isoformat(),
-                "channel": "dashboard",
+                "channel": channel,
                 "change": "item_add",
                 "to": to_variant_id,
                 "quantity": quantity,
@@ -1253,9 +1329,26 @@ def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int 
 
     if inventory.breached_threshold(session, to_variant_id):
         notifications.low_stock_breach(session, addition)
-    check_total_against_shopify(session, order, "an add")
+    check_total_against_shopify(session, order, what)
     notifications.order_modified(session, order, f"add {quantity} × {to_variant_id}")
     return order_payload(order)
+
+
+def apply_add(session: Session, order: Order, to_variant_id: str, quantity: int = 1) -> dict:
+    """Staff approving an *add* from the review queue. See `_add_variant`."""
+    return _add_variant(session, order, to_variant_id, quantity, channel="dashboard", what="an add")
+
+
+def add_item(session: Session, order: Order, to_variant_id: str, quantity: int = 1) -> dict:
+    """A customer adding an item to their own unshipped order, applied at
+    once rather than queued -- the `add_item_to_order` tool's sibling to
+    `modify_quantity`, now that `write_order_edits` makes an immediate Shopify
+    edit possible. Attributed to the conversation's own channel in the
+    modification log, not "dashboard": nobody on staff pressed anything.
+    """
+    return _add_variant(
+        session, order, to_variant_id, quantity, channel=order.source_channel, what="an add"
+    )
 
 
 def advance_status(session: Session, order: Order, new_status: str) -> dict:

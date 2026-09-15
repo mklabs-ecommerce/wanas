@@ -57,6 +57,11 @@ TOPICS: dict[str, str] = {
     "orders/partially_fulfilled": "ORDERS_PARTIALLY_FULFILLED",
     "fulfillments/update": "FULFILLMENTS_UPDATE",
     "orders/cancelled": "ORDERS_CANCELLED",
+    #: Staff editing an order straight in Shopify Admin -- adding a line,
+    #: changing a quantity -- never went through `orderEditCommit` on this
+    #: side, so nothing here ever heard the new total. Without this topic the
+    #: local row keeps quoting the number it was created with, forever.
+    "orders/updated": "ORDERS_UPDATED",
     #: A product created in Shopify Admin, mirrored into wanas.db as it
     #: happens. `product_import` still runs its catalogue-wide reconcile at
     #: boot -- that is the safety net for a delivery Shopify dropped -- but a

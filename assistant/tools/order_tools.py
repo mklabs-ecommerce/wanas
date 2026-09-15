@@ -1,7 +1,15 @@
 """Ordering and after-the-order tools.
 
-confirm_order, get_my_orders, modify_order_quantity, cancel_order,
-get_return_terms, request_item_swap, request_item_add, submit_feedback.
+confirm_order, get_my_orders, modify_order_quantity, add_item_to_order,
+cancel_order, get_return_terms, request_item_swap, request_item_add,
+submit_feedback.
+
+**Adding to an unshipped order applies immediately; adding to a shipped one
+is a request.** `add_item_to_order` is `modify_order_quantity`'s sibling --
+same immediate-Shopify-edit shape, gated the same way by `order.modifiable`
+-- now that the app carries `write_order_edits`. `request_item_add` stays for
+the cases that still need a person: a shipped order, or a customer who has
+described what they want without naming a variant.
 
 **Adding and swapping are two tools because they are two things.** For a
 while `request_item_swap` was the only post-order request type there was, so
@@ -162,6 +170,32 @@ def get_return_terms(ctx: ToolContext, order_id: str | None = None) -> dict:
     if order is None:
         return {"error": "order_not_found", "order_id": order_id}
     return orders.return_terms(order)
+
+
+@tool(
+    "add_item_to_order",
+    "Add another item to an existing UNSHIPPED order right now -- applied immediately, not "
+    "queued for staff. Use this whenever the variant is known and the order has not shipped "
+    "('modifiable' from get_my_orders). Merges into the existing line if that variant is "
+    "already on the order. Returns the order with its total read back from Shopify itself -- "
+    "read that number to the customer; never state a total of your own. If the order has "
+    "already shipped, or the customer has not said exactly which piece they want, use "
+    "request_item_add instead.",
+    properties={
+        "order_id": {"type": "string"},
+        "variant_id": {"type": "string", "description": "The piece to add."},
+        "quantity": {"type": "integer", "description": "How many, 1-10. Defaults to 1."},
+    },
+    required=("order_id", "variant_id"),
+)
+def add_item_to_order(
+    ctx: ToolContext, order_id: str, variant_id: str, quantity: int | None = None
+) -> dict:
+    order = orders.find_order_for_identity(ctx.session, ctx.channel, ctx.external_id, order_id)
+    if order is None:
+        return {"error": "order_not_found", "order_id": order_id}
+    quantity = 1 if quantity is None else int(quantity)
+    return orders.add_item(ctx.session, order, variant_id, quantity)
 
 
 @tool(

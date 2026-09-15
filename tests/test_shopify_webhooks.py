@@ -201,6 +201,28 @@ def test_each_stage_gets_its_own_message_in_order(post, placed, outbox):
     assert "اتجهز" in outbox[0].text and "الطريق" in outbox[1].text
 
 
+def test_an_admin_edit_syncs_the_total(post, placed, seeded):
+    """Staff editing the order straight in Shopify Admin never goes through
+    `orderEditCommit` on this side, so nothing here ever heard the new total
+    until `orders/updated` closed that gap."""
+    body = {**order_body(placed), "total_price": "999.50", "subtotal_price": "939.50"}
+    assert post("orders/updated", body).status_code == 200
+
+    order = reload(seeded, placed)
+    assert str(order.total) == "999.50" or float(order.total) == 999.50
+    assert float(order.subtotal) == 939.50
+
+
+def test_an_admin_edit_with_no_readable_total_changes_nothing(post, placed, seeded):
+    before = reload(seeded, placed).total
+    assert post("orders/updated", order_body(placed)).status_code == 200
+    assert reload(seeded, placed).total == before
+
+
+def test_an_admin_edit_for_an_order_with_no_local_row_is_ignored(post):
+    assert post("orders/updated", {"id": 999999, "total_price": "50.00"}).status_code == 200
+
+
 def test_a_partial_fulfilment_only_packs_it(post, placed, seeded):
     post("orders/partially_fulfilled", order_body(placed))
     assert reload(seeded, placed).status == OrderStatus.PACKED.value

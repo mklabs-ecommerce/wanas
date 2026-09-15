@@ -15,6 +15,8 @@ So the shop's own actions become the trigger:
     orders/partially_fulfilled  -> Packed
     fulfillments/update         -> Delivered, when Shopify says delivered
     orders/cancelled            -> Cancelled, stock returned locally
+    orders/updated              -> the total synced, when staff edited the
+                                   order straight in Shopify Admin
 
 And the second gap, the same shape: the bot's search reads wanas.db, never
 the live Shopify product list, so a product staff add in Shopify Admin exists
@@ -56,6 +58,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from common.money import to_decimal
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import Order, OrderStatus, WebhookEvent
@@ -76,6 +79,11 @@ TOPIC_STATUS = {
 
 CANCEL_TOPIC = "orders/cancelled"
 FULFILMENT_TOPICS = {"fulfillments/create", "fulfillments/update"}
+
+#: A staff edit made straight in Shopify Admin -- the only door
+#: `orderEditCommit` and `check_total_against_shopify` never see. Not
+#: `TOPIC_STATUS`: this never moves the status, only the money.
+UPDATED_TOPIC = "orders/updated"
 
 #: A product created or changed in Shopify Admin. The bot's search reads
 #: wanas.db and never the live Shopify product list, so until one of these is
@@ -180,6 +188,8 @@ def handle_topic(topic: str, payload: dict) -> None:
                 _handle_status(session, payload, TOPIC_STATUS[topic])
             elif topic in FULFILMENT_TOPICS:
                 _handle_fulfilment(session, payload)
+            elif topic == UPDATED_TOPIC:
+                _handle_updated(session, payload)
             elif topic in PRODUCT_TOPICS:
                 _handle_product(session, payload)
             else:
@@ -287,6 +297,45 @@ def _handle_cancelled(session: Session, payload: dict) -> None:
         # what they did and the two sides disagreeing is what
         # `shopify_check_live` is for.
         log.warning("could not mirror a Shopify cancellation for %s: %s", order.order_id, result)
+
+
+def _handle_updated(session: Session, payload: dict) -> None:
+    """Money that moved because staff edited the order in Shopify Admin
+    itself, never through `orderEditCommit` on this side.
+
+    `orders/updated` also fires for a great many things this bot already
+    hears about on their own topic (a fulfilment, a cancellation), so this
+    only reads the total and, best-effort, the subtotal -- syncing every line
+    item from a REST payload's SKUs is a lot of surface for a webhook to get
+    wrong, and the number that actually reaches the customer at the door is
+    the total. Fires every delivery, not just the ones that actually moved
+    the number: `sync_from_admin_edit` is idempotent and only logs when
+    something changed.
+    """
+    order = find_order(session, payload)
+    if order is None:
+        log.info("orders/updated for %s has no local row; nothing to sync", payload.get("name"))
+        return
+
+    try:
+        total = to_decimal(payload["total_price"])
+    except (KeyError, TypeError, ValueError):
+        log.warning("orders/updated for %s carried no readable total", order.order_id)
+        return
+
+    subtotal = None
+    try:
+        subtotal = to_decimal(payload["subtotal_price"])
+    except (KeyError, TypeError, ValueError):
+        pass
+
+    if order_service.sync_from_admin_edit(session, order, total=total, subtotal=subtotal):
+        log.info(
+            "Shopify admin edit on %s: total is now %s (subtotal %s)",
+            order.order_id,
+            total,
+            subtotal,
+        )
 
 
 def _handle_product(session: Session, payload: dict) -> None:

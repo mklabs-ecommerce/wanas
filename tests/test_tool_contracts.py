@@ -39,7 +39,7 @@ def call(ctx, name, **arguments):
 # --- the seventeen --------------------------------------------------------
 
 
-def test_exactly_twenty_tools():
+def test_exactly_twenty_one_tools():
     """Every capability the bot has is on this list. A behaviour described in
     the docs with no tool here is a behaviour the bot cannot do."""
     assert sorted(REGISTRY) == sorted(
@@ -56,6 +56,7 @@ def test_exactly_twenty_tools():
             "confirm_order",
             "get_my_orders",
             "modify_order_quantity",
+            "add_item_to_order",
             "cancel_order",
             "get_return_terms",
             "request_item_swap",
@@ -66,7 +67,7 @@ def test_exactly_twenty_tools():
             "link_client",
         ]
     )
-    assert len(REGISTRY) == 20
+    assert len(REGISTRY) == 21
 
 
 def test_every_tool_returns_an_object_never_prose(ctx):

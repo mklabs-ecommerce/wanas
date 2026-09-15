@@ -356,3 +356,130 @@ def test_the_check_runs_on_every_edit_path(order, seeded, monkeypatch):
     orders.apply_add(seeded, order, VARIANT_B, 1)
     orders.modify_quantity(seeded, order, VARIANT_A, 2)
     assert seen == ["an add", "a quantity change"], seen
+
+
+# --------------------------------------------------------------------------
+# ...and the total the customer is told is Shopify's number, not a guess
+# reconstructed from local snapshots -- the actual fix for #1039/#1040.
+# --------------------------------------------------------------------------
+
+
+def test_add_item_to_order_applies_at_once_under_the_conversations_own_channel(order, seeded):
+    """`add_item` is the self-service tool's function -- immediate, like
+    `modify_order_quantity`, and attributed to the channel the customer wrote
+    from rather than "dashboard" (`apply_add`'s attribution, for staff)."""
+    from decimal import Decimal
+
+    result = orders.add_item(seeded, order, VARIANT_B, 1)
+    assert "error" not in result, result
+
+    seeded.flush()
+    after = seeded.get(Order, order.order_id)
+    assert after.modification_log[-1]["channel"] == "whatsapp"
+    assert after.modification_log[-1]["change"] == "item_add"
+
+    original_line = next(i for i in after.items if i.variant_id == VARIANT_A)
+    added_line = next(i for i in after.items if i.variant_id == VARIANT_B)
+    expected = Decimal(str(original_line.unit_price)) + Decimal(str(added_line.unit_price)) + Decimal(
+        str(after.shipping_fee)
+    )
+    # The number actually read back to the customer -- not recomputed from
+    # memory here, but the one `add_item` itself wrote onto the order from
+    # Shopify's own `orderEditCommit` response.
+    assert Decimal(str(after.total)) == expected
+    assert Decimal(str(result["total"])) == expected
+
+
+def test_increasing_a_quantity_after_the_price_changed_reads_back_shopifys_total(
+    order, seeded, shopify
+):
+    """The exact shape of #1040: a unit added to a placed order is priced by
+    Shopify at the variant's *current* price, not the line's original
+    snapshot -- so the two units on the line after this end up at two
+    different prices, and the total must reflect both, not `2 * old_price`.
+    """
+    from decimal import Decimal
+
+    original_price = shopify.shelf[VARIANT_A]["price"]
+    new_price = original_price + Decimal("50")
+    shopify.set(VARIANT_A, price=new_price)
+
+    result = orders.modify_quantity(seeded, order, VARIANT_A, 2)
+    assert "error" not in result, result
+
+    seeded.flush()
+    after = seeded.get(Order, order.order_id)
+    item = next(i for i in after.items if i.variant_id == VARIANT_A)
+    # The unit already on the order keeps the price it was sold at...
+    assert Decimal(str(item.unit_price)) == original_price
+    # ...but the total has to say what the new unit actually cost, which a
+    # plain `2 * unit_price` recompute from the local snapshot would get
+    # wrong by exactly the price difference -- the 81.20 that reached a
+    # customer's door with nobody mentioning it.
+    expected = original_price + new_price + Decimal(str(after.shipping_fee))
+    assert Decimal(str(after.total)) == expected
+    wrong_local_only = original_price * 2 + Decimal(str(after.shipping_fee))
+    assert Decimal(str(after.total)) != wrong_local_only
+
+
+def test_place_order_alerts_when_shopifys_own_total_disagrees(cairo_rate, seeded, monkeypatch):
+    """`orderCreate` is checked too, not only the edit paths -- a mismatch at
+    the moment of sale is exactly as much money at the door as one from a
+    later edit."""
+    from decimal import Decimal
+
+    from domain.models import QueueKind
+    from domain.services import carts, queues
+
+    real_create = shopify_orders.create_order
+
+    def surprising(**kwargs):
+        result = real_create(**kwargs)
+        result["total"] = Decimal(str(result["total"])) + Decimal("81.20")
+        return result
+
+    monkeypatch.setattr(shopify_orders, "create_order", surprising)
+
+    carts.add(seeded, "whatsapp", "201555000444", VARIANT_A, 1)
+    result = orders.place_order(
+        seeded,
+        channel="whatsapp",
+        external_id="201555000444",
+        customer_name="Sara",
+        governorate="Cairo",
+        address="2 Test Street",
+        contact_phone="01055566688",
+    )
+    assert "error" not in result, result
+
+    alerts = [
+        item
+        for item in queues.open_items(seeded, QueueKind.ALERT.value)
+        if item.reason == "order_total_mismatch"
+    ]
+    assert len(alerts) == 1, "the disagreement at order-creation time was not raised"
+    assert alerts[0].payload["change"] == "placing the order"
+
+
+def test_place_order_raises_nothing_when_shopify_agrees(cairo_rate, seeded):
+    """The common case: Shopify was sent exactly the price the customer was
+    quoted, so nothing is worth an alert."""
+    from domain.models import QueueKind
+    from domain.services import carts, queues
+
+    carts.add(seeded, "whatsapp", "201555000555", VARIANT_A, 1)
+    result = orders.place_order(
+        seeded,
+        channel="whatsapp",
+        external_id="201555000555",
+        customer_name="Mona",
+        governorate="Cairo",
+        address="3 Test Street",
+        contact_phone="01055566699",
+    )
+    assert "error" not in result, result
+    assert not [
+        item
+        for item in queues.open_items(seeded, QueueKind.ALERT.value)
+        if item.reason == "order_total_mismatch"
+    ]

@@ -309,6 +309,13 @@ class FakeShopify:
                 #: sku -> {title, unit_price}, so a swap/quantity edit can still
                 #: describe the line without a second lookup.
                 "line_meta": {},
+                #: sku -> the money value of that line, tracked separately
+                #: from `lines[sku] * line_meta[sku]["unit_price"]` so an edit
+                #: can price *added* units at the shelf's current price while
+                #: the units already on the order keep the price they were
+                #: sold at -- the same drift `orderEditAddVariant` produces on
+                #: real Shopify, and what `_commit_totals` reports back.
+                "line_totals": {},
             }
             for item in items:
                 vid = str(item["shopify_variant_id"]).rsplit("/", 1)[-1]
@@ -318,10 +325,23 @@ class FakeShopify:
                     "title": f"variant {vid}",
                     "unit_price": Decimal(str(item.get("unit_price", 0))),
                 }
+                order["line_totals"][vid] = order["line_totals"].get(
+                    vid, Decimal("0")
+                ) + Decimal(str(item.get("unit_price", 0))) * qty
                 if self.shelf[vid]["tracked"]:
                     self.shelf[vid]["qty"] -= qty
             self.orders[order["id"]] = order
-            return {"id": order["id"], "name": order["name"]}
+            return {"id": order["id"], "name": order["name"], "total": self._commit_totals(order)["total"]}
+
+    def _commit_totals(self, order) -> dict:
+        """What an `orderEditCommit` (or, here, `orderCreate`) would report
+        back: the money value of every line, plus shipping, as Shopify's
+        `totalPriceSet`/`subtotalPriceSet`/`totalShippingPriceSet` would."""
+        subtotal = sum(order["line_totals"].values(), Decimal("0")) - order.get(
+            "discounts", Decimal("0")
+        )
+        shipping = order["shipping_fee"]
+        return {"total": subtotal + shipping, "subtotal": subtotal, "shipping": shipping}
 
     def cancel_order(self, shopify_order_id, *, reason="CUSTOMER", restock=True):
         self._guard()
@@ -352,13 +372,29 @@ class FakeShopify:
                 raise self._orders.OrderRejected(f"no order {shopify_order_id}")
             if sku not in order["lines"]:
                 raise self._orders.OrderRejected(f"{sku} is not a line on that order")
-            delta = int(quantity) - order["lines"][sku]
+            old_qty = order["lines"][sku]
+            delta = int(quantity) - old_qty
             entry = self.shelf[sku]
             if delta > 0 and entry["tracked"] and entry["qty"] < delta:
                 raise self._orders.OrderRejected(f"{sku}: insufficient inventory")
             if entry["tracked"]:
                 entry["qty"] -= delta
+            if delta > 0:
+                # The units being added now, priced at the shelf's *current*
+                # price -- not the line's original snapshot. This is the
+                # actual drift the real `orderEditSetQuantity` produces.
+                order["line_totals"][sku] = order["line_totals"].get(
+                    sku, Decimal("0")
+                ) + entry["price"] * delta
+            elif delta < 0 and old_qty:
+                # Removed at the line's own average price -- Shopify does not
+                # invent a different price to take units away at.
+                average = order["line_totals"].get(sku, Decimal("0")) / old_qty
+                order["line_totals"][sku] = order["line_totals"].get(
+                    sku, Decimal("0")
+                ) + average * delta
             order["lines"][sku] = int(quantity)
+            return self._commit_totals(order)
 
     def add_line(self, shopify_order_id, to_variant_id, quantity, *, note=None):
         """Put one more line on the order, and take nothing off.
@@ -381,6 +417,10 @@ class FakeShopify:
             if target["tracked"]:
                 target["qty"] -= int(quantity)
             order["lines"][to_sku] = order["lines"].get(to_sku, 0) + int(quantity)
+            order["line_totals"][to_sku] = order["line_totals"].get(
+                to_sku, Decimal("0")
+            ) + target["price"] * int(quantity)
+            return self._commit_totals(order)
 
     def swap_line(self, shopify_order_id, from_sku, to_variant_id, quantity, *, note=None):
         self._guard()
@@ -400,9 +440,14 @@ class FakeShopify:
             if target["tracked"]:
                 target["qty"] -= int(quantity)
             back = order["lines"].pop(from_sku)
+            order["line_totals"].pop(from_sku, None)
             if self.shelf[from_sku]["tracked"]:
                 self.shelf[from_sku]["qty"] += back
             order["lines"][to_sku] = order["lines"].get(to_sku, 0) + int(quantity)
+            order["line_totals"][to_sku] = order["line_totals"].get(
+                to_sku, Decimal("0")
+            ) + target["price"] * int(quantity)
+            return self._commit_totals(order)
 
     def seed_order(
         self,
@@ -453,6 +498,7 @@ class FakeShopify:
                 "delivery_status": None,
                 "lines": {},
                 "line_meta": {},
+                "line_totals": {},
             }
             for item in items:
                 vid = str(item["variant_id"])
@@ -462,6 +508,9 @@ class FakeShopify:
                     "title": item.get("title", f"variant {vid}"),
                     "unit_price": Decimal(str(item.get("unit_price", 0))),
                 }
+                order["line_totals"][vid] = order["line_totals"].get(
+                    vid, Decimal("0")
+                ) + Decimal(str(item.get("unit_price", 0))) * qty
                 if vid in self.shelf and self.shelf[vid]["tracked"]:
                     self.shelf[vid]["qty"] -= qty
             self.orders[order["id"]] = order
