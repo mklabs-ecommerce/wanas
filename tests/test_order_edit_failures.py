@@ -393,10 +393,11 @@ def test_add_item_to_order_applies_at_once_under_the_conversations_own_channel(o
 def test_increasing_a_quantity_after_the_price_changed_reads_back_shopifys_total(
     order, seeded, shopify
 ):
-    """The exact shape of #1040: a unit added to a placed order is priced by
-    Shopify at the variant's *current* price, not the line's original
-    snapshot -- so the two units on the line after this end up at two
-    different prices, and the total must reflect both, not `2 * old_price`.
+    """A separate drift from #1039/#1040's tax gap, but the same fix covers
+    it: a unit *added* to a placed order is priced by Shopify at the
+    variant's *current* price, not the line's original snapshot -- so the two
+    units on the line after this end up at two different prices, and the
+    total must reflect both, not `2 * old_price`.
     """
     from decimal import Decimal
 
@@ -420,6 +421,45 @@ def test_increasing_a_quantity_after_the_price_changed_reads_back_shopifys_total
     assert Decimal(str(after.total)) == expected
     wrong_local_only = original_price * 2 + Decimal(str(after.shipping_fee))
     assert Decimal(str(after.total)) != wrong_local_only
+
+
+def test_an_edit_on_a_taxexempt_order_matches_the_local_total_exactly(order, seeded, monkeypatch):
+    """The actual #1039/#1040 gap, closed: with every variant `taxable:
+    false` (`scripts/shopify_untax_products.py`), Shopify's own tax engine
+    has nothing to add when `orderEditAddVariant` runs, so the total it hands
+    back in the commit response and the plain local sum must now be the same
+    number -- and the live safety-net read (`check_total_against_shopify`)
+    must find nothing to alert on either. Before the fix this add would have
+    landed with 112.00 of unmentioned GST on top, exactly like order #1039.
+    """
+    from decimal import Decimal
+
+    from domain.models import QueueKind
+    from domain.services import queues
+
+    result = orders.add_item(seeded, order, VARIANT_B, 1)
+    assert "error" not in result, result
+
+    seeded.flush()
+    after = seeded.get(Order, order.order_id)
+    original_line = next(i for i in after.items if i.variant_id == VARIANT_A)
+    added_line = next(i for i in after.items if i.variant_id == VARIANT_B)
+    local_total = (
+        Decimal(str(original_line.unit_price))
+        + Decimal(str(added_line.unit_price))
+        + Decimal(str(after.shipping_fee))
+    )
+    assert Decimal(str(after.total)) == local_total
+
+    # The safety net agrees too, on a live read that would have carried
+    # tax if the shop still charged any.
+    monkeypatch.setattr(shopify_orders, "current_total", lambda _id: (local_total, Decimal("0")))
+    orders.check_total_against_shopify(seeded, after, "an add")
+    assert not [
+        i
+        for i in queues.open_items(seeded, QueueKind.ALERT.value)
+        if i.reason == "order_total_mismatch"
+    ]
 
 
 def test_place_order_alerts_when_shopifys_own_total_disagrees(cairo_rate, seeded, monkeypatch):

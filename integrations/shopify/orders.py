@@ -154,6 +154,16 @@ def _line(item: dict) -> dict:
     up. The customer agreed to a number in the conversation, and an order that
     silently re-prices itself from the catalog between the promise and the
     record is the same broken trade the live-price work removed elsewhere.
+
+    `taxable: False` because this shop charges none -- the price quoted is the
+    price charged. `OrderCreateOrderInput` itself has no order-level tax-exempt
+    field, only `taxesIncluded` (see the order dict below); the per-line flag
+    is the one Shopify actually reads at creation, and matters more once the
+    line is edited later: `orderEditAddVariant` on a genuinely new line reads
+    the *variant's own* `taxable` setting on the product (see
+    scripts/shopify_untax_products.py), but raising or lowering the quantity of
+    a line already on the order keeps whatever `taxable` that line was created
+    with -- which this makes `False` too.
     """
     return {
         "variantId": item["shopify_variant_id"],
@@ -162,6 +172,7 @@ def _line(item: dict) -> dict:
             "shopMoney": {"amount": f"{item['unit_price']:.2f}", "currencyCode": "EGP"}
         },
         "requiresShipping": True,
+        "taxable": False,
     }
 
 
@@ -324,6 +335,11 @@ def create_order(
         ),
         "tags": [*ORDER_TAGS, channel_tag(channel)],
         "sourceIdentifier": reference,
+        # This shop charges no tax. `OrderCreateOrderInput` has no order-level
+        # tax-exempt field to set (`taxExempt` lives on the customer, not the
+        # order); `taxesIncluded: False` plus each line's own `taxable: False`
+        # (see `_line`) is the actual way to say it.
+        "taxesIncluded": False,
         # Cash on delivery: the money has not moved, so the order is
         # deliberately left unpaid rather than marked paid on creation. Marking
         # it paid would make every revenue report in the admin count cash that

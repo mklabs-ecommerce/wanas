@@ -1030,6 +1030,12 @@ def _finish_create(
                 "tracked": True,
             },
             "inventoryPolicy": "DENY",
+            # This shop charges no tax. Shopify defaults a new variant to
+            # taxable, which is what put an unquoted GST line on orders #1039
+            # and #1040 once each was edited -- see
+            # scripts/shopify_untax_products.py for the same fix applied to
+            # every variant that already existed.
+            "taxable": False,
         }
         for v in variants
     ]

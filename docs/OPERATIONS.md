@@ -686,6 +686,7 @@ python scripts/shopify_sync.py          # reconcile the catalog
 python scripts/shopify_reconcile_products.py   # drop wanas.db products Shopify no longer has
 python scripts/shopify_size_charts.py          # publish the size charts to Shopify
 python scripts/shopify_size_charts_import.py   # and read edited ones back
+python scripts/shopify_untax_products.py       # set every variant taxable:false
 ```
 
 The two size-chart scripts are a pair, and which one to run depends on where
@@ -741,6 +742,41 @@ SKUs (an outage, or a token pointed at the wrong store), and refuses if more
 than half the catalog looks gone; `--force` lifts only the second of those,
 and you should check `SHOPIFY_STORE_DOMAIN` and the token before reaching for
 it.
+
+### Tax -- this shop charges none
+
+Cash on delivery collects whatever Shopify's own total says, so a variant
+Shopify considers taxable is money the customer was never quoted. Two things
+had to be set, neither of which the API can do:
+
+1. **Settings -> Taxes and duties -> Egypt** in Shopify Admin -- set it to
+   collect no tax for Egypt. This is the setting that actually decides
+   whether the tax engine runs at all; a variant's own `taxable` flag only
+   controls whether *that* variant is offered up to it.
+2. The **"Charge tax on this product"** checkbox that is *on* by default for
+   a product created straight in Shopify Admin -- turn it off when adding a
+   product there by hand, the same way `productCreate` from the dashboard
+   already sends `taxable: false` for one made through the bot's own admin
+   screen.
+
+Everything on the code side follows from those two: `orderCreate`'s line
+items are sent `taxable: false` (`integrations/shopify/orders.py::_line`),
+and `scripts/shopify_untax_products.py` sets it on every *existing* variant --
+that catalog-level flag is what `orderEditAddVariant` reads when a line
+that was never on the order before gets added mid-conversation, which is
+what put an unquoted GST line on orders #1039 and #1040. Run it once after
+the admin setting above is in place:
+
+```bash
+python scripts/shopify_untax_products.py            # dry run, writes nothing
+python scripts/shopify_untax_products.py --apply    # perform the writes
+```
+
+**Orders #1039 and #1040 already carry tax the customer was not quoted** and
+are not touched by any of this -- correct each by hand in the admin (remove
+the GST line / adjust the order to the total the customer actually agreed
+to), since editing a live order's tax from a script is exactly the kind of
+silent-to-the-customer change this whole fix exists to stop.
 
 ## Product photos
 
