@@ -1406,10 +1406,8 @@ const EN = {
   "تعليق انستجرام": "Instagram comment",
   "تعليق سبام": "Spam comment",
   "تعليق سلبي": "Negative comment",
-  "سؤال عن أوردر": "Order-status question",
   "تعليقات آخر ٣٠ يوم": "Comments in the last 30 days",
   "تعليقات انستجرام": "Instagram comments",
-  "تعليقات كتير": "Comment flood",
   "تفصيل المبيعات": "Sales breakdown",
   "تفعيل الحساب": "Activate account",
   "تقفله بدل ما تمسحه؟ هيختفي من البوت ومن الموقع، والطلبات القديمة تفضل زي ما هي.": "Close it instead of deleting it? It disappears from the bot and the site, and the old orders stay exactly as they are.",
@@ -1502,13 +1500,11 @@ const EN = {
   "ضيف منتجات للمجموعة": "Add products to the collection",
   "طريقة الدفع": "Payment method",
   "طلب": "order",
-  "طلب اتعدّل": "Order modified",
   "طلب اختبار من أرقام الفريق مستبعد من كل رقم في الصفحة دي.": "test order(s) from staff numbers are excluded from every figure on this page.",
   "طلب البوت": "Bot order",
   "طلب الموقع": "Website order",
   "طلب تبديل": "Swap request",
   "طلب من": "Order from",
-  "طلب موظف": "Asked for a person",
   "طلبات": "orders",
   "طلبات فعّالة": "Active orders",
   "طلبات قايمة": "Orders standing",
@@ -1666,6 +1662,34 @@ const EN = {
   "مفيش صلاحيات لسه": "No permissions yet",
 "مفيش طلب تبديل ولا إضافة ولا تنبيه مستني مراجعة": "No swap request, addition or alert is waiting for review",
   "طلب إضافة": "Add-an-item request",
+  "الزبون طلب موظف": "Customer asked for a person",
+  "صورة محتاجة نظرة": "A photo that needs a look",
+  "رسالة صوتية محتاجة سماع": "A voice note that needs listening to",
+  "سؤال برة شغلنا": "A question outside what we do",
+  "طلب تبديل قطعة": "Item swap requested",
+  "طلب إضافة قطعة": "Item add requested",
+  "أوردر اتأكد": "Order confirmed",
+  "أوردر اتعدّل": "Order changed",
+  "أوردر اتلغى": "Order cancelled",
+  "البوت وقع وهو بيرد": "The bot crashed mid-reply",
+  "توكن انستجرام محتاج تجديد": "The Instagram token needs refreshing",
+  "رد مااتبعتش للزبون": "A reply did not reach the customer",
+  "رد انستجرام مااتبعتش": "An Instagram reply did not send",
+  "تأكيد الأوردر مااتبعتش": "The order confirmation did not send",
+  "تحديث الأوردر مااتبعتش": "The order update did not send",
+  "رسالة للزبون مااتبعتتش": "A message to the customer did not send",
+  "الزبون مااتبلغش بنتيجة طلبه": "The customer was never told the outcome",
+  "تعليقات كتير مرة واحدة": "A burst of comments",
+  "سؤال عن أوردر في تعليق": "An order question in a comment",
+  "سبب مش متعرف عليه": "Unrecognised reason",
+  "حالة مش متعرف عليها": "Unrecognised status",
+  "قناة تانية": "Another channel",
+  "رجع للمخزن": "Restocked",
+  "مفتوح": "Open",
+  "مجدول": "Scheduled",
+  "مستني الشحن": "Awaiting fulfilment",
+  "الطلب اترفض": "Request declined",
+  "مدفوع جزئي": "Partially paid",
   "مالكش صلاحية على الجزء ده. كلّم المالك لو محتاجها.": "You do not have access to this section. Ask the owner if you need it.",
   "الجلسة خلصت. سجّل دخول تاني.": "Your session has expired. Sign in again.",
   "اسم المستخدم أو الباسورد غلط.": "Wrong username or password.",
@@ -1795,7 +1819,6 @@ const EN = {
   "واتسجل مدفوع": "and recorded as paid",
   "وافق على التبديل": "Approve the swap",
   "المحادثة لسه معاك — دوس «رجّع البوت» لما تخلص": "The conversation is still yours — press Hand back to the bot when you are done",
-  "وسائط مش مدعومة": "Unsupported media",
   "وسيط زمن الإغلاق": "Median time to close",
   "وصف قصير يظهر في شوبيفاي": "A short description shown in Shopify",
   "وهيترجع للمخزون، والعميل هيوصله إشعار": "and it returns to stock; the customer is notified",
@@ -1974,14 +1997,24 @@ const CHANNELS = {
   whatsapp:     { label: tr("واتساب"), tone: "teal", short: tr("و") },
   instagram_dm: { label: tr("انستجرام"), tone: "lilac", short: tr("ا") },
 };
-const channelInfo = (ch) => CHANNELS[ch] || { label: ch || "—", tone: "sky", short: tr("؟") };
+const channelInfo = (ch) => {
+  const known = CHANNELS[ch];
+  if (known) return known;
+  if (ch) console.warn("dashboard: no label for channel", ch);
+  return { label: ch ? tr("قناة تانية") : "—", tone: "sky", short: tr("؟") };
+};
 
 /* An *order's* channel, which has one value a conversation never has: an
    order nobody talked to the bot about came from the website. See
    `dashboard/shopify_api.py::_order_channel` -- it is read off the local
    order row, not off the Shopify tags, so an Instagram sale says Instagram. */
 const ORDER_CHANNELS = { web: tr("الموقع"), whatsapp: tr("واتساب"), instagram_dm: tr("انستجرام"), all: tr("كل القنوات") };
-const channelLabel = (ch) => ORDER_CHANNELS[ch] || ch || "—";
+const channelLabel = (ch) => {
+  const known = ORDER_CHANNELS[ch];
+  if (known) return known;
+  if (ch) console.warn("dashboard: no label for order channel", ch);
+  return ch ? tr("قناة تانية") : "—";
+};
 
 const PAYMENT_LABELS = { cod: tr("عند الاستلام"), online: tr("أونلاين"), unknown: tr("غير محدد") };
 const PAYMENT_TONES = { cod: "amber", online: "teal", unknown: "sky" };
@@ -2043,23 +2076,67 @@ const customerKindChip = (kind, count) => {
   return chipHTML(detail, kind === "returning" ? "clay" : "sky");
 };
 
-const HANDOFF_REASONS = {
-  manual: tr("الفريق استلم المحادثة"),
-  complaint: tr("شكوى"),
-  human_request: tr("طلب موظف"),
+/* Every reason a queue item or a paused conversation can carry, as words.
+
+   This map was written for handoffs and then reused for the whole staff
+   queue without growing: it listed three reasons that do not exist
+   (`human_request`, `media_unsupported`, `comment_handoff`), omitted four
+   that do, and knew none of the twenty alert reasons at all -- while
+   `reasonLabel` fell through to the raw key. So the heading on an
+   add-an-item card read `add_requested`, in the same screen and the same
+   week as «الإضافة مانفذتش store_permission». Same bug, one element up.
+
+   `tests/test_dashboard_errors.py` now checks this against
+   `domain/models.py`, so a new reason cannot be added without a label. */
+const QUEUE_REASONS = {
+  // -- a conversation handed to a person (domain/models.py HANDOFF_REASONS)
   unclear: tr("البوت مش فاهم"),
-  media_unsupported: tr("وسائط مش مدعومة"),
-  comment_handoff: tr("تعليق انستجرام"),
+  complaint: tr("شكوى"),
+  customer_asked: tr("الزبون طلب موظف"),
+  image_received: tr("صورة محتاجة نظرة"),
+  voice_received: tr("رسالة صوتية محتاجة سماع"),
+  out_of_scope: tr("سؤال برة شغلنا"),
+  // -- a staff member took the conversation over themselves
+  manual: tr("الفريق استلم المحادثة"),
+  // -- a post-order request waiting on a decision
+  swap_requested: tr("طلب تبديل قطعة"),
+  add_requested: tr("طلب إضافة قطعة"),
+  // -- ordinary business events (domain/models.py ALERT_REASONS)
+  order_confirmed: tr("أوردر اتأكد"),
+  order_modified: tr("أوردر اتعدّل"),
+  order_cancelled: tr("أوردر اتلغى"),
   low_stock: tr("مخزون منخفض"),
-  order_modified: tr("طلب اتعدّل"),
+  // -- the bot not working
+  turn_crashed: tr("البوت وقع وهو بيرد"),
+  classifier_unavailable: tr("تصنيف التعليقات واقف"),
+  instagram_token_refresh_failed: tr("توكن انستجرام محتاج تجديد"),
+  // -- the bot working and unable to reach the customer
+  reply_delivery_failed: tr("رد مااتبعتش للزبون"),
+  instagram_reply_delivery_failed: tr("رد انستجرام مااتبعتش"),
+  confirmation_delivery_failed: tr("تأكيد الأوردر مااتبعتش"),
+  status_push_undelivered: tr("تحديث الأوردر مااتبعتش"),
+  proactive_outreach_failed: tr("رسالة للزبون مااتبعتتش"),
+  resolution_undelivered: tr("الزبون مااتبلغش بنتيجة طلبه"),
+  // -- the public surface
   negative_comment: tr("تعليق سلبي"),
   customer_complaint: tr("شكوى زبون"),
   spam_comment: tr("تعليق سبام"),
-  order_status_comment: tr("سؤال عن أوردر"),
-  classifier_unavailable: tr("تصنيف التعليقات واقف"),
-  comment_flood: tr("تعليقات كتير"),
+  comment_flood: tr("تعليقات كتير مرة واحدة"),
+  order_status_comment: tr("سؤال عن أوردر في تعليق"),
 };
-const reasonLabel = (r) => HANDOFF_REASONS[r] || r || "—";
+
+/* Kept as the old name for the handful of call sites that read it. */
+const HANDOFF_REASONS = QUEUE_REASONS;
+
+/* Never the raw key. A reason nobody labelled is still a real queue item a
+   person has to work, so it says so and the key goes to the console. */
+const reasonLabel = (r) => {
+  if (!r) return "\u2014";
+  const known = QUEUE_REASONS[r];
+  if (known) return known;
+  console.warn("dashboard: no label for queue reason", r);
+  return tr("سبب مش متعرف عليه");
+};
 
 const ORDER_STATUS = {
   FULFILLED:          { label: tr("متشحن"), tone: "teal" },
@@ -2070,11 +2147,26 @@ const ORDER_STATUS = {
   PAID:               { label: tr("مدفوع"), tone: "teal" },
   PENDING:            { label: tr("معلّق"), tone: "amber" },
   REFUNDED:           { label: tr("مسترجع"), tone: "rose" },
+  RESTOCKED:          { label: tr("رجع للمخزن"), tone: "rose" },
+  OPEN:               { label: tr("مفتوح"), tone: "sky" },
+  SCHEDULED:          { label: tr("مجدول"), tone: "sky" },
+  PENDING_FULFILLMENT:{ label: tr("مستني الشحن"), tone: "amber" },
+  REQUEST_DECLINED:   { label: tr("الطلب اترفض"), tone: "rose" },
+  PARTIALLY_PAID:     { label: tr("مدفوع جزئي"), tone: "amber" },
+  VOIDED:             { label: tr("ملغي"), tone: "rose" },
+  EXPIRED:            { label: tr("منتهي"), tone: "rose" },
   cancelled:          { label: tr("ملغي"), tone: "rose" },
 };
 const statusChip = (raw, cancelled) => {
   if (cancelled) return chipHTML(tr("ملغي"), "rose", "bar");
-  const s = ORDER_STATUS[raw] || { label: raw || "—", tone: "sky" };
+  /* An unknown status is Shopify adding an enum member we have not met.
+     Saying so beats printing `REQUEST_DECLINED` at somebody reading Arabic;
+     the key goes to the console like every other unmapped value here. */
+  let s = ORDER_STATUS[raw];
+  if (!s) {
+    if (raw) console.warn("dashboard: no label for order status", raw);
+    s = { label: raw ? tr("حالة مش متعرف عليها") : "—", tone: "sky" };
+  }
   return chipHTML(s.label, s.tone, s.tone === "amber" ? "ring" : "dot");
 };
 
@@ -5519,7 +5611,7 @@ VIEWS.comments = {
         <div class="row" style="flex-wrap:wrap">
           ${chipHTML(COMMENT_TABS.find((t) => t.id === c.sentiment)?.label || tr("غير مصنّف"),
                      COMMENT_SENTIMENT_TONES[c.sentiment] || "clay", "dot")}
-          ${c.category ? chipHTML(COMMENT_CATEGORY_LABELS[c.category] || c.category, "sky") : ""}
+          ${c.category ? chipHTML(COMMENT_CATEGORY_LABELS[c.category] || tr("غير محدد"), "sky") : ""}
           ${c.unanswered ? chipHTML(tr("بدون رد"), "amber", "bar") : ""}
         </div>
         ${replyBlock(c.public_replied, c.public_reply, tr("الرد العام"), "teal")}

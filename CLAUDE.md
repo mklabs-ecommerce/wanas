@@ -614,6 +614,15 @@ tests/                   pytest suite (flat, one test_<module>.py per
   sentence and a `console.warn`, never the key itself.
   `tests/test_dashboard_errors.py` fails if a code the API can return has no
   sentence, or if anything in the rendering path reaches for `err.message`.
+  **The same rule covers every other key staff read**, because the error
+  codes were only half of it: `reasonLabel`, `channelInfo`, `channelLabel`
+  and `statusChip` all did `MAP[key] || key`, so the queue card for an add
+  request was headed `add_requested` — and `QUEUE_REASONS` had been written
+  for handoffs and never grown, listing three reasons that do not exist and
+  none of the twenty alert ones. Every resolver now returns a readable
+  fallback and `console.warn`s the key; the test reads the real lists out of
+  `domain/models.py` and `assistant/providers/base.py`, so a new reason,
+  status or category cannot ship without a label.
 
 ## Shopify
 

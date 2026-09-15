@@ -136,3 +136,85 @@ def test_the_mapping_has_nothing_the_api_never_returns():
     maintains -- and it hides the fact that the real code is missing."""
     stale = sorted(_mapped_codes() - _raised_codes())
     assert not stale, f"ERROR_REASONS has entries no API returns: {stale}"
+
+
+# --------------------------------------------------------------------------
+# ...and the same rule for every other key staff read.
+#
+# The error codes were only half of it. `reasonLabel` fell through to the raw
+# key too, and the queue card's heading uses it -- so an add-an-item card was
+# titled `add_requested`, in the same screen and the same week as
+# «الإضافة مانفذتش store_permission». The map had been written for handoffs
+# and never grown: three reasons in it do not exist, four that do were
+# missing, and it knew none of the twenty alert reasons.
+# --------------------------------------------------------------------------
+
+
+def _js_map_keys(name: str) -> set[str]:
+    page = PAGE.read_text(encoding="utf-8")
+    block = re.search(r"const " + name + r" = \{(.*?)\n\};", page, re.S)
+    assert block, f"{name} is gone from dashboard.html"
+    # Keys start a line or follow a comma: `COMMENT_CATEGORY_LABELS` packs
+    # several per line, and a line-anchored pattern saw only the first of each
+    # -- which reported a complete map as mostly missing.
+    return set(re.findall(r"(?:^|,)\s*([A-Za-z_][A-Za-z0-9_]*):", block.group(1), re.M))
+
+
+def test_every_queue_reason_has_a_label():
+    """Read from `domain/models.py`, so adding a reason without a label is a
+    failing build rather than a code on a card."""
+    from domain.models import ALERT_REASONS, HANDOFF_REASONS
+
+    labelled = _js_map_keys("QUEUE_REASONS")
+    missing = sorted((set(ALERT_REASONS) | set(HANDOFF_REASONS)) - labelled)
+    assert not missing, (
+        f"{len(missing)} queue reason(s) have no Arabic label, so they render as raw keys. "
+        "Add each to QUEUE_REASONS in dashboard/dashboard.html:\n"
+        + "\n".join(f"  {r}" for r in missing)
+    )
+
+
+def test_the_reason_map_has_nothing_that_is_not_a_reason():
+    """`human_request`, `media_unsupported` and `comment_handoff` sat here for
+    a long time and are not values this system produces. A label for a reason
+    that cannot happen hides the absence of one that can."""
+    from domain.models import ALERT_REASONS, HANDOFF_REASONS
+
+    real = set(ALERT_REASONS) | set(HANDOFF_REASONS) | {
+        # Not a queue reason: what a conversation a staff member took over
+        # themselves is tagged with. See dashboard/inbox_api.py.
+        "manual",
+    }
+    stale = sorted(_js_map_keys("QUEUE_REASONS") - real)
+    assert not stale, f"QUEUE_REASONS labels reasons that do not exist: {stale}"
+
+
+def test_every_comment_category_has_a_label():
+    from assistant.providers.base import COMMENT_SENTIMENT
+
+    missing = sorted(set(COMMENT_SENTIMENT) - _js_map_keys("COMMENT_CATEGORY_LABELS"))
+    assert not missing, f"comment categories with no label: {missing}"
+
+
+@pytest.mark.parametrize(
+    "resolver",
+    ["reasonLabel", "channelInfo", "channelLabel", "statusChip"],
+)
+def test_no_label_resolver_falls_back_to_the_raw_key(resolver):
+    """The shape of the bug, rather than the instances of it: every one of
+    these used `MAP[key] || key`, which is how a key reaches a screen."""
+    page = PAGE.read_text(encoding="utf-8")
+    body = re.search(
+        r"const " + resolver + r" = .*?\n\};|function " + resolver + r"\(.*?\n\}",
+        page,
+        re.S,
+    )
+    assert body, f"{resolver} is gone from dashboard.html"
+    source = body.group(0)
+    # `|| raw` / `|| ch` / `|| r` is the fallthrough. Allowed only to "—".
+    offenders = re.findall(r"\|\|\s*(raw|ch|r)\b", source)
+    assert not offenders, (
+        f"{resolver} falls back to the raw key: {offenders}. "
+        "Return a readable sentence and console.warn the key instead."
+    )
+    assert "console.warn" in source, f"{resolver} must log an unmapped key"
