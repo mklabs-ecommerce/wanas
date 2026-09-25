@@ -311,14 +311,17 @@ def test_a_chart_picture_with_no_measurements_still_rides_along(ctx):
     chart as far as the customer is concerned."""
     from domain.models import Product
 
+    # A Shopify Files URL, which is where the dashboard's upload actually
+    # lands -- a local path is only ever attached when the file is there.
+    uploaded = "https://cdn.shopify.com/s/files/1/uploaded-chart.png"
     product = ctx.session.get(Product, "wanas-hoodie")
     product.size_chart = None
-    product.size_chart_image = "data/size-charts/uploaded.png"
+    product.size_chart_image = uploaded
     ctx.session.flush()
 
     asked_about_sizes(ctx)
     call(ctx, "get_variants", product_id="wanas-hoodie")
-    assert "data/size-charts/uploaded.png" in ctx.attachments
+    assert uploaded in ctx.attachments
 
 
 def test_the_prompt_forbids_describing_a_chart_that_was_never_fetched():

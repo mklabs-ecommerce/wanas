@@ -366,10 +366,25 @@ PARTIAL_IMAGE_FALLBACK = (
 _UNDELIVERED_NOTE = (
     "\n\nتنبيه داخلي: فيه صورة بعتناها في المحادثة دي والمنصة رفضتها، يعني "
     "العميل فعلاً **ماوصلتوش** ({what}). لو قال إن الصورة مش واصلة، صدّقه: "
-    "اعتذر وقول إن المشكلة من عندنا إحنا، ونادي get_variants تاني في نفس الرد "
+    "اعتذر وقول إن المشكلة من عندنا إحنا، ونادي {resend} تاني في نفس الرد "
     "ده عشان تتبعت من جديد. ممنوع تمامًا تقوله إن المشكلة في النت بتاعه أو في "
     "التطبيق أو يقفل الواتس ويفتحه -- المشكلة عندنا ومعانا في السجل."
 )
+
+
+def _resend_tool(labels: list[str], count: int) -> str:
+    """Which tool sends the refused picture again, decided from what it was.
+
+    The note used to say `get_variants` whatever had been refused, and
+    `get_variants` sends the garment -- a refused size chart asked for again
+    came back as a photo of the shirt. A chart is resent by the chart tool.
+    """
+    charts = sum(1 for label in labels if label.endswith("size chart"))
+    if labels and charts == len(labels) and charts >= count:
+        return "get_size_chart"
+    if charts:
+        return "get_variants (للصورة) وget_size_chart (لجدول المقاسات)"
+    return "get_variants"
 
 #: Appended when a reply blamed the customer's phone, app or line for our own
 #: failed send. Blunt on purpose: there is no partially-correct version of this
@@ -575,7 +590,11 @@ def run_turn(
     sent_images = _sent_images(history) - set(undelivered)
     if undelivered:
         named = photo_claims.undelivered_labels(history)
-        system_prompt = f"{system_prompt}{_UNDELIVERED_NOTE.format(what=_describe(named, len(undelivered)))}"
+        note = _UNDELIVERED_NOTE.format(
+            what=_describe(named, len(undelivered)),
+            resend=_resend_tool(named, len(undelivered)),
+        )
+        system_prompt = f"{system_prompt}{note}"
         log.info(
             "%s/%s has %d undelivered photo(s); the turn is told so rather than "
             "left to insist they arrived",

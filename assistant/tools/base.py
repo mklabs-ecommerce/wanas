@@ -757,8 +757,12 @@ def _chart_label(result: dict, product_id: str | None = None) -> dict | None:
     Saying so is what stops the next turn reading it as a colour choice. It
     still names the product: a customer scrolling back to an older chart and
     asking about it has told you which product they mean.
+
+    The product's `name` before the chart's `title`: several products share
+    one chart, and a Cairokee tee's chart labelled "Oversized t-shirt size
+    chart" names a product nobody asked about.
     """
-    name = result.get("title") or result.get("name")
+    name = result.get("name") or result.get("title")
     if not (isinstance(name, str) and name.strip()):
         return None
     product_id = product_id if isinstance(product_id, str) and product_id.strip() else None

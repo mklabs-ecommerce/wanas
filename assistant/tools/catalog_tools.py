@@ -17,7 +17,7 @@ from domain.services import (
     shipping,
     sleeves,
 )
-from domain.services.size_charts import MEASUREMENT_NOTE, get_chart
+from domain.services.size_charts import MEASUREMENT_NOTE, chart_picture, get_chart, sendable_image
 
 
 @tool(
@@ -217,16 +217,13 @@ def _chart_image(session, product_id: str) -> str | None:
     the file, both over `Product.size_chart_image`, which is the picture the
     dashboard uploaded when nobody filled the measurements in. A chart with
     numbers but no picture is normal and returns None; the numbers are still
-    there to be quoted.
+    there to be quoted. So is a chart whose picture is not actually there --
+    see `size_charts.chart_picture`.
     """
     product = session.get(Product, product_id)
     if product is None:
         return None
-    chart = get_chart(product.size_chart, session)
-    image = chart.get("image") if chart else None
-    if isinstance(image, str) and image:
-        return image
-    return product.size_chart_image or None
+    return chart_picture(product, get_chart(product.size_chart, session))
 
 
 def _not_found(ctx: ToolContext, product_id: str) -> dict:
@@ -407,9 +404,12 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
         # they would do on the storefront. `sizes` is empty rather than
         # absent, so nothing downstream has to guess -- and there is still
         # nothing here for the model to quote a number from.
-        if product.size_chart_image:
+        uploaded = sendable_image(product.size_chart_image)
+        if uploaded:
             return {
                 "has_chart": True,
+                "product_id": product.product_id,
+                "name": product.name,
                 "chart_id": None,
                 "title": product.name,
                 "unit": "cm",
@@ -417,7 +417,7 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
                 "length_specific": False,
                 "measurements": [],
                 "sizes": {},
-                "image": product.size_chart_image,
+                "image": uploaded,
                 "image_only": True,
             }
 
@@ -428,6 +428,13 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
 
     return {
         "has_chart": True,
+        # Which *product* this answers for, beside the chart's own `title`.
+        # Several products share one chart, and the title is the chart's --
+        # read as the product's name, "Ringer t-shirt" became what the
+        # conversation was about and the next question was answered about the
+        # Ringer tee.
+        "product_id": product.product_id,
+        "name": product.name,
         "chart_id": chart["chart_id"],
         "title": chart["title"],
         "unit": chart.get("unit", "cm"),
@@ -437,7 +444,10 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
         "length_specific": bool(chart.get("length_specific", False)),
         "measurements": chart["measurements"],
         "sizes": chart["sizes"],
-        "image": chart.get("image"),
+        # Only a picture that can actually be sent. A chart naming a file that
+        # is not there still answers with its numbers; it does not promise the
+        # customer a picture that can only fail on the way out.
+        "image": chart_picture(product, chart),
     }
 
 

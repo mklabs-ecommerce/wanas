@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased — The Boxy WNS Tee's chart was the Ringer's, and then no chart at all
+
+    customer: the size chart for the Boxy WNS Tee
+    bot:      the RINGER BOXY FIT chart
+    customer: asks again, and again
+    log:      whatsapp send rejected 400: Param image.id is not a valid
+              whatsapp business account media attachment ID
+
+The tool was asked for the right product every time
+(`get_size_chart({'product_id': 'boxy-wns-tee'})`). Everything after that was
+wrong, in three separate places, and `tests/test_size_chart_delivery.py`
+reproduces each of them from the production log before fixing it.
+
+- **The product row still pointed at the Ringer chart.** `boxy-wns-tee` was
+  seeded with `size_chart: "ringer-boxy-tee"`. Commit e0333cb corrected the
+  seed file to `wns-boxy-tee` -- but the seed only ever runs against an empty
+  catalog, so the live row never heard about it. Boot now runs
+  `seed.products.correct_retired_size_charts`: a product still carrying a value
+  its own seed retired (`RETIRED_SIZE_CHARTS`) is moved to the seed's current
+  one. Exact, not a re-seed: any other value, including one staff picked in the
+  dashboard, is never touched.
+- **The corrected chart had no picture.** `data/size_charts.json` named
+  `data/size-charts/wns-boxy-tee.png` and the file was never committed. It is
+  now -- the same picture the storefront already shows for the product in
+  Shopify Files -- and a test fails if any shipped chart names a picture that
+  is not on disk. `size_charts.chart_picture` also refuses to attach a path to
+  nothing: a chart whose file is missing falls back to the product's own
+  uploaded chart, or sends its numbers with no picture, and logs the gap.
+- **Every local picture died on day thirty.** `WhatsAppClient.media_id_for`
+  said "upload once, reuse forever", and Meta keeps an uploaded file for thirty
+  days. Every size chart (and every product photo Shopify has no picture for)
+  went out through a dead id, was refused, and was refused again on every
+  retry, because nothing ever threw the dead id away. An id older than
+  `MEDIA_ID_MAX_AGE` (25 days) is uploaded again before it is sent, and a send
+  Meta refuses for a dead id uploads once more and retries -- once. Any other
+  refusal is not retried.
+- **A chart was read as no picture at all.** `photo_claims` rightly does not
+  count a size chart as a photograph *of the garment*, so «دي صورة جدول
+  المقاسات 👆» beside the chart it attached was flagged as a photo promised and
+  nothing sent, and retried. A clause that names the chart is now backed by the
+  chart; «دي صورة التيشيرت» beside a chart alone is still caught.
+- **The chart answer names its product.** `get_size_chart` returns the
+  product's `product_id` and `name` beside the chart's own `title`. Several
+  products share a chart, and read as the product's name, "Ringer t-shirt"
+  became what the conversation was about.
+- **A refused chart is resent by the chart tool.** The turn's note about a
+  refused picture always said `get_variants`, which sends the garment. It now
+  names `get_size_chart` when what was refused was a chart.
+
 ## Unreleased — قميص is not a تيشيرت
 
     customer: «فيه قمصان»

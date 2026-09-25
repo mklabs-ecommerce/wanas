@@ -162,3 +162,46 @@ def backfill_sleeves(session: Session, path: Path | None = None) -> dict:
         updated.append(product.product_id)
     session.flush()
     return {"updated": updated}
+
+
+#: Size-chart values the seed file itself used to hold and has since
+#: corrected, `{product_id: (retired chart_id, ...)}`.
+#:
+#: `import_products` runs against an empty catalog only, so correcting the
+#: seed file corrects every *future* database and none that already exists.
+#: That is how the Boxy WNS Tee kept the Ringer tee's chart: it was seeded
+#: with `ringer-boxy-tee`, commit e0333cb gave it its own `wns-boxy-tee`, and
+#: production -- seeded before that commit -- went on sending customers who
+#: asked for the Boxy WNS Tee's measurements the Ringer's. Sizing wrong is a
+#: return, and AGENTS.md is explicit that a product must never be answered
+#: with another product's chart.
+#:
+#: A value listed here is one nobody chose: it is the seed's own mistake. Add
+#: a line whenever a seed correction changes a product's `size_chart`.
+RETIRED_SIZE_CHARTS: dict[str, tuple[str, ...]] = {
+    "boxy-wns-tee": ("ringer-boxy-tee",),
+}
+
+
+def correct_retired_size_charts(session: Session, path: Path | None = None) -> dict:
+    """Move a product off a chart its seed retired, onto the seed's current one.
+
+    Exact, the same way `backfill_sleeves` is careful: a product is rewritten
+    only while it still carries a value listed in `RETIRED_SIZE_CHARTS` for
+    that product. Any other value -- a chart staff picked in the dashboard, a
+    chart made for it there, a product the seed does not know -- is left
+    alone, so running this on every boot can never undo a person's choice.
+    Idempotent: once corrected, the retired value is gone and nothing matches.
+    """
+    current = {raw["product_id"]: raw.get("size_chart") for raw in load_seed(path)}
+    updated: list[str] = []
+    for product_id, retired in RETIRED_SIZE_CHARTS.items():
+        product = session.get(Product, product_id)
+        wanted = current.get(product_id)
+        if product is None or not wanted or product.size_chart == wanted:
+            continue
+        if product.size_chart in retired:
+            product.size_chart = wanted
+            updated.append(product_id)
+    session.flush()
+    return {"updated": updated}

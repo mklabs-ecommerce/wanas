@@ -173,6 +173,33 @@ def _backfill_product_sleeves() -> None:
         )
 
 
+def _correct_retired_size_charts() -> None:
+    """Move a product off a size chart its own seed has since corrected.
+
+    Same reason `_backfill_product_sleeves` above exists: the seed runs against
+    an empty catalog only, so a correction to `data/products_seed.json`
+    reaches no database that already has rows -- which is every real one. The
+    Boxy WNS Tee went on answering sizing questions with the Ringer tee's chart
+    for exactly that reason. Only a value the seed itself retired is rewritten
+    (`domain/seed/products.py::RETIRED_SIZE_CHARTS`); a chart staff chose is
+    never touched.
+    """
+    from domain.seed.products import correct_retired_size_charts
+
+    try:
+        with session_scope() as db:
+            result = correct_retired_size_charts(db)
+    except Exception:
+        log.exception("could not correct retired size-chart links")
+        return
+    if result["updated"]:
+        log.warning(
+            "size chart corrected for %d product(s) still on a chart their seed retired: %s",
+            len(result["updated"]),
+            ", ".join(result["updated"]),
+        )
+
+
 def _published_flat_shipping_fee() -> Decimal | None:
     """The one shipping number this shop publishes without looking anything up.
 
@@ -397,6 +424,7 @@ async def lifespan(_app: FastAPI):
     _ensure_schema_columns()
     _ensure_catalog_seeded()
     _backfill_product_sleeves()
+    _correct_retired_size_charts()
     _ensure_shipping_fees_set()
     # The one place domain/services/conversation_reset.py learns how to clear
     # chat history, without domain/ ever importing the assistant layer.

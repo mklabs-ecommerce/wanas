@@ -74,6 +74,29 @@ _PLURAL_PHOTO = re.compile(
 #: photograph of Y.
 _CLAUSE = re.compile(r"[.\n،؛!؟?]+")
 
+#: A clause about the size chart rather than the garment. «دي صورة جدول
+#: المقاسات 👆» beside the chart it attached is a true sentence, and it was
+#: read as a photo promised with nothing sent -- because a chart is rightly
+#: not a photograph *of the garment* -- and retried until the model stopped
+#: mentioning the picture it had sent. Deliberately not «مقاسات» on its own:
+#: «صورة التيشيرت والمقاسات المتاحة» is about the shirt.
+_CHART_WORD = re.compile(r"جدول|قياسات|size ?chart|\bchart\b")
+
+
+def _is_chart(labels: dict[str, dict], path: str) -> bool:
+    return str(((labels or {}).get(path) or {}).get("label") or "").endswith("size chart")
+
+
+def _garment_claim(text: str) -> bool:
+    """Some clause claims a photograph and is not about the size chart."""
+    for clause in _CLAUSE.split(text or ""):
+        lowered = clause.lower()
+        if not _IMAGE_WORD.search(lowered) or _NO_IMAGES.search(lowered):
+            continue
+        if not _CHART_WORD.search(lowered):
+            return True
+    return False
+
 
 def mentions_photo(text: str) -> bool:
     """The reply talks about photographs at all."""
@@ -158,7 +181,11 @@ def product_names(history: list[dict]) -> dict[str, str]:
             if not isinstance(content, dict):
                 continue
             _note(content.get("name"))
-            _note(content.get("title"))
+            if not content.get("name"):
+                # A size chart's `title` is the chart's, not a product's --
+                # "Oversized t-shirt" is shared by three of them. Only an
+                # answer with no product name of its own speaks through it.
+                _note(content.get("title"))
             for entry in content.get("products") or []:
                 if isinstance(entry, dict):
                     _note(entry.get("name"))
@@ -185,11 +212,7 @@ def attached_names(labels: dict[str, dict]) -> set[str]:
 
 def _product_photos(labels: dict[str, dict], attachments: list[str]) -> int:
     """How many of the attachments are photographs of a garment."""
-    charts = sum(
-        1
-        for path in attachments or []
-        if str(((labels or {}).get(path) or {}).get("label") or "").endswith("size chart")
-    )
+    charts = sum(1 for path in attachments or [] if _is_chart(labels, path))
     return max(0, len(attachments or []) - charts)
 
 
@@ -218,7 +241,12 @@ def unbacked_claim(
         return ""
 
     photos = _product_photos(labels or {}, attachments or [])
+    charts = len(attachments or []) - photos
     if photos <= 0:
+        if charts and not _garment_claim(text):
+            # Every mention of a picture is about the chart, and the chart
+            # is attached: the sentence is true.
+            return ""
         return "the reply says a photo is coming and nothing is attached"
 
     known = product_names(history or [])
@@ -245,7 +273,10 @@ def unbacked_claim(
         if not _IMAGE_WORD.search(lowered) or _NO_IMAGES.search(lowered):
             continue
 
-        if (_BOTH.search(clause) or _PLURAL_PHOTO.search(lowered)) and photos < 2:
+        # A clause that names the chart may count it: «دي صور الهودي وجدول
+        # المقاسات» beside one photo and one chart is two pictures, as said.
+        shown = photos + (charts if _CHART_WORD.search(lowered) else 0)
+        if (_BOTH.search(clause) or _PLURAL_PHOTO.search(lowered)) and shown < 2:
             return (
                 f"the reply claims more than one photo ({clause.strip()[:48]!r}) "
                 f"and {photos} went out"
