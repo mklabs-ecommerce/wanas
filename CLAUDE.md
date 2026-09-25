@@ -134,6 +134,11 @@ domain/                  persistence + business rules; no vendor HTTP calls,
                             *what the alert is about* -- external_id, else
                             order, else variant, since the stock and order
                             reasons carry no customer at all),
+                            shop_facts.py (the sentences said with no tool
+                            behind them -- shipping, delivery time, payment --
+                            rendered from the rate table and the constants in
+                            code, for the prompt and the public comment
+                            answers alike; never a literal in either),
                             search_terms.py (Arabic +
                             franco catalog-search vocabulary — Egyptian, not
                             Modern Standard: «فانلة» is a tee, «بلوفر» a

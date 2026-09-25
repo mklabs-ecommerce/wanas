@@ -14,10 +14,8 @@ what keeps /domain/ free of any import from /assistant/.
 from __future__ import annotations
 
 import logging
-import re
 import threading
 from contextlib import asynccontextmanager
-from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
@@ -46,7 +44,7 @@ from dashboard.stats_api import router as dashboard_stats_router
 from dashboard.web import router as dashboard_router
 from domain.db import engine, session_scope
 from domain.models import Base, Product, ShippingRate, Variant
-from domain.services import alert_email, conversation_reset, notifications
+from domain.services import alert_email, conversation_reset, notifications, shop_facts
 from domain.services.scheduler import scheduler
 from integrations.shopify.webhooks import router as shopify_router
 
@@ -200,29 +198,12 @@ def _correct_retired_size_charts() -> None:
         )
 
 
-def _published_flat_shipping_fee() -> Decimal | None:
-    """The one shipping number this shop publishes without looking anything up.
-
-    Both `assistant/comment_faq.py` (under a post, in public) and the system
-    prompt answer "how much is delivery" with a flat rate and no tool call --
-    the FAQ module says why: one rate to every governorate, confirmed across
-    ~100 orders, so there is nothing to look up. Parsed out of the published
-    string rather than written down a third time here, because a third copy is
-    a third thing to forget.
-    """
-    from assistant.comment_faq import FAQ_REPLIES
-
-    digits = re.search(r"[0-9]+", FAQ_REPLIES.get("shipping_cost", ""))
-    return Decimal(digits.group(0)) if digits else None
-
-
-#: The flat rate the shop set for every governorate on 2026-08-20, read from
-#: the sentence the shop actually publishes rather than written down again.
-#: It used to be a third copy of the number, beside the public comment answer
-#: and the prompt, with nothing keeping the three in step. Only ever applied
-#: to a governorate with no fee yet -- staff correcting one later through the
+#: The flat rate the shop set for every governorate on 2026-08-20, kept in
+#: `domain/services/shop_facts.py` with the other published facts. It used to
+#: be parsed back out of the public comment answer. Only ever applied to a
+#: governorate with no fee yet -- staff correcting one later through the
 #: dashboard is never overwritten by a later boot of this.
-_DEFAULT_SHIPPING_FEE = _published_flat_shipping_fee() or Decimal("110")
+_DEFAULT_SHIPPING_FEE = shop_facts.DEFAULT_SHIPPING_FEE
 
 
 def _ensure_shipping_fees_set() -> None:

@@ -579,7 +579,7 @@ def run_turn(
     # (`assistant/recovery.py::RESUME_INSTRUCTION`), which the turn after this
     # one must not still be reading.
     with telemetry.stage("prompt_build"):
-        system_prompt = build_system_prompt(system_extra, channel=channel)
+        system_prompt = build_system_prompt(system_extra, channel=channel, session=db)
 
     # The messages this turn is about were already written to the transcript
     # when they arrived, so staff could see the conversation before the bot

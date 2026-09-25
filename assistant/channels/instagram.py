@@ -862,7 +862,8 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     #    DM, no seeded session, and the classifier is never called, which is
     #    the saving.
     if faq_key:
-        answer = comment_faq.reply_for(faq_key)
+        with session_scope() as facts:
+            answer = comment_faq.reply_for(faq_key, facts)
         result = client.reply_to_comment(comment_id, answer)
         if result.delivered:
             _mark_comment(comment_id, public_replied=True, public_reply_text=answer)

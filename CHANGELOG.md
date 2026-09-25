@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — The published facts are read from where they are kept
+
+`docs/LLM_AUDIT.md` finding 6. Shipping ("110 جنيه لكل محافظات مصر"), delivery
+("بياخد لغاية 4 أيام"), the payment sentence, the 24-hour exchange window and
+the 20-pound surcharge were literals in the prompt and in the public comment
+answers -- second copies of numbers whose source of truth is the rate table and
+`orders.py` -- and `app.py` seeded missing fees by parsing the fee back *out of*
+the comment answer. A fee changed in the dashboard changed every order and left
+the bot quoting the old one. The prompt's layout example also priced shipping
+to Cairo at 60 beside the published flat 110.
+
+`domain/services/shop_facts.py` now holds the defaults and renders each
+sentence from its source; the prompt is a template filled per turn from the
+rate table (`build_system_prompt(session=...)`), the comment FAQ reads the
+same table, and the example fee is always a fee the shop charges.
+
 ## Unreleased — The courier's number is one the customer gave
 
 `docs/LLM_AUDIT.md` finding 5. `confirm_order.contact_phone` is written by the
