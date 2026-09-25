@@ -98,10 +98,13 @@ paid for at least once:
    الواتس وافتحه تاني», about a photograph the system had already recorded as
    refused. The picture leaves from here: if it did not arrive, the failure is
    ours, and a customer saying so is ground truth.
-17. **One photo per product per reply**, unless the customer asked for that
-   product's colours. Asked "photos of which of the two?", the customer
-   answered «الاتنين» and received every colourway of both -- a screenful of
-   notifications in answer to a two-word message that asked for two pictures.
+17. **One photo per product in a reply that shows several**, unless the
+   customer asked for that product's colours. Asked "photos of which of the
+   two?", the customer answered «الاتنين» and received every colourway of both
+   -- a screenful of notifications in answer to a two-word message that asked
+   for two pictures. A reply about *one* product may show up to
+   `showcase.FIRST_SHOWING_PHOTOS` of it: that is the first showing
+   `assistant/showcase.py` makes on purpose, and never more.
 18. **And it answers the garment that was asked for.** «فيه قمصان» came back
    «أيوه، عندنا تيشيرتات كتير» with four t-shirts under it. In Egyptian a قميص
    is a button-up shirt, a تيشيرت is not one, and this shop sells no shirts --
@@ -142,7 +145,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
-from assistant import agent, order_change_claims, photo_claims  # noqa: E402
+from assistant import agent, order_change_claims, photo_claims, showcase  # noqa: E402
 from assistant.providers import set_provider  # noqa: E402
 from domain.db import session_scope  # noqa: E402
 from domain.services import garments  # noqa: E402
@@ -569,9 +572,11 @@ def repeats_the_previous_reply(text: str, previous: str) -> float:
     return difflib.SequenceMatcher(None, before, now).ratio()
 
 
-#: How many garment photos one product may appear in, in one reply, unless the
-#: customer asked for its colours. One. See `tools.base.MAX_PRODUCT_IMAGES` --
-#: this is the same rule judged from the outside, on what actually went out.
+#: How many garment photos one product may appear in, in a reply that shows
+#: several products, unless the customer asked for its colours. One. See
+#: `tools.base.MAX_PRODUCT_IMAGES` -- this is the same rule judged from the
+#: outside, on what actually went out. A reply about one product alone may show
+#: `showcase.FIRST_SHOWING_PHOTOS` of it.
 _PHOTOS_PER_PRODUCT = 1
 
 
@@ -607,10 +612,10 @@ def too_many_photos_of_one_product(counts: dict, asked_for_colors: bool) -> str:
     """
     if asked_for_colors:
         return ""
+    counts = counts or {}
+    limit = showcase.FIRST_SHOWING_PHOTOS if len(counts) == 1 else _PHOTOS_PER_PRODUCT
     over = sorted(
-        f"{product or 'unnamed'}={count}"
-        for product, count in (counts or {}).items()
-        if count > _PHOTOS_PER_PRODUCT
+        f"{product or 'unnamed'}={count}" for product, count in counts.items() if count > limit
     )
     return ", ".join(over)
 

@@ -717,6 +717,33 @@ def test_one_photo_of_each_of_two_products_passes():
     assert check(_run(reply), _run(reply)) == []
 
 
+def test_one_product_shown_alone_may_show_its_colourways():
+    """The showcase's first showing of a single product -- the colour asked
+    for and the other in-stock colourways, up to its budget."""
+    reply = _reply(
+        "photos_of_both",
+        1,
+        "ده تيشيرت Ringer Tee، ودي الألوان اللي متاحة منه دلوقتي 👆",
+        ("get_variants",),
+        photos=3,
+        photos_by_product={"ringer-tee": 3},
+    )
+    assert check(_run(reply), _run(reply)) == []
+
+
+def test_two_products_still_show_one_photo_each():
+    reply = _reply(
+        "photos_of_both",
+        1,
+        "دي صورة تيشيرت Ringer Tee 👆 وصورة Envy T-shirt ورا بعض.",
+        ("get_variants",),
+        photos=4,
+        photos_by_product={"ringer-tee": 2, "envy-tee": 2},
+    )
+    failures = check(_run(reply), _run(reply))
+    assert any("more than one photo of the same product" in f for f in failures), failures
+
+
 def test_the_colours_the_customer_asked_for_are_allowed():
     reply = _reply(
         "photos_of_both",
