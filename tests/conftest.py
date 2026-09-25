@@ -278,3 +278,23 @@ def cairo_rate(seeded):
     rate.fee = 60
     seeded.commit()
     return rate
+
+
+@pytest.fixture(autouse=True)
+def name_question_off(request, monkeypatch):
+    """A brand-new customer's first replies end with «ممكن أعرف اسم حضرتك؟»
+    when the model forgot to ask (`assistant/customer_name.py::ensure_asked`).
+
+    Every conversation in this suite is a brand-new customer, and most tests
+    pin a reply's exact text for reasons that have nothing to do with names --
+    so the *appended line* is off by default, the same way the Shopify shelf
+    is on by default. Everything else about the name (the per-turn note, the
+    decision, the tool) still runs. `@pytest.mark.asks_name` turns the line
+    back on, and every test about the name uses it.
+    """
+    if "asks_name" in request.keywords:
+        return
+    from assistant import customer_name
+
+    monkeypatch.setattr(customer_name, "ensure_asked", lambda text, decision: text)
+

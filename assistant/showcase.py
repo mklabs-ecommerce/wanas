@@ -360,29 +360,37 @@ def show(ctx: ToolContext, text: str, history: list[dict], called: list[str]) ->
     return added
 
 
-#: Words asking to *see* the garment. «صورة» alone is not enough: «ابعتلي صورة
-#: جدول المقاسات» is a request for the chart, so a photo word followed by a
-#: chart word is read as part of the chart request (`_CHART_NEXT`).
-_PHOTO_WORD = re.compile(
-    r"صور\w*|وريني\w*|وريهولي|فرجني\w*|شكله|شكلها|شكلهم|أشوف|اشوف|نشوف"
-    r"|\b(?:photos?|pics?|pictures?|images?|see it|show me)\b",
+#: Asking to see the garment, in two strengths.
+#:
+#: A photo *noun* («صور», «صورة», «photo») names what is wanted, so it counts
+#: -- unless what follows it is the chart: «ابعتلي صورة جدول المقاسات» is a
+#: request for the chart (`_ABOUT_THE_CHART`).
+#:
+#: A *verb* of seeing («اشوف», «وريني») says only "show me", and the object
+#: decides what. In a message about sizing it is the chart they want to see:
+#: production's «عايز اشوف السايز شارت بتاع boxy wns tee» was read as a
+#: request for photos, and the first version of this rule knew «جدول / مقاس /
+#: قياس» but not the loanwords «السايز شارت», so the garment went out beside
+#: the chart. A verb therefore counts only when the message is not about
+#: sizing at all.
+_PHOTO_NOUN = re.compile(r"صور\w*|\b(?:photos?|pics?|pictures?|images?)\b", re.IGNORECASE)
+_SEE_VERB = re.compile(
+    r"وريني\w*|وريهولي|فرجني\w*|شكله|شكلها|شكلهم|أشوف|اشوف|نشوف|\b(?:see|show)\b",
     re.IGNORECASE,
 )
-_CHART_NEXT = re.compile(
-    r"\s*(?:بتاعت?ه?\s+)?(?:ال)?(?:جدول|مقاس|قياس)"
-    r"|\s*(?:of\s+)?(?:the\s+)?(?:size|chart|measurement)",
-    re.IGNORECASE,
+#: What the chart is called, in every spelling the customers use.
+_CHART_WORDS = (
+    r"جدول|مقاس|قياس|سايز|سيز|شارت|تشارت|size|chart|measurement|sizing"
+)
+_ABOUT_THE_CHART = re.compile(
+    # «ال» / «بال» / «لل» may lead the chart word; «و» may not -- «صور
+    # التيشيرت والجدول» asks for both, not for a picture of the chart.
+    rf"\s*(?:\S+\s+){{0,2}}?(?:ال|بال|لل|ل|ب)?(?:{_CHART_WORDS})", re.IGNORECASE
 )
 
 
-def asked_for_photos(ctx: ToolContext) -> bool:
-    """Did the customer's own last message ask to see the garment itself?
-
-    Read from what they wrote, like `catalog_tools.asked_about_sizing` -- the
-    two together are what decide whether a reply may carry both a chart and a
-    photograph.
-    """
-    text = next(
+def _latest_customer_text(ctx: ToolContext) -> str:
+    return next(
         (
             (m.get("content") or "").strip()
             for m in reversed(ctx.history)
@@ -390,33 +398,48 @@ def asked_for_photos(ctx: ToolContext) -> bool:
         ),
         "",
     )
-    for match in _PHOTO_WORD.finditer(text):
-        if not _CHART_NEXT.match(text, match.end()):
+
+
+def asked_for_photos(ctx: ToolContext) -> bool:
+    """Did the customer's own last message ask to see the garment itself?
+
+    Read from what they wrote, like `catalog_tools.asked_about_sizing` -- the
+    two together decide whether a reply may carry garment photos at all.
+    """
+    from assistant.tools.catalog_tools import asked_about_sizing
+
+    text = _latest_customer_text(ctx)
+    for match in _PHOTO_NOUN.finditer(text):
+        if not _ABOUT_THE_CHART.match(text, match.end()):
             return True
-    return asked_for_colors(ctx)
+    if asked_about_sizing(ctx):
+        return False
+    return bool(_SEE_VERB.search(text)) or asked_for_colors(ctx)
 
 
 def keep_chart_or_photos(ctx: ToolContext) -> list[str]:
-    """A reply carries a size chart or garment photos, not both. Returns what
-    it took off.
+    """A size-chart question gets no garment photo; a product question gets no
+    chart. Returns what it took off.
 
     Reported from production as «when I ask for the size chart it sends the
     chart together with product photos», and it did, by design:
     `get_variants` attached the product's photo on every call and the chart
     beside it whenever the message was about sizing, a single-hit
     `get_products` did the same, and the showcase could then add colourways
-    on top. A measurements table between four pictures of a T-shirt is a
-    table nobody can find.
+    on top. A measurements table between pictures of a T-shirt is a table
+    nobody can find.
 
     Decided here, once, on the pictures that are actually leaving -- after
     every tool call and the showcase -- rather than inside each tool, because
     three doors lead to the mix and a rule kept at each door is a rule one
     new door forgets. From the customer's own words:
 
-    * asked to see the garment and not about sizing -> the photos go;
-    * anything else with a chart attached -> the chart goes, alone. A chart
-      is only ever attached for a sizing question or an explicit
-      `get_size_chart`, so without a request for photos it is the answer;
+    * about sizing and not asking for photos -> **no garment photo**, whether
+      or not a chart picture exists to send instead: «a size chart question
+      must never get a product photo»;
+    * asking for photos and not about sizing -> no chart;
+    * neither, with both attached -> the chart alone (it only attaches for a
+      sizing question or an explicit `get_size_chart`, so it is the answer);
     * asked for both («ابعتلي صوره وجدول المقاسات») -> both.
 
     What is taken off is taken off entirely, so it is never recorded as
@@ -427,21 +450,25 @@ def keep_chart_or_photos(ctx: ToolContext) -> list[str]:
 
     photos = [path for path in ctx.attachments if path in ctx.photo_products]
     charts = [path for path in ctx.attachments if path not in ctx.photo_products]
-    if not (photos and charts):
-        return []
     wants_photos = asked_for_photos(ctx)
     wants_chart = asked_about_sizing(ctx)
     if wants_photos and wants_chart:
         return []
-    dropped = charts if wants_photos else photos
+    if wants_chart:
+        dropped = photos
+    elif wants_photos:
+        dropped = charts
+    else:
+        dropped = photos if charts else []
     for path in dropped:
         ctx.attachments.remove(path)
         ctx.attachment_labels.pop(path, None)
         ctx.photo_products.pop(path, None)
-    log.info(
-        "kept the %s and withheld %d %s: the customer asked for one, not both",
-        "photos" if wants_photos else "size chart",
-        len(dropped),
-        "chart(s)" if wants_photos else "photo(s)",
-    )
+    if dropped:
+        log.info(
+            "withheld %d %s: the customer asked %s",
+            len(dropped),
+            "size chart(s)" if dropped is charts else "product photo(s)",
+            "to see the garment" if dropped is charts else "about sizing, not for photos",
+        )
     return dropped

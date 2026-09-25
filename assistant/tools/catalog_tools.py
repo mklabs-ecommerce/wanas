@@ -164,7 +164,7 @@ def _garment_we_do_not_sell(
 #: answers "which size am I?", and nothing else -- «عايز مقاس L» has already
 #: answered it.
 _SIZING_WORDS = (
-    "مقاس", "مقاسات", "سايز", "قياس", "قياسات", "جدول",
+    "مقاس", "مقاسات", "سايز", "سيز", "شارت", "قياس", "قياسات", "جدول",
     "size", "sizes", "sizing", "measurement", "measurements", "chart",
     "fit", "فيت", "يضبط", "هيضبط", "مظبوط", "يجيلي", "هيجيلي", "واسع", "ضيق",
 )
@@ -206,7 +206,7 @@ def asked_about_sizing(ctx: ToolContext) -> bool:
     words = {w.lower() for w in _WORD.findall(text)}
     #: `جدول` / `chart` / `measurements` are unambiguous -- a customer who says
     #: those is asking for the chart whatever else the message names.
-    if any(word in lowered for word in ("جدول", "chart", "قياسات", "measurement")):
+    if any(word in lowered for word in ("جدول", "chart", "شارت", "قياسات", "measurement")):
         return True
     return not (words & set(_NAMED_SIZES))
 

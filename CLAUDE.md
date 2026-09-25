@@ -309,11 +309,16 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              what to call them once it is known. Code decides
                              *whether* (never when a name is held -- the
                              order's `Client.full_name`, else the chat's
-                             `ChannelIdentity.customer_name`; once ever, read
-                             off the transcript; only in a conversation's
-                             first replies), the model decides the wording, so
-                             the question sits after an answer and never
-                             instead of one. `save_customer_name` stores only
+                             `ChannelIdentity.customer_name`; once per
+                             conversation, read off the *live* slice -- never
+                             the archive, which a staff reset keeps, so the
+                             first version never asked a number with any
+                             history; only in a conversation's first replies),
+                             the model decides the wording, so the question
+                             sits after an answer and never instead of one,
+                             and `ensure_asked` adds the line if the finished
+                             reply still does not ask. Each turn logs its
+                             decision (`wanas.customer_name`). `save_customer_name` stores only
                              a name the customer typed, and
                              `dashboard/web.py::customer_labels` titles the
                              conversation with it

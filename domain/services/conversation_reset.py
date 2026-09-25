@@ -53,6 +53,9 @@ def reset(session: Session, channel: str, external_id: str, *, staff_id: int) ->
         identity.client_id = None
         identity.pending_link = None
         identity.paused_until_staff_reply = False
+        # "How a brand-new customer looks" includes not knowing their name:
+        # the next conversation asks for it again.
+        identity.customer_name = None
         session.flush()
 
     session.execute(delete(CartItem).where(CartItem.channel == channel, CartItem.external_id == external_id))

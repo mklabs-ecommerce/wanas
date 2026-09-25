@@ -11,13 +11,25 @@ so it can sit naturally at the end of an answer instead of in front of one:
 
 * **never when the name is known** -- from an order (`Client.full_name`) or
   from an earlier answer (`ChannelIdentity.customer_name`);
-* **once, ever.** A customer who read the question and carried on without
-  answering it has answered it. Whether it was asked is read off the stored
-  transcript (every reply the shop sent, archive included), not off a flag the
-  model would have to remember to set;
+* **once per conversation.** A customer who read the question and carried on
+  without answering it has answered it -- for this conversation. Whether it
+  was asked is read off the replies of the *live* conversation, never the
+  archive: the first version read the whole transcript, so a number whose
+  history held any earlier «اسم حضرتك» (checkout asks it) was "already asked"
+  forever, and a staff reset -- which archives, it does not erase -- did not
+  make it a new conversation. That is how production's first greeting after a
+  reset, on 2026-09-25, went out with no name question at all;
 * **only in a conversation's first few replies** (`ASK_WITHIN_REPLIES`). The
   name is an introduction; asked in the middle of choosing a size it is a
   form field, and checkout asks for the name the parcel goes to anyway.
+
+And it is **not left to the model to remember**. The note asks for the
+question to sit after the answer, in the model's own words; if the finished
+reply still does not ask, `ensure_asked` adds the one line itself -- after
+everything else, so an answer is never held behind it -- except on an
+apology, where a name question reads as not having listened. Every turn logs
+what was decided (`log_decision`), because the only trace the first version
+left in production was the absence of a question.
 
 The answer is saved by the `save_customer_name` tool, which refuses a name
 the customer never typed.
@@ -25,13 +37,22 @@ the customer never typed.
 
 from __future__ import annotations
 
+import logging
 import re
 
 from sqlalchemy.orm import Session
 
-from assistant import session as session_store
 from assistant.messages import ASSISTANT
 from domain.services import identities
+
+log = logging.getLogger("wanas.customer_name")
+
+#: What `ensure_asked` adds when the model answered without asking.
+ASK_LINE = "ممكن أعرف اسم حضرتك؟"
+
+#: A reply that apologises is about something that went wrong for the
+#: customer; a name question under it reads as not having listened.
+_APOLOGY = re.compile(r"آسف|اسف|معلش|أعتذر|اعتذر|للأسف|للاسف|عذرًا|عذراً|عذرا")
 
 #: The bot's replies, counted from the start of the live conversation, within
 #: which the name is still an introduction. Past it the question is dropped
@@ -78,19 +99,29 @@ def _replies(history: list[dict]) -> list[str]:
     ]
 
 
-def already_asked(db: Session, channel: str, external_id: str) -> bool:
-    """Whether any reply the shop ever sent this customer asked their name."""
-    transcript = session_store.transcript(db, channel, external_id)
-    return any(asks_for_name(text) for text in _replies(transcript))
+def already_asked(history: list[dict]) -> bool:
+    """Whether a reply in *this* conversation (the live slice) asked the name."""
+    return any(asks_for_name(text) for text in _replies(history))
+
+
+def decide(db: Session, channel: str, external_id: str, history: list[dict]) -> str:
+    """What this turn does about the name, as one word:
+
+    `known` -- we hold it; `asked` -- asked earlier in this conversation;
+    `late` -- past the conversation's opening replies; `ask` -- ask now.
+    """
+    if identities.known_name(db, channel, external_id):
+        return "known"
+    if already_asked(history):
+        return "asked"
+    if len(_replies(history)) >= ASK_WITHIN_REPLIES:
+        return "late"
+    return "ask"
 
 
 def should_ask(db: Session, channel: str, external_id: str, history: list[dict]) -> bool:
     """Ask on this turn? See the module docstring for each condition."""
-    if identities.known_name(db, channel, external_id):
-        return False
-    if len(_replies(history)) >= ASK_WITHIN_REPLIES:
-        return False
-    return not already_asked(db, channel, external_id)
+    return decide(db, channel, external_id, history) == "ask"
 
 
 def turn_note(db: Session, channel: str, external_id: str, history: list[dict]) -> str:
@@ -103,3 +134,20 @@ def turn_note(db: Session, channel: str, external_id: str, history: list[dict]) 
     if should_ask(db, channel, external_id, history):
         return _ASK_NOTE
     return ""
+
+
+def log_decision(channel: str, external_id: str, decision: str) -> None:
+    """One line per turn saying what the name logic decided -- never the
+    name itself, which is a customer's personal data in a hosting log."""
+    log.info("customer name for %s/%s: %s", channel, external_id, decision)
+
+
+def ensure_asked(text: str, decision: str) -> str:
+    """The reply, with the name question added if this turn had to ask and
+    the model's reply does not. Added last, so the answer still comes first."""
+    if decision != "ask" or not (text or "").strip():
+        return text
+    if asks_for_name(text) or _APOLOGY.search(text):
+        return text
+    log.info("the reply did not ask the customer's name; adding the question")
+    return text.rstrip() + "\n\n" + ASK_LINE

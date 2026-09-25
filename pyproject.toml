@@ -15,6 +15,7 @@ addopts = "-q --strict-markers"
 markers = [
     "no_shopify: run without the in-memory Shopify shelf, to exercise the outage path",
     "live: costs real model quota; skipped unless RUN_LIVE_TESTS=1",
+    "asks_name: let the turn add the customer-name question to a reply that forgot it",
 ]
 filterwarnings = ["error::DeprecationWarning:domain.*", "error::DeprecationWarning:assistant.*"]
 

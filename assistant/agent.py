@@ -674,6 +674,8 @@ def run_turn(
     # only moment it is knowable; see `session.record_undelivered_attachments`.
     # Whether to ask the customer's name on this turn, or what to call them
     # -- decided in code, phrased by the model. See `assistant/customer_name.py`.
+    name_decision = customer_name.decide(db, channel, external_id, history)
+    customer_name.log_decision(channel, external_id, name_decision)
     system_prompt = f"{system_prompt}{customer_name.turn_note(db, channel, external_id, history)}"
 
     undelivered = photo_claims.undelivered(history)
@@ -1193,6 +1195,9 @@ def run_turn(
                     channel,
                     external_id,
                 )
+            # Last, after every check above: a turn that had to ask the
+            # customer's name asks it, whether or not the model remembered to.
+            text_out = customer_name.ensure_asked(text_out, name_decision)
             history.append(msg.assistant(text_out, signature=reply.signature, attachments=ctx.attachments))
             session_store.save(db, channel, external_id, history, merge_since=base)
             return AgentReply(

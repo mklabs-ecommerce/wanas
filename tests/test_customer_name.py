@@ -32,6 +32,8 @@ from domain.services import auth, identities
 
 load_all()
 
+pytestmark = pytest.mark.asks_name
+
 CHANNEL = "whatsapp"
 WHO = "201000000077"
 SECRET = "test-dashboard-secret"
