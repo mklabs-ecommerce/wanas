@@ -27,6 +27,19 @@ def _lines(session: Session, channel: str, external_id: str) -> list[CartItem]:
     )
 
 
+def has_items(session: Session, channel: str, external_id: str) -> bool:
+    """Whether this identity's cart holds anything. One cheap query, for a
+    caller that needs to know and not to price it."""
+    return (
+        session.scalar(
+            select(CartItem.id)
+            .where(CartItem.channel == channel, CartItem.external_id == external_id)
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def cart_payload(session: Session, channel: str, external_id: str) -> dict:
     """The cart, priced the way the order will be charged.
 

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from assistant import (
+    action_claims,
     context,
     messages as msg,
     order_change_claims,
@@ -43,6 +44,7 @@ from assistant.tools.base import (
 )
 from common import telemetry
 from config.settings import settings
+from domain.services import carts, orders
 
 log = logging.getLogger("wanas.agent")
 
@@ -412,6 +414,23 @@ _FACTS_NUDGE = (
 )
 
 
+#: Appended when a reply said it added something to the cart, or that the
+#: order went through, and no tool in the turn did. What is true is the
+#: tool's answer; the sentence is rewritten to match it, never the reverse.
+_ACTION_NUDGE = {
+    "cart": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إن القطعة اتضافت للسلة، بس add_to_cart "
+        "مانجحش في الدور ده (يا اترفض يا متنادهش). لو الزبون قرر، نادي add_to_cart "
+        "دلوقتي؛ ولو اترفض قوله بصراحة ليه واعرض البدائل اللي رجعت. متقولش «ضفته» "
+        "غير لو الأداة رجعت السلة."
+    ),
+    "order": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إن الأوردر اتسجل، بس confirm_order "
+        "مانجحش في الدور ده. الأوردر مابيتسجلش غير لما confirm_order يرجّع رقم "
+        "أوردر -- كمّل البيانات الناقصة أو نادي الأداة، ولو رفضت قول السبب."
+    ),
+}
+
 #: The last resort when the model will not stop diagnosing the customer's
 #: phone. It says the one true thing -- the failure is ours -- and offers the
 #: person, which is the only thing left that can actually get the picture to
@@ -655,6 +674,10 @@ def run_turn(
     #: The post-order request kinds this turn filed -- see
     #: `assistant/order_change_claims.py`.
     filed_kinds: list[str] = []
+    #: Every tool this turn ran and what it answered, in order -- what a
+    #: reply's claim to have *done* something is checked against
+    #: (`assistant/action_claims.py`).
+    turn_results: list[tuple[str, dict]] = []
     promise_retries = 0
     truncation_retries = 0
     # The customer sent a picture of their own this turn, so every mention of
@@ -891,6 +914,52 @@ def run_turn(
             # A price, a total or a measurement nothing in this conversation
             # said. The rule has been in the prompt since the first version;
             # this is the check behind it (`assistant/reply_facts.py`).
+            # "I added it" / "your order is placed" with no tool this turn
+            # having done it. The same shape as the order-change check above,
+            # for the two actions everything else in a sale depends on.
+            claimed = action_claims.unbacked(
+                text_out,
+                turn_results,
+                cart_has_items=lambda: carts.has_items(db, channel, external_id),
+                has_orders=lambda: bool(
+                    orders.orders_for_identity(db, channel, external_id, include_closed=True)
+                ),
+            )
+            if claimed:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s claimed an action no tool did (%s), retry %d/%d",
+                        channel,
+                        external_id,
+                        claimed,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}{_ACTION_NUDGE[claimed]}"
+                    ctx.restore(before_showcase)
+                    continue
+                log.error(
+                    "provider %s kept claiming an action no tool did for %s/%s (%s); "
+                    "sending what is true instead",
+                    provider.name,
+                    channel,
+                    external_id,
+                    claimed,
+                )
+                text_out = action_claims.FALLBACKS[claimed]
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                    error=f"unbacked_{claimed}_claim",
+                )
+
             made_up = reply_facts.ungrounded(
                 text_out, history, reply_facts.shop_constants(db)
             )
@@ -1053,6 +1122,7 @@ def run_turn(
                 content = call_tool(ctx, name, call.get("arguments"))
             # What this turn actually wrote to the staff queue, in the tool's
             # own words. Read back below against what the reply says it wrote.
+            turn_results.append((name, content if isinstance(content, dict) else {}))
             if isinstance(content, dict) and content.get("filed"):
                 filed_kinds.append(str(content["filed"]))
             log.info("tool %s(%s) -> %s", name, call.get("arguments"), list(content)[:4])

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — A reply may not say it did what no tool did
+
+`docs/LLM_AUDIT.md` finding 7. «ضفتهولك في السلة» could go out beside an
+`out_of_stock` refusal or beside no call at all, and «الأوردر اتسجل» beside a
+cart nobody had checked out -- the words are the model's, the outcome is the
+tool layer's, and nothing joined them. `assistant/action_claims.py` is the third
+of the family after `photo_claims` and `order_change_claims`: a past-tense
+claim to have added to the cart, or placed the order, with no successful tool
+this turn behind it sends the turn back naming the tool, and a model that keeps
+claiming it gets a fixed sentence that is true instead. Offers («أضيفه؟»),
+plans and honest refusals («مقدرتش أضيفه») are not claims; a turn that looked
+up the customer's existing orders is reporting a status, not placing one.
+
 ## Unreleased — The published facts are read from where they are kept
 
 `docs/LLM_AUDIT.md` finding 6. Shipping ("110 جنيه لكل محافظات مصر"), delivery
