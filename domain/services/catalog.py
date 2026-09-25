@@ -140,6 +140,17 @@ def _overlay(variant: Variant, live_map) -> _Priced:
     )
 
 
+def quoted(variant: Variant, live_map=None) -> _Priced:
+    """One variant's price and stock as a customer may be told them now.
+
+    The overlay every quote goes through -- `get_variants`, the cart, and
+    `place_order`'s own live read -- exposed for a caller that holds a
+    `Variant` rather than a payload. Pass the turn's `shopify_catalog.live_map()`
+    so a payload of many lines reads the shelf once.
+    """
+    return _overlay(variant, live_map)
+
+
 def live_stock(variant: Variant) -> tuple[int, bool]:
     """How many of this variant are really sellable, and whether Shopify said so.
 

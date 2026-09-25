@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from common.money import money, to_decimal
 from config.settings import settings
 from domain.models import CartItem, Variant
+from domain.services import catalog
+from integrations.shopify import catalog as shopify_catalog
 
 
 def _lines(session: Session, channel: str, external_id: str) -> list[CartItem]:
@@ -26,14 +28,26 @@ def _lines(session: Session, channel: str, external_id: str) -> list[CartItem]:
 
 
 def cart_payload(session: Session, channel: str, external_id: str) -> dict:
+    """The cart, priced the way the order will be charged.
+
+    Through the live Shopify overlay (`catalog.quoted`), never the
+    `variants.price` column. That column is a seeded value: the cart used to
+    read it while `place_order` charged Shopify's live price, so the summary a
+    customer agreed to before confirming could differ from what the courier
+    collected at the door. Shopify unreachable falls back to the column, the
+    same as every other quote.
+    """
     lines = []
     subtotal = to_decimal(0)
     item_count = 0
-    for row in _lines(session, channel, external_id):
+    rows = _lines(session, channel, external_id)
+    live_map = shopify_catalog.live_map() if rows else None
+    for row in rows:
         variant = session.get(Variant, row.variant_id)
         if variant is None:  # a variant retired from the catalog under an open cart
             continue
-        line_total = to_decimal(variant.price) * row.quantity
+        priced = catalog.quoted(variant, live_map)
+        line_total = to_decimal(priced.price) * row.quantity
         subtotal += line_total
         item_count += row.quantity
         lines.append(
@@ -45,8 +59,8 @@ def cart_payload(session: Session, channel: str, external_id: str) -> dict:
                 "color": variant.color,
                 "length": variant.length,
                 "quantity": row.quantity,
-                "unit_price": money(variant.price),
-                "unit_original_price": money(variant.original_price),
+                "unit_price": money(priced.price),
+                "unit_original_price": money(priced.original_price),
                 "line_total": money(line_total),
             }
         )

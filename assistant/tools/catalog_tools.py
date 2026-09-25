@@ -7,10 +7,11 @@ import re
 
 from assistant import interactive
 from assistant.tools.base import ToolContext, last_product, tool
-from common.money import money
+from common.money import money, to_decimal
 from config.settings import settings
 from domain.models import Product
 from domain.services import (
+    carts,
     catalog,
     garments,
     runtime_flags,
@@ -455,7 +456,9 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
     "get_shipping_fee",
     "The delivery fee for a governorate. The governorate is a picked value from a fixed list, not "
     "free text, because it sets the price. Call this while collecting the address so the summary "
-    "shows a real total.",
+    "shows a real total. When the cart has items, `checkout` is that summary already worked out -- "
+    "the lines, `subtotal`, `shipping_fee` and `total`, priced the way the order will be charged. "
+    "Read those numbers to the customer exactly; never add anything up yourself.",
     properties={"governorate": {"type": "string", "description": "English or Arabic name."}},
     required=("governorate",),
 )
@@ -471,7 +474,41 @@ def get_shipping_fee(ctx: ToolContext, governorate: str) -> dict:
         # The shop has not priced it. An order for it cannot be confirmed --
         # shipping free by accident is a real loss on every parcel.
         return {"error": "no_rate_set", "governorate": resolved}
-    return {"governorate": resolved, "fee": money(fee)}
+    payload = {"governorate": resolved, "fee": money(fee)}
+    checkout = _checkout(ctx, fee)
+    if checkout is not None:
+        payload["checkout"] = checkout
+    return payload
+
+
+def _checkout(ctx: ToolContext, fee) -> dict | None:
+    """The pre-confirmation summary, with its arithmetic done here.
+
+    The prompt has always asked for "the real total" before `confirm_order`,
+    and the only way the model could produce one was to add the cart subtotal
+    to the fee itself. On cash on delivery that sum is the number the courier
+    asks for, so it is computed by the same rule `orders.recompute_totals`
+    uses -- subtotal, less the discount (none: codes are out of scope), plus
+    shipping -- from a cart priced the way the order will be charged.
+    """
+    cart = carts.cart_payload(ctx.session, ctx.channel, ctx.external_id)
+    if not cart["lines"]:
+        return None
+    subtotal = to_decimal(cart["subtotal"])
+    return {
+        "lines": [
+            {
+                key: line[key]
+                for key in ("product_name", "size", "color", "length", "quantity", "unit_price", "line_total")
+            }
+            for line in cart["lines"]
+        ],
+        "item_count": cart["item_count"],
+        "subtotal": money(subtotal),
+        "shipping_fee": money(fee),
+        "total": money(subtotal + to_decimal(fee)),
+        "payment": "cash_on_delivery",
+    }
 
 
 def _interactive_enabled(ctx: ToolContext) -> bool:

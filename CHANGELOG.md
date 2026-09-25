@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — The total agreed to was not the total charged
+
+`docs/LLM_AUDIT.md` findings 1 and 2, the two that rank first because they are
+the number a courier collects at the door.
+
+- **The cart was priced from wanas.db.** `carts.cart_payload` read
+  `variants.price`, a seeded column nothing keeps current, while `place_order`
+  charged Shopify's live price -- so a price changed in Shopify Admin reached
+  the order and not the summary the customer agreed to before confirming. The
+  cart now goes through the same live overlay as every other quote
+  (`catalog.quoted`).
+- **The total was the model's arithmetic.** The prompt asked for "the real
+  total" before `confirm_order`, and the only way to produce one was to add the
+  subtotal and the fee in its head. `get_shipping_fee` now returns `checkout`
+  -- the lines, the subtotal, the fee and the total -- computed by the same rule
+  as `orders.recompute_totals`, and the prompt says to read those numbers and
+  add nothing up.
+
 ## Unreleased — The shop answered about clothes without showing them
 
     customer: «عندكم هوديز؟»
