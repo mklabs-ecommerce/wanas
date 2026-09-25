@@ -881,6 +881,10 @@ def run_turn(
             # puts them back: the next sentence may name something else.
             before_showcase = ctx.checkpoint()
             showcase.show(ctx, text_out, history, called)
+            # A size chart or garment photos, not both, unless both were
+            # asked for -- on the pictures actually leaving, and before the
+            # claim checks below read them.
+            showcase.keep_chart_or_photos(ctx)
 
             # Blaming the customer's phone for our own failed send. Checked
             # before the claim guard because it is the more expensive mistake

@@ -129,6 +129,10 @@ paid for at least once:
    an action the queue does not hold is worse than no reply: the customer has
    been told, in writing, that the thing about to happen to their order is
    not the thing about to happen to their order.
+21. **A size chart or product photos, not both.** «When I ask for the size
+   chart it sends the chart together with product photos» -- it did, by
+   design, and a table between four pictures of a T-shirt is a table nobody
+   finds. Both only when the customer's own message asked for both.
 
 Exit code 0 means keep the change; 1 means revert it.
 """
@@ -349,6 +353,7 @@ def run(runs: int, real: bool, only: str) -> dict:
                 reply["expects_photo"] = bool(step.expects_photo)
                 reply["sizing_question"] = bool(step.sizing_question)
                 reply["asked_for_colors"] = bool(step.asked_for_colors)
+                reply["asked_for_photos"] = bool(step.asked_for_photos)
                 reply["expects_filed"] = step.expects_filed
                 # What the customer actually typed. The vocabulary rule below
                 # is about the gap between the question and the answer -- a
@@ -442,6 +447,15 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
                 failures.append(
                     f"{where}: a size chart went out and the customer never asked "
                     "about sizes, measurements or fit"
+                )
+
+            # Rule 21: and never both. A sizing question answered with the
+            # chart *and* four photos of the garment buries the table; a
+            # product question answered with a chart is rule 14 above.
+            if (reply.get("charts") or 0) and photos_out > 0 and not reply.get("asked_for_photos"):
+                failures.append(
+                    f"{where}: a size chart and product photos went out together, "
+                    "and the customer asked for one of them"
                 )
 
             # One product, one photo -- unless the customer asked for the

@@ -65,6 +65,9 @@ class Step:
     #: is a request for two pictures, one per product, and it was answered with
     #: every colourway of both.
     asked_for_colors: bool = False
+    #: The customer asked to see photographs *and* the size chart in one
+    #: message. The only step on which a reply may carry both (gate rule 21).
+    asked_for_photos: bool = False
     #: The post-order request this step must file -- "item_add" or
     #: "item_swap". A customer asking to *add* a piece to an order must not
     #: produce a swap: `item_swap` was for a while the only post-order request
@@ -161,7 +164,10 @@ def build(facts: dict) -> list[Scenario]:
                     # which the "golden called a tool, this run called none"
                     # rule in `quality_gate.py` is what defends.
                     expects_text=(facts["size"],),
-                    expects_photo=True,
+                    # A sizing question is answered with the chart, alone:
+                    # the garment photo beside it was the reported mix
+                    # (`showcase.keep_chart_or_photos`), and gate rule 21
+                    # fails a reply that carries both.
                     sizing_question=True,
                 )
             ],

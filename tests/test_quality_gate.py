@@ -32,6 +32,7 @@ def _reply(
     photos_by_product=None,
     asked_for_colors=False,
     customer_text="",
+    asked_for_photos=False,
 ):
     return {
         "scenario": scenario,
@@ -53,6 +54,7 @@ def _reply(
         "photos_by_product": dict(photos_by_product or {}),
         "asked_for_colors": asked_for_colors,
         "customer_text": customer_text,
+        "asked_for_photos": asked_for_photos,
     }
 
 
@@ -454,8 +456,26 @@ def test_a_size_chart_on_a_price_question_fails():
 
 
 def test_a_size_chart_on_a_sizing_question_passes():
+    """The chart, alone -- see rule 21 below for why no photo rides with it."""
     reply = _reply("sizes", 0, "المقاسات S و M و L", ("get_variants",),
-                   photos=2, charts=1, expects_photo=True, sizing_question=True)
+                   photos=1, charts=1, sizing_question=True)
+    assert check(_run(reply), _run(reply)) == []
+
+
+# --- rule 21: a chart or photos, not both ---------------------------------
+
+
+def test_a_chart_and_garment_photos_together_fail():
+    """The reported mix: asked for the chart, got the chart and the photos."""
+    reply = _reply("sizes", 0, "ده جدول المقاسات", ("get_variants",),
+                   photos=3, charts=1, sizing_question=True)
+    failures = check(_run(reply), _run(reply))
+    assert any("went out together" in f for f in failures), failures
+
+
+def test_both_pass_when_the_customer_asked_for_both():
+    reply = _reply("sizes", 0, "دي صورته وده جدول المقاسات", ("get_variants",),
+                   photos=2, charts=1, sizing_question=True, asked_for_photos=True)
     assert check(_run(reply), _run(reply)) == []
 
 

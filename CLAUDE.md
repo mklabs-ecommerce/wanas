@@ -327,7 +327,13 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              a photo already delivered, never a sold-out
                              colourway, nothing on an order/handoff turn, and
                              it runs before photo_claims reads the reply, so
-                             the claim check sees what will actually go
+                             the claim check sees what will actually go.
+                             keep_chart_or_photos then settles the one rule
+                             three tool paths used to break: a reply carries a
+                             size chart *or* garment photos, never both unless
+                             the customer's message asked for both -- read
+                             from their words, applied to what is leaving, and
+                             a withheld photo is never recorded as sent
   action_claims.py          a past-tense claim to have added to the cart or
                              placed the order, checked against this turn's tool
                              outcomes -- the third of the claims family beside

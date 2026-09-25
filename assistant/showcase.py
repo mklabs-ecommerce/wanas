@@ -37,7 +37,7 @@ import re
 
 from assistant.messages import TOOL_RESULTS
 from assistant.photo_claims import _BOTH, _GENERIC_NAME_WORDS
-from assistant.tools.base import ToolContext, _image_labels, _matching_color
+from assistant.tools.base import ToolContext, _image_labels, _matching_color, asked_for_colors
 from domain.services import catalog, search_terms
 
 log = logging.getLogger("wanas.showcase")
@@ -358,3 +358,90 @@ def show(ctx: ToolContext, text: str, history: list[dict], called: list[str]) ->
     if added:
         log.info("showcase attached %d photo(s) for %s", len(added), ", ".join(sorted(shown)))
     return added
+
+
+#: Words asking to *see* the garment. «صورة» alone is not enough: «ابعتلي صورة
+#: جدول المقاسات» is a request for the chart, so a photo word followed by a
+#: chart word is read as part of the chart request (`_CHART_NEXT`).
+_PHOTO_WORD = re.compile(
+    r"صور\w*|وريني\w*|وريهولي|فرجني\w*|شكله|شكلها|شكلهم|أشوف|اشوف|نشوف"
+    r"|\b(?:photos?|pics?|pictures?|images?|see it|show me)\b",
+    re.IGNORECASE,
+)
+_CHART_NEXT = re.compile(
+    r"\s*(?:بتاعت?ه?\s+)?(?:ال)?(?:جدول|مقاس|قياس)"
+    r"|\s*(?:of\s+)?(?:the\s+)?(?:size|chart|measurement)",
+    re.IGNORECASE,
+)
+
+
+def asked_for_photos(ctx: ToolContext) -> bool:
+    """Did the customer's own last message ask to see the garment itself?
+
+    Read from what they wrote, like `catalog_tools.asked_about_sizing` -- the
+    two together are what decide whether a reply may carry both a chart and a
+    photograph.
+    """
+    text = next(
+        (
+            (m.get("content") or "").strip()
+            for m in reversed(ctx.history)
+            if m.get("role") == "user" and (m.get("content") or "").strip()
+        ),
+        "",
+    )
+    for match in _PHOTO_WORD.finditer(text):
+        if not _CHART_NEXT.match(text, match.end()):
+            return True
+    return asked_for_colors(ctx)
+
+
+def keep_chart_or_photos(ctx: ToolContext) -> list[str]:
+    """A reply carries a size chart or garment photos, not both. Returns what
+    it took off.
+
+    Reported from production as «when I ask for the size chart it sends the
+    chart together with product photos», and it did, by design:
+    `get_variants` attached the product's photo on every call and the chart
+    beside it whenever the message was about sizing, a single-hit
+    `get_products` did the same, and the showcase could then add colourways
+    on top. A measurements table between four pictures of a T-shirt is a
+    table nobody can find.
+
+    Decided here, once, on the pictures that are actually leaving -- after
+    every tool call and the showcase -- rather than inside each tool, because
+    three doors lead to the mix and a rule kept at each door is a rule one
+    new door forgets. From the customer's own words:
+
+    * asked to see the garment and not about sizing -> the photos go;
+    * anything else with a chart attached -> the chart goes, alone. A chart
+      is only ever attached for a sizing question or an explicit
+      `get_size_chart`, so without a request for photos it is the answer;
+    * asked for both («ابعتلي صوره وجدول المقاسات») -> both.
+
+    What is taken off is taken off entirely, so it is never recorded as
+    delivered: the photo a chart reply withheld is still unseen when the
+    customer asks for it next.
+    """
+    from assistant.tools.catalog_tools import asked_about_sizing
+
+    photos = [path for path in ctx.attachments if path in ctx.photo_products]
+    charts = [path for path in ctx.attachments if path not in ctx.photo_products]
+    if not (photos and charts):
+        return []
+    wants_photos = asked_for_photos(ctx)
+    wants_chart = asked_about_sizing(ctx)
+    if wants_photos and wants_chart:
+        return []
+    dropped = charts if wants_photos else photos
+    for path in dropped:
+        ctx.attachments.remove(path)
+        ctx.attachment_labels.pop(path, None)
+        ctx.photo_products.pop(path, None)
+    log.info(
+        "kept the %s and withheld %d %s: the customer asked for one, not both",
+        "photos" if wants_photos else "size chart",
+        len(dropped),
+        "chart(s)" if wants_photos else "photo(s)",
+    )
+    return dropped

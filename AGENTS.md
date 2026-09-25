@@ -117,7 +117,9 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   differ.
 - **Size charts:** `data/size_charts.json` + the images in
   `data/size-charts/`. When a customer asks about sizing the bot returns the
-  numbers *and* sends the chart image. **It must never estimate a
+  numbers *and* sends the chart image -- the chart alone, never product
+  photos beside it unless they asked to see those too; a product question
+  gets photos and no chart (`showcase.keep_chart_or_photos`). **It must never estimate a
   measurement or reuse another product's chart** — sizing wrong doesn't
   confuse a customer, it causes a return.
   - Charts are assigned **per product**, never derived from `category`.
