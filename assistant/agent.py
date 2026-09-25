@@ -27,6 +27,7 @@ from assistant import (
     order_change_claims,
     photo_claims,
     quoting,
+    reply_facts,
     session as session_store,
     showcase,
 )
@@ -398,6 +399,19 @@ _BLAME_NUDGE = (
     "تتبعت اعرض عليه تحويله لحد من الفريق."
 )
 
+#: Appended when a reply stated a price, a total or a measurement that no tool
+#: in this conversation returned. The number is named back so the model knows
+#: which one, and the fix is the only one allowed: fetch it, or leave it out.
+#: Never "correct" it -- a figure put right by guesswork is still a guess.
+_FACTS_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات فيه أرقام ({numbers}) مش موجودة في أي نتيجة "
+    "أداة في المحادثة دي. كل سعر أو إجمالي أو قياس بالسنتيمتر لازم يتنقل حرفياً من "
+    "نتيجة أداة: get_variants للسعر، checkout من get_shipping_fee للإجمالي، "
+    "get_size_chart للقياسات. نادي الأداة دي في نفس الرد، أو اكتب ردك من غير الرقم. "
+    "متحسبش أي رقم بنفسك."
+)
+
+
 #: The last resort when the model will not stop diagnosing the customer's
 #: phone. It says the one true thing -- the failure is ours -- and offers the
 #: person, which is the only thing left that can actually get the picture to
@@ -760,6 +774,9 @@ def run_turn(
             text_out, path_leaked = strip_paths(reply.text)
             text_out, tool_leaked = strip_tool_leaks(text_out)
             text_out, _ = strip_markdown(text_out)
+            # Centimetres are always garment-flat, said every time -- in code,
+            # not left to the model remembering to (`reply_facts.FLAT_NOTE`).
+            text_out = reply_facts.with_flat_note(text_out)
 
             # The photographs this reply's own words call for: every catalog
             # product it names, and the rest of one product's colourways the
@@ -869,6 +886,49 @@ def run_turn(
                     tool_calls=called,
                     filed=list(filed_kinds),
                     error="blamed_the_customer",
+                )
+
+            # A price, a total or a measurement nothing in this conversation
+            # said. The rule has been in the prompt since the first version;
+            # this is the check behind it (`assistant/reply_facts.py`).
+            made_up = reply_facts.ungrounded(
+                text_out, history, reply_facts.shop_constants(db)
+            )
+            if made_up:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s stated numbers no tool returned (%s), retry %d/%d",
+                        channel,
+                        external_id,
+                        ", ".join(made_up),
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}" + _FACTS_NUDGE.format(
+                        numbers="، ".join(made_up)
+                    )
+                    ctx.restore(before_showcase)
+                    continue
+                log.error(
+                    "provider %s kept stating numbers no tool returned for %s/%s (%s); "
+                    "sending the fallback question instead",
+                    provider.name,
+                    channel,
+                    external_id,
+                    ", ".join(made_up),
+                )
+                text_out = promise_fallback(history)
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                    error="ungrounded_numbers",
                 )
 
             if image_promise or _is_dangling_promise(text_out, tools_called=bool(called)):

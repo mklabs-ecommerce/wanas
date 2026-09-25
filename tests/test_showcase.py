@@ -179,7 +179,7 @@ def test_a_product_already_shown_is_not_shown_again(seeded):
     )
     assert first.attachments
 
-    again, _ = turn(seeded, "بكام؟", ModelReply(text="الـ Ringer Tee بـ 450 جنيه."))
+    again, _ = turn(seeded, "بكام؟", ModelReply(text="الـ Ringer Tee بـ 580 جنيه."))
     assert again.attachments == []
 
 

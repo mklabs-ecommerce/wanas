@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — A number in a reply is one a tool returned
+
+`docs/LLM_AUDIT.md` findings 3 and 12.
+
+- **Every price, total and measurement is checked before the reply leaves.**
+  `assistant/reply_facts.py` reads the finished sentence for money amounts (a
+  number in a clause naming the currency, or straight after «بـ» / «السعر») and
+  centimetre figures, and each one has to appear in a tool result in this
+  conversation, in the customer's own messages, or among the shop's published
+  amounts (the shipping fees in the rate table, twice a fee for a refused
+  parcel, the exchange surcharge). A number that appears nowhere is one the
+  model made: the turn is sent back naming it and saying where to fetch it,
+  and a model that keeps doing it gets the fallback question instead of the
+  figure. Quantities, days, percentages, order references and phone numbers are
+  not amounts and are not read as one. The check never rewrites a number -- a
+  figure corrected by guesswork is still a guess.
+- **Measurements always say they are garment-flat.** `AGENTS.md` says "say
+  which, every time"; the prompt asked. A reply quoting centimetres without
+  saying so now has the sentence added in code (`reply_facts.FLAT_NOTE`).
+
 ## Unreleased — The total agreed to was not the total charged
 
 `docs/LLM_AUDIT.md` findings 1 and 2, the two that rank first because they are

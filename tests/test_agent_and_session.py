@@ -250,7 +250,7 @@ def test_a_stock_check_promise_never_ends_the_turn(seeded):
         [
             ModelReply(text="تمام يا فندم، ثواني بس هشوفلك المتاح في اللون ده وأقولك"),
             reply_with("get_variants", {"product_id": "wanas-hoodie"}),
-            ModelReply(text="الزيتي متاح في S و M بـ 750 جنيه"),
+            ModelReply(text="الزيتي متاح في S و M بـ 650 جنيه"),
         ]
     )
     reply = agent.run_turn(
@@ -258,7 +258,7 @@ def test_a_stock_check_promise_never_ends_the_turn(seeded):
     )
     assert "get_variants" in reply.tool_calls
     assert not agent._is_dangling_promise(reply.text, tools_called=bool(reply.tool_calls))
-    assert "750" in reply.text
+    assert "650" in reply.text
 
 
 def test_a_promise_after_a_tool_call_is_still_caught(seeded):
@@ -360,9 +360,11 @@ def test_a_real_answer_that_mentions_a_promise_word_is_sent_untouched(seeded):
     """The guard must not eat an actual answer. This one delivers the numbers
     and only then offers to follow up."""
     answer = (
-        "الأسود متاح في L و XL بـ 850 جنيه، ولو حبيت أي لون تاني قولي وأشوفلك"
+        "الأسود متاح في S و M بـ 650 جنيه، ولو حبيت أي لون تاني قولي وأشوفلك"
     )
-    provider = ScriptedProvider([reply_with("get_categories"), ModelReply(text=answer)])
+    provider = ScriptedProvider(
+        [reply_with("get_variants", {"product_id": "wanas-hoodie"}), ModelReply(text=answer)]
+    )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "الأسود؟", provider=provider)
     assert reply.text == answer
 
@@ -682,13 +684,13 @@ def _cut_off(text: str) -> ModelReply:
 def test_a_truncated_reply_is_regenerated_rather_than_sent(seeded):
     provider = ScriptedProvider(
         [
-            _cut_off("الإجمالي 950 جنيه، اطم"),
-            ModelReply(text="الإجمالي 950 جنيه. أأكد الأوردر؟"),
+            _cut_off("تمام، كده الأوردر جاهز، اطم"),
+            ModelReply(text="تمام، كده الأوردر جاهز. أأكده؟"),
         ]
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "اكد", provider=provider)
 
-    assert reply.text == "الإجمالي 950 جنيه. أأكد الأوردر؟"
+    assert reply.text == "تمام، كده الأوردر جاهز. أأكده؟"
     assert reply.error is None
     # The fragment is not in what the customer got, and not in the transcript
     # either -- the model must not read its own broken output back.
