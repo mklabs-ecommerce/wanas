@@ -473,6 +473,93 @@ def limit_emoji(text: str, *, states_money: bool) -> str:
     return re.sub(r"[ \t]+\n", "\n", cleaned).strip()
 
 
+#: Persian and Urdu letters that look like Arabic ones and are not: the
+#: prompt itself carried «متنادیش» with a Persian ی for as long as it existed,
+#: and a model copies the letters it is shown. On a phone they render almost
+#: the same and search, copy-paste and screen readers treat them as different
+#: words.
+_LOOKALIKE_LETTERS = str.maketrans({"\u06cc": "\u064a", "\u06a9": "\u0643", "\u06be": "\u0647"})
+
+#: Misspellings with exactly one right answer, each seen in a real reply.
+#: Whole words only (`_WORD_EDGE`), so a longer word containing one is never
+#: touched. «كل تمام» is the one that started this list -- the answer to
+#: «عامل ايه» that a person reads as broken Arabic, not as a typo.
+_MISSPELLINGS = (
+    ("كل تمام", "كله تمام"),
+    ("العفى", "العفو"),
+    ("تقلي", "تقولي"),
+    ("أبراهم", "أبرزهم"),
+    ("إنشاء الله", "إن شاء الله"),
+    ("انشاء الله", "إن شاء الله"),
+    ("لاكن", "لكن"),
+    ("أحد من الفريق", "حد من الفريق"),
+)
+#: \w already covers Arabic letters; the harakat are added so a vowelled
+#: word is still one word. Not the whole Arabic block: «،» and «؟» live there.
+_WORD_EDGE = r"(?<![\w\u064b-\u065f])({})(?![\w\u064b-\u065f])"
+
+#: The internal name of the order number, which the prompt used to *teach*
+#: («قول الـ reference»), and so reached customers as «ابعتلي رقم الأوردر
+#: (الـ reference)». To the customer it is «رقم الأوردر» and nothing else.
+_REFERENCE_ASIDE = re.compile(r"\s*\((?:ال(?:ـ)?\s*)?reference\)", re.IGNORECASE)
+_REFERENCE_WORD = re.compile(r"(?:ال(?:ـ)?\s*)reference\b", re.IGNORECASE)
+
+
+def fix_arabic(text: str) -> tuple[str, list[str]]:
+    """The Arabic slips that have one right spelling, fixed, and what changed."""
+    fixes: list[str] = []
+    fixed = (text or "").translate(_LOOKALIKE_LETTERS)
+    if fixed != (text or ""):
+        fixes.append("persian letters")
+    for wrong, right in _MISSPELLINGS:
+        # «و» is written joined to the word after it: «وكل تمام» is the same slip.
+        pattern = _WORD_EDGE.format("و?" + re.escape(wrong))
+        fixed, count = re.subn(
+            pattern, lambda m, r=right, w=wrong: m.group(1)[: -len(w)] + r, fixed
+        )
+        if count:
+            fixes.append(f"{wrong} -> {right}")
+    for pattern, replacement in ((_REFERENCE_ASIDE, ""), (_REFERENCE_WORD, "رقم الأوردر")):
+        fixed, count = pattern.subn(replacement, fixed)
+        if count:
+            fixes.append("reference -> رقم الأوردر")
+    return fixed, fixes
+
+
+#: Words that are not Egyptian. Each is ordinary in another Arabic -- Levantine,
+#: Gulf, or the Modern Standard of a form letter -- and each reads to an
+#: Egyptian customer as a shop that is not talking to them: «بتكون وين» went
+#: out where «فين» was the only word an Egyptian would use. None has a single
+#: mechanical replacement (the sentence around «لدينا» is MSA too), so the
+#: reply is written again rather than patched.
+_NOT_EGYPTIAN = (
+    ("وين", "فين"),
+    ("شو", "إيه"),
+    ("هيك", "كده"),
+    ("منيح", "كويس"),
+    ("هلق", "دلوقتي"),
+    ("بدك", "عايز"),
+    ("تبعك", "بتاعك"),
+    ("تبعنا", "بتاعنا"),
+    ("شلون", "إزاي"),
+    ("لدينا", "عندنا"),
+    ("لديك", "عندك"),
+    ("لديكم", "عندكم"),
+    ("سوف", "هـ"),
+    ("يرجى", "ياريت"),
+    ("هل ترغب", "تحب"),
+    ("هل تريد", "تحب"),
+)
+
+
+def not_egyptian(text: str) -> str:
+    """The first non-Egyptian word in a reply, with the one to use, or ""."""
+    for word, egyptian in _NOT_EGYPTIAN:
+        if re.search(_WORD_EDGE.format(re.escape(word)), text or ""):
+            return f"«{word}» -> «{egyptian}»"
+    return ""
+
+
 def correct(
     text: str, *, vocabulary, references: dict[str, str], states_money: bool
 ) -> tuple[str, list[str]]:
@@ -482,7 +569,7 @@ def correct(
     `references` maps this customer's internal order ids to the reference
     they were given (`#1040`) -- the one they can quote to staff.
     """
-    fixes: list[str] = []
+    text, fixes = fix_arabic(text)
 
     def _order(match: re.Match) -> str:
         reference = references.get(match.group(0))
@@ -565,6 +652,10 @@ def violation(
         found = offered_a_garment_they_did_not_ask_for(customer, text)
         if found.startswith("opened with"):
             return f"garment: {found}"
+
+    dialect = not_egyptian(text)
+    if dialect:
+        return f"dialect: {dialect}"
 
     dodge = dodged_a_sleeve_question(text)
     if dodge:

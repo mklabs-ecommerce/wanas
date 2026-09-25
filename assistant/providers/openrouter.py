@@ -380,6 +380,15 @@ class OpenRouterProvider(LLMProvider):
         away is judgement, and judgement is what `scripts/quality_gate.py`
         checks. `OPENROUTER_REASONING_EFFORT=` (blank) sends no `reasoning`
         field at all, which is byte-for-byte the request this made before.
+
+        And the default is "medium", because what "low" traded away turned
+        out to be the Arabic. Twenty-six live turns through the real prompt
+        and tools, each effort: "low" wrote «العفى» for «العفو», «تقلي»,
+        a Levantine «بتكون وين», «وخدمت المقاسات» (not a phrase in any
+        dialect) and introduced itself by a staff name nobody has; "medium"
+        wrote none of them, and the two runs took the same wall-clock time. A
+        reply is thirty-odd tokens of Egyptian dialect from a flash model --
+        with no thinking at all, the dialect is the first thing to go.
         """
         effort = (settings.openrouter_reasoning_effort or "").strip().lower()
         if not effort or effort == "default":

@@ -787,7 +787,16 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # the one line here is checkout's -- confirm a name already given
         # rather than ask for it twice, which no per-turn note reaches in
         # time because the order is taken many turns later.
-    assert 3000 < len(SYSTEM_PROMPT) < 23300
+        #
+        # 23300 -> 24100: the Arabic itself. «عامل ايه» was answered «كل
+        # تمام», and a live run of the old prompt added «العفى», a Levantine
+        # «وين», an MSA «لدينا», a feminine «أوريكي» to a man and a staff
+        # name nobody has. The fixable half is code now
+        # (`reply_rules.fix_arabic`, `reply_rules.not_egyptian`); what only the
+        # prompt can say is which dialect, how to answer a courtesy instead of
+        # being forbidden to, who to address as «حضرتك», and that the bot has
+        # no name of its own.
+    assert 3000 < len(SYSTEM_PROMPT) < 24100
 
 
 # --------------------------------------------------------------------------

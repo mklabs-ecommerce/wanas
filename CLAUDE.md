@@ -339,9 +339,13 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
   reply_rules.py            the quality gate's reply checks, run live:
                              correct() fixes what has one right answer (a
                              mangled catalog word, WNS-12 -> the customer's
-                             #reference, the shop's name, emoji); violation()
-                             sends back what only a new sentence fixes (another
-                             payment method, a line denied without a lookup,
+                             #reference, the shop's name, emoji, and
+                             fix_arabic: «كل تمام» -> «كله تمام», «العفى»,
+                             Persian look-alike letters, the internal word
+                             «reference»); violation()
+                             sends back what only a new sentence fixes (a word
+                             that is not Egyptian -- «وين», «لدينا», «تبعك» --
+                             another payment method, a line denied without a lookup,
                              yes to a garment not sold, a sleeve dodge, a
                              repeat). scripts/quality_gate.py imports the same
                              functions
@@ -785,6 +789,11 @@ tests/                   pytest suite (flat, one test_<module>.py per
   on it — so both providers' `transcribe()` return `""` on a ceiling hit,
   which is the documented "hand it to a person" signal
   (`assistant/media.py::transcribe_voice`).
+- **The chat model thinks by default.** `OPENROUTER_REASONING_EFFORT`
+  defaults to `medium`: `low` is zero reasoning tokens on `glm-5.3-flash`, and
+  measured live the dialect was what that cost («العفى», «وين», «معك أحمد»),
+  at no measurable wall-clock saving. Lowering it is a quality decision, not a
+  latency tweak -- re-measure the Arabic before doing it.
 - The reasoning blocks a reasoning model returns (`reasoning_details` on
   OpenRouter, `thoughtSignature` on Gemini) ride in `ModelReply.signature` and
   are handed back with the assistant turn that produced them. OpenRouter
