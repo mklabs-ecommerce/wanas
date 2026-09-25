@@ -86,6 +86,16 @@ These need language understanding, and nothing deterministic can replace it:
 
 ## Status
 
-Each finding is implemented and committed on its own, in the order above,
-grouped where two findings share one change. The commit that closes a finding
-names it by its number.
+Every finding above is implemented, each committed on its own or with the
+findings it shares a change with:
+
+| Findings | Change |
+| --- | --- |
+| 1, 2 | the cart priced through the live overlay; `get_shipping_fee` returns `checkout` with the total computed |
+| 3, 12 | `assistant/reply_facts.py`: ungrounded amounts and measurements regenerated; the garment-flat note appended |
+| 4 | `get_variants` carries `by_color` |
+| 5 | `orders.egyptian_mobile` in `place_order`; `confirm_order` refuses a number the customer never gave |
+| 6 | `domain/services/shop_facts.py`; the prompt is a template filled from the rate table |
+| 7 | `assistant/action_claims.py` |
+| 8, 9, 10, 11, 15, 16, 17 | `assistant/reply_rules.py`, shared with the quality gate |
+| 13, 14 | `request_human` ends the turn on `HANDOFF_CLOSINGS`; archived products are out of photo matching |

@@ -316,6 +316,23 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              colourway, nothing on an order/handoff turn, and
                              it runs before photo_claims reads the reply, so
                              the claim check sees what will actually go
+  action_claims.py          a past-tense claim to have added to the cart or
+                             placed the order, checked against this turn's tool
+                             outcomes -- the third of the claims family beside
+                             photo_claims and order_change_claims
+  reply_facts.py            every money amount and centimetre figure in a reply
+                             must appear in a tool result, the customer's own
+                             words, or the rate table; otherwise the turn is
+                             regenerated. Also appends the garment-flat note
+  reply_rules.py            the quality gate's reply checks, run live:
+                             correct() fixes what has one right answer (a
+                             mangled catalog word, WNS-12 -> the customer's
+                             #reference, the shop's name, emoji); violation()
+                             sends back what only a new sentence fixes (another
+                             payment method, a line denied without a lookup,
+                             yes to a garment not sold, a sleeve dodge, a
+                             repeat). scripts/quality_gate.py imports the same
+                             functions
   session.py                 DB-backed session storage
   display.py                 stored history -> bubbles a person can read;
                               shared by the harness and the dashboard

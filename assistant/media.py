@@ -141,7 +141,11 @@ def catalog_shortlist(session: Session) -> list[dict]:
     this morning has to be matchable this morning, and the list is eighteen
     rows.
     """
-    products = session.scalars(select(Product).order_by(Product.name)).all()
+    # Never an archived product: the note that follows a match says «أقرب
+    # منتج عندنا هو ...», and the shop no longer has it.
+    products = session.scalars(
+        select(Product).where(Product.archived.is_(False)).order_by(Product.name)
+    ).all()
     return [
         {
             "product_id": product.product_id,
@@ -197,7 +201,8 @@ def matched_product(session: Session, reading: ImageReading) -> Product | None:
     """
     if reading.product_id is None or reading.confidence < settings.image_match_confidence:
         return None
-    return session.get(Product, reading.product_id)
+    product = session.get(Product, reading.product_id)
+    return None if product is None or product.archived else product
 
 
 def photo_context(reading: ImageReading, product: Product | None, caption: str = "") -> str:

@@ -1247,6 +1247,20 @@ def run_turn(
                 external_id,
                 ctx.end_turn,
             )
+            if ctx.closing:
+                # A tool that ends the turn on a sentence the shop wrote
+                # (`request_human`): that sentence is the reply, and the
+                # model is not asked for another.
+                history.append(msg.assistant(ctx.closing, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=ctx.closing,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                )
             session_store.save(db, channel, external_id, history, merge_since=base)
             return AgentReply(
                 text="",

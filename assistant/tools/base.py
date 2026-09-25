@@ -89,6 +89,13 @@ class ToolContext:
     #: `domain/services/notifications.py`, so a model reply after it is a
     #: second message about the same order landing on the customer's phone.
     end_turn: str | None = None
+    #: The sentence a turn ended by `end_turn` says, when the shop has one to
+    #: say and nothing else sends it. `request_human` is the case: the
+    #: conversation pauses until a person picks it up, and the model's own
+    #: farewell used to be where a callback time nobody gave got promised.
+    #: None keeps the old silence, for a tool whose message is sent
+    #: elsewhere (`confirm_order`).
+    closing: str | None = None
 
     def offer(self, payload: dict) -> bool:
         """Attach a picker to this reply. First one wins.

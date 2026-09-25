@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — The handoff's last line is the shop's; photos match what it sells
+
+`docs/LLM_AUDIT.md` findings 13 and 14, which complete it.
+
+- **A handoff ends on a sentence the shop wrote.** After `request_human` the
+  conversation goes quiet until a person opens the dashboard, and the model's
+  own sign-off was where a callback time nobody had promised could be written.
+  The turn now ends with the call, on `HANDOFF_CLOSINGS[reason]`, the way
+  `confirm_order` ends on the shop's own confirmation -- the model is not asked
+  for another word.
+- **A customer's photo is matched only against what the shop still sells.**
+  Archived products were in the shortlist the vision pass chooses from, and
+  the note after a match says «أقرب منتج عندنا هو ...». They are out of the
+  shortlist, and a match that lands on one is no match.
+
 ## Unreleased — The quality gate's rules run on every reply, not only offline
 
 `docs/LLM_AUDIT.md` findings 8, 9, 10, 11, 15, 16 and 17. `scripts/quality_gate.py`
