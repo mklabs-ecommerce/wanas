@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased — The quality gate's rules run on every reply, not only offline
+
+`docs/LLM_AUDIT.md` findings 8, 9, 10, 11, 15, 16 and 17. `scripts/quality_gate.py`
+held a deterministic check for each of these, each written after a real
+conversation went wrong -- and every one of them ran against a benchmark and
+never against a reply a customer was about to receive. They live in
+`assistant/reply_rules.py` now; the gate imports them from there, unchanged,
+and `assistant/agent.py` runs them on every reply before it leaves.
+
+- **Corrected in place, because there is one right answer.** A product name
+  reconstructed from memory («Lightwelson Sweatpant») goes back to the
+  catalog's spelling; an internal order id (`WNS-12`) becomes the reference
+  the customer can quote to staff (`#1040`); the shop's name is spelled its one
+  way; and the emoji rule the prompt stated is applied -- one at most, none
+  beside a price or an apology. Identifiers and ordinary English are never
+  touched.
+- **Sent back, because only a new sentence fixes it.** A payment method the
+  shop cannot take; a whole line («مفيش قسم حريمي») denied with no catalog
+  lookup in the turn; «أيوه» to a garment the shop does not sell, or a reply
+  that never says so after `get_products` returned `garment_not_sold`; a sleeve
+  length professed unknown; the previous reply sent again. The turn is
+  regenerated with the reason, and falls back to the question it always
+  falls back to.
+
 ## Unreleased — A reply may not say it did what no tool did
 
 `docs/LLM_AUDIT.md` finding 7. «ضفتهولك في السلة» could go out beside an

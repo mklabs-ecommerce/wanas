@@ -489,7 +489,10 @@ def test_full_order_through_the_harness_entry_point(seeded):
     assert order.items[0].quantity == 2
     assert seeded.get(SessionRow, (CHANNEL, WHO)) is not None
 
-    assert "WNS-1001" in say("orders").text
+    # The reference the customer can quote to staff, never the internal id --
+    # a reply that names `WNS-1001` is corrected before it leaves.
+    orders_reply = say("orders").text
+    assert "#1001" in orders_reply and "WNS-1001" not in orders_reply
     assert "710" in say(f"qty WNS-1001 {VARIANT} 1").text
     assert "اتلغى" in say("cancel WNS-1001").text
 

@@ -29,6 +29,7 @@ from assistant import (
     photo_claims,
     quoting,
     reply_facts,
+    reply_rules,
     session as session_store,
     showcase,
 )
@@ -431,6 +432,52 @@ _ACTION_NUDGE = {
     ),
 }
 
+#: Appended when a reply broke one of the rules in `assistant/reply_rules.py`
+#: that only a new sentence can fix. Keyed by the rule; the reason the check
+#: found is named back so the model knows what to change.
+_RULE_NUDGE = {
+    "payment": (
+        "\n\nتنبيه داخلي: ردك اللي فات عرض طريقة دفع إحنا مش بنقبلها ({why}). "
+        "الدفع كاش عند الاستلام، أو أونلاين من الموقع، وبس. اكتب الرد تاني من غير أي "
+        "طريقة دفع تانية."
+    ),
+    "section": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إن مفيش عندنا نوع أو قسم كامل ({why}) من غير "
+        "ما تدور. نادي get_products (أو get_categories) الأول، ورد من اللي رجع."
+    ),
+    "garment": (
+        "\n\nتنبيه داخلي: الزبون سأل عن حاجة إحنا مش بنبيعها ({why}). قوله بوضوح إن "
+        "مفيش في أول الرد، وبعدين اعرض البدائل كبديل -- متقولش «أيوه عندنا»."
+    ),
+    "sleeve": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إنك مش عارف طول الكم ({why}). كل منتج "
+        "ليه `sleeve` في get_products و get_variants -- نادي الأداة وجاوب منه."
+    ),
+    "repeat": (
+        "\n\nتنبيه داخلي: ردك اللي فات هو نفس ردك اللي قبله تقريبًا. الزبون رد عليه، "
+        "فالرد الجديد لازم يرد على رسالته هو: جاوب، أو اسأل سؤال تاني، أو قول إنك مش فاهم."
+    ),
+}
+
+
+def _order_references(db: Session, channel: str, external_id: str) -> dict[str, str]:
+    """This customer's internal order ids, each mapped to the reference they
+    were given and can quote to staff (`#1040`)."""
+    return {
+        order.order_id: order.shopify_order_name
+        for order in orders.orders_for_identity(db, channel, external_id, include_closed=True)
+        if order.shopify_order_name
+    }
+
+
+def _previous_reply(history: list[dict]) -> str:
+    """What the shop last said in words, before this turn's message."""
+    for message in reversed(history):
+        if message.get("role") == msg.ASSISTANT and (message.get("content") or "").strip():
+            return message["content"]
+    return ""
+
+
 #: The last resort when the model will not stop diagnosing the customer's
 #: phone. It says the one true thing -- the failure is ours -- and offers the
 #: person, which is the only thing left that can actually get the picture to
@@ -658,6 +705,7 @@ def run_turn(
     # for this turn -- kept on the stored message for the dashboard (see
     # `assistant/messages.py::user`), never sent to the provider itself, so
     # this is not a second copy of what the model already read via `text`.
+    previous_reply = _previous_reply(history)
     history.append(msg.user(text, images=images, audio=audio, mids=mids, refers_to=refers_to))
 
     # `history` is the same list object the loop below appends to, so the
@@ -800,6 +848,20 @@ def run_turn(
             # Centimetres are always garment-flat, said every time -- in code,
             # not left to the model remembering to (`reply_facts.FLAT_NOTE`).
             text_out = reply_facts.with_flat_note(text_out)
+            # The rules with exactly one right answer, applied in place: a
+            # catalog word back to its catalog spelling, an internal order id
+            # to the customer's reference, the shop's own name, the emoji rule
+            # (`assistant/reply_rules.py`). Nothing is regenerated for these.
+            text_out, fixes = reply_rules.correct(
+                text_out,
+                vocabulary=reply_rules.catalog_vocabulary(db),
+                references=(
+                    _order_references(db, channel, external_id) if "WNS-" in text_out else {}
+                ),
+                states_money=bool(reply_facts.stated(text_out)[0]),
+            )
+            if fixes:
+                log.info("corrected a reply to %s/%s: %s", channel, external_id, "; ".join(fixes))
 
             # The photographs this reply's own words call for: every catalog
             # product it names, and the rest of one product's colourways the
@@ -958,6 +1020,51 @@ def run_turn(
                     tool_calls=called,
                     filed=list(filed_kinds),
                     error=f"unbacked_{claimed}_claim",
+                )
+
+            # The rules only a new sentence can fix: a payment method the shop
+            # cannot take, a line denied without a lookup, a «أيوه» to a garment
+            # it does not sell, a sleeve length professed unknown, the last reply
+            # sent again. They used to run only offline, in the quality gate.
+            broken = reply_rules.violation(
+                text_out, customer=text, previous=previous_reply, results=turn_results
+            )
+            if broken:
+                rule, _, why = broken.partition(": ")
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s broke the %s rule (%s), retry %d/%d",
+                        channel,
+                        external_id,
+                        rule,
+                        why,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}" + _RULE_NUDGE[rule].format(why=why)
+                    ctx.restore(before_showcase)
+                    continue
+                log.error(
+                    "provider %s kept breaking the %s rule for %s/%s (%s); "
+                    "sending the fallback question instead",
+                    provider.name,
+                    rule,
+                    channel,
+                    external_id,
+                    why,
+                )
+                text_out = promise_fallback(history)
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                    error=f"rule_{rule}",
                 )
 
             made_up = reply_facts.ungrounded(
