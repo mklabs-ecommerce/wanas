@@ -25,7 +25,7 @@ _CLAUSE = re.compile(r"[\n.،؛!؟?]+")
 #: Something was put in the cart. Past tense only, and never after the
 #: negating «م» Egyptian glues to the verb («مضفتش»).
 _ADDED = re.compile(
-    r"(?<![مa-z])(?:ضفت|ضفنا|ضفتل|اتضاف|اتضافت|اتحط|اتحطت|حطيت|حطينا|حطتهولك)"
+    r"(?<![مa-z])(?:ضفت|ضفنا|ضفتل|اتضاف|اتضافت|اتضفت|اتحط|اتحطت|حطيت|حطينا|حطتهولك)"
     r"|\badded (?:it |them |that )?to (?:your |the )?(?:cart|bag|basket)\b",
     re.I,
 )

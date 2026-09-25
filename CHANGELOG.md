@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — A product named in full is the product searched for
+
+Found by the live model suite, which failed the same way on `main` and on this
+branch: «عايز Cairokee T-shirt أسود XL واتنين» searched `Cairokee T-shirt`,
+and the all-words search also returned `Cairokee T-shirt 2`, whose name contains
+every word of it -- so the model asked a customer who had named the product
+exactly which of two they meant. `catalog.get_products` now narrows to the
+products a query names by their whole name (the longer name winning where one
+sits inside another); a query that names no product in full browses as before.
+
 ## Unreleased — The handoff's last line is the shop's; photos match what it sells
 
 `docs/LLM_AUDIT.md` findings 13 and 14, which complete it.

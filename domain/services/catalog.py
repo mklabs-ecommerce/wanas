@@ -255,6 +255,39 @@ def _matches_query(product: Product, needle: str) -> bool:
     return search_terms.matches(_haystack(product), needle)
 
 
+def _named_in_full(products: list[Product], query: str) -> list[Product]:
+    """The products a query names by their whole name, or [] when it names none.
+
+    The search is deliberately loose -- every token of the query has to match
+    somewhere -- so "Cairokee T-shirt" also finds "Cairokee T-shirt 2", whose
+    name contains every word of it. That turned a customer who named one
+    product exactly into a "which of these two?" question, asked back about
+    something they had already said; it failed the live suite on `main` and on
+    this branch alike. A query that contains a product's full name, as whole
+    words, is about that product. When one named product's name sits inside
+    another named one ("Cairokee T-shirt" inside "Cairokee T-shirt 2"), the
+    longer name is the one the query spelt out.
+    """
+    wanted = f" {search_terms.normalize(query)} "
+    taken: list[tuple[int, int]] = []
+    named: list[Product] = []
+    for product in sorted(products, key=lambda p: len(p.name or ""), reverse=True):
+        name = f" {search_terms.normalize(product.name)} "
+        if not name.strip():
+            continue
+        start = wanted.find(name)
+        while start != -1:
+            end = start + len(name)
+            # Only a mention of its own counts -- not the front of a longer
+            # name already matched at the same place.
+            if all(end <= a or start >= b for a, b in taken):
+                taken.append((start, end))
+                named.append(product)
+                break
+            start = wanted.find(name, start + 1)
+    return [p for p in products if p in named]
+
+
 def _resolve_categories(session: Session, given: str) -> list[str]:
     """The real category names a `category` argument means, in order of trust.
 
@@ -323,6 +356,8 @@ def get_products(
         products = [p for p in products if any(wanted == s.lower() for s in (p.style or []))]
     if query:
         products = [p for p in products if _matches_query(p, query)]
+        if len(products) > 1:
+            products = _named_in_full(products, query) or products
 
     #: Applied last, and in Python, so it compares the same effective value
     #: the payload goes on to quote. Folded through `sleeves.normalise` rather
