@@ -39,9 +39,13 @@ before naming an order.
 
 from __future__ import annotations
 
+import re
+
+from assistant.messages import USER
 from assistant.tools.base import ToolContext, tool
+from common.identifiers import is_phone_number
 from domain.models import OrderStatus, Variant
-from domain.services import orders
+from domain.services import identities, orders
 from domain.services.notifications import item_add_requested, item_swap_requested
 
 
@@ -50,7 +54,11 @@ from domain.services.notifications import item_add_requested, item_swap_requeste
     "Place the order. This is the only tool that writes one, and it re-checks live stock itself. "
     "Do not tell the customer an order was placed until this returns an order_id. Requires the "
     "customer's name, the governorate (a picked value, not inferred from the address text), the "
-    "full address and a contact phone. Cash on delivery only.",
+    "full address and a contact phone. Cash on delivery only. contact_phone must be an Egyptian "
+    "mobile the customer actually gave -- typed in this conversation, saved on their profile, or "
+    "the WhatsApp number they are writing from; never one you reconstructed. invalid_phone means "
+    "it is not a mobile a courier can call; phone_not_given means they never sent it -- ask them "
+    "to type it.",
     properties={
         "customer_name": {"type": "string"},
         "governorate": {"type": "string", "description": "From the fixed list; ask, do not infer."},
@@ -69,6 +77,21 @@ def confirm_order(
     contact_phone: str,
     email: str | None = None,
 ) -> dict:
+    mobile = orders.egyptian_mobile(contact_phone)
+    if mobile is not None and mobile not in _numbers_the_customer_gave(ctx):
+        # The model writes this argument, and a phone number is the one
+        # detail of an order nobody can check by reading it: a transposed
+        # digit looks exactly like the real thing, and the parcel goes to a
+        # courier who cannot reach anyone. So it has to be a number the
+        # customer actually gave -- typed in this conversation, saved on their
+        # profile from an earlier order, or the WhatsApp number they are
+        # writing from.
+        return {
+            "error": "phone_not_given",
+            "contact_phone": contact_phone,
+            "do_instead": "Ask the customer to type the phone number the courier should call, "
+            "then confirm with exactly the digits they sent.",
+        }
     result = orders.place_order(
         ctx.session,
         channel=ctx.channel,
@@ -89,6 +112,36 @@ def confirm_order(
         ctx.end_turn = "order_confirmed"
         result["confirmation_sent"] = True
     return result
+
+
+#: A run of digits the way a number is typed: spaces and dashes allowed
+#: inside it, Western or Arabic-Indic digits.
+_DIGIT_RUN = re.compile(r"[0-9٠-٩۰-۹][0-9٠-٩۰-۹ \-]{8,}[0-9٠-٩۰-۹]")
+
+
+def _numbers_the_customer_gave(ctx: ToolContext) -> set[str]:
+    """Every mobile number this customer has actually given us, canonical.
+
+    Their own messages in this conversation, the phone saved on their
+    profile, and the WhatsApp number they are messaging from -- «نفس الرقم
+    ده» is an ordinary answer. Never a number that appears only in the
+    model's own words.
+    """
+    found: set[str] = set()
+    for message in ctx.history:
+        if message.get("role") != USER:
+            continue
+        for run in _DIGIT_RUN.findall(message.get("content") or ""):
+            mobile = orders.egyptian_mobile(run)
+            if mobile:
+                found.add(mobile)
+    client = identities.client_for(ctx.session, ctx.channel, ctx.external_id)
+    for known in (client.phone if client else None, ctx.external_id):
+        if known and is_phone_number(known):
+            mobile = orders.egyptian_mobile(known)
+            if mobile:
+                found.add(mobile)
+    return found
 
 
 @tool(

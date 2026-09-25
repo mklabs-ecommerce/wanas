@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — The courier's number is one the customer gave
+
+`docs/LLM_AUDIT.md` finding 5. `confirm_order.contact_phone` is written by the
+model, and a phone number is the one field of an order nobody can check by
+reading it -- a transposed digit looks exactly like the real thing. It was
+checked for being non-blank and nothing else.
+
+- **An Egyptian mobile, in one form.** `orders.egyptian_mobile` accepts
+  010/011/012/015 and eight digits however it was written -- `+20 100 ...`,
+  `0020...`, WhatsApp's `2010...`, Arabic-Indic digits, spaces and dashes --
+  and `place_order` stores that one canonical form. Anything else is
+  `invalid_phone`: a landline or a digit short is a parcel that comes back.
+- **A number the customer actually gave.** `confirm_order` refuses
+  (`phone_not_given`) a mobile that is not in the customer's own messages in
+  this conversation, not on their saved profile, and not the WhatsApp number
+  they are writing from -- so a number the model reassembled from memory
+  never reaches a courier.
+
 ## Unreleased — Which sizes, in which colour, for how much: worked out in code
 
 `docs/LLM_AUDIT.md` finding 4. `get_variants` answered with a flat list of 10

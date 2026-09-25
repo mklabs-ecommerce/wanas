@@ -8,6 +8,7 @@ is permanently wrong with nothing to show for it.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import timedelta
 from decimal import Decimal
 
@@ -46,6 +47,31 @@ from integrations.shopify import (
 log = logging.getLogger("wanas.orders")
 
 REQUIRED_FIELDS = ("customer_name", "governorate", "address", "contact_phone")
+
+#: An Egyptian mobile as a courier dials it: 010, 011, 012 or 015, then eight
+#: digits. Orders ship to the twenty-seven governorates only, and the courier
+#: calls the number on the parcel -- a landline, a foreign number or a digit
+#: short is a parcel that comes back.
+_EGYPTIAN_MOBILE = re.compile(r"^01[0125]\d{8}$")
+_ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+
+def egyptian_mobile(phone: str | None) -> str | None:
+    """`phone` as the eleven-digit local mobile number, or None.
+
+    Every way the same number is written arrives here: `+20 100 123 4567`,
+    `00201001234567`, `201001234567` (what WhatsApp hands over), `1001234567`,
+    and the Arabic-Indic digits a phone keyboard types by default. One
+    canonical form goes to Shopify and to the courier.
+    """
+    digits = "".join(ch for ch in (phone or "").translate(_ARABIC_INDIC_DIGITS) if ch.isdigit())
+    if digits.startswith("0020"):
+        digits = "0" + digits[4:]
+    elif digits.startswith("20") and len(digits) == 12:
+        digits = "0" + digits[2:]
+    elif digits.startswith("1") and len(digits) == 10:
+        digits = "0" + digits
+    return digits if _EGYPTIAN_MOBILE.match(digits) else None
 
 
 class Refusal(Exception):
@@ -394,6 +420,15 @@ def place_order(
         # It does not fill in blanks, and it does not infer a governorate from
         # the address text -- that is what the shipping fee is priced on.
         return {"error": "missing_fields", "fields": missing}
+
+    # Only a number the courier can actually ring. It used to be checked for
+    # being non-blank and nothing else, so a digit short, a landline or a
+    # number the model reassembled from memory all reached Shopify as the
+    # contact for a cash-on-delivery parcel.
+    mobile = egyptian_mobile(contact_phone)
+    if mobile is None:
+        return {"error": "invalid_phone", "contact_phone": contact_phone}
+    contact_phone = mobile
 
     lines = carts._lines(session, channel, external_id)
     if not lines:

@@ -196,7 +196,7 @@ def test_fetch_orders_in_range_pages_through_a_fake_shopify(seeded, cairo_rate, 
         carts.add(seeded, "whatsapp", f"20155500{i}", VARIANT, 1)
         result = orders.place_order(
             seeded, channel="whatsapp", external_id=f"20155500{i}", customer_name=f"C{i}",
-            governorate="Cairo", address="1 St", contact_phone=f"0100000{i}",
+            governorate="Cairo", address="1 St", contact_phone=f"0100000000{i}",
         )
         assert "error" not in result, result
     seeded.commit()
@@ -212,7 +212,7 @@ def test_fetch_orders_in_range_reports_truncation_when_capped(seeded, cairo_rate
         carts.add(seeded, "whatsapp", f"20166600{i}", VARIANT, 1)
         orders.place_order(
             seeded, channel="whatsapp", external_id=f"20166600{i}", customer_name=f"C{i}",
-            governorate="Cairo", address="1 St", contact_phone=f"0100000{i}",
+            governorate="Cairo", address="1 St", contact_phone=f"0100000000{i}",
         )
     seeded.commit()
 

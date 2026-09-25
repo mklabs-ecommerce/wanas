@@ -78,7 +78,7 @@ def test_the_total_quoted_before_confirming_is_the_order_total(seeded, cairo_rat
             "customer_name": "Omar",
             "governorate": "Cairo",
             "address": "12 Tahrir St, flat 3",
-            "contact_phone": "01001234567",
+            "contact_phone": "01000000555",  # the WhatsApp number they write from
         },
     )
     order = seeded.get(Order, placed["order_id"])
