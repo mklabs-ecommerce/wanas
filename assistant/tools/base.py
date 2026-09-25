@@ -294,7 +294,15 @@ def validate_arguments(spec: ToolSpec, arguments: dict) -> dict | None:
 #: `ask_governorate` is *not* cacheable even though it only reads: its whole
 #: purpose is to put a picker in front of the customer, and a cached copy
 #: would return the rows with no picker attached.
-CACHEABLE_TOOLS = {"get_categories", "get_products", "get_variants", "get_size_chart", "get_shipping_fee"}
+#:
+#: `get_size_chart` is not cacheable either. It is a local read with no round
+#: trip to save, and replaying it replays whatever chart the product had the
+#: last time it was asked -- which is how, minutes after the Boxy WNS Tee was
+#: moved off the Ringer tee's chart, a conversation that had asked that
+#: morning was sent the Ringer chart again, and kept being sent it until the
+#: conversation was reset by hand. A chart corrected in the dashboard
+#: mid-conversation would go the same way.
+CACHEABLE_TOOLS = {"get_categories", "get_products", "get_variants", "get_shipping_fee"}
 
 
 def _cached_result(ctx: ToolContext, name: str, arguments: dict) -> dict | None:
