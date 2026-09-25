@@ -58,6 +58,35 @@ def set_platform_profile(
     return identity
 
 
+def set_customer_name(session: Session, channel: str, external_id: str, name: str) -> ChannelIdentity:
+    """Record the name a customer gave in the conversation.
+
+    Overwrites: a customer correcting the bot («لا، اسمي محمد») is the
+    newest thing they said about it. Checking that they actually typed it is
+    the tool's job (`save_customer_name`), not this function's.
+    """
+    identity = get_or_create(session, channel, external_id)
+    identity.customer_name = " ".join((name or "").split())[:120] or identity.customer_name
+    session.flush()
+    return identity
+
+
+def known_name(session: Session, channel: str, external_id: str) -> str | None:
+    """The name we hold for this conversation, if any.
+
+    The order's name first -- it is what a parcel was addressed to -- then the
+    one given in the chat. What the dashboard titles with and what decides
+    whether the bot still needs to ask.
+    """
+    client = client_for(session, channel, external_id)
+    if client is not None and (client.full_name or "").strip():
+        return client.full_name.strip()
+    identity = get(session, channel, external_id)
+    if identity is not None and (identity.customer_name or "").strip():
+        return identity.customer_name.strip()
+    return None
+
+
 def needs_platform_profile(session: Session, channel: str, external_id: str) -> bool:
     """Whether it is worth spending a call on this customer's handle.
 

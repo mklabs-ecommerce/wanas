@@ -67,9 +67,9 @@ def test_run_turn_builds_the_prompt_for_its_own_channel(seeded):
 
         def generate(self, system_prompt, history, specs):
             captured["system_prompt"] = system_prompt
-            from assistant.providers.base import ProviderReply
+            from assistant.providers.base import ModelReply
 
-            return ProviderReply(text="تمام")
+            return ModelReply(text="تمام")
 
     provider = RecordingProvider()
     agent_module.run_turn(
@@ -81,4 +81,8 @@ def test_run_turn_builds_the_prompt_for_its_own_channel(seeded):
     agent_module.run_turn(
         seeded, "whatsapp", "201555999111", "بكام؟", provider=provider
     )
-    assert captured["system_prompt"] == SYSTEM_PROMPT
+    # The shop's prompt, plus whatever this one turn carries on top (the
+    # customer-name paragraph, `assistant/customer_name.py`) -- and nothing
+    # of Instagram's.
+    assert captured["system_prompt"].startswith(SYSTEM_PROMPT)
+    assert INSTAGRAM_SURFACE_LINE not in captured["system_prompt"]

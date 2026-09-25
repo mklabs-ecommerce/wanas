@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from assistant import (
     action_claims,
     context,
+    customer_name,
     messages as msg,
     order_change_claims,
     photo_claims,
@@ -667,6 +668,10 @@ def run_turn(
     # would otherwise refuse to send the one picture the customer is asking
     # for. The channel adapter records the refusal after the send, which is the
     # only moment it is knowable; see `session.record_undelivered_attachments`.
+    # Whether to ask the customer's name on this turn, or what to call them
+    # -- decided in code, phrased by the model. See `assistant/customer_name.py`.
+    system_prompt = f"{system_prompt}{customer_name.turn_note(db, channel, external_id, history)}"
+
     undelivered = photo_claims.undelivered(history)
     sent_images = _sent_images(history) - set(undelivered)
     if undelivered:

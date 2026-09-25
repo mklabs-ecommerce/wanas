@@ -305,6 +305,18 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              the send by the channel adapter) so the next turn
                              resends and apologises instead of arguing
   interactive.py            tappable pickers, in a channel-neutral shape
+  customer_name.py          whether this turn asks the customer's name, and
+                             what to call them once it is known. Code decides
+                             *whether* (never when a name is held -- the
+                             order's `Client.full_name`, else the chat's
+                             `ChannelIdentity.customer_name`; once ever, read
+                             off the transcript; only in a conversation's
+                             first replies), the model decides the wording, so
+                             the question sits after an answer and never
+                             instead of one. `save_customer_name` stores only
+                             a name the customer typed, and
+                             `dashboard/web.py::customer_labels` titles the
+                             conversation with it
   showcase.py               which product photographs a reply carries, decided
                              from the finished sentence rather than from
                              whether the model remembered to call get_variants:

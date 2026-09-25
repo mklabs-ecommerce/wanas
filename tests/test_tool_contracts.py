@@ -46,7 +46,7 @@ def call(ctx, name, **arguments):
 # --- the seventeen --------------------------------------------------------
 
 
-def test_exactly_twenty_one_tools():
+def test_exactly_twenty_two_tools():
     """Every capability the bot has is on this list. A behaviour described in
     the docs with no tool here is a behaviour the bot cannot do."""
     assert sorted(REGISTRY) == sorted(
@@ -71,10 +71,11 @@ def test_exactly_twenty_one_tools():
             "submit_feedback",
             "request_human",
             "get_my_profile",
+            "save_customer_name",
             "link_client",
         ]
     )
-    assert len(REGISTRY) == 21
+    assert len(REGISTRY) == 22
 
 
 def test_every_tool_returns_an_object_never_prose(ctx):
@@ -802,7 +803,7 @@ def test_request_human_rejects_an_invented_reason(ctx):
 def test_get_my_profile_unknown_is_not_an_error(ctx):
     """The normal state for a first-time customer, and the case every
     implementation forgets."""
-    assert call(ctx, "get_my_profile") == {"known": False, "pending_link": None}
+    assert call(ctx, "get_my_profile") == {"known": False, "name": None, "pending_link": None}
 
 
 def test_get_my_profile_known(ctx, placed):

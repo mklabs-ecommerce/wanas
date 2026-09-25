@@ -1,6 +1,9 @@
-"""Escalation and identity tools: request_human, get_my_profile, link_client."""
+"""Escalation and identity tools: request_human, get_my_profile,
+save_customer_name, link_client."""
 
 from __future__ import annotations
+
+import re
 
 from assistant.messages import TOOL_RESULTS, USER
 from assistant.tools.base import ToolContext, tool
@@ -8,6 +11,7 @@ from domain.models import HANDOFF_REASONS, Client, QueueKind
 from domain.services import (
     identities,
     queues,
+    search_terms,
 )
 
 #: The reasons the **model** is allowed to hand a conversation over with.
@@ -232,13 +236,18 @@ def get_my_profile(ctx: ToolContext) -> dict:
     if pending:
         pending.pop("_client_pk", None)  # internal key, never shown to the model
 
+    # The name given in the chat, before any order -- what to call them, and
+    # the name to confirm at checkout rather than ask for a second time.
+    chat_name = (identity.customer_name if identity else None) or None
+
     client = identities.client_for(ctx.session, ctx.channel, ctx.external_id)
     if client is None:
-        return {"known": False, "pending_link": pending}
+        return {"known": False, "name": chat_name, "pending_link": pending}
 
     return {
         "known": True,
         "client_id": client.public_id,
+        "name": chat_name,
         "full_name": client.full_name,
         "phone": client.phone,
         "email": client.email,
@@ -246,6 +255,64 @@ def get_my_profile(ctx: ToolContext) -> dict:
         "address": client.address,
         "pending_link": pending,
     }
+
+
+#: A name is a few words. Anything longer is a sentence the model lifted
+#: whole, and anything with a digit or a link in it is not somebody's name.
+_NAME_MAX_WORDS = 4
+_NAME_MAX_CHARS = 60
+_NOT_A_NAME = re.compile(r"[0-9٠-٩۰-۹@/:#]|https?")
+
+
+def _typed_by_customer(ctx: ToolContext, name: str) -> bool:
+    """Whether the customer wrote this name, word for word, in this
+    conversation -- folded the way catalog search folds (أ/ا, ة/ه, ى/ي,
+    case), so «احمد» the model spells «أحمد» is still theirs."""
+    wanted = search_terms.normalize(name)
+    if not wanted:
+        return False
+    for message in ctx.history:
+        if message.get("role") != USER:
+            continue
+        said = search_terms.normalize(message.get("content") or "")
+        if f" {wanted} " in f" {said} ":
+            return True
+    return False
+
+
+@tool(
+    "save_customer_name",
+    "Save the name the customer told you, so the shop's team sees it on this conversation. Call it "
+    "the moment the customer tells you their name -- because you asked, or on their own («أنا "
+    "أحمد»). Pass the name exactly as they wrote it, nothing added: no title, no surname they did "
+    "not give. name_not_given means they never typed it; do not guess one.",
+    properties={"name": {"type": "string", "description": "As the customer typed it."}},
+    required=("name",),
+)
+def save_customer_name(ctx: ToolContext, name: str) -> dict:
+    cleaned = " ".join((name or "").split())
+    if (
+        not cleaned
+        or len(cleaned) > _NAME_MAX_CHARS
+        or len(cleaned.split()) > _NAME_MAX_WORDS
+        or _NOT_A_NAME.search(cleaned)
+    ):
+        return {
+            "error": "not_a_name",
+            "do_instead": "Pass only the customer's name, a word or a few, as they wrote it.",
+        }
+    if not _typed_by_customer(ctx, cleaned):
+        # The model writes this argument. A name the customer never typed is
+        # a stranger's name on their conversation -- staff would greet them
+        # by it -- so it has to be one of their own words, like the courier's
+        # phone number in `confirm_order`.
+        return {
+            "error": "name_not_given",
+            "do_instead": "Only save a name the customer typed. If they have not said it, "
+            "carry on without it.",
+        }
+    identities.set_customer_name(ctx.session, ctx.channel, ctx.external_id, cleaned)
+    return {"saved": True, "name": cleaned}
 
 
 @tool(

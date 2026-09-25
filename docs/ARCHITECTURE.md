@@ -33,7 +33,7 @@ How the pieces fit, and why they are arranged this way. Business rules live in
                                                      ▼
                        ┌───────────────────────────────────────────────┐
                        │  assistant/agent.py   the tool-use loop          │
-                        │    the LLM ⇄ 18 tools, capped at 8 rounds     │
+                        │    the LLM ⇄ 22 tools, capped at 8 rounds     │
                        └───────────────────────────────────────────────┘
                              │                              │
                assistant/tools/*                      domain/services/*
@@ -189,7 +189,7 @@ note before this existed.
 | `assistant/media.py` | Voice notes and photos. |
 | `assistant/prompt.py` | Persona, flow, and the data quirks the model would otherwise get wrong. |
 | `assistant/interactive.py` | Tappable pickers, in a channel-neutral shape. |
-| `assistant/tools/` | The twenty tools and their refusals. |
+| `assistant/tools/` | The twenty-two tools and their refusals. |
 | `assistant/channels/whatsapp.py` | The only WhatsApp-specific code in the conversational path. |
 | `assistant/channels/instagram.py` | The Instagram twin: DMs plus comment ingest, same architecture. |
 | `assistant/harness/` | Dev-only chat UI. Unauthenticated by design; off unless `HARNESS_ENABLED=1`. |

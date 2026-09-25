@@ -400,6 +400,13 @@ class ChannelIdentity(Base):
     #: person typed and outranks a handle everywhere it exists.
     username: Mapped[str | None] = mapped_column(String(120), nullable=True)
     profile_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: The name the customer gave the bot when it asked, in the conversation
+    #: itself -- long before there is an order, and so long before there is a
+    #: `Client` to hold a name. Written only by `save_customer_name`, which
+    #: refuses anything the customer did not type. `Client.full_name`, once
+    #: an order exists, still outranks it on every screen: that is the name
+    #: a parcel is addressed to.
+    customer_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

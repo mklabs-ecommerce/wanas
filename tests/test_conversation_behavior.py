@@ -781,7 +781,13 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # a message it had not understood got a confident answer anyway. The
         # tools cannot see this: every one of those replies is well-formed and
         # every tool call in it succeeded.
-    assert 3000 < len(SYSTEM_PROMPT) < 23100
+        #
+        # 23100 -> 23300: the customer's name. Whether to ask is decided in
+        # code and arrives as a per-turn note (`assistant/customer_name.py`);
+        # the one line here is checkout's -- confirm a name already given
+        # rather than ask for it twice, which no per-turn note reaches in
+        # time because the order is taken many turns later.
+    assert 3000 < len(SYSTEM_PROMPT) < 23300
 
 
 # --------------------------------------------------------------------------

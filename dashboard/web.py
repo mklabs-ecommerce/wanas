@@ -203,6 +203,17 @@ def handle_directory(db) -> dict[tuple[str, str], str]:
     }
 
 
+def name_directory(db) -> dict[tuple[str, str], str]:
+    """Every conversation whose customer told the bot their name, keyed the
+    same way. A third source beside the two above: written in the chat
+    itself (`save_customer_name`), long before any order makes a `Client`."""
+    return {
+        (i.channel, i.external_id): i.customer_name
+        for i in db.scalars(select(ChannelIdentity)).all()
+        if i.customer_name
+    }
+
+
 #: The one channel whose `external_id` can itself be a phone number. On
 #: Instagram it is an IGSID -- all digits, and `is_phone_number` says yes to
 #: it, which is the whole reason this is decided by channel rather than by
@@ -215,11 +226,15 @@ def customer_labels(
     channel: str,
     external_id: str,
     handle: str | None = None,
+    stated_name: str | None = None,
 ) -> dict:
     """What to call a conversation, decided once and server-side.
 
     In order: the customer's own name, then their platform handle, then their
-    phone number, then the id the channel handed us.
+    phone number, then the id the channel handed us. "Their own name" is the
+    one on their order when there is one, else the one they gave the bot in
+    the chat (`stated_name`) -- which is what most conversations have, since
+    most never reach an order.
 
     The handle sits above the phone and below the name on purpose.
     `Client.full_name` is a name a person typed onto an order, so it wins
@@ -237,7 +252,7 @@ def customer_labels(
     from the list it happened to have loaded, and fell back to the raw id
     whenever the conversation was opened from anywhere else.
     """
-    name = ((client.full_name if client else "") or "").strip()
+    name = ((client.full_name if client else "") or "").strip() or (stated_name or "").strip()
     phone = ((client.phone if client else "") or "").strip()
     if not phone and channel in PHONE_CHANNELS and is_phone_number(external_id):
         phone = external_id
@@ -253,10 +268,16 @@ def customer_labels(
 
 
 def _conversation_summary(
-    row: SessionRow, *, paused: bool, handoff, client: Client | None = None, handle: str | None = None
+    row: SessionRow,
+    *,
+    paused: bool,
+    handoff,
+    client: Client | None = None,
+    handle: str | None = None,
+    stated_name: str | None = None,
 ) -> dict:
     return {
-        **customer_labels(client, row.channel, row.external_id, handle),
+        **customer_labels(client, row.channel, row.external_id, handle, stated_name),
         "channel": row.channel,
         "external_id": row.external_id,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -405,6 +426,7 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
 
         directory = client_directory(db)
         handles = handle_directory(db)
+        names = name_directory(db)
         items = [
             _conversation_summary(
                 row,
@@ -412,6 +434,7 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
                 handoff=handoffs.get((row.channel, row.external_id)),
                 client=directory.get((row.channel, row.external_id)),
                 handle=handles.get((row.channel, row.external_id)),
+                stated_name=names.get((row.channel, row.external_id)),
             )
             for row in rows
         ]
@@ -439,6 +462,10 @@ def conversation_detail(
         history = session_store.transcript(db, channel, external_id)
         handoff = _open_handoffs(db).get((channel, external_id))
         paused = identities.is_paused(db, channel, external_id)
+        # Read off the identity rather than the list this thread was opened
+        # from, so a conversation reached by URL is titled the same as one
+        # clicked in the inbox.
+        identity = identities.get(db, channel, external_id) or _NO_IDENTITY
 
         return JSONResponse(
             {
@@ -446,10 +473,8 @@ def conversation_detail(
                     identities.client_for(db, channel, external_id),
                     channel,
                     external_id,
-                    # Read off the identity rather than the list this thread
-                    # was opened from, so a conversation reached by URL is
-                    # titled the same as one clicked in the inbox.
-                    (identities.get(db, channel, external_id) or _NO_IDENTITY).username,
+                    identity.username,
+                    identity.customer_name,
                 ),
                 "channel": channel,
                 "external_id": external_id,

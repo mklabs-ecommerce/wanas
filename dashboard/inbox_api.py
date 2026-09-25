@@ -43,6 +43,7 @@ from dashboard.web import (
     _paused_identity_keys,
     client_directory,
     handle_directory,
+    name_directory,
 )
 from domain.db import session_scope
 from domain.models import InstagramCommentReply, SessionRow
@@ -139,6 +140,7 @@ def inbox(
         # and the thread it opens cannot disagree.
         directory = client_directory(db)
         handles = handle_directory(db)
+        names = name_directory(db)
 
         needle = (q or "").strip().lower()
         items: list[dict] = []
@@ -147,6 +149,7 @@ def inbox(
             history = row.history or []
             client = directory.get(key)
             handle = handles.get(key)
+            stated_name = names.get(key)
 
             if needle:
                 hit = (
@@ -156,6 +159,7 @@ def inbox(
                     # find them only by an IGSID nobody has memorised.
                     or (handle is not None and needle.lstrip("@") in handle.lower())
                     or (client is not None and needle in (client.full_name or "").lower())
+                    or (stated_name is not None and needle in stated_name.lower())
                     or (client is not None and needle in (client.phone or "").lower())
                     or _searchable(history, needle)
                 )
@@ -168,6 +172,7 @@ def inbox(
                 handoff=handoffs.get(key),
                 client=client,
                 handle=handle,
+                stated_name=stated_name,
             )
             summary["last_role"] = _last_role(history)
             summary["message_count"] = _message_count(history)

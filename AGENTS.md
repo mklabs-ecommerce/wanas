@@ -162,7 +162,7 @@ hard architectural boundary, not a nice-to-have.
 Tool argument/return shapes and refusal codes are defined by the `@tool`
 decorators in `assistant/tools/*.py` and pinned down by
 `tests/test_tool_contracts.py` (every refusal, and that there are exactly
-nineteen tools) — that pairing is what to build against, not a separate
+twenty-two tools) — that pairing is what to build against, not a separate
 spec.
 
 **A photo and a voice note do not escape any of this.** A voice note is
