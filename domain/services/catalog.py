@@ -487,12 +487,57 @@ def get_variants(session: Session, product_id: str) -> dict | None:
         # in Black" rather than pretending the combination never existed.
         "variants": [variant_payload(v, live_map) for v in variants],
         "in_stock": [v.variant_id for v in variants if stock[v.variant_id] > 0],
+        # The same rows, already added up per colourway -- see `_by_color`.
+        "by_color": _by_color(variants, live_map),
         "images": images,
         # May be empty for the five products the store never split by colour.
         # An unlabelled photo is fine; the wrong colourway labelled
         # confidently is not.
         "color_images": color_images,
     }
+
+
+def _by_color(variants: list[Variant], live_map) -> dict[str, dict]:
+    """What can be bought in each colourway, worked out here.
+
+    `variants` is a flat list of 10 to 24 rows, and "which sizes are there in
+    olive, and what does olive cost" was the model's to answer by reading all
+    of them -- matching each id in `in_stock` back to its size, grouping by
+    colour, putting the sizes in S-to-XL order because the prompt says to, and
+    noticing that one colour of the Ringer tee is cheaper. Each of those steps
+    is a place a sold-out size gets offered or the wrong price gets quoted,
+    and none of them needs language understanding.
+
+    Keyed by colour, or by "colour / length" for the Worker Jacket, whose
+    length is a third axis. `available` and `sold_out` are sizes in size
+    order; the price is one number when the colourway has one, and a
+    `price_from` / `price_to` pair when its sizes differ.
+    """
+    groups: dict[str, list[tuple[Variant, _Priced]]] = {}
+    for variant in variants:
+        key = variant.color or ""
+        if variant.length:
+            key = f"{key} / {variant.length}" if key else variant.length
+        groups.setdefault(key, []).append((variant, _overlay(variant, live_map)))
+
+    summary: dict[str, dict] = {}
+    for key, rows in groups.items():
+        available = in_order([v.size for v, priced in rows if priced.stock_qty > 0 and v.size])
+        sold_out = in_order(
+            [v.size for v, priced in rows if priced.stock_qty <= 0 and v.size and v.size not in available]
+        )
+        prices = sorted({priced.price for _v, priced in rows})
+        originals = sorted({priced.original_price for _v, priced in rows})
+        entry: dict = {"available": available, "sold_out": sold_out}
+        if len(prices) == 1:
+            entry["price"] = money(prices[0])
+        else:
+            entry["price_from"] = money(prices[0])
+            entry["price_to"] = money(prices[-1])
+        if any(priced.on_sale for _v, priced in rows):
+            entry["original_price"] = money(originals[-1])
+        summary[key] = entry
+    return summary
 
 
 def alternatives_for(session: Session, variant: Variant, limit: int = 6) -> list[dict]:

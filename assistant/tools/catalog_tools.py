@@ -264,7 +264,11 @@ def _not_found(ctx: ToolContext, product_id: str) -> dict:
 @tool(
     "get_variants",
     "Every variant of one product with its variant_id, price and availability, plus that "
-    "product's `sleeve` -- always half, long or sleeveless, never null. You must call this "
+    "product's `sleeve` -- always half, long or sleeveless, never null. `by_color` is the "
+    "availability already worked out per colourway: `available` and `sold_out` sizes in the "
+    "order to say them, and that colour's `price` (or `price_from`/`price_to` when its sizes "
+    "differ) with `original_price` when it is on sale. Answer 'which sizes / how much in "
+    "this colour' from `by_color`, never by adding up `variants` yourself. You must call this "
     "before adding anything to a cart -- a variant_id cannot be guessed or constructed. Sold-out "
     "variants are returned too so you can say which combinations exist; `in_stock` is the only "
     "list you may offer from. If you already called this for the same product earlier in this "

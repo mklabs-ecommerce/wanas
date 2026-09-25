@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — Which sizes, in which colour, for how much: worked out in code
+
+`docs/LLM_AUDIT.md` finding 4. `get_variants` answered with a flat list of 10
+to 24 variant rows, and "which sizes are there in olive, and how much?" was
+the model's to work out: match each `in_stock` id back to a size, group by
+colour, order S before M because the prompt said to, and notice that the
+hoodie's grey costs 50 pounds more. The payload now carries `by_color` --
+`available` and `sold_out` sizes per colourway (per colour and length for the
+Worker Jacket), in the order they are said, with that colourway's own `price`
+(or `price_from`/`price_to` when its sizes differ) and `original_price` when on
+sale -- from the same live overlay as every other number in it.
+
 ## Unreleased — A number in a reply is one a tool returned
 
 `docs/LLM_AUDIT.md` findings 3 and 12.
