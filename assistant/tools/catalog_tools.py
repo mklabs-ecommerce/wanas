@@ -7,17 +7,18 @@ import re
 
 from assistant import interactive
 from assistant.tools.base import ToolContext, last_product, tool
-from common.money import money
+from common.money import money, to_decimal
 from config.settings import settings
 from domain.models import Product
 from domain.services import (
+    carts,
     catalog,
     garments,
     runtime_flags,
     shipping,
     sleeves,
 )
-from domain.services.size_charts import MEASUREMENT_NOTE, get_chart
+from domain.services.size_charts import MEASUREMENT_NOTE, chart_picture, get_chart, sendable_image
 
 
 @tool(
@@ -217,16 +218,13 @@ def _chart_image(session, product_id: str) -> str | None:
     the file, both over `Product.size_chart_image`, which is the picture the
     dashboard uploaded when nobody filled the measurements in. A chart with
     numbers but no picture is normal and returns None; the numbers are still
-    there to be quoted.
+    there to be quoted. So is a chart whose picture is not actually there --
+    see `size_charts.chart_picture`.
     """
     product = session.get(Product, product_id)
     if product is None:
         return None
-    chart = get_chart(product.size_chart, session)
-    image = chart.get("image") if chart else None
-    if isinstance(image, str) and image:
-        return image
-    return product.size_chart_image or None
+    return chart_picture(product, get_chart(product.size_chart, session))
 
 
 def _not_found(ctx: ToolContext, product_id: str) -> dict:
@@ -266,7 +264,11 @@ def _not_found(ctx: ToolContext, product_id: str) -> dict:
 @tool(
     "get_variants",
     "Every variant of one product with its variant_id, price and availability, plus that "
-    "product's `sleeve` -- always half, long or sleeveless, never null. You must call this "
+    "product's `sleeve` -- always half, long or sleeveless, never null. `by_color` is the "
+    "availability already worked out per colourway: `available` and `sold_out` sizes in the "
+    "order to say them, and that colour's `price` (or `price_from`/`price_to` when its sizes "
+    "differ) with `original_price` when it is on sale. Answer 'which sizes / how much in "
+    "this colour' from `by_color`, never by adding up `variants` yourself. You must call this "
     "before adding anything to a cart -- a variant_id cannot be guessed or constructed. Sold-out "
     "variants are returned too so you can say which combinations exist; `in_stock` is the only "
     "list you may offer from. If you already called this for the same product earlier in this "
@@ -407,9 +409,12 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
         # they would do on the storefront. `sizes` is empty rather than
         # absent, so nothing downstream has to guess -- and there is still
         # nothing here for the model to quote a number from.
-        if product.size_chart_image:
+        uploaded = sendable_image(product.size_chart_image)
+        if uploaded:
             return {
                 "has_chart": True,
+                "product_id": product.product_id,
+                "name": product.name,
                 "chart_id": None,
                 "title": product.name,
                 "unit": "cm",
@@ -417,7 +422,7 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
                 "length_specific": False,
                 "measurements": [],
                 "sizes": {},
-                "image": product.size_chart_image,
+                "image": uploaded,
                 "image_only": True,
             }
 
@@ -428,6 +433,13 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
 
     return {
         "has_chart": True,
+        # Which *product* this answers for, beside the chart's own `title`.
+        # Several products share one chart, and the title is the chart's --
+        # read as the product's name, "Ringer t-shirt" became what the
+        # conversation was about and the next question was answered about the
+        # Ringer tee.
+        "product_id": product.product_id,
+        "name": product.name,
         "chart_id": chart["chart_id"],
         "title": chart["title"],
         "unit": chart.get("unit", "cm"),
@@ -437,7 +449,10 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
         "length_specific": bool(chart.get("length_specific", False)),
         "measurements": chart["measurements"],
         "sizes": chart["sizes"],
-        "image": chart.get("image"),
+        # Only a picture that can actually be sent. A chart naming a file that
+        # is not there still answers with its numbers; it does not promise the
+        # customer a picture that can only fail on the way out.
+        "image": chart_picture(product, chart),
     }
 
 
@@ -445,7 +460,9 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
     "get_shipping_fee",
     "The delivery fee for a governorate. The governorate is a picked value from a fixed list, not "
     "free text, because it sets the price. Call this while collecting the address so the summary "
-    "shows a real total.",
+    "shows a real total. When the cart has items, `checkout` is that summary already worked out -- "
+    "the lines, `subtotal`, `shipping_fee` and `total`, priced the way the order will be charged. "
+    "Read those numbers to the customer exactly; never add anything up yourself.",
     properties={"governorate": {"type": "string", "description": "English or Arabic name."}},
     required=("governorate",),
 )
@@ -461,7 +478,41 @@ def get_shipping_fee(ctx: ToolContext, governorate: str) -> dict:
         # The shop has not priced it. An order for it cannot be confirmed --
         # shipping free by accident is a real loss on every parcel.
         return {"error": "no_rate_set", "governorate": resolved}
-    return {"governorate": resolved, "fee": money(fee)}
+    payload = {"governorate": resolved, "fee": money(fee)}
+    checkout = _checkout(ctx, fee)
+    if checkout is not None:
+        payload["checkout"] = checkout
+    return payload
+
+
+def _checkout(ctx: ToolContext, fee) -> dict | None:
+    """The pre-confirmation summary, with its arithmetic done here.
+
+    The prompt has always asked for "the real total" before `confirm_order`,
+    and the only way the model could produce one was to add the cart subtotal
+    to the fee itself. On cash on delivery that sum is the number the courier
+    asks for, so it is computed by the same rule `orders.recompute_totals`
+    uses -- subtotal, less the discount (none: codes are out of scope), plus
+    shipping -- from a cart priced the way the order will be charged.
+    """
+    cart = carts.cart_payload(ctx.session, ctx.channel, ctx.external_id)
+    if not cart["lines"]:
+        return None
+    subtotal = to_decimal(cart["subtotal"])
+    return {
+        "lines": [
+            {
+                key: line[key]
+                for key in ("product_name", "size", "color", "length", "quantity", "unit_price", "line_total")
+            }
+            for line in cart["lines"]
+        ],
+        "item_count": cart["item_count"],
+        "subtotal": money(subtotal),
+        "shipping_fee": money(fee),
+        "total": money(subtotal + to_decimal(fee)),
+        "payment": "cash_on_delivery",
+    }
 
 
 def _interactive_enabled(ctx: ToolContext) -> bool:

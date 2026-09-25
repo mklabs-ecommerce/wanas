@@ -29,7 +29,14 @@ SOLD_OUT = "wanas-hoodie-m-olive"
 
 @pytest.fixture()
 def ctx(seeded):
-    return ToolContext(session=seeded, channel="whatsapp", external_id="201000000001")
+    # The customer has given the number the orders below are placed with:
+    # `confirm_order` refuses a phone the customer never sent.
+    return ToolContext(
+        session=seeded,
+        channel="whatsapp",
+        external_id="201000000001",
+        history=[{"role": "user", "content": "رقمي 01000000000"}],
+    )
 
 
 def call(ctx, name, **arguments):

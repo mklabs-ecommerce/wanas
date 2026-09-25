@@ -134,6 +134,11 @@ domain/                  persistence + business rules; no vendor HTTP calls,
                             *what the alert is about* -- external_id, else
                             order, else variant, since the stock and order
                             reasons carry no customer at all),
+                            shop_facts.py (the sentences said with no tool
+                            behind them -- shipping, delivery time, payment --
+                            rendered from the rate table and the constants in
+                            code, for the prompt and the public comment
+                            answers alike; never a literal in either),
                             search_terms.py (Arabic +
                             franco catalog-search vocabulary — Egyptian, not
                             Modern Standard: «فانلة» is a tee, «بلوفر» a
@@ -300,6 +305,34 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              the send by the channel adapter) so the next turn
                              resends and apologises instead of arguing
   interactive.py            tappable pickers, in a channel-neutral shape
+  showcase.py               which product photographs a reply carries, decided
+                             from the finished sentence rather than from
+                             whether the model remembered to call get_variants:
+                             every catalog product the reply names by name (as
+                             a tool returned it) gets a photo, and one product
+                             shown alone for the first time gets its other
+                             in-stock colourways (FIRST_SHOWING_PHOTOS). Never
+                             a photo already delivered, never a sold-out
+                             colourway, nothing on an order/handoff turn, and
+                             it runs before photo_claims reads the reply, so
+                             the claim check sees what will actually go
+  action_claims.py          a past-tense claim to have added to the cart or
+                             placed the order, checked against this turn's tool
+                             outcomes -- the third of the claims family beside
+                             photo_claims and order_change_claims
+  reply_facts.py            every money amount and centimetre figure in a reply
+                             must appear in a tool result, the customer's own
+                             words, or the rate table; otherwise the turn is
+                             regenerated. Also appends the garment-flat note
+  reply_rules.py            the quality gate's reply checks, run live:
+                             correct() fixes what has one right answer (a
+                             mangled catalog word, WNS-12 -> the customer's
+                             #reference, the shop's name, emoji); violation()
+                             sends back what only a new sentence fixes (another
+                             payment method, a line denied without a lookup,
+                             yes to a garment not sold, a sleeve dodge, a
+                             repeat). scripts/quality_gate.py imports the same
+                             functions
   session.py                 DB-backed session storage
   display.py                 stored history -> bubbles a person can read;
                               shared by the harness and the dashboard
@@ -482,6 +515,21 @@ tests/                   pytest suite (flat, one test_<module>.py per
   `assistant/photo_claims.py` reads it on the next turn. Never let a reply
   claim a picture the attachment list does not carry, and never explain a
   failed send by the customer's phone: the picture leaves from here.
+- **A cached WhatsApp media id is not forever.** Meta keeps a file uploaded
+  to `/media` for thirty days; `WhatsAppMedia` used to be "upload once, reuse
+  forever", so on day thirty-one every size chart and every local product
+  photo was refused (`Param image.id is not a valid ... media attachment ID`)
+  and kept being refused. `integrations/whatsapp/client.py` re-uploads an id
+  older than `MEDIA_ID_MAX_AGE` before sending it, and re-uploads once more
+  when Meta refuses a dead id. And a chart picture that is not on disk is
+  never attached (`size_charts.chart_picture`) -- `wns-boxy-tee.png` was named
+  and never committed.
+- **A seed correction does not reach an existing database.** The seed runs
+  against an empty catalog only, which is how the Boxy WNS Tee kept the Ringer
+  tee's size chart after the seed file was fixed. A seed change to a product's
+  `size_chart` needs a line in `domain/seed/products.py::RETIRED_SIZE_CHARTS`,
+  which boot applies exactly (only the retired value is rewritten, never a
+  staff choice).
 - **A stored message is not proof it arrived.** Meta refuses free-form
   business-initiated text more than 24 hours after the customer's last
   message (`notifications.CUSTOMER_SERVICE_WINDOW`), which is routine for a

@@ -140,6 +140,17 @@ def _overlay(variant: Variant, live_map) -> _Priced:
     )
 
 
+def quoted(variant: Variant, live_map=None) -> _Priced:
+    """One variant's price and stock as a customer may be told them now.
+
+    The overlay every quote goes through -- `get_variants`, the cart, and
+    `place_order`'s own live read -- exposed for a caller that holds a
+    `Variant` rather than a payload. Pass the turn's `shopify_catalog.live_map()`
+    so a payload of many lines reads the shelf once.
+    """
+    return _overlay(variant, live_map)
+
+
 def live_stock(variant: Variant) -> tuple[int, bool]:
     """How many of this variant are really sellable, and whether Shopify said so.
 
@@ -244,6 +255,39 @@ def _matches_query(product: Product, needle: str) -> bool:
     return search_terms.matches(_haystack(product), needle)
 
 
+def _named_in_full(products: list[Product], query: str) -> list[Product]:
+    """The products a query names by their whole name, or [] when it names none.
+
+    The search is deliberately loose -- every token of the query has to match
+    somewhere -- so "Cairokee T-shirt" also finds "Cairokee T-shirt 2", whose
+    name contains every word of it. That turned a customer who named one
+    product exactly into a "which of these two?" question, asked back about
+    something they had already said; it failed the live suite on `main` and on
+    this branch alike. A query that contains a product's full name, as whole
+    words, is about that product. When one named product's name sits inside
+    another named one ("Cairokee T-shirt" inside "Cairokee T-shirt 2"), the
+    longer name is the one the query spelt out.
+    """
+    wanted = f" {search_terms.normalize(query)} "
+    taken: list[tuple[int, int]] = []
+    named: list[Product] = []
+    for product in sorted(products, key=lambda p: len(p.name or ""), reverse=True):
+        name = f" {search_terms.normalize(product.name)} "
+        if not name.strip():
+            continue
+        start = wanted.find(name)
+        while start != -1:
+            end = start + len(name)
+            # Only a mention of its own counts -- not the front of a longer
+            # name already matched at the same place.
+            if all(end <= a or start >= b for a, b in taken):
+                taken.append((start, end))
+                named.append(product)
+                break
+            start = wanted.find(name, start + 1)
+    return [p for p in products if p in named]
+
+
 def _resolve_categories(session: Session, given: str) -> list[str]:
     """The real category names a `category` argument means, in order of trust.
 
@@ -312,6 +356,8 @@ def get_products(
         products = [p for p in products if any(wanted == s.lower() for s in (p.style or []))]
     if query:
         products = [p for p in products if _matches_query(p, query)]
+        if len(products) > 1:
+            products = _named_in_full(products, query) or products
 
     #: Applied last, and in Python, so it compares the same effective value
     #: the payload goes on to quote. Folded through `sleeves.normalise` rather
@@ -476,12 +522,57 @@ def get_variants(session: Session, product_id: str) -> dict | None:
         # in Black" rather than pretending the combination never existed.
         "variants": [variant_payload(v, live_map) for v in variants],
         "in_stock": [v.variant_id for v in variants if stock[v.variant_id] > 0],
+        # The same rows, already added up per colourway -- see `_by_color`.
+        "by_color": _by_color(variants, live_map),
         "images": images,
         # May be empty for the five products the store never split by colour.
         # An unlabelled photo is fine; the wrong colourway labelled
         # confidently is not.
         "color_images": color_images,
     }
+
+
+def _by_color(variants: list[Variant], live_map) -> dict[str, dict]:
+    """What can be bought in each colourway, worked out here.
+
+    `variants` is a flat list of 10 to 24 rows, and "which sizes are there in
+    olive, and what does olive cost" was the model's to answer by reading all
+    of them -- matching each id in `in_stock` back to its size, grouping by
+    colour, putting the sizes in S-to-XL order because the prompt says to, and
+    noticing that one colour of the Ringer tee is cheaper. Each of those steps
+    is a place a sold-out size gets offered or the wrong price gets quoted,
+    and none of them needs language understanding.
+
+    Keyed by colour, or by "colour / length" for the Worker Jacket, whose
+    length is a third axis. `available` and `sold_out` are sizes in size
+    order; the price is one number when the colourway has one, and a
+    `price_from` / `price_to` pair when its sizes differ.
+    """
+    groups: dict[str, list[tuple[Variant, _Priced]]] = {}
+    for variant in variants:
+        key = variant.color or ""
+        if variant.length:
+            key = f"{key} / {variant.length}" if key else variant.length
+        groups.setdefault(key, []).append((variant, _overlay(variant, live_map)))
+
+    summary: dict[str, dict] = {}
+    for key, rows in groups.items():
+        available = in_order([v.size for v, priced in rows if priced.stock_qty > 0 and v.size])
+        sold_out = in_order(
+            [v.size for v, priced in rows if priced.stock_qty <= 0 and v.size and v.size not in available]
+        )
+        prices = sorted({priced.price for _v, priced in rows})
+        originals = sorted({priced.original_price for _v, priced in rows})
+        entry: dict = {"available": available, "sold_out": sold_out}
+        if len(prices) == 1:
+            entry["price"] = money(prices[0])
+        else:
+            entry["price_from"] = money(prices[0])
+            entry["price_to"] = money(prices[-1])
+        if any(priced.on_sale for _v, priced in rows):
+            entry["original_price"] = money(originals[-1])
+        summary[key] = entry
+    return summary
 
 
 def alternatives_for(session: Session, variant: Variant, limit: int = 6) -> list[dict]:

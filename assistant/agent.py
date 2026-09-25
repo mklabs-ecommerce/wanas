@@ -22,12 +22,16 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from assistant import (
+    action_claims,
     context,
     messages as msg,
     order_change_claims,
     photo_claims,
     quoting,
+    reply_facts,
+    reply_rules,
     session as session_store,
+    showcase,
 )
 from assistant.prompt import build_system_prompt
 from assistant.providers import LLMProvider, ProviderError, get_provider
@@ -41,6 +45,7 @@ from assistant.tools.base import (
 )
 from common import telemetry
 from config.settings import settings
+from domain.services import carts, orders
 
 log = logging.getLogger("wanas.agent")
 
@@ -366,10 +371,25 @@ PARTIAL_IMAGE_FALLBACK = (
 _UNDELIVERED_NOTE = (
     "\n\nتنبيه داخلي: فيه صورة بعتناها في المحادثة دي والمنصة رفضتها، يعني "
     "العميل فعلاً **ماوصلتوش** ({what}). لو قال إن الصورة مش واصلة، صدّقه: "
-    "اعتذر وقول إن المشكلة من عندنا إحنا، ونادي get_variants تاني في نفس الرد "
+    "اعتذر وقول إن المشكلة من عندنا إحنا، ونادي {resend} تاني في نفس الرد "
     "ده عشان تتبعت من جديد. ممنوع تمامًا تقوله إن المشكلة في النت بتاعه أو في "
     "التطبيق أو يقفل الواتس ويفتحه -- المشكلة عندنا ومعانا في السجل."
 )
+
+
+def _resend_tool(labels: list[str], count: int) -> str:
+    """Which tool sends the refused picture again, decided from what it was.
+
+    The note used to say `get_variants` whatever had been refused, and
+    `get_variants` sends the garment -- a refused size chart asked for again
+    came back as a photo of the shirt. A chart is resent by the chart tool.
+    """
+    charts = sum(1 for label in labels if label.endswith("size chart"))
+    if labels and charts == len(labels) and charts >= count:
+        return "get_size_chart"
+    if charts:
+        return "get_variants (للصورة) وget_size_chart (لجدول المقاسات)"
+    return "get_variants"
 
 #: Appended when a reply blamed the customer's phone, app or line for our own
 #: failed send. Blunt on purpose: there is no partially-correct version of this
@@ -381,6 +401,82 @@ _BLAME_NUDGE = (
     "ناحيتنا، ونادي get_variants عشان تبعت الصورة من تاني، ولو لسه مش راضية "
     "تتبعت اعرض عليه تحويله لحد من الفريق."
 )
+
+#: Appended when a reply stated a price, a total or a measurement that no tool
+#: in this conversation returned. The number is named back so the model knows
+#: which one, and the fix is the only one allowed: fetch it, or leave it out.
+#: Never "correct" it -- a figure put right by guesswork is still a guess.
+_FACTS_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات فيه أرقام ({numbers}) مش موجودة في أي نتيجة "
+    "أداة في المحادثة دي. كل سعر أو إجمالي أو قياس بالسنتيمتر لازم يتنقل حرفياً من "
+    "نتيجة أداة: get_variants للسعر، checkout من get_shipping_fee للإجمالي، "
+    "get_size_chart للقياسات. نادي الأداة دي في نفس الرد، أو اكتب ردك من غير الرقم. "
+    "متحسبش أي رقم بنفسك."
+)
+
+
+#: Appended when a reply said it added something to the cart, or that the
+#: order went through, and no tool in the turn did. What is true is the
+#: tool's answer; the sentence is rewritten to match it, never the reverse.
+_ACTION_NUDGE = {
+    "cart": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إن القطعة اتضافت للسلة، بس add_to_cart "
+        "مانجحش في الدور ده (يا اترفض يا متنادهش). لو الزبون قرر، نادي add_to_cart "
+        "دلوقتي؛ ولو اترفض قوله بصراحة ليه واعرض البدائل اللي رجعت. متقولش «ضفته» "
+        "غير لو الأداة رجعت السلة."
+    ),
+    "order": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إن الأوردر اتسجل، بس confirm_order "
+        "مانجحش في الدور ده. الأوردر مابيتسجلش غير لما confirm_order يرجّع رقم "
+        "أوردر -- كمّل البيانات الناقصة أو نادي الأداة، ولو رفضت قول السبب."
+    ),
+}
+
+#: Appended when a reply broke one of the rules in `assistant/reply_rules.py`
+#: that only a new sentence can fix. Keyed by the rule; the reason the check
+#: found is named back so the model knows what to change.
+_RULE_NUDGE = {
+    "payment": (
+        "\n\nتنبيه داخلي: ردك اللي فات عرض طريقة دفع إحنا مش بنقبلها ({why}). "
+        "الدفع كاش عند الاستلام، أو أونلاين من الموقع، وبس. اكتب الرد تاني من غير أي "
+        "طريقة دفع تانية."
+    ),
+    "section": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إن مفيش عندنا نوع أو قسم كامل ({why}) من غير "
+        "ما تدور. نادي get_products (أو get_categories) الأول، ورد من اللي رجع."
+    ),
+    "garment": (
+        "\n\nتنبيه داخلي: الزبون سأل عن حاجة إحنا مش بنبيعها ({why}). قوله بوضوح إن "
+        "مفيش في أول الرد، وبعدين اعرض البدائل كبديل -- متقولش «أيوه عندنا»."
+    ),
+    "sleeve": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إنك مش عارف طول الكم ({why}). كل منتج "
+        "ليه `sleeve` في get_products و get_variants -- نادي الأداة وجاوب منه."
+    ),
+    "repeat": (
+        "\n\nتنبيه داخلي: ردك اللي فات هو نفس ردك اللي قبله تقريبًا. الزبون رد عليه، "
+        "فالرد الجديد لازم يرد على رسالته هو: جاوب، أو اسأل سؤال تاني، أو قول إنك مش فاهم."
+    ),
+}
+
+
+def _order_references(db: Session, channel: str, external_id: str) -> dict[str, str]:
+    """This customer's internal order ids, each mapped to the reference they
+    were given and can quote to staff (`#1040`)."""
+    return {
+        order.order_id: order.shopify_order_name
+        for order in orders.orders_for_identity(db, channel, external_id, include_closed=True)
+        if order.shopify_order_name
+    }
+
+
+def _previous_reply(history: list[dict]) -> str:
+    """What the shop last said in words, before this turn's message."""
+    for message in reversed(history):
+        if message.get("role") == msg.ASSISTANT and (message.get("content") or "").strip():
+            return message["content"]
+    return ""
+
 
 #: The last resort when the model will not stop diagnosing the customer's
 #: phone. It says the one true thing -- the failure is ours -- and offers the
@@ -549,7 +645,7 @@ def run_turn(
     # (`assistant/recovery.py::RESUME_INSTRUCTION`), which the turn after this
     # one must not still be reading.
     with telemetry.stage("prompt_build"):
-        system_prompt = build_system_prompt(system_extra, channel=channel)
+        system_prompt = build_system_prompt(system_extra, channel=channel, session=db)
 
     # The messages this turn is about were already written to the transcript
     # when they arrived, so staff could see the conversation before the bot
@@ -575,7 +671,11 @@ def run_turn(
     sent_images = _sent_images(history) - set(undelivered)
     if undelivered:
         named = photo_claims.undelivered_labels(history)
-        system_prompt = f"{system_prompt}{_UNDELIVERED_NOTE.format(what=_describe(named, len(undelivered)))}"
+        note = _UNDELIVERED_NOTE.format(
+            what=_describe(named, len(undelivered)),
+            resend=_resend_tool(named, len(undelivered)),
+        )
+        system_prompt = f"{system_prompt}{note}"
         log.info(
             "%s/%s has %d undelivered photo(s); the turn is told so rather than "
             "left to insist they arrived",
@@ -605,6 +705,7 @@ def run_turn(
     # for this turn -- kept on the stored message for the dashboard (see
     # `assistant/messages.py::user`), never sent to the provider itself, so
     # this is not a second copy of what the model already read via `text`.
+    previous_reply = _previous_reply(history)
     history.append(msg.user(text, images=images, audio=audio, mids=mids, refers_to=refers_to))
 
     # `history` is the same list object the loop below appends to, so the
@@ -621,6 +722,10 @@ def run_turn(
     #: The post-order request kinds this turn filed -- see
     #: `assistant/order_change_claims.py`.
     filed_kinds: list[str] = []
+    #: Every tool this turn ran and what it answered, in order -- what a
+    #: reply's claim to have *done* something is checked against
+    #: (`assistant/action_claims.py`).
+    turn_results: list[tuple[str, dict]] = []
     promise_retries = 0
     truncation_retries = 0
     # The customer sent a picture of their own this turn, so every mention of
@@ -740,6 +845,33 @@ def run_turn(
             text_out, path_leaked = strip_paths(reply.text)
             text_out, tool_leaked = strip_tool_leaks(text_out)
             text_out, _ = strip_markdown(text_out)
+            # Centimetres are always garment-flat, said every time -- in code,
+            # not left to the model remembering to (`reply_facts.FLAT_NOTE`).
+            text_out = reply_facts.with_flat_note(text_out)
+            # The rules with exactly one right answer, applied in place: a
+            # catalog word back to its catalog spelling, an internal order id
+            # to the customer's reference, the shop's own name, the emoji rule
+            # (`assistant/reply_rules.py`). Nothing is regenerated for these.
+            text_out, fixes = reply_rules.correct(
+                text_out,
+                vocabulary=reply_rules.catalog_vocabulary(db),
+                references=(
+                    _order_references(db, channel, external_id) if "WNS-" in text_out else {}
+                ),
+                states_money=bool(reply_facts.stated(text_out)[0]),
+            )
+            if fixes:
+                log.info("corrected a reply to %s/%s: %s", channel, external_id, "; ".join(fixes))
+
+            # The photographs this reply's own words call for: every catalog
+            # product it names, and the rest of one product's colourways the
+            # first time it is shown alone. Decided here, from the finished
+            # sentence, rather than left to whether the model remembered to
+            # call get_variants -- and before the claim check below, so that
+            # check reads the attachments as they will actually go. A retry
+            # puts them back: the next sentence may name something else.
+            before_showcase = ctx.checkpoint()
+            showcase.show(ctx, text_out, history, called)
 
             # Blaming the customer's phone for our own failed send. Checked
             # before the claim guard because it is the more expensive mistake
@@ -785,6 +917,7 @@ def run_turn(
                         said=change_mismatch,
                         describe=_CHANGE_WORDS[filed],
                     )
+                    ctx.restore(before_showcase)
                     continue
                 log.error(
                     "provider %s kept describing the wrong request for %s/%s (%s); "
@@ -819,6 +952,7 @@ def run_turn(
                     )
                     promise_retries += 1
                     system_prompt = f"{system_prompt}{_BLAME_NUDGE}"
+                    ctx.restore(before_showcase)
                     continue
                 log.error(
                     "provider %s kept blaming the customer's device for %s/%s; "
@@ -837,6 +971,140 @@ def run_turn(
                     tool_calls=called,
                     filed=list(filed_kinds),
                     error="blamed_the_customer",
+                )
+
+            # A price, a total or a measurement nothing in this conversation
+            # said. The rule has been in the prompt since the first version;
+            # this is the check behind it (`assistant/reply_facts.py`).
+            # "I added it" / "your order is placed" with no tool this turn
+            # having done it. The same shape as the order-change check above,
+            # for the two actions everything else in a sale depends on.
+            claimed = action_claims.unbacked(
+                text_out,
+                turn_results,
+                cart_has_items=lambda: carts.has_items(db, channel, external_id),
+                has_orders=lambda: bool(
+                    orders.orders_for_identity(db, channel, external_id, include_closed=True)
+                ),
+            )
+            if claimed:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s claimed an action no tool did (%s), retry %d/%d",
+                        channel,
+                        external_id,
+                        claimed,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}{_ACTION_NUDGE[claimed]}"
+                    ctx.restore(before_showcase)
+                    continue
+                log.error(
+                    "provider %s kept claiming an action no tool did for %s/%s (%s); "
+                    "sending what is true instead",
+                    provider.name,
+                    channel,
+                    external_id,
+                    claimed,
+                )
+                text_out = action_claims.FALLBACKS[claimed]
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                    error=f"unbacked_{claimed}_claim",
+                )
+
+            # The rules only a new sentence can fix: a payment method the shop
+            # cannot take, a line denied without a lookup, a «أيوه» to a garment
+            # it does not sell, a sleeve length professed unknown, the last reply
+            # sent again. They used to run only offline, in the quality gate.
+            broken = reply_rules.violation(
+                text_out, customer=text, previous=previous_reply, results=turn_results
+            )
+            if broken:
+                rule, _, why = broken.partition(": ")
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s broke the %s rule (%s), retry %d/%d",
+                        channel,
+                        external_id,
+                        rule,
+                        why,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}" + _RULE_NUDGE[rule].format(why=why)
+                    ctx.restore(before_showcase)
+                    continue
+                log.error(
+                    "provider %s kept breaking the %s rule for %s/%s (%s); "
+                    "sending the fallback question instead",
+                    provider.name,
+                    rule,
+                    channel,
+                    external_id,
+                    why,
+                )
+                text_out = promise_fallback(history)
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                    error=f"rule_{rule}",
+                )
+
+            made_up = reply_facts.ungrounded(
+                text_out, history, reply_facts.shop_constants(db)
+            )
+            if made_up:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s stated numbers no tool returned (%s), retry %d/%d",
+                        channel,
+                        external_id,
+                        ", ".join(made_up),
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}" + _FACTS_NUDGE.format(
+                        numbers="، ".join(made_up)
+                    )
+                    ctx.restore(before_showcase)
+                    continue
+                log.error(
+                    "provider %s kept stating numbers no tool returned for %s/%s (%s); "
+                    "sending the fallback question instead",
+                    provider.name,
+                    channel,
+                    external_id,
+                    ", ".join(made_up),
+                )
+                text_out = promise_fallback(history)
+                history.append(msg.assistant(text_out, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=text_out,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                    error="ungrounded_numbers",
                 )
 
             if image_promise or _is_dangling_promise(text_out, tools_called=bool(called)):
@@ -868,6 +1136,7 @@ def run_turn(
                     # The model never sees its own bad reply (it is not
                     # appended to history), only the instruction to act.
                     system_prompt = f"{system_prompt}{nudge}"
+                    ctx.restore(before_showcase)
                     continue
 
                 log.error(
@@ -960,6 +1229,7 @@ def run_turn(
                 content = call_tool(ctx, name, call.get("arguments"))
             # What this turn actually wrote to the staff queue, in the tool's
             # own words. Read back below against what the reply says it wrote.
+            turn_results.append((name, content if isinstance(content, dict) else {}))
             if isinstance(content, dict) and content.get("filed"):
                 filed_kinds.append(str(content["filed"]))
             log.info("tool %s(%s) -> %s", name, call.get("arguments"), list(content)[:4])
@@ -977,6 +1247,20 @@ def run_turn(
                 external_id,
                 ctx.end_turn,
             )
+            if ctx.closing:
+                # A tool that ends the turn on a sentence the shop wrote
+                # (`request_human`): that sentence is the reply, and the
+                # model is not asked for another.
+                history.append(msg.assistant(ctx.closing, attachments=ctx.attachments))
+                session_store.save(db, channel, external_id, history, merge_since=base)
+                return AgentReply(
+                    text=ctx.closing,
+                    attachments=ctx.attachments,
+                    attachment_labels=ctx.attachment_labels,
+                    interactive=ctx.interactive,
+                    tool_calls=called,
+                    filed=list(filed_kinds),
+                )
             session_store.save(db, channel, external_id, history, merge_since=base)
             return AgentReply(
                 text="",

@@ -25,23 +25,23 @@ from __future__ import annotations
 
 import re
 
+from domain.services import shop_facts
 from domain.services.search_terms import expand, normalize
 
 #: The exact public replies. Verbatim strings, not templates: every one of
 #: these is published under a post where anyone can read it.
 #:
-#: The 110 EGP is hardcoded on purpose -- shipping is one flat rate to every
-#: governorate, confirmed across ~100 completed orders, so there is nothing to
-#: look up per customer. The live fee the bot quotes *in DM* comes from the
-#: `ShippingRate` table (`domain/services/shipping.py::get_fee`), not from
-#: Shopify; if that flat rate ever changes, this string changes with it.
+#: Rendered from `domain/services/shop_facts.py` -- the same sentences the
+#: DM prompt uses, written down once. These are the defaults; `reply_for`
+#: reads the shipping fee from the rate table when it is handed a session,
+#: so a fee changed in the dashboard is the fee published under a post.
 #:
 #: No URL in the payment line: Instagram suppresses the reach of a comment
 #: carrying a link, so the answer would be published and then unread.
 FAQ_REPLIES: dict[str, str] = {
-    "delivery_time": "التوصيل بياخد لغاية 4 أيام لكل محافظات مصر.",
-    "shipping_cost": "الشحن 110 جنيه لكل محافظات مصر.",
-    "payment": "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع.",
+    "delivery_time": f"التوصيل {shop_facts.delivery_line()} لكل محافظات مصر.",
+    "shipping_cost": f"الشحن {shop_facts.shipping_line()}.",
+    "payment": shop_facts.PAYMENT_LINE,
 }
 
 #: Written already normalized (no hamza, `ي` not `ى`, `ه` not `ة`, lowercase)
@@ -112,5 +112,7 @@ def match(text: str) -> str | None:
     return None
 
 
-def reply_for(key: str) -> str:
+def reply_for(key: str, session=None) -> str:
+    if key == "shipping_cost" and session is not None:
+        return f"الشحن {shop_facts.shipping_line(session)}."
     return FAQ_REPLIES[key]

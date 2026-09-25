@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
 
 from common import bidi
 from common.identifiers import is_bsuid
+from common.timeutil import as_aware, utcnow
 from config.settings import PROJECT_ROOT, settings
 from domain.db import session_scope
 from domain.models import WhatsAppMedia
@@ -31,6 +33,38 @@ from domain.services.notifications import OutboundMessage
 log = logging.getLogger("wanas.whatsapp")
 
 GRAPH = "https://graph.facebook.com"
+
+#: How long a cached media id is trusted. Meta keeps a file uploaded to
+#: `/media` for thirty days and then refuses its id with «Param image.id is not
+#: a valid whatsapp business account media attachment ID». The cache used to
+#: say "upload once, reuse forever", so on day thirty-one every size chart and
+#: every local product photo started failing at once -- and kept failing,
+#: because nothing ever threw the dead id away. Five days short of Meta's
+#: limit, so an id is replaced before it can be refused rather than after.
+MEDIA_ID_MAX_AGE = timedelta(days=25)
+
+
+def _media_id_refused(error: str | None) -> bool:
+    """Meta refused the send because it no longer knows the media id.
+
+    The one refusal a fresh upload can fix. Everything else -- the customer
+    outside the 24-hour window, a number that is not on WhatsApp -- is refused
+    the same way whatever id is sent, and uploading a picture again to learn
+    that is a slower failure, not a recovery.
+    """
+    text = (error or "").lower()
+    return "media attachment id" in text or "image.id" in text
+
+
+def _fresh(uploaded_at) -> bool:
+    """Whether a cached id is young enough to send without asking Meta.
+
+    A row with no upload time predates the column being read and is treated
+    as old: the cost of being wrong is one upload, the cost of trusting it is
+    a picture the customer never gets.
+    """
+    stamped = as_aware(uploaded_at)
+    return stamped is not None and utcnow() - stamped < MEDIA_ID_MAX_AGE
 
 
 def _is_url(image_path: str) -> bool:
@@ -192,19 +226,18 @@ class WhatsAppClient:
                 delivered=False,
                 error="upload_failed",
             )
-        ok, error, sent_id = self._post(
-            {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                **self._addressed(to),
-                "type": "image",
-                "image": (
-                    {"id": media_id, "caption": bidi.shape(caption[:1024])}
-                    if caption
-                    else {"id": media_id}
-                ),
-            }
-        )
+        ok, error, sent_id = self._post(self._image_by_id(to, media_id, caption))
+        if not ok and _media_id_refused(error):
+            # The cached id outlived Meta's copy of the file. Upload it again
+            # and send once more -- once, because a second refusal of a
+            # *fresh* id is not something another upload would change.
+            log.warning(
+                "whatsapp no longer knows the media id cached for %s; uploading it again",
+                image_path,
+            )
+            media_id = self.media_id_for(image_path, refresh=True)
+            if media_id is not None:
+                ok, error, sent_id = self._post(self._image_by_id(to, media_id, caption))
         return OutboundMessage(
             to=to,
             text=caption,
@@ -214,6 +247,19 @@ class WhatsAppClient:
             error=error,
             message_ids=[sent_id] if sent_id else [],
         )
+
+    def _image_by_id(self, to: str, media_id: str, caption: str) -> dict:
+        return {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            **self._addressed(to),
+            "type": "image",
+            "image": (
+                {"id": media_id, "caption": bidi.shape(caption[:1024])}
+                if caption
+                else {"id": media_id}
+            ),
+        }
 
     def send_template(self, to: str, template: str, *, language: str = "ar") -> OutboundMessage:
         """A pre-approved template message -- the only kind Meta allows once
@@ -323,16 +369,18 @@ class WhatsAppClient:
 
     # -- media ------------------------------------------------------------
 
-    def media_id_for(self, image_path: str) -> str | None:
-        """Upload once, reuse forever.
+    def media_id_for(self, image_path: str, *, refresh: bool = False) -> str | None:
+        """Upload once, reuse for as long as Meta keeps the file.
 
-        There are twelve size charts and they change rarely; re-uploading a
-        several-hundred-KB PNG on every sizing question is a slow reply for no
-        reason.
+        Re-uploading a several-hundred-KB PNG on every sizing question is a
+        slow reply for no reason, so the id is cached per path. It is *not*
+        cached forever: Meta drops an uploaded file after thirty days, and an
+        id past `MEDIA_ID_MAX_AGE` is uploaded again before it is sent.
+        `refresh` forces that, for the id Meta has just refused.
         """
         with session_scope() as session:
             cached = session.get(WhatsAppMedia, image_path)
-            if cached is not None:
+            if cached is not None and not refresh and _fresh(cached.uploaded_at):
                 return cached.media_id
 
         media_id = self._upload(image_path)
@@ -340,8 +388,12 @@ class WhatsAppClient:
             return None
 
         with session_scope() as session:
-            if session.get(WhatsAppMedia, image_path) is None:
-                session.add(WhatsAppMedia(path=image_path, media_id=media_id))
+            row = session.get(WhatsAppMedia, image_path)
+            if row is None:
+                session.add(WhatsAppMedia(path=image_path, media_id=media_id, uploaded_at=utcnow()))
+            else:
+                row.media_id = media_id
+                row.uploaded_at = utcnow()
         return media_id
 
     def _upload(self, image_path: str) -> str | None:

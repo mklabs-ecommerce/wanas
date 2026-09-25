@@ -39,6 +39,17 @@ MODEL_HANDOFF_REASONS = ("unclear", "complaint", "customer_asked")
 #: unread, and it is what staff were queued to look at.
 RESUMABLE_REASONS = ("unclear", "out_of_scope")
 
+#: What the customer reads once a handoff goes through, per reason. Written
+#: by the shop, not the model: the conversation is about to go quiet until a
+#: person opens the dashboard, and the model's own sign-off was where «حد
+#: هيكلمك خلال ساعة» -- a time nobody had promised -- could be written. Each
+#: says the one true thing: a person has it now, and will answer here.
+HANDOFF_CLOSINGS = {
+    "complaint": "آسفين جدًا على اللي حصل. حوّلت كلامك لحد من الفريق، وهيرد عليك هنا في أقرب وقت.",
+    "customer_asked": "تمام، حوّلت كلامك لحد من الفريق، وهيرد عليك هنا في أقرب وقت.",
+    "unclear": "معلش مش قادر أفهم طلبك كويس، فحوّلته لحد من الفريق وهيرد عليك هنا في أقرب وقت.",
+}
+
 #: What a refused scope handoff hands back. The prompt has said since the
 #: scope section was written that an off-topic question is answered with one
 #: friendly line and **not** escalated ("ده مش سبب لـ request_human"), but the
@@ -159,8 +170,9 @@ def raise_handoff(
     "request_human",
     "Hand this conversation to a person. This is the only way a conversation leaves you, and it is "
     "the last resort, not the answer to a message you did not follow. It pauses the conversation "
-    "until a staff member picks it up -- you will not be asked to reply again, so tell the customer "
-    "someone will get back to them. Use `complaint` for anything wrong with what arrived; never "
+    "until a staff member picks it up, and the customer is told so by the shop's own sentence -- "
+    "the turn ends with this call and nothing you write after it is sent. Use `complaint` for "
+    "anything wrong with what arrived; never "
     "offer a new order to someone reporting a damaged or wrong item. A question that is not about "
     "the shop is NOT a reason to call this -- answer it yourself in one line and carry on.",
     properties={
@@ -201,6 +213,9 @@ def request_human(ctx: ToolContext, reason: str, summary: str) -> dict:
     # clears it -- not a timer, and not the model deciding things look normal
     # again, because a human is handling it now.
     raise_handoff(ctx.session, ctx.channel, ctx.external_id, reason, summary)
+    # The turn ends here, on the shop's own sentence -- see HANDOFF_CLOSINGS.
+    ctx.end_turn = "handoff"
+    ctx.closing = HANDOFF_CLOSINGS[reason]
     return {"queued": True, "conversation_paused": True}
 
 

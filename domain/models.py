@@ -724,11 +724,14 @@ class AbandonedCartNudge(Base):
 
 
 class WhatsAppMedia(Base):
-    """Cache of Meta media IDs for the 12 size-chart images.
+    """Cache of Meta media IDs for the local pictures -- the size charts, and
+    any product photo Shopify has no picture for yet.
 
-    There are only twelve and they change rarely; re-uploading a
-    several-hundred-KB PNG on every sizing question is a slow reply for no
-    reason (04-whatsapp-channel.md).
+    They change rarely; re-uploading a several-hundred-KB PNG on every sizing
+    question is a slow reply for no reason (04-whatsapp-channel.md). But Meta
+    keeps an uploaded file for thirty days only, so `uploaded_at` is what
+    decides whether a row may still be sent: see
+    `integrations/whatsapp/client.py::MEDIA_ID_MAX_AGE`.
     """
 
     __tablename__ = "whatsapp_media"

@@ -48,6 +48,7 @@ from assistant.channels import whatsapp as adapter
 from assistant.providers import set_provider
 from assistant.providers.base import ModelReply, ProviderError
 from assistant.providers.fake import RehearsalProvider, ScriptedProvider
+from assistant.tools.support_tools import HANDOFF_CLOSINGS
 from config.settings import settings
 from domain.models import QueueKind
 from domain.services import queues
@@ -367,7 +368,8 @@ def test_a_request_human_handoff_never_triggers_a_retry(seeded, monkeypatch):
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "عايز أكلم حد", provider=provider)
 
-    assert reply.text == "تمام، حد من الفريق هيرد عليك."
+    # The shop's own sentence, not the model's: the turn ends on the handoff.
+    assert reply.text == HANDOFF_CLOSINGS["customer_asked"]
     assert agent_sleeps == []  # no retry -- this was never a failure
 
 

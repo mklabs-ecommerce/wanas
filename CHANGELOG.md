@@ -1,5 +1,234 @@
 # Changelog
 
+## Unreleased — A product named in full is the product searched for
+
+Found by the live model suite, which failed the same way on `main` and on this
+branch: «عايز Cairokee T-shirt أسود XL واتنين» searched `Cairokee T-shirt`,
+and the all-words search also returned `Cairokee T-shirt 2`, whose name contains
+every word of it -- so the model asked a customer who had named the product
+exactly which of two they meant. `catalog.get_products` now narrows to the
+products a query names by their whole name (the longer name winning where one
+sits inside another); a query that names no product in full browses as before.
+
+## Unreleased — The handoff's last line is the shop's; photos match what it sells
+
+`docs/LLM_AUDIT.md` findings 13 and 14, which complete it.
+
+- **A handoff ends on a sentence the shop wrote.** After `request_human` the
+  conversation goes quiet until a person opens the dashboard, and the model's
+  own sign-off was where a callback time nobody had promised could be written.
+  The turn now ends with the call, on `HANDOFF_CLOSINGS[reason]`, the way
+  `confirm_order` ends on the shop's own confirmation -- the model is not asked
+  for another word.
+- **A customer's photo is matched only against what the shop still sells.**
+  Archived products were in the shortlist the vision pass chooses from, and
+  the note after a match says «أقرب منتج عندنا هو ...». They are out of the
+  shortlist, and a match that lands on one is no match.
+
+## Unreleased — The quality gate's rules run on every reply, not only offline
+
+`docs/LLM_AUDIT.md` findings 8, 9, 10, 11, 15, 16 and 17. `scripts/quality_gate.py`
+held a deterministic check for each of these, each written after a real
+conversation went wrong -- and every one of them ran against a benchmark and
+never against a reply a customer was about to receive. They live in
+`assistant/reply_rules.py` now; the gate imports them from there, unchanged,
+and `assistant/agent.py` runs them on every reply before it leaves.
+
+- **Corrected in place, because there is one right answer.** A product name
+  reconstructed from memory («Lightwelson Sweatpant») goes back to the
+  catalog's spelling; an internal order id (`WNS-12`) becomes the reference
+  the customer can quote to staff (`#1040`); the shop's name is spelled its one
+  way; and the emoji rule the prompt stated is applied -- one at most, none
+  beside a price or an apology. Identifiers and ordinary English are never
+  touched.
+- **Sent back, because only a new sentence fixes it.** A payment method the
+  shop cannot take; a whole line («مفيش قسم حريمي») denied with no catalog
+  lookup in the turn; «أيوه» to a garment the shop does not sell, or a reply
+  that never says so after `get_products` returned `garment_not_sold`; a sleeve
+  length professed unknown; the previous reply sent again. The turn is
+  regenerated with the reason, and falls back to the question it always
+  falls back to.
+
+## Unreleased — A reply may not say it did what no tool did
+
+`docs/LLM_AUDIT.md` finding 7. «ضفتهولك في السلة» could go out beside an
+`out_of_stock` refusal or beside no call at all, and «الأوردر اتسجل» beside a
+cart nobody had checked out -- the words are the model's, the outcome is the
+tool layer's, and nothing joined them. `assistant/action_claims.py` is the third
+of the family after `photo_claims` and `order_change_claims`: a past-tense
+claim to have added to the cart, or placed the order, with no successful tool
+this turn behind it sends the turn back naming the tool, and a model that keeps
+claiming it gets a fixed sentence that is true instead. Offers («أضيفه؟»),
+plans and honest refusals («مقدرتش أضيفه») are not claims; a turn that looked
+up the customer's existing orders is reporting a status, not placing one.
+
+## Unreleased — The published facts are read from where they are kept
+
+`docs/LLM_AUDIT.md` finding 6. Shipping ("110 جنيه لكل محافظات مصر"), delivery
+("بياخد لغاية 4 أيام"), the payment sentence, the 24-hour exchange window and
+the 20-pound surcharge were literals in the prompt and in the public comment
+answers -- second copies of numbers whose source of truth is the rate table and
+`orders.py` -- and `app.py` seeded missing fees by parsing the fee back *out of*
+the comment answer. A fee changed in the dashboard changed every order and left
+the bot quoting the old one. The prompt's layout example also priced shipping
+to Cairo at 60 beside the published flat 110.
+
+`domain/services/shop_facts.py` now holds the defaults and renders each
+sentence from its source; the prompt is a template filled per turn from the
+rate table (`build_system_prompt(session=...)`), the comment FAQ reads the
+same table, and the example fee is always a fee the shop charges.
+
+## Unreleased — The courier's number is one the customer gave
+
+`docs/LLM_AUDIT.md` finding 5. `confirm_order.contact_phone` is written by the
+model, and a phone number is the one field of an order nobody can check by
+reading it -- a transposed digit looks exactly like the real thing. It was
+checked for being non-blank and nothing else.
+
+- **An Egyptian mobile, in one form.** `orders.egyptian_mobile` accepts
+  010/011/012/015 and eight digits however it was written -- `+20 100 ...`,
+  `0020...`, WhatsApp's `2010...`, Arabic-Indic digits, spaces and dashes --
+  and `place_order` stores that one canonical form. Anything else is
+  `invalid_phone`: a landline or a digit short is a parcel that comes back.
+- **A number the customer actually gave.** `confirm_order` refuses
+  (`phone_not_given`) a mobile that is not in the customer's own messages in
+  this conversation, not on their saved profile, and not the WhatsApp number
+  they are writing from -- so a number the model reassembled from memory
+  never reaches a courier.
+
+## Unreleased — Which sizes, in which colour, for how much: worked out in code
+
+`docs/LLM_AUDIT.md` finding 4. `get_variants` answered with a flat list of 10
+to 24 variant rows, and "which sizes are there in olive, and how much?" was
+the model's to work out: match each `in_stock` id back to a size, group by
+colour, order S before M because the prompt said to, and notice that the
+hoodie's grey costs 50 pounds more. The payload now carries `by_color` --
+`available` and `sold_out` sizes per colourway (per colour and length for the
+Worker Jacket), in the order they are said, with that colourway's own `price`
+(or `price_from`/`price_to` when its sizes differ) and `original_price` when on
+sale -- from the same live overlay as every other number in it.
+
+## Unreleased — A number in a reply is one a tool returned
+
+`docs/LLM_AUDIT.md` findings 3 and 12.
+
+- **Every price, total and measurement is checked before the reply leaves.**
+  `assistant/reply_facts.py` reads the finished sentence for money amounts (a
+  number in a clause naming the currency, or straight after «بـ» / «السعر») and
+  centimetre figures, and each one has to appear in a tool result in this
+  conversation, in the customer's own messages, or among the shop's published
+  amounts (the shipping fees in the rate table, twice a fee for a refused
+  parcel, the exchange surcharge). A number that appears nowhere is one the
+  model made: the turn is sent back naming it and saying where to fetch it,
+  and a model that keeps doing it gets the fallback question instead of the
+  figure. Quantities, days, percentages, order references and phone numbers are
+  not amounts and are not read as one. The check never rewrites a number -- a
+  figure corrected by guesswork is still a guess.
+- **Measurements always say they are garment-flat.** `AGENTS.md` says "say
+  which, every time"; the prompt asked. A reply quoting centimetres without
+  saying so now has the sentence added in code (`reply_facts.FLAT_NOTE`).
+
+## Unreleased — The total agreed to was not the total charged
+
+`docs/LLM_AUDIT.md` findings 1 and 2, the two that rank first because they are
+the number a courier collects at the door.
+
+- **The cart was priced from wanas.db.** `carts.cart_payload` read
+  `variants.price`, a seeded column nothing keeps current, while `place_order`
+  charged Shopify's live price -- so a price changed in Shopify Admin reached
+  the order and not the summary the customer agreed to before confirming. The
+  cart now goes through the same live overlay as every other quote
+  (`catalog.quoted`).
+- **The total was the model's arithmetic.** The prompt asked for "the real
+  total" before `confirm_order`, and the only way to produce one was to add the
+  subtotal and the fee in its head. `get_shipping_fee` now returns `checkout`
+  -- the lines, the subtotal, the fee and the total -- computed by the same rule
+  as `orders.recompute_totals`, and the prompt says to read those numbers and
+  add nothing up.
+
+## Unreleased — The shop answered about clothes without showing them
+
+    customer: «عندكم هوديز؟»
+    log:      tool get_products({'query': 'hoodie'})
+    bot:      «عندنا WANAS Hoodie و WANAS Zip-Hoodie ...»      -> no photo
+    customer: «طب ابعتلي صورة»
+
+A photograph reached the customer only when the model decided to call
+`get_variants`, or when a search happened to land on exactly one product. The
+prompt asked for a photo on every product reply; the model answered from the
+search results in front of it instead, and a conversation about clothes --
+which starts with a search that finds several -- went by in words.
+
+- **The reply's own words now decide, below the model.** `assistant/showcase.py`
+  runs on the finished reply, before `photo_claims` reads it: every catalog
+  product the reply names -- by the name a tool in this conversation returned,
+  or by its one distinctive word ("Ringer") when no other product shares it,
+  never by the brand word "WANAS" -- gets its photograph. A reply that names
+  several shows one of each, up to four.
+- **One product, shown alone for the first time, shows its colourways.** The
+  colour the reply names first (in English or Arabic, through the same
+  vocabulary the search uses), then the other colourways that can actually be
+  bought, up to three.
+- **The existing image policy still holds over all of it.** Nothing already
+  delivered is sent again; a product already shown gets a new photograph only
+  for a colour the reply names; sold-out colourways and products are never
+  offered; an order, delivery or handoff turn shows nothing; a sizing turn
+  sends its chart alone; «الاتنين» about one product is still caught by the
+  claim check rather than answered with two colours of it; and a reply sent
+  back for a retry takes its photographs with it.
+- Also fixed in passing (see the entry below): every local-file photograph had
+  been failing since its WhatsApp media id expired, which made the shop look
+  even more reluctant to show anything than it was.
+
+## Unreleased — The Boxy WNS Tee's chart was the Ringer's, and then no chart at all
+
+    customer: the size chart for the Boxy WNS Tee
+    bot:      the RINGER BOXY FIT chart
+    customer: asks again, and again
+    log:      whatsapp send rejected 400: Param image.id is not a valid
+              whatsapp business account media attachment ID
+
+The tool was asked for the right product every time
+(`get_size_chart({'product_id': 'boxy-wns-tee'})`). Everything after that was
+wrong, in three separate places, and `tests/test_size_chart_delivery.py`
+reproduces each of them from the production log before fixing it.
+
+- **The product row still pointed at the Ringer chart.** `boxy-wns-tee` was
+  seeded with `size_chart: "ringer-boxy-tee"`. Commit e0333cb corrected the
+  seed file to `wns-boxy-tee` -- but the seed only ever runs against an empty
+  catalog, so the live row never heard about it. Boot now runs
+  `seed.products.correct_retired_size_charts`: a product still carrying a value
+  its own seed retired (`RETIRED_SIZE_CHARTS`) is moved to the seed's current
+  one. Exact, not a re-seed: any other value, including one staff picked in the
+  dashboard, is never touched.
+- **The corrected chart had no picture.** `data/size_charts.json` named
+  `data/size-charts/wns-boxy-tee.png` and the file was never committed. It is
+  now -- the same picture the storefront already shows for the product in
+  Shopify Files -- and a test fails if any shipped chart names a picture that
+  is not on disk. `size_charts.chart_picture` also refuses to attach a path to
+  nothing: a chart whose file is missing falls back to the product's own
+  uploaded chart, or sends its numbers with no picture, and logs the gap.
+- **Every local picture died on day thirty.** `WhatsAppClient.media_id_for`
+  said "upload once, reuse forever", and Meta keeps an uploaded file for thirty
+  days. Every size chart (and every product photo Shopify has no picture for)
+  went out through a dead id, was refused, and was refused again on every
+  retry, because nothing ever threw the dead id away. An id older than
+  `MEDIA_ID_MAX_AGE` (25 days) is uploaded again before it is sent, and a send
+  Meta refuses for a dead id uploads once more and retries -- once. Any other
+  refusal is not retried.
+- **A chart was read as no picture at all.** `photo_claims` rightly does not
+  count a size chart as a photograph *of the garment*, so «دي صورة جدول
+  المقاسات 👆» beside the chart it attached was flagged as a photo promised and
+  nothing sent, and retried. A clause that names the chart is now backed by the
+  chart; «دي صورة التيشيرت» beside a chart alone is still caught.
+- **The chart answer names its product.** `get_size_chart` returns the
+  product's `product_id` and `name` beside the chart's own `title`. Several
+  products share a chart, and read as the product's name, "Ringer t-shirt"
+  became what the conversation was about.
+- **A refused chart is resent by the chart tool.** The turn's note about a
+  refused picture always said `get_variants`, which sends the garment. It now
+  names `get_size_chart` when what was refused was a chart.
+
 ## Unreleased — قميص is not a تيشيرت
 
     customer: «فيه قمصان»

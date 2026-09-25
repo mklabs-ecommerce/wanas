@@ -89,6 +89,13 @@ class ToolContext:
     #: `domain/services/notifications.py`, so a model reply after it is a
     #: second message about the same order landing on the customer's phone.
     end_turn: str | None = None
+    #: The sentence a turn ended by `end_turn` says, when the shop has one to
+    #: say and nothing else sends it. `request_human` is the case: the
+    #: conversation pauses until a person picks it up, and the model's own
+    #: farewell used to be where a callback time nobody gave got promised.
+    #: None keeps the old silence, for a tool whose message is sent
+    #: elsewhere (`confirm_order`).
+    closing: str | None = None
 
     def offer(self, payload: dict) -> bool:
         """Attach a picker to this reply. First one wins.
@@ -145,6 +152,31 @@ class ToolContext:
         if label and label.get("label"):
             self.attachment_labels[path] = dict(label)
         return True
+
+    def checkpoint(self) -> tuple:
+        """Where the attachments stand, to put them back to with `restore`.
+
+        The showcase (`assistant/showcase.py`) attaches photographs for the
+        words of a reply that may still be sent back for a retry; the retry's
+        words name different products, and the photographs of the rejected
+        sentence must not ride along with it.
+        """
+        return (
+            list(self.attachments),
+            dict(self.attachment_labels),
+            dict(self.photo_products),
+            dict(self.gallery),
+        )
+
+    def restore(self, checkpoint: tuple) -> None:
+        attachments, labels, products, gallery = checkpoint
+        self.attachments[:] = attachments
+        self.attachment_labels.clear()
+        self.attachment_labels.update(labels)
+        self.photo_products.clear()
+        self.photo_products.update(products)
+        self.gallery.clear()
+        self.gallery.update(gallery)
 
     def photos_of(self, product: str | None) -> int:
         """Garment photos of one product that this reply is already carrying."""
@@ -757,8 +789,12 @@ def _chart_label(result: dict, product_id: str | None = None) -> dict | None:
     Saying so is what stops the next turn reading it as a colour choice. It
     still names the product: a customer scrolling back to an older chart and
     asking about it has told you which product they mean.
+
+    The product's `name` before the chart's `title`: several products share
+    one chart, and a Cairokee tee's chart labelled "Oversized t-shirt size
+    chart" names a product nobody asked about.
     """
-    name = result.get("title") or result.get("name")
+    name = result.get("name") or result.get("title")
     if not (isinstance(name, str) and name.strip()):
         return None
     product_id = product_id if isinstance(product_id, str) and product_id.strip() else None
