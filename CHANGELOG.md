@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased — The shop answered about clothes without showing them
+
+    customer: «عندكم هوديز؟»
+    log:      tool get_products({'query': 'hoodie'})
+    bot:      «عندنا WANAS Hoodie و WANAS Zip-Hoodie ...»      -> no photo
+    customer: «طب ابعتلي صورة»
+
+A photograph reached the customer only when the model decided to call
+`get_variants`, or when a search happened to land on exactly one product. The
+prompt asked for a photo on every product reply; the model answered from the
+search results in front of it instead, and a conversation about clothes --
+which starts with a search that finds several -- went by in words.
+
+- **The reply's own words now decide, below the model.** `assistant/showcase.py`
+  runs on the finished reply, before `photo_claims` reads it: every catalog
+  product the reply names -- by the name a tool in this conversation returned,
+  or by its one distinctive word ("Ringer") when no other product shares it,
+  never by the brand word "WANAS" -- gets its photograph. A reply that names
+  several shows one of each, up to four.
+- **One product, shown alone for the first time, shows its colourways.** The
+  colour the reply names first (in English or Arabic, through the same
+  vocabulary the search uses), then the other colourways that can actually be
+  bought, up to three.
+- **The existing image policy still holds over all of it.** Nothing already
+  delivered is sent again; a product already shown gets a new photograph only
+  for a colour the reply names; sold-out colourways and products are never
+  offered; an order, delivery or handoff turn shows nothing; a sizing turn
+  sends its chart alone; «الاتنين» about one product is still caught by the
+  claim check rather than answered with two colours of it; and a reply sent
+  back for a retry takes its photographs with it.
+- Also fixed in passing (see the entry below): every local-file photograph had
+  been failing since its WhatsApp media id expired, which made the shop look
+  even more reluctant to show anything than it was.
+
 ## Unreleased — The Boxy WNS Tee's chart was the Ringer's, and then no chart at all
 
     customer: the size chart for the Boxy WNS Tee

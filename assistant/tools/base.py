@@ -146,6 +146,31 @@ class ToolContext:
             self.attachment_labels[path] = dict(label)
         return True
 
+    def checkpoint(self) -> tuple:
+        """Where the attachments stand, to put them back to with `restore`.
+
+        The showcase (`assistant/showcase.py`) attaches photographs for the
+        words of a reply that may still be sent back for a retry; the retry's
+        words name different products, and the photographs of the rejected
+        sentence must not ride along with it.
+        """
+        return (
+            list(self.attachments),
+            dict(self.attachment_labels),
+            dict(self.photo_products),
+            dict(self.gallery),
+        )
+
+    def restore(self, checkpoint: tuple) -> None:
+        attachments, labels, products, gallery = checkpoint
+        self.attachments[:] = attachments
+        self.attachment_labels.clear()
+        self.attachment_labels.update(labels)
+        self.photo_products.clear()
+        self.photo_products.update(products)
+        self.gallery.clear()
+        self.gallery.update(gallery)
+
     def photos_of(self, product: str | None) -> int:
         """Garment photos of one product that this reply is already carrying."""
         key = product or ""

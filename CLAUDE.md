@@ -300,6 +300,17 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              the send by the channel adapter) so the next turn
                              resends and apologises instead of arguing
   interactive.py            tappable pickers, in a channel-neutral shape
+  showcase.py               which product photographs a reply carries, decided
+                             from the finished sentence rather than from
+                             whether the model remembered to call get_variants:
+                             every catalog product the reply names by name (as
+                             a tool returned it) gets a photo, and one product
+                             shown alone for the first time gets its other
+                             in-stock colourways (FIRST_SHOWING_PHOTOS). Never
+                             a photo already delivered, never a sold-out
+                             colourway, nothing on an order/handoff turn, and
+                             it runs before photo_claims reads the reply, so
+                             the claim check sees what will actually go
   session.py                 DB-backed session storage
   display.py                 stored history -> bubbles a person can read;
                               shared by the harness and the dashboard

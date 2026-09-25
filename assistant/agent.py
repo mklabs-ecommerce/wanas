@@ -28,6 +28,7 @@ from assistant import (
     photo_claims,
     quoting,
     session as session_store,
+    showcase,
 )
 from assistant.prompt import build_system_prompt
 from assistant.providers import LLMProvider, ProviderError, get_provider
@@ -760,6 +761,16 @@ def run_turn(
             text_out, tool_leaked = strip_tool_leaks(text_out)
             text_out, _ = strip_markdown(text_out)
 
+            # The photographs this reply's own words call for: every catalog
+            # product it names, and the rest of one product's colourways the
+            # first time it is shown alone. Decided here, from the finished
+            # sentence, rather than left to whether the model remembered to
+            # call get_variants -- and before the claim check below, so that
+            # check reads the attachments as they will actually go. A retry
+            # puts them back: the next sentence may name something else.
+            before_showcase = ctx.checkpoint()
+            showcase.show(ctx, text_out, history, called)
+
             # Blaming the customer's phone for our own failed send. Checked
             # before the claim guard because it is the more expensive mistake
             # and because a reply can be both: «الصور اتبعتت، جرب اقفل
@@ -804,6 +815,7 @@ def run_turn(
                         said=change_mismatch,
                         describe=_CHANGE_WORDS[filed],
                     )
+                    ctx.restore(before_showcase)
                     continue
                 log.error(
                     "provider %s kept describing the wrong request for %s/%s (%s); "
@@ -838,6 +850,7 @@ def run_turn(
                     )
                     promise_retries += 1
                     system_prompt = f"{system_prompt}{_BLAME_NUDGE}"
+                    ctx.restore(before_showcase)
                     continue
                 log.error(
                     "provider %s kept blaming the customer's device for %s/%s; "
@@ -887,6 +900,7 @@ def run_turn(
                     # The model never sees its own bad reply (it is not
                     # appended to history), only the instruction to act.
                     system_prompt = f"{system_prompt}{nudge}"
+                    ctx.restore(before_showcase)
                     continue
 
                 log.error(
