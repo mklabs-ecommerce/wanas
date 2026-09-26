@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — A size chart is read fresh, never replayed from the conversation
+
+Seen in production minutes after #7 deployed: the corrected Boxy WNS Tee still
+answered with the Ringer tee's chart in a conversation that had asked that
+morning, because the tool cache replays an identical earlier call from the
+live conversation for up to six hours (`served from session cache, not
+re-fetched`). `get_size_chart` is a local read with no Shopify round trip to
+save, so it is no longer cacheable: a chart corrected at boot or in the
+dashboard mid-conversation is the chart the next question gets.
+
 ## Unreleased — A product named in full is the product searched for
 
 Found by the live model suite, which failed the same way on `main` and on this
