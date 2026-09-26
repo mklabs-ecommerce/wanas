@@ -1,27 +1,22 @@
-"""Sleeve length: the one garment fact the catalog could not state.
+"""Sleeve length: a garment fact the catalog records, or does not.
 
 A customer asked for «البولو النص كم» -- the half-sleeve polo -- and the bot
 answered that the shop has two polos but "no published data about sleeve
 length for either", and offered to fetch a person. Two holes behind that: the
 phrase was not in the catalog's vocabulary (that lives in
 `domain.services.search_terms`), and nothing recorded sleeve length at all.
+Every product in the seed now records one, and the dashboard asks for it.
 
-This module is the second half, and it has one rule: **every product has a
-definite answer.** There is no "not recorded".
-
-That is a correction. The first version of this field left a product unset
-when nobody had said, on the reasoning that a guess is worse than a shrug --
-and it made the bot answer "I don't have that information" for every product
-outside the half-sleeve list, which is worse than the bug it replaced. A
-customer asking whether a hoodie is half-sleeve is not helped by being told
-the shop does not know what it sells.
-
-So the half-sleeve list is **closed** -- those products and no others -- and
-everything else takes the value its garment type implies. A product that
-reaches here with nothing set (a new one mirrored from Shopify, which has no
-such field) is not unknown either: `for_category` answers for it, always with
-something that is *not* half, so the worst case is a hoodie described as
-long-sleeved rather than a shop that cannot describe its own stock.
+**A product nobody classified has no sleeve length, and says so.** An earlier
+version of this module answered for it from its category -- "T-Shirts ->
+long" -- on the reasoning that a shrug is worse than a guess. Production,
+2026-09-25: a short-sleeved plain tee created in the dashboard (whose form
+also preselected «كم طويل») was described as «كم طويل» in five replies across
+two channels, one of them to a customer who never mentioned sleeves, and the
+prompt forbade the bot from doubting it. A guess stated as a fact is the
+failure this shop cannot afford; "I'm not sure, here is the photo" is not.
+So `recorded` answers None for an unclassified product, the tools leave the
+field out, and the bot is told what that means.
 """
 
 from __future__ import annotations
@@ -81,59 +76,19 @@ _ALIASES: dict[str, str] = {
 }
 
 
-#: What a garment of each kind is, when nobody has said otherwise. Every entry
-#: is deliberately **not** `HALF`: the half-sleeve list is closed, so a
-#: product nobody has classified cannot be on it, and the one thing this
-#: default must never do is add a product to an answer about half sleeves.
-#:
-#: Trousers take `SLEEVELESS` because that is literally true -- they have no
-#: sleeves -- and because "is this half sleeve?" about a sweatpant deserves
-#: "it's trousers" rather than "no".
-_BY_CATEGORY: dict[str, str] = {
-    "hoodies & sweatshirts": LONG,
-    "jackets": LONG,
-    "polo shirts": LONG,
-    "joggers & sweatpants": SLEEVELESS,
-    "t-shirts": LONG,
-    "tops": LONG,
-}
-
-#: For a category this shop has never had. Long rather than half, for the same
-#: reason every entry above is: a closed list is only closed if nothing can
-#: fall into it by accident.
-FALLBACK = LONG
-
-
-def for_category(category) -> str:
-    """The sleeve length a product of this kind has, absent anything better.
-
-    Used for a product mirrored in from Shopify -- which has no sleeve field,
-    so there is nothing to mirror -- and as the last line of defence on the
-    read path, so a NULL that somehow survives is still answered with a
-    sentence rather than a shrug.
-    """
-    key = " ".join(str(category or "").split()).lower()
-    return _BY_CATEGORY.get(key, FALLBACK)
-
-
-def effective(sleeve, category) -> str:
-    """What to *tell a customer*, which is never "we don't know".
-
-    The column is still nullable -- a database this code did not write is
-    allowed to exist -- but nothing above this line ever sees a None. That is
-    what makes "unset" unreachable in an answer rather than merely unlikely.
-    """
-    return normalise(sleeve) or for_category(category)
+def recorded(sleeve) -> str | None:
+    """What may be *told to a customer*: one of `SLEEVES`, or None when nobody
+    has recorded it. Never inferred from the category -- see the module
+    docstring for what inferring it cost."""
+    return normalise(sleeve)
 
 
 def normalise(value) -> str | None:
     """One of `SLEEVES`, or None when the input says nothing.
 
-    None here means "the caller passed nothing", not "the product is a
-    mystery" -- `effective` above is what turns it into an answer. Anything
-    unrecognised answers None too rather than being stored as itself: a fourth
-    value in this column would be a sleeve length no search, no filter and no
-    reply knows how to read.
+    Anything unrecognised answers None too rather than being stored as itself:
+    a fourth value in this column would be a sleeve length no search, no
+    filter and no reply knows how to read.
     """
     if not isinstance(value, str):
         return None

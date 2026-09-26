@@ -125,23 +125,20 @@ def import_products(session: Session, path: Path | None = None, *, verify: bool 
 
 
 def backfill_sleeves(session: Session, path: Path | None = None) -> dict:
-    """Give every product a definite sleeve length, where it has none.
+    """Give a seeded product the sleeve length the seed records for it, where
+    it has none.
 
     `import_products` above only ever runs against an empty catalog
     (`app._ensure_catalog_seeded`), so adding a field to the seed file reaches
     a fresh database and nothing else. Production has had these products since
     long before `Product.sleeve` existed, and a column added by
-    `domain/schema_drift.py` arrives full of NULLs -- which is precisely the
-    "no published data about sleeve length" answer that made this work
-    necessary.
+    `domain/schema_drift.py` arrives full of NULLs.
 
-    **Every** NULL, not only the ones the seed has an opinion about. The first
-    version of this filled in the half-sleeve list and left the rest unset,
-    and the rest is what customers then got "I don't have that information"
-    about -- worse than the bug it replaced. A product the seed does not name
-    takes the value its category implies (`sleeves.for_category`), which is
-    never `half`: the half-sleeve list is closed, so nothing may fall into it
-    by accident.
+    **Only what the seed says.** A product the seed does not name -- one
+    created in the dashboard or in Shopify Admin -- keeps its NULL. This used
+    to fill it from the category ("T-Shirts -> long"), and on 2026-09-25 that
+    described a short-sleeved tee as long-sleeved to customers in five
+    replies. Nobody recording it is not the same as it being long.
 
     **Only where it is NULL.** Staff set sleeve length from the dashboard, and
     a boot-time backfill that reasserted the seed's answer every deploy would
@@ -154,12 +151,37 @@ def backfill_sleeves(session: Session, path: Path | None = None) -> dict:
 
     updated: list[str] = []
     for product in session.scalars(select(Product)).all():
-        if product.sleeve is not None:
+        if product.sleeve is not None or not from_seed.get(product.product_id):
             continue
-        product.sleeve = from_seed.get(product.product_id) or sleeves.for_category(
-            product.category
-        )
+        product.sleeve = from_seed[product.product_id]
         updated.append(product.product_id)
+    session.flush()
+    return {"updated": updated}
+
+
+#: Sleeve lengths that were *inferred* rather than recorded, and what the
+#: product actually is: `{product_id: (inferred value, true value)}`.
+#:
+#: `oversized-plain-t-shirt-4` was created in the dashboard on 2026-09-22 with
+#: the new-product form's preselected «كم طويل» (or, equally, filled in from
+#: its category by the backfill above) -- nothing a person chose. It is a
+#: short-sleeved tee: Shopify's own photos of all three colourways show it,
+#: and its size chart gives a 21-25 cm sleeve. Rewritten only while it still
+#: holds the inferred value, so a choice staff make later is never undone.
+CORRECTED_SLEEVES: dict[str, tuple[str, str]] = {
+    "oversized-plain-t-shirt-4": ("long", "half"),
+}
+
+
+def correct_sleeves(session: Session) -> dict:
+    """Apply `CORRECTED_SLEEVES`, exactly: only a row still holding the
+    inferred value is rewritten."""
+    updated: list[str] = []
+    for product_id, (inferred, true) in CORRECTED_SLEEVES.items():
+        product = session.get(Product, product_id)
+        if product is not None and product.sleeve == inferred:
+            product.sleeve = true
+            updated.append(product_id)
     session.flush()
     return {"updated": updated}
 

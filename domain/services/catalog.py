@@ -68,8 +68,7 @@ def get_categories(session: Session) -> dict:
     #: empty is a filter the model will use and get nothing back from, which
     #: reads to the customer as "we don't have any".
     sleeve_values = {
-        sleeves.effective(row[0], row[1])
-        for row in session.execute(select(Product.sleeve, Product.category))
+        sleeves.recorded(row[0]) for row in session.execute(select(Product.sleeve))
     }
 
     return {
@@ -189,10 +188,10 @@ def _product_summary(product: Product, live_map=None) -> dict:
         "style": list(product.style or []),
         "department": product.department,
         "collection": product.collection,
-        # `half`, `long` or `sleeveless` -- never null. A product that
-        # somehow reaches here unset is answered from its category rather than
-        # with a shrug; see `sleeves.effective`.
-        "sleeve": sleeves.effective(product.sleeve, product.category),
+        # `half`, `long` or `sleeveless` when recorded, and None when nobody
+        # has: never guessed from the category (`domain/services/sleeves.py`).
+        # The prompt says what null means -- not recorded, so not stated.
+        "sleeve": sleeves.recorded(product.sleeve),
         # The full run including sold-out ones: these describe the product,
         # they are not an offer. get_variants decides what can be offered.
         "colors": list(product.colors or []),
@@ -232,7 +231,7 @@ def _haystack(product: Product) -> str:
             # «نص كم» reaches here as `half sleeve` (search_terms), so the
             # words have to be in the text being searched or the fold has
             # nothing to land on.
-            sleeves.SEARCH_TEXT.get(sleeves.effective(product.sleeve, product.category), ""),
+            sleeves.SEARCH_TEXT.get(sleeves.recorded(product.sleeve) or "", ""),
             product.description or "",
         ]
     )
@@ -367,7 +366,7 @@ def get_products(
     #: answering "we have none" about a shelf full of them.
     wanted = sleeves.normalise(sleeve) if sleeve else None
     if wanted is not None:
-        products = [p for p in products if sleeves.effective(p.sleeve, p.category) == wanted]
+        products = [p for p in products if sleeves.recorded(p.sleeve) == wanted]
 
     live_map = shopify_catalog.live_map()
     summaries = [_product_summary(p, live_map) for p in products]
@@ -515,8 +514,8 @@ def get_variants(session: Session, product_id: str) -> dict | None:
         "description": product.description,
         # The answer to "is this one half sleeve?" -- a property of the
         # product, so it rides with every variant read rather than needing a
-        # search. Always one of the three; never null.
-        "sleeve": sleeves.effective(product.sleeve, product.category),
+        # search. None when nobody recorded it; see `sleeves.recorded`.
+        "sleeve": sleeves.recorded(product.sleeve),
         "has_size_chart": product.size_chart is not None or product.size_chart_image is not None,
         # Sold-out variants are returned too, so the bot can say "XL only comes
         # in Black" rather than pretending the combination never existed.

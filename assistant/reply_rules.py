@@ -20,6 +20,7 @@ import re
 
 from sqlalchemy import select
 
+from assistant import sleeve_claims
 from domain.services import garments
 
 #: The ways of paying this shop cannot take. It takes two -- cash at the door,
@@ -243,17 +244,13 @@ _SLEEVE_WORDS = (
     "طول الكم", "الكم", "half sleeve", "short sleeve", "long sleeve", "sleeveless",
 )
 
-#: "I don't know" in every shape a reply has reached for. All of these were
-#: once defensible: the column was nullable, and a product nobody had
-#: classified genuinely had no answer. That is no longer true -- every product
-#: resolves to half, long or sleeveless, and `sleeves.effective` makes that
-#: hold even for a row still sitting NULL -- so beside a sleeve word, each one
-#: of them is the bot refusing to read something it is holding.
-#:
-#: «مش متسجّل» is on this list on purpose, and it is the addition that matters.
-#: It used to be the *correct* answer and this rule explicitly allowed it. It
-#: is unreachable now, and a reply that produces it has invented a state the
-#: catalog does not have.
+#: "I don't know" in every shape a reply has reached for. Used as-is only by
+#: the offline quality gate, which has no conversation to check against. A
+#: live turn asks `assistant/sleeve_claims.py` instead, which fails these
+#: only when the product in question *has* a sleeve recorded: a product
+#: nobody classified has none (`domain/services/sleeves.py`), and for it
+#: «مش متسجّل» is the true answer -- the rule that forbade it everywhere is
+#: what left an inferred «كم طويل» as the only sentence the bot could say.
 _NO_DATA = (
     "معنديش المعلومة", "معنديش معلومات", "معنديش بيانات", "مش متوفرة عندي",
     "مفيش معلومات", "مفيش بيانات", "مش موجودة عندي", "مش عارف", "مش عارفة",
@@ -278,11 +275,10 @@ def dodged_a_sleeve_question(text: str) -> str:
     it is the shop saying it does not know what it sells, about most of what
     it sells.
 
-    So the field is total now -- half, long or sleeveless, for every product,
-    with `sleeves.effective` covering even a row that is still NULL -- and
-    this rule is total to match. Beside a sleeve word, *any* profession of
-    ignorance fails, including the "not recorded" phrasing that used to be the
-    right answer and that this rule used to let through.
+    Offline only now (the quality gate): a live turn checks the claim
+    against the record for the product in question instead
+    (`assistant/sleeve_claims.py`), because "not recorded" is the truth about
+    a product nobody classified.
     """
     lowered = (text or "").lower()
     if not any(word.lower() in lowered for word in _SLEEVE_WORDS):
@@ -623,10 +619,15 @@ def violation(
     customer: str,
     previous: str,
     results: list[tuple[str, dict]],
+    history: list[dict] | None = None,
 ) -> str:
     """The rule this reply breaks that only a new sentence can fix, or "".
 
-    `results` are this turn's `(tool name, result)` pairs.
+    `results` are this turn's `(tool name, result)` pairs. `history` is the
+    conversation so far; with it, sleeve claims are held to what the tools
+    recorded for the products in question (`assistant/sleeve_claims.py`).
+    Without it -- the offline quality gate -- the older, blunter sleeve rule
+    applies.
     """
     called = {name for name, _content in results}
 
@@ -657,9 +658,14 @@ def violation(
     if dialect:
         return f"dialect: {dialect}"
 
-    dodge = dodged_a_sleeve_question(text)
-    if dodge:
-        return f"sleeve: said {dodge!r} about a sleeve length every product has"
+    if history is not None:
+        wrong = sleeve_claims.problem(text, history)
+        if wrong:
+            return f"sleeve: {wrong}"
+    else:
+        dodge = dodged_a_sleeve_question(text)
+        if dodge:
+            return f"sleeve: said {dodge!r} beside a sleeve word"
 
     if (
         len(" ".join((text or "").split())) >= _REPEAT_MIN_CHARS

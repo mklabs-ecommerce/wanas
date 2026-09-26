@@ -1146,19 +1146,14 @@ def _mirror_local(
     #: has no such field) from blanking a value staff set in the dashboard the
     #: next time somebody edits the product in Shopify Admin.
     #:
-    #: A product that has no value *yet* is a different case, and it is the
-    #: one `product_import` actually hits: a brand new product, mirrored from
-    #: a store that cannot tell us. It gets its category's answer rather than
-    #: a NULL, because a NULL is what the bot used to say "I don't know" to.
-    #: Never `half` -- the half-sleeve list is closed and nothing may join it
-    #: without a person saying so.
+    #: A product that has no value *yet* -- the one `product_import` hits: a
+    #: new product mirrored from a store that has no such field -- stays
+    #: NULL. It used to take its category's answer ("T-Shirts -> long"), and
+    #: that is how a short-sleeved tee was sold as long-sleeved on 2026-09-25
+    #: (`domain/services/sleeves.py`). Not recorded is an answer the bot can
+    #: give honestly; an inferred value is not.
     if sleeve is not None:
-        # `effective`, not `normalise`: a blank or unrecognised value must not
-        # land as NULL. There is no "unrecorded" state to fall back to any
-        # more -- that is the state the bot used to say "I don't know" to.
-        product.sleeve = sleeves.effective(sleeve, category)
-    elif product.sleeve is None:
-        product.sleeve = sleeves.for_category(category)
+        product.sleeve = sleeves.normalise(sleeve)
     product.size_chart = size_chart
     product.sizes = summary["sizes"]
     product.colors = summary["colors"]
@@ -1647,11 +1642,9 @@ def update_product(
         product.collection = collection
     if sleeve is not None:
         # Omitting the field leaves it alone, the same contract as every other
-        # field here. A blank or unrecognised value does *not* clear it to
-        # NULL any more -- there is no such state to clear to -- it falls back
-        # to the category's answer, so a save can never leave a product the
-        # bot has to shrug about.
-        product.sleeve = sleeves.effective(sleeve, category or product.category)
+        # field here. A blank one records "not known" -- never a value
+        # inferred from the category (`domain/services/sleeves.py`).
+        product.sleeve = sleeves.normalise(sleeve)
     if size_chart is not None:
         product.size_chart = size_chart
 

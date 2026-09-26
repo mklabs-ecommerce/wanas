@@ -40,6 +40,13 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   a third axis on that product only, so its variants are size × colour ×
   length. Every other product's variants are size × colour.
 - **Low stock threshold:** 2 units per variant by default.
+- **Sleeve length is recorded or it is unknown -- never inferred.** Every
+  seeded product records one; a product made in the dashboard or Shopify
+  Admin has one only if staff chose it (the form preselects nothing). An
+  unrecorded sleeve reads `null`, and the bot says it is not sure rather than
+  guessing from the category: "T-Shirts -> long" sold a short-sleeved tee as
+  long-sleeved on 2026-09-25 (`domain/services/sleeves.py`,
+  `assistant/sleeve_claims.py`).
 
 ## Shopify is the source of truth for orders, live inventory, and live price
 

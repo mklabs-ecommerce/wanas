@@ -11,10 +11,12 @@ hoodie, jacket and sweatpant in the shop -- which is worse than the original
 bug, because it is the shop saying it does not know what it sells, about most
 of what it sells.
 
-So the rule now is that **every product has a definite answer**. The
-half-sleeve list is closed; everything else takes what its garment type
-implies; and `sleeves.effective` covers even a row still sitting NULL, so
-"unset" is unreachable in an answer rather than merely unlikely.
+Every seeded product records its sleeve length, and the dashboard asks for
+it. What is *not* recorded stays not recorded: a later version of this module
+filled it from the category ("T-Shirts -> long"), and on 2026-09-25 that sold
+a short-sleeved tee as long-sleeved in five replies. An unclassified product
+reads `sleeve: None`, and the bot says it is not sure
+(`tests/test_production_2026_09_25_review.py`).
 """
 
 from __future__ import annotations
@@ -170,30 +172,28 @@ def test_the_worker_jacket_is_long_although_it_sells_a_short_variant(seeded):
     assert {v.length for v in jacket.variants} == {"Long", "Short"}
 
 
-def test_the_category_default_is_never_half():
-    """A closed list stays closed only if nothing can join it by accident --
-    including through a category this shop has never had."""
-    for category in (
-        "Hoodies & Sweatshirts", "Jackets", "Polo Shirts",
-        "Joggers & Sweatpants", "T-Shirts", "Tops", "Scarves", "",
-    ):
-        assert sleeves.for_category(category) != "half", category
+def test_nothing_is_inferred_from_the_category():
+    """The category default is gone, not merely changed: there is no function
+    left that turns "T-Shirts" into a sleeve length."""
+    assert not hasattr(sleeves, "for_category")
+    assert sleeves.recorded(None) is None
+    assert sleeves.recorded("") is None
+    assert sleeves.recorded("short sleeve") == "half"
 
 
-def test_a_row_still_sitting_null_is_still_answered(seeded):
-    """The read path is the last line of defence. A product mirrored in
-    between a deploy and the backfill has a NULL column, and the one thing
-    that must not happen is the customer hearing about it."""
+def test_a_row_sitting_null_reads_as_not_recorded(seeded):
+    """A NULL is reported as a NULL -- never as its category's guess -- and
+    no sleeve filter returns it, in either direction."""
     hoodie = seeded.get(Product, "wanas-hoodie")
     hoodie.sleeve = None
     seeded.flush()
 
-    assert catalog.get_variants(seeded, "wanas-hoodie")["sleeve"] == "long"
+    assert catalog.get_variants(seeded, "wanas-hoodie")["sleeve"] is None
     found = catalog.get_products(seeded, query="WANAS Hoodie")["products"]
-    assert found[0]["sleeve"] == "long"
-    # And the fallback does not sweep it into the half-sleeve answer.
-    half = catalog.get_products(seeded, sleeve="half")["products"]
-    assert "wanas-hoodie" not in {p["product_id"] for p in half}
+    assert found[0]["sleeve"] is None
+    for value in ("half", "long"):
+        filtered = catalog.get_products(seeded, sleeve=value)["products"]
+        assert "wanas-hoodie" not in {p["product_id"] for p in filtered}, value
 
 
 # --------------------------------------------------------------------------
@@ -291,10 +291,10 @@ def test_the_backfill_leaves_a_staff_answer_alone(seeded):
     assert polo.sleeve == "long"
 
 
-def test_a_product_the_seed_never_heard_of_is_filled_from_its_category(seeded):
-    """`oversized-plain-t-shirt` reached production through `product_import`,
-    not the seed. A product the seed cannot name must still come out with an
-    answer."""
+def test_a_product_the_seed_never_heard_of_keeps_no_sleeve(seeded):
+    """`oversized-plain-t-shirt` reached production through the dashboard,
+    not the seed. A product the seed cannot name has no sleeve length the
+    backfill knows, and it keeps saying so."""
     seeded.add(
         Product(
             product_id="mystery-parka",
@@ -315,13 +315,12 @@ def test_a_product_the_seed_never_heard_of_is_filled_from_its_category(seeded):
     seeded.flush()
 
     backfill_sleeves(seeded)
-    assert seeded.get(Product, "mystery-parka").sleeve == "long"
+    assert seeded.get(Product, "mystery-parka").sleeve is None
 
 
-def test_a_new_shopify_product_defaults_to_not_half_rather_than_unknown(seeded):
-    """Shopify has no sleeve field, so `product_import` has nothing to mirror.
-    What it must not leave behind is a NULL -- that is the state the bot used
-    to answer "I don't have that information" to."""
+def test_a_new_shopify_product_arrives_with_no_sleeve_recorded(seeded):
+    """Shopify has no sleeve field, so `product_import` has nothing to mirror,
+    and it mirrors nothing -- not the category's guess."""
     from integrations.shopify.admin_products import _mirror_local
 
     _mirror_local(
@@ -337,7 +336,7 @@ def test_a_new_shopify_product_defaults_to_not_half_rather_than_unknown(seeded):
         variants=[{"size": "M", "color": "Black", "price": 700, "stock_qty": 2}],
         image_url=None,
     )
-    assert seeded.get(Product, "brand-new-hoodie").sleeve == "long"
+    assert seeded.get(Product, "brand-new-hoodie").sleeve is None
 
 
 def test_a_shopify_admin_edit_does_not_wipe_what_staff_recorded(seeded):
@@ -362,10 +361,9 @@ def test_a_shopify_admin_edit_does_not_wipe_what_staff_recorded(seeded):
     assert seeded.get(Product, "knitted-polo").sleeve == "half"
 
 
-def test_a_blank_from_the_dashboard_no_longer_clears_it_to_unknown(seeded):
-    """There is no "unrecorded" to clear back to. A save that somehow carries
-    a blank falls to the category's answer rather than leaving a product the
-    bot has to shrug about."""
+def test_a_blank_from_the_dashboard_records_not_known(seeded):
+    """The edit form offers «مش متسجّل». Saving it records exactly that -- not
+    the category's guess."""
     from integrations.shopify.admin_products import _mirror_local
 
     _mirror_local(
@@ -382,7 +380,7 @@ def test_a_blank_from_the_dashboard_no_longer_clears_it_to_unknown(seeded):
         image_url=None,
         sleeve="",
     )
-    assert seeded.get(Product, "knitted-polo").sleeve == "long"
+    assert seeded.get(Product, "knitted-polo").sleeve is None
 
 
 # --------------------------------------------------------------------------

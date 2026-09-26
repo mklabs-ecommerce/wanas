@@ -69,8 +69,9 @@ def get_categories(ctx: ToolContext) -> dict:
             "enum": list(sleeves.SLEEVES),
             "description": "Sleeve length: half (also called short sleeve, «نص كم»), long, or "
             "sleeveless. Use it whenever the customer names one, on its own or beside a category "
-            "-- 'polo نص كم' is category plus sleeve, not a product name. Every product has one, "
-            "so this filter is exhaustive: what it does not return, the shop does not have.",
+            "-- 'polo نص كم' is category plus sleeve, not a product name. A product whose "
+            "`sleeve` is null has none recorded, so it is never returned by this filter; its "
+            "sleeve length is not something to state.",
         },
         "query": {"type": "string", "description": "Free text, any language or spelling."},
     },

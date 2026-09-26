@@ -1424,8 +1424,11 @@ const EN = {
   "نص كم": "Half sleeve",
   "كم طويل": "Long sleeve",
   "من غير كم": "Sleeveless",
-  "الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. مفيش «مش متسجّل» — كل منتج لازم يكون ليه إجابة، وإلا البوت هيقول للزبون إنه مش عارف.": "Customers ask for half sleeve and the bot answers from here. There is no “not recorded” — every product needs an answer, or the bot tells the customer it does not know.",
-  "الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. اختارها صح — مفيش «مش متسجّل»، وكل منتج لازم يكون ليه إجابة.": "Customers ask for half sleeve and the bot answers from here. Pick the right one — there is no “not recorded”, every product needs an answer.",
+  "الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. لو سبتها فاضية البوت هيقول إنه مش متأكد — عمره ما هيخمّن.": "Customers ask for half sleeve and the bot answers from here. Left blank, the bot says it is not sure — it never guesses.",
+  "الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. اختارها بنفسك — مفيش اختيار جاهز عشان محدش يسجّل كم طويل لتيشيرت نص كم بالغلط.": "Customers ask for half sleeve and the bot answers from here. Choose it yourself — nothing is preselected, so nobody records a short-sleeved tee as long-sleeved by accident.",
+  "اختار طول الكم": "Choose sleeve length",
+  "مش متسجّل": "Not recorded",
+  "اختار طول الكم للمنتج": "Choose the product's sleeve length",
   "جرّب فلتر تاني أو امسح البحث": "Try another filter or clear the search",
   "جزئي": "Partial",
   "حالة الدفع": "Payment status",
@@ -4207,11 +4210,12 @@ async function openProduct(gid) {
           <input class="inp" id="pStyle" value="${esc(local && local.style ? local.style.join(tr("، ")) : "")}" ${local ? "" : "disabled"}></div>
         <div><label class="lbl" for="pSleeve">طول الكم *</label>
           <select class="inp" id="pSleeve" ${local ? "" : "disabled"}>
+            <option value=""${local && local.sleeve ? "" : " selected"}>مش متسجّل</option>
             <option value="half"${local && local.sleeve === "half" ? " selected" : ""}>نص كم</option>
             <option value="long"${local && local.sleeve === "long" ? " selected" : ""}>كم طويل</option>
             <option value="sleeveless"${local && local.sleeve === "sleeveless" ? " selected" : ""}>من غير كم</option>
           </select>
-          <div class="hint" style="margin-top:var(--s-1)">الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. مفيش «مش متسجّل» — كل منتج لازم يكون ليه إجابة، وإلا البوت هيقول للزبون إنه مش عارف.</div></div>
+          <div class="hint" style="margin-top:var(--s-1)">الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. لو سبتها فاضية البوت هيقول إنه مش متأكد — عمره ما هيخمّن.</div></div>
         <div><label class="lbl" for="pChart">جدول مقاسات منشور</label>
           <select class="inp" id="pChart" ${local ? "" : "disabled"}>
             <option value="${esc(local ? local.size_chart || "" : "")}">${esc(local && local.size_chart ? local.size_chart : tr("من غير جدول"))}</option>
@@ -4720,11 +4724,12 @@ function productCreateForm() {
       <div><label class="lbl" for="nDept">القسم *</label><input class="inp" id="nDept" placeholder="رجالي"></div>
       <div><label class="lbl" for="nSleeve">طول الكم *</label>
         <select class="inp" id="nSleeve">
+          <option value="">اختار طول الكم</option>
           <option value="half">نص كم</option>
-          <option value="long" selected>كم طويل</option>
+          <option value="long">كم طويل</option>
           <option value="sleeveless">من غير كم</option>
         </select>
-        <div class="hint" style="margin-top:var(--s-1)">الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. اختارها صح — مفيش «مش متسجّل»، وكل منتج لازم يكون ليه إجابة.</div></div>
+        <div class="hint" style="margin-top:var(--s-1)">الزبون بيسأل «نص كم؟» والبوت بيرد من هنا. اختارها بنفسك — مفيش اختيار جاهز عشان محدش يسجّل كم طويل لتيشيرت نص كم بالغلط.</div></div>
       <div>
         <label class="lbl">المجموعات</label>
         <div class="inp" id="nColl" style="max-height:132px;overflow:auto">جاري التحميل</div>
@@ -4832,6 +4837,9 @@ function productCreateForm() {
     };
     if (!payload.title || !payload.category || !payload.department || !variants.length) {
       return toast(tr("ناقص بيانات"), tr("الاسم والتصنيف والقسم ومقاس واحد على الأقل مطلوبين"), "warn");
+    }
+    if (!payload.sleeve) {
+      return toast(tr("ناقص بيانات"), tr("اختار طول الكم للمنتج"), "warn");
     }
 
     create.disabled = true;

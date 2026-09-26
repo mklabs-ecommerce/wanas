@@ -25,6 +25,7 @@ from assistant import (
     action_claims,
     context,
     customer_name,
+    customer_words,
     messages as msg,
     order_change_claims,
     photo_claims,
@@ -451,8 +452,10 @@ _RULE_NUDGE = {
         "مفيش في أول الرد، وبعدين اعرض البدائل كبديل -- متقولش «أيوه عندنا»."
     ),
     "sleeve": (
-        "\n\nتنبيه داخلي: ردك اللي فات قال إنك مش عارف طول الكم ({why}). كل منتج "
-        "ليه `sleeve` في get_products و get_variants -- نادي الأداة وجاوب منه."
+        "\n\nتنبيه داخلي: ردك اللي فات قال حاجة عن طول الكم مش مطابقة لنتيجة الأداة ({why}). "
+        "طول الكم بيتقال من حقل `sleeve` بس. لو `sleeve` قيمته null يبقى مش متسجّل: متقولش "
+        "نص كم ولا كم طويل عن المنتج ده -- لو الزبون سأل، قول إنك مش متأكد وإن الصورة بتوضحه. "
+        "ولو الزبون مسألش عن الكم، متجيبش سيرته."
     ),
     "dialect": (
         "\n\nتنبيه داخلي: ردك اللي فات فيه كلمة مش مصري ({why}). اكتب الرد تاني بعامية "
@@ -1042,7 +1045,11 @@ def run_turn(
             # it does not sell, a sleeve length professed unknown, the last reply
             # sent again. They used to run only offline, in the quality gate.
             broken = reply_rules.violation(
-                text_out, customer=text, previous=previous_reply, results=turn_results
+                text_out,
+                customer=customer_words.own_words(text),
+                previous=previous_reply,
+                results=turn_results,
+                history=history,
             )
             if broken:
                 rule, _, why = broken.partition(": ")

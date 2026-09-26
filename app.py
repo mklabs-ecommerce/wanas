@@ -155,11 +155,12 @@ def _backfill_product_sleeves() -> None:
     touched, and a product the seed says nothing about stays NULL rather than
     being guessed at.
     """
-    from domain.seed.products import backfill_sleeves
+    from domain.seed.products import backfill_sleeves, correct_sleeves
 
     try:
         with session_scope() as db:
             result = backfill_sleeves(db)
+            corrected = correct_sleeves(db)
     except Exception:
         log.exception("could not backfill product sleeve lengths")
         return
@@ -168,6 +169,13 @@ def _backfill_product_sleeves() -> None:
             "sleeve length filled in for %d product(s) that had none: %s",
             len(result["updated"]),
             ", ".join(result["updated"]),
+        )
+    if corrected["updated"]:
+        log.warning(
+            "sleeve length corrected for %d product(s) whose value was inferred, "
+            "not recorded: %s",
+            len(corrected["updated"]),
+            ", ".join(corrected["updated"]),
         )
 
 
