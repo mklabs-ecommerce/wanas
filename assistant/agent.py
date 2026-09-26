@@ -404,6 +404,14 @@ _BLAME_NUDGE = (
     "تتبعت اعرض عليه تحويله لحد من الفريق."
 )
 
+#: Appended when a reply offered to show photos it was already carrying
+#: (`photo_claims.offers_what_it_sends`).
+_OFFER_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات سأل الزبون لو يحب يشوف صور، والصور دي رايحة معاه "
+    "في نفس الرد. اكتب الرد تاني من غير ما تعرض تبعت صور -- اسأله عن الخطوة الجاية "
+    "(أنهي واحد عجبه، أو اللون أو المقاس)."
+)
+
 #: Appended when a reply stated a price, a total or a measurement that no tool
 #: in this conversation returned. The number is named back so the model knows
 #: which one, and the fix is the only one allowed: fetch it, or leave it out.
@@ -991,6 +999,34 @@ def run_turn(
                     filed=list(filed_kinds),
                     error="blamed_the_customer",
                 )
+
+            # Asking «تحب أوريك صوره؟» while the reply already carries the
+            # photos -- the showcase decides pictures after the words are
+            # written, so the words can offer what is already attached. One
+            # retry to write it again; then the offering sentence is removed.
+            offered = photo_claims.offers_what_it_sends(
+                text_out, ctx.attachments, ctx.photo_products
+            )
+            if offered:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s offered photos it was already carrying (%r), retry %d/%d",
+                        channel,
+                        external_id,
+                        offered,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}{_OFFER_NUDGE}"
+                    ctx.restore(before_showcase)
+                    continue
+                log.warning(
+                    "reply to %s/%s kept offering photos it carries; removing the offer",
+                    channel,
+                    external_id,
+                )
+                text_out = photo_claims.without_the_offer(text_out)
 
             # A price, a total or a measurement nothing in this conversation
             # said. The rule has been in the prompt since the first version;

@@ -372,3 +372,52 @@ def undelivered_labels(history: list[dict]) -> list[str]:
         if label and label not in named:
             named.append(label)
     return named
+
+
+#: Offering to show or send pictures of the garment: «تحب أوريك صور واحد
+#: فيهم؟», «تحب تشوفه؟», «أبعتلك صورته؟». Not «تحب أشوفلك» (I check for you)
+#: and not «تحب تشوف جدول المقاسات» -- a see-verb counts only with a photo
+#: object or the garment as its pronoun.
+_PHOTO_OBJECT = r"(?:صور|صورة|صوره|صورته|صورتها|صورهم|شكله|شكلها|شكلهم)"
+_OFFER = re.compile(
+    r"(?:تحب|تحبي|حابب|حابة|عايز|عايزة|ممكن)\s+(?:حضرتك\s+)?"
+    r"(?:[أاإ]?(?:وريك|ورّيك|وريكي|وريلك|وريهولك|وريهالك|وريهملك)(?:\s+" + _PHOTO_OBJECT + r")?"
+    r"|[أاإ]?بعت(?:لك|هولك|هالك|هملك)\s+" + _PHOTO_OBJECT +
+    r"|تشوف(?:ه|ها|هم)(?![\u0600-\u06ff])"
+    r"|تشوف\s+" + _PHOTO_OBJECT + r")"
+)
+_SENTENCE_END = re.compile(r"(?<=[.!؟?])\s+")
+
+
+def offers_photos(text: str) -> str:
+    """The phrase offering to show the garment, or ""."""
+    match = _OFFER.search(text or "")
+    return match.group(0) if match else ""
+
+
+def offers_what_it_sends(text: str, attachments: list[str], photo_products: dict) -> str:
+    """An offer to show photos in a reply that is already carrying garment
+    photos, or "".
+
+    instagram/1692370588503523, 2026-09-25 21:50:47: a list of three tees,
+    two of their photos attached by the showcase, ending «تحب أوريك صور واحد
+    فيهم؟». The words were written before the pictures were decided, so the
+    reply asks permission for what it is already doing.
+    """
+    if not any(path in photo_products for path in attachments):
+        return ""
+    return offers_photos(text)
+
+
+def without_the_offer(text: str) -> str:
+    """`text` with the sentence that offers photos taken out; `text` itself
+    if nothing else would be left."""
+    lines = []
+    for line in (text or "").splitlines():
+        sentences = [part for part in _SENTENCE_END.split(line) if not _OFFER.search(part)]
+        lines.append(" ".join(sentences).rstrip())
+    trimmed = _BLANK_RUN.sub("\n\n", "\n".join(lines)).strip()
+    return trimmed or text
+
+
+_BLANK_RUN = re.compile(r"\n{3,}")

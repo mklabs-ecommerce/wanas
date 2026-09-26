@@ -457,6 +457,38 @@ def test_offering_photos_the_reply_is_already_carrying_is_sent_back(seeded):
     assert reply.text == fixed
 
 
+def test_an_offer_the_model_keeps_writing_is_removed_rather_than_sent(seeded):
+    offer = "\n".join(
+        [
+            "أيوه، عندنا تيشيرتات شبهه. الأقرب:",
+            "• تيشيرت Envy T-shirt — السعر 500 جنيه",
+            "• تيشيرت Cairokee T-shirt — السعر 600 جنيه",
+            "",
+            "تحب أوريك صور واحد فيهم؟",
+        ]
+    )
+    reply = _turn(
+        seeded,
+        "instagram_dm",
+        "1692370588503523",
+        "هو في تيشرت شبه دا عندكو",
+        _call("get_products", category="T-Shirts"),
+        *[ModelReply(text=offer) for _ in range(4)],
+    )
+    assert _photos(reply)
+    assert "أوريك" not in reply.text
+    assert reply.text.startswith("أيوه، عندنا تيشيرتات شبهه.")
+
+
+def test_what_is_not_an_offer_of_photos():
+    from assistant import photo_claims
+
+    for text in ("تحب أشوفلك واحد فيهم بالتفصيل؟", "تحب تشوف جدول مقاساته ولا نضيفه؟"):
+        assert photo_claims.offers_photos(text) == "", text
+    for text in ("تحب تشوفه ولا نكمل؟", "تحب تشوف صوره؟", "تحب أبعتلك صورهم؟"):
+        assert photo_claims.offers_photos(text), text
+
+
 # ==========================================================================
 # 6. An answer the customer never gave: link_client in the same breath as
 #    the question (whatsapp/201021233010, 22 Sep 15:08)
