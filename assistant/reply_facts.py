@@ -17,7 +17,12 @@ So the reply is read before it leaves:
   «خلال 24 ساعة». The shop publishes one delivery promise («بياخد لغاية 4
   أيام», `shop_facts.DELIVERY_DAYS`) and one exchange window; «من 2 لـ 4
   أيام» was quoted to customers on 2026-09-22 and 09-25, and the «2» was the
-  prompt's own layout example, not anything the shop ever promised.
+  prompt's own layout example, not anything the shop ever promised;
+* a **count of what is left** -- «باقي حاجة واحدة», «آخر قطعة», «فاضل
+  قطعتين» -- has to be a `stock_qty` a tool returned, not merely a number
+  that appears somewhere: on 2026-09-25 «باقي حاجة واحدة لكل لون» went out
+  beside a get_variants answer of two each, and a «1» was sitting in the
+  same conversation as a search's `count`.
 
 Each one has to appear somewhere the shop said it: a tool result in this
 conversation, the customer's own messages (a budget they named is theirs to
@@ -189,13 +194,76 @@ def durations(text: str) -> list[Decimal]:
     return found
 
 
+_COUNT_WORDS = {
+    "واحد": 1, "واحدة": 1, "واحده": 1, "قطعة": 1, "قطعه": 1, "حتة": 1, "حته": 1,
+    "اتنين": 2, "اثنين": 2, "قطعتين": 2, "حتتين": 2, "عددين": 2,
+    "تلاتة": 3, "تلاته": 3, "ثلاثة": 3, "تلات": 3,
+}
+
+#: What is left of something: «باقي حاجة واحدة», «فاضل منه 3», «متبقي منه
+#: عددين», «آخر قطعة».
+_LEFT = re.compile(
+    r"(?:باقي|باقى|فاضل|فاضله|فاضلة|متبقي|متبقى|فضل|فضلت|آخر|اخر)\s+"
+    r"(?:(?:منه|منها|منهم)\s+)?(?:(?:حاجة|حاجه|قطعة|قطعه|حتة|حته)\s+)?"
+    r"(\d+|" + "|".join(sorted(_COUNT_WORDS, key=len, reverse=True)) + r")"
+    r"(?![\u0600-\u06ff])"
+)
+
+
+def stock_counts(text: str) -> list[int]:
+    """The counts of remaining stock a reply states."""
+    folded = (text or "").translate(_ARABIC_INDIC)
+    found: list[int] = []
+    for match in _LEFT.finditer(folded):
+        raw = match.group(1)
+        value = int(raw) if raw.isdigit() else _COUNT_WORDS.get(raw)
+        if value is not None and value not in found:
+            found.append(value)
+    return found
+
+
+def _stock_values(value, out: set[int]) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "stock_qty" and isinstance(item, int) and not isinstance(item, bool):
+                out.add(item)
+            else:
+                _stock_values(item, out)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _stock_values(item, out)
+
+
+def known_stock(history: list[dict]) -> set[int]:
+    """Every `stock_qty` a tool in this conversation returned, plus whatever
+    numbers the customer typed."""
+    found: set[int] = set()
+    for message in history:
+        role = message.get("role")
+        if role == TOOL_RESULTS:
+            for result in message.get("results") or []:
+                _stock_values(result.get("content"), found)
+        elif role == USER:
+            numbers: set[Decimal] = set()
+            _numbers_in(message.get("content") or "", numbers)
+            found.update(int(n) for n in numbers if n == n.to_integral_value())
+    return found
+
+
 def ungrounded(text: str, history: list[dict], constants: set[Decimal] | None = None) -> list[str]:
-    """The money amounts, measurements and durations in `text` nothing in the
-    conversation said, formatted for a log line and a nudge. Empty is clean."""
+    """The money amounts, measurements, durations and stock counts in `text`
+    nothing in the conversation said, formatted for a log line and a nudge.
+    Empty is clean."""
     money, measures = stated(text)
     spans = durations(text)
-    if not (money or measures or spans):
+    left = stock_counts(text)
+    if not (money or measures or spans or left):
         return []
+    if left:
+        stock = known_stock(history)
+        missing_stock = [f"{n} قطعة" for n in left if n not in stock]
+    else:
+        missing_stock = []
     known = known_numbers(history, constants)
     missing: list[str] = []
     for value in money:
@@ -207,7 +275,7 @@ def ungrounded(text: str, history: list[dict], constants: set[Decimal] | None = 
     for value in spans:
         if value not in known and f"{value:f} يوم/ساعة" not in missing:
             missing.append(f"{value:f} يوم/ساعة")
-    return missing
+    return missing + missing_stock
 
 
 #: The garment-flat caveat. `AGENTS.md`: the numbers are measurements of the

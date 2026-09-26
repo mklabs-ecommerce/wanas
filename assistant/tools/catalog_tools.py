@@ -169,7 +169,7 @@ def _garment_we_do_not_sell(
 #: «بالمقاس», «مقاسي»), never as substrings. As substrings, «سايز» fired on
 #: «اوفر سايز» and "size" on "oversized", and production withheld every
 #: product photo from «انا عايز تيشيرت اوفر سايز» -- a product question.
-_AR = "؀-ۿ"
+_AR = "\u0600-\u06ff"
 _SIZING = re.compile(
     rf"(?<![{_AR}])(?:و|ف|ب|ل)?(?:ال|لل)?"
     rf"(?:مقاس|قياس|سايز|سيز|شارت|تشارت|جدول)[{_AR}]*"
