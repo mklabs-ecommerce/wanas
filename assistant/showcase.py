@@ -517,3 +517,25 @@ def keep_chart_or_photos(ctx: ToolContext, called=(), text: str = "") -> list[st
             "to see the garment" if dropped is charts else "about sizing, not for photos",
         )
     return dropped
+
+
+def sent_pictures(outcomes: list, attachment_labels: dict | None = None) -> str:
+    """One log line's worth: every picture a reply sent, as chart or photo,
+    with what it showed and whether the platform took it.
+
+    Production had no record of which pictures actually left: "the size
+    chart came with product photos" could be read only off a customer's
+    screenshot. `wanas.showcase: sent ...` is that record, for every reply
+    that carries a picture.
+    """
+    parts: list[str] = []
+    for out in outcomes:
+        path = getattr(out, "image_path", None)
+        if not path:
+            continue
+        label = (attachment_labels or {}).get(path) or {}
+        wording = label.get("label") if isinstance(label, dict) else str(label)
+        kind = "chart" if str(wording or "").endswith("size chart") else "photo"
+        state = "ok" if getattr(out, "delivered", False) else "REFUSED"
+        parts.append(f"{kind}[{wording or path.rsplit('/', 1)[-1]}]={state}")
+    return ", ".join(parts)

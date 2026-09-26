@@ -39,6 +39,7 @@ from assistant import (
     comment_replies,
     messages as msg,
     session as session_store,
+    showcase,
     turn_retry,
 )
 from assistant.agent import GENERIC_FAILURE
@@ -1213,6 +1214,9 @@ def _deliver_turn(external_id: str, pending: Pending) -> None:
         _flag_delivery_failures(external_id, outcomes)
         _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
         _remember_undelivered_photos(external_id, outcomes, reply.attachment_labels)
+        pictures = showcase.sent_pictures(outcomes, reply.attachment_labels)
+        if pictures:
+            log.info("sent to %s: %s", external_id, pictures)
 
 
 def _remember_undelivered_photos(

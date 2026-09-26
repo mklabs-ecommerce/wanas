@@ -529,3 +529,27 @@ def test_is_this_you_cannot_be_answered_by_the_bot_itself(seeded):
     history.append(msg.assistant("عندنا سجل تاني بنفس رقم تليفون حضرتك — ده انت؟"))
     history.append(msg.user("اه ده انا"))
     assert call_tool(ctx, "link_client", {"confirmed": True}).get("linked") is True
+
+
+# ==========================================================================
+# 7. What left, on the record: which pictures a reply sent
+# ==========================================================================
+
+
+def test_every_picture_sent_is_logged_as_chart_or_photo():
+    from types import SimpleNamespace
+
+    from assistant import showcase
+
+    outcomes = [
+        SimpleNamespace(delivered=True, image_path=None),  # the text
+        SimpleNamespace(delivered=True, image_path="data/size-charts/wns-boxy-tee.png"),
+        SimpleNamespace(delivered=False, image_path=CDN + "DSC02008.jpg"),
+    ]
+    labels = {
+        "data/size-charts/wns-boxy-tee.png": {"label": "Boxy WNS Tee size chart"},
+        CDN + "DSC02008.jpg": {"label": "Boxy WNS Tee (Black)"},
+    }
+    assert showcase.sent_pictures(outcomes, labels) == (
+        "chart[Boxy WNS Tee size chart]=ok, photo[Boxy WNS Tee (Black)]=REFUSED"
+    )

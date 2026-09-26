@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, Response
 
-from assistant import session as session_store, turn_retry
+from assistant import session as session_store, showcase, turn_retry
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
 from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
@@ -648,6 +648,9 @@ def _deliver_turn(external_id: str, pending: Pending) -> None:
         _flag_delivery_failures(external_id, outcomes)
         _remember_sent_ids(external_id, outcomes, reply.attachment_labels)
         _remember_undelivered_photos(external_id, outcomes, reply.attachment_labels)
+        pictures = showcase.sent_pictures(outcomes, reply.attachment_labels)
+        if pictures:
+            log.info("sent to %s: %s", external_id, pictures)
 
 
 def _batch_ids(pending: Pending) -> list[str]:
