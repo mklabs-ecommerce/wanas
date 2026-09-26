@@ -1,12 +1,13 @@
 """The 25 September test conversations, replayed turn by turn.
 
-Production, deployed 92475b1, three conversations from the same tester:
+Production, deployed 92475b1, three conversations (identifiers replaced
+with placeholders):
 
-* ``whatsapp/201021233010`` 17:51-17:52 UTC -- the last WhatsApp
+* ``instagram_dm/<customer C>`` 19:13 and 21:50-21:58 UTC -- the owner's own
+  test conversation, ending in order #1042 (section 8 onwards);
+* ``whatsapp/<customer A>`` 17:51-17:52 UTC -- the last WhatsApp
   conversation in production;
-* ``instagram_dm/1692370588503523`` 19:13 and 21:50-21:58 UTC -- the same
-  person (he gave 01021233010 as his phone), ending in order #1042;
-* ``whatsapp/201067177129`` 07:43-16:35 UTC -- the size-chart saga, most of
+* ``whatsapp/<customer B>`` 07:43-16:35 UTC -- the size-chart saga, most of
   it on the deploys before 92475b1.
 
 Every message, tool call and reply below is copied from the stored
@@ -72,7 +73,7 @@ def _photos(reply) -> list[str]:
 
 def _ctx(seeded, text: str, channel: str = "whatsapp") -> ToolContext:
     return ToolContext(
-        session=seeded, channel=channel, external_id="201021233010", history=[msg.user(text)]
+        session=seeded, channel=channel, external_id="201000000201", history=[msg.user(text)]
     )
 
 
@@ -133,7 +134,7 @@ def _mirror_the_plain_tee(seeded, shopify, *, sleeve: str | None) -> Product:
 @pytest.mark.parametrize(
     "text",
     [
-        "انا عايز تيشيرت اوفر سايز",  # whatsapp/201021233010 17:51:58
+        "انا عايز تيشيرت اوفر سايز",  # whatsapp/<customer A> 17:51:58
         "انا عايز تيشرت شبه دا ساده وافر سايز",  # instagram 21:53:19
         "عندك حاجة oversized؟",
         "عايز الرينجر boxy fit الأسود",
@@ -170,7 +171,7 @@ def test_the_last_whatsapp_turn_17_52_keeps_its_product_photos(seeded):
     reply = _turn(
         seeded,
         "whatsapp",
-        "201021233010",
+        "201000000201",
         "انا عايز تيشيرت اوفر سايز",
         _call("get_products", query="oversized تيشيرت"),
         ModelReply(
@@ -195,7 +196,7 @@ def test_the_instagram_photo_turn_sends_photos_and_no_chart(seeded, shopify):
     reply = _turn(
         seeded,
         "instagram_dm",
-        "1692370588503523",
+        "ig-customer-c",
         PHOTO_NOTE,
         _call("get_products", query="oversized plain t-shirt"),
         ModelReply(
@@ -210,10 +211,10 @@ def test_the_instagram_photo_turn_sends_photos_and_no_chart(seeded, shopify):
 
 
 def test_a_chart_question_answered_from_memory_still_sends_the_chart(seeded):
-    """whatsapp/201067177129 13:17: «طيب السايز شارت بتاع ringer boxy fit»,
+    """whatsapp/<customer B> 13:17: «طيب السايز شارت بتاع ringer boxy fit»,
     answered without a tool call («ده نفس السايز شارت اللي بعتهولك») -- and
     what went out was three Ringer photos and no chart."""
-    who = "201067177129"
+    who = "201000000202"
     history = [
         msg.user("طيب السايز شارت بتاع ringer boxy fit"),
         msg.assistant("", [{"id": "c1", "name": "get_size_chart", "arguments": {"product_id": "ringer-tee"}}]),
@@ -301,14 +302,14 @@ def test_the_new_product_form_does_not_preselect_long_sleeve():
 
 
 def test_a_long_sleeve_claim_about_a_short_sleeved_tee_is_sent_back(seeded, shopify):
-    """whatsapp/201021233010 17:52:56 -- «بس ده كم طويل مش نص كم» about a
+    """whatsapp/<customer A> 17:52:56 -- «بس ده كم طويل مش نص كم» about a
     short-sleeved tee, to a customer who never mentioned sleeves."""
     _mirror_the_plain_tee(seeded, shopify, sleeve="half")
     fixed = "تيشيرت oversized plain t-shirt سادة ونص كم — السعر 300 جنيه، والمقاس المتاح S بس."
     reply = _turn(
         seeded,
         "whatsapp",
-        "201021233010",
+        "201000000201",
         "لا عايز حاجه ساده",
         _call("get_products", query="plain"),
         _call("get_variants", product_id=PLAIN),
@@ -331,7 +332,7 @@ def test_a_sleeve_claim_about_an_unclassified_product_is_sent_back(seeded, shopi
     reply = _turn(
         seeded,
         "instagram_dm",
-        "1692370588503523",
+        "ig-customer-c",
         PHOTO_NOTE,
         _call("get_products", query="oversized plain t-shirt"),
         ModelReply(
@@ -440,7 +441,7 @@ def test_offering_photos_the_reply_is_already_carrying_is_sent_back(seeded):
     reply = _turn(
         seeded,
         "instagram_dm",
-        "1692370588503523",
+        "ig-customer-c",
         "هو في تيشرت شبه دا عندكو",
         _call("get_products", category="T-Shirts"),
         ModelReply(
@@ -470,7 +471,7 @@ def test_an_offer_the_model_keeps_writing_is_removed_rather_than_sent(seeded):
     reply = _turn(
         seeded,
         "instagram_dm",
-        "1692370588503523",
+        "ig-customer-c",
         "هو في تيشرت شبه دا عندكو",
         _call("get_products", category="T-Shirts"),
         *[ModelReply(text=offer) for _ in range(4)],
@@ -491,13 +492,13 @@ def test_what_is_not_an_offer_of_photos():
 
 # ==========================================================================
 # 6. An answer the customer never gave: link_client in the same breath as
-#    the question (whatsapp/201021233010, 22 Sep 15:08)
+#    the question (whatsapp/<customer A>, 22 Sep 15:08)
 # ==========================================================================
 
 
 def test_is_this_you_cannot_be_answered_by_the_bot_itself(seeded):
-    who = "201021233010"
-    other = Client(full_name="محمد ابراهيم", phone="01021233010", address="كفر المصيلحه - الساقيه", governorate="Monufia")
+    who = "201000000201"
+    other = Client(full_name="عميل تاني", phone="01000000201", address="عنوان محفوظ تجريبي", governorate="Monufia")
     seeded.add(other)
     seeded.flush()
     identity = identities.get_or_create(seeded, "whatsapp", who)

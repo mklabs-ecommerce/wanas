@@ -363,7 +363,7 @@ def link_client(ctx: ToolContext, confirmed: bool) -> dict:
         return {"linked": False}
 
     if not _asked_before_their_answer(ctx.history):
-        # whatsapp/201021233010, 2026-09-22 15:08: «عندنا سجل تاني بنفس رقم
+        # whatsapp/<customer A>, 2026-09-22 15:08: «عندنا سجل تاني بنفس رقم
         # تليفون حضرتك — ده انت؟» and link_client(confirmed=true) in the same
         # hop, before the customer could answer -- then the other record's
         # saved address read back into this chat. "Yes" is the customer's

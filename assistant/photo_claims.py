@@ -399,7 +399,7 @@ def offers_what_it_sends(text: str, attachments: list[str], photo_products: dict
     """An offer to show photos in a reply that is already carrying garment
     photos, or "".
 
-    instagram/1692370588503523, 2026-09-25 21:50:47: a list of three tees,
+    instagram/<customer C>, 2026-09-25 21:50:47: a list of three tees,
     two of their photos attached by the showcase, ending «تحب أوريك صور واحد
     فيهم؟». The words were written before the pictures were decided, so the
     reply asks permission for what it is already doing.
