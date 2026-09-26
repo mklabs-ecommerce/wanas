@@ -384,8 +384,13 @@ def test_the_prompt_says_where_a_photo_actually_comes_from():
     """Forbidding the false claim was not enough on its own: the model has to
     know *why* the sentence is false. It read "photos are attached
     automatically", concluded that announcing them was the whole job, and sent
-    "sending the colours now" with an empty attachment list."""
-    assert "الصورة بتتبعت من نداء الأداة، مش من كلامك" in SYSTEM_PROMPT
+    "sending the colours now" with an empty attachment list.
+
+    The sentence it used to be taught -- "the photo comes from the tool call,
+    not from your words" -- stopped being true when the showcase started
+    attaching photos for the products a reply names. What is true, and what
+    the model needs, is that they go with this reply or not at all."""
+    assert "الصور بتروح مع ردك نفسه" in SYSTEM_PROMPT
     assert "مفيش رسالة بعد ردك" in SYSTEM_PROMPT
 
 

@@ -12,7 +12,12 @@ So the reply is read before it leaves:
 
 * a **money amount** is a number in a clause that names the currency
   («جنيه», «EGP»), or a number directly after a price word («بـ», «السعر»);
-* a **measurement** is a number directly followed by «سم» / «cm».
+* a **measurement** is a number directly followed by «سم» / «cm»;
+* a **duration** is a number of days or hours -- «4 أيام», «من 2 لـ 4 أيام»,
+  «خلال 24 ساعة». The shop publishes one delivery promise («بياخد لغاية 4
+  أيام», `shop_facts.DELIVERY_DAYS`) and one exchange window; «من 2 لـ 4
+  أيام» was quoted to customers on 2026-09-22 and 09-25, and the «2» was the
+  prompt's own layout example, not anything the shop ever promised.
 
 Each one has to appear somewhere the shop said it: a tool result in this
 conversation, the customer's own messages (a budget they named is theirs to
@@ -115,12 +120,18 @@ def known_numbers(history: list[dict], constants: set[Decimal] | None = None) ->
 
 
 def shop_constants(session) -> set[Decimal]:
-    """The amounts the shop publishes without a lookup: its shipping fees and
-    the exchange surcharge. Read from where they are kept, never restated."""
+    """The numbers the shop publishes without a lookup: its shipping fees, the
+    exchange surcharge and window, and the delivery promise. Read from where
+    they are kept, never restated."""
     from domain.models import ShippingRate
-    from domain.services.orders import EXCHANGE_SURCHARGE
+    from domain.services.orders import EXCHANGE_SURCHARGE, EXCHANGE_WINDOW_HOURS
+    from domain.services.shop_facts import DELIVERY_DAYS
 
-    found = {_decimal(str(EXCHANGE_SURCHARGE))}
+    found = {
+        _decimal(str(EXCHANGE_SURCHARGE)),
+        _decimal(str(EXCHANGE_WINDOW_HOURS)),
+        _decimal(str(DELIVERY_DAYS)),
+    }
     for (fee,) in session.query(ShippingRate.fee).filter(ShippingRate.fee.is_not(None)).all():
         found.add(_decimal(str(fee)))
         # Refusing a shipped parcel at the door costs the round trip.
@@ -154,11 +165,36 @@ def stated(text: str) -> tuple[list[Decimal], list[Decimal]]:
     return money, measures
 
 
+#: A number of days or hours, or a range of them: «4 أيام», «من 2 لـ 4
+#: أيام», «2-4 days», «خلال 24 ساعة».
+_DURATION = re.compile(
+    r"(\d+)\s*(?:(?:لـ|ل|الى|إلى|لغاية|to|-|–)\s*(\d+)\s*)?"
+    r"(?:يوم|ايام|أيام|أيّام|ساعة|ساعه|ساعات|days?|hours?)",
+    re.IGNORECASE,
+)
+_TWO_DAYS = re.compile(r"(?<![\u0600-\u06ff])يومين(?![\u0600-\u06ff])")
+
+
+def durations(text: str) -> list[Decimal]:
+    """The day and hour counts a reply states."""
+    folded = (text or "").translate(_ARABIC_INDIC)
+    found: list[Decimal] = []
+    for match in _DURATION.finditer(folded):
+        for raw in match.groups():
+            value = _decimal(raw) if raw else None
+            if value is not None and value not in found:
+                found.append(value)
+    if _TWO_DAYS.search(folded) and Decimal(2) not in found:
+        found.append(Decimal(2))
+    return found
+
+
 def ungrounded(text: str, history: list[dict], constants: set[Decimal] | None = None) -> list[str]:
-    """The money amounts and measurements in `text` nothing in the
+    """The money amounts, measurements and durations in `text` nothing in the
     conversation said, formatted for a log line and a nudge. Empty is clean."""
     money, measures = stated(text)
-    if not (money or measures):
+    spans = durations(text)
+    if not (money or measures or spans):
         return []
     known = known_numbers(history, constants)
     missing: list[str] = []
@@ -168,6 +204,9 @@ def ungrounded(text: str, history: list[dict], constants: set[Decimal] | None = 
     for value in measures:
         if value not in known and f"{value:f} سم" not in missing:
             missing.append(f"{value:f} سم")
+    for value in spans:
+        if value not in known and f"{value:f} يوم/ساعة" not in missing:
+            missing.append(f"{value:f} يوم/ساعة")
     return missing
 
 
