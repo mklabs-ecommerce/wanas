@@ -24,7 +24,13 @@ from fastapi import APIRouter, Request, Response
 from assistant import session as session_store, showcase, turn_retry
 from assistant.agent import GENERIC_FAILURE
 from assistant.dispatcher import MessageDispatcher, Pending
-from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
+from assistant.runtime import (
+    claim_message,
+    handle_message,
+    record_inbound,
+    record_outbound,
+    release_claims,
+)
 from assistant.tools.support_tools import raise_handoff
 from common import offthread, telemetry
 from common.security import verify_signature  # noqa: F401 -- re-exported; tests import it from here
@@ -479,7 +485,14 @@ def _accept(message: dict, contact_name: str | None, *, verify_seconds: float = 
                 f"Customer sent a {message_type} message, which the bot cannot handle in Phase 1",
                 payload={"message_type": message_type, "platform_message_id": message_id},
             )
-        client.send_text(external_id, UNSUPPORTED_ACK)
+        # What the customer was told goes in the transcript like any other
+        # line the shop sends (`record_outbound`, by="system"): it promises a
+        # person, and on 2026-09-25 neither staff nor the turn that resumed
+        # the conversation six seconds later could see that it had.
+        ack = client.send_text(external_id, UNSUPPORTED_ACK)
+        record_outbound(CHANNEL, external_id, UNSUPPORTED_ACK, delivered=ack.delivered)
+        if ack.message_ids:
+            record_outbound(CHANNEL, external_id, UNSUPPORTED_ACK, message_ids=list(ack.message_ids))
         return
     else:
         # A reaction, a system notice, a type Meta has not documented here.

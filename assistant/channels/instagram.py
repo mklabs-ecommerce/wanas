@@ -51,7 +51,13 @@ from assistant.providers.base import (
     ProviderError,
     comment_sentiment,
 )
-from assistant.runtime import claim_message, handle_message, record_inbound, release_claims
+from assistant.runtime import (
+    claim_message,
+    handle_message,
+    record_inbound,
+    record_outbound,
+    release_claims,
+)
 from assistant.tools.support_tools import raise_handoff
 from common import offthread, telemetry
 from common.security import verify_signature
@@ -421,7 +427,14 @@ def _collect_message(
                     f"Customer sent an instagram {att_type} attachment, which the bot cannot handle",
                     payload={"attachment_type": att_type, "platform_message_id": mid},
                 )
-            client.send_text(sender_id, UNSUPPORTED_ACK)
+            # What the customer was told goes in the transcript like any other
+            # line the shop sends (`record_outbound`, by="system"): it promises a
+            # person, and on 2026-09-25 neither staff nor the turn that resumed
+            # the conversation six seconds later could see that it had.
+            ack = client.send_text(sender_id, UNSUPPORTED_ACK)
+            record_outbound(CHANNEL, sender_id, UNSUPPORTED_ACK, delivered=ack.delivered)
+            if ack.message_ids:
+                record_outbound(CHANNEL, sender_id, UNSUPPORTED_ACK, message_ids=list(ack.message_ids))
             return False
 
         log.info("ignoring unsupported instagram attachment type %r", att_type)
