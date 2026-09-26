@@ -489,6 +489,15 @@ _MISSPELLINGS = (
     ("انشاء الله", "إن شاء الله"),
     ("لاكن", "لكن"),
     ("أحد من الفريق", "حد من الفريق"),
+    # Not a spelling slip but the same shape: one right wording. The shop
+    # holds nothing -- a piece is only set aside by an order -- so «تحب
+    # أحجزلك لون؟» (instagram, 2026-09-25 19:13) offers a service that does
+    # not exist. What the bot can do is add it to the cart.
+    ("أحجزلك", "أضيفلك"),
+    ("احجزلك", "أضيفلك"),
+    ("نحجزلك", "نضيفلك"),
+    ("أحجزهولك", "أضيفهولك"),
+    ("احجزهولك", "أضيفهولك"),
 )
 #: \w already covers Arabic letters; the harakat are added so a vowelled
 #: word is still one word. Not the whole Arabic block: «،» and «؟» live there.
