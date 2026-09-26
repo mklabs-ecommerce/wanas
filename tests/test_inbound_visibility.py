@@ -233,6 +233,11 @@ def test_an_unsupported_type_is_recorded_alongside_its_handoff(client, configure
 
     assert texts() == ["[location]"]
     assert sent and adapter.UNSUPPORTED_ACK in sent[0]["text"]["body"]
+    # And what the customer was told is in the transcript too: "a person will
+    # reply" is a promise staff -- and a resumed turn -- have to be able to see.
+    shop = [m for m in stored() if m["role"] == "assistant"]
+    assert [m["content"] for m in shop] == [adapter.UNSUPPORTED_ACK]
+    assert shop[0].get("by") == "system"
 
 
 # --- it must never make things worse -------------------------------------

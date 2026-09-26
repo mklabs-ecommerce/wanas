@@ -553,3 +553,96 @@ def test_every_picture_sent_is_logged_as_chart_or_photo():
     assert showcase.sent_pictures(outcomes, labels) == (
         "chart[Boxy WNS Tee size chart]=ok, photo[Boxy WNS Tee (Black)]=REFUSED"
     )
+
+
+# ==========================================================================
+# 8. The Instagram conversation that ended in #1042, reviewed again
+#    (names, phone and address below are placeholders)
+# ==========================================================================
+
+IG_WHO = "ig-customer-placeholder"
+PHONE = "01000000017"
+
+
+def _monufia_at_110(seeded) -> None:
+    from domain.models import ShippingRate
+
+    seeded.get(ShippingRate, "Monufia").fee = 110
+    seeded.commit()
+
+
+def _checkout_so_far(seeded, shopify):
+    """21:53:57 add_to_cart, then 21:54-21:57 exactly as it ran: fee and total
+    given once («الإجمالي 410 جنيه… تحب نكمّل؟»), then name, address and phone
+    collected one by one -- and no summary after them."""
+    _mirror_the_plain_tee(seeded, shopify, sleeve="half")
+    _monufia_at_110(seeded)
+    history = [msg.user("طب أنا عايز الأسود مقاس الـ Small عادي.")]
+    ctx = ToolContext(session=seeded, channel="instagram_dm", external_id=IG_WHO, history=history)
+    call_tool(ctx, "add_to_cart", {"variant_id": f"{PLAIN}-s-black"})
+    history += [
+        msg.assistant("تمام، ضفنالك تيشيرت oversized plain t-shirt — مقاس S، لون Black، بـ 300 جنيه.\n\nتحب نكمّل بيانات التوصيل؟"),
+        msg.user("اه تمام بس عايز اعرف سعر الشحن ومدته قد ايه"),
+        msg.assistant("الشحن 110 جنيه لكل محافظات مصر، والتوصيل بياخد لغاية 4 أيام.\n\nمحافظتك إيه عشان أحسبلك الإجمالي؟"),
+        msg.user("المنوفية"),
+    ]
+    fee = call_tool(ctx, "get_shipping_fee", {"governorate": "المنوفية"})
+    assert fee["checkout"]["total"] == 410
+    history += [
+        msg.tool_results([msg.tool_result("f", "get_shipping_fee", fee)]),
+        msg.assistant("الشحن للمنوفية 110 جنيه، فالإجمالي 410 جنيه كاش عند الاستلام.\n\nتحب نكمّل؟ محتاج منك اسمك والعنوان بالتفصيل ورقم تليفون."),
+        msg.user("عميل تجريبي"),
+        msg.assistant("تمام. عايز العنوان بالتفصيل — الشارع والعمارة والشقة وأي علامة مميزة."),
+        msg.user("المنوفيه، مدينة تجريبية، قرية تجريبية"),
+        msg.assistant("تمام. عايز تفاصيل أكتر من كده عشان المندوب — اسم الشارع أو العمارة ورقم الشقة، وأي علامة مميزة قريبة."),
+        msg.user(f"قوله عند النادي وهو هيعرف\n{PHONE}"),
+    ]
+    return ctx
+
+
+ORDER_ARGS = {
+    "address": "مدينة تجريبية، قرية تجريبية، عند النادي",
+    "contact_phone": PHONE,
+    "customer_name": "عميل تجريبي",
+    "governorate": "المنوفية",
+}
+
+
+def test_no_order_is_placed_before_the_customer_says_yes_to_a_summary(seeded, shopify):
+    """21:57:20 -- confirm_order ran on «قوله عند النادي وهو هيعرف» plus a
+    phone number. No summary of name, address and total had been shown since
+    the details were given, and nobody said yes: order #1042 was real."""
+    from domain.models import Order
+
+    ctx = _checkout_so_far(seeded, shopify)
+    refused = call_tool(ctx, "confirm_order", dict(ORDER_ARGS))
+    assert refused.get("error") == "not_confirmed_by_customer"
+    assert seeded.query(Order).count() == 0
+
+    ctx.history += [
+        msg.tool_results([msg.tool_result("o", "confirm_order", refused)]),
+        msg.assistant(
+            "ملخص الأوردر:\n• تيشيرت oversized plain t-shirt — مقاس S، لون Black، السعر 300 جنيه\n"
+            "• الشحن للمنوفية — 110 جنيه\n• الإجمالي — 410 جنيه كاش عند الاستلام\n\nأأكد الأوردر؟"
+        ),
+        msg.user("اه"),
+    ]
+    placed = call_tool(ctx, "confirm_order", dict(ORDER_ARGS))
+    assert placed.get("order_id"), placed
+
+
+def test_a_summary_followed_by_new_details_is_not_a_yes(seeded, shopify):
+    """The total was shown at 21:55:28 and the customer answered with their
+    name -- not with a yes to that summary, and not after the address."""
+    ctx = _checkout_so_far(seeded, shopify)
+    ctx.history[-1] = msg.user("اه تمام " + PHONE)  # agreeing -- to the address question
+    assert call_tool(ctx, "confirm_order", dict(ORDER_ARGS)).get("error") == "not_confirmed_by_customer"
+
+
+def test_offering_to_hold_stock_the_shop_cannot_hold_is_corrected():
+    """19:13:49 «تحب أحجزلك لون ولا مقاس معين؟» -- there is no reservation;
+    the only thing the bot can do is add it to the cart."""
+    from assistant import reply_rules
+
+    fixed, fixes = reply_rules.fix_arabic("أيوه موجود. تحب أحجزلك لون ولا مقاس معين؟")
+    assert "أحجزلك" not in fixed and "أضيفلك" in fixed and fixes

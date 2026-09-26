@@ -436,6 +436,28 @@ def test_an_unsupported_attachment_hands_off_and_acknowledges(
     assert "الفريق" in sent[0]["message"]["text"]
 
 
+def test_the_acknowledgement_of_an_unsupported_attachment_is_in_the_transcript(
+    client, configured, sent, seeded
+):
+    """instagram, 2026-09-25 21:57:08: a «[template]» attachment mid-checkout.
+    The customer was sent «…حد من الفريق هيرد عليك حالاً», and the transcript
+    never showed it -- not to staff, and not to the resumed turn six seconds
+    later, which carried on as if nothing had been promised."""
+    from assistant import session as session_store
+
+    assert post_message(
+        client,
+        {"attachments": [{"type": "template", "payload": {}}]},
+        mid="aWdfdGVtcGxhdGU=",
+    ).status_code == 200
+
+    with SessionLocal() as db:
+        history = session_store.transcript(db, Channel.INSTAGRAM_DM.value, IGSID)
+    shop_lines = [m for m in history if m["role"] == "assistant"]
+    assert [m["content"] for m in shop_lines] == [adapter.UNSUPPORTED_ACK]
+    assert shop_lines[0].get("by") == "system"
+
+
 def test_a_failed_download_still_leaves_a_chaseable_path(
     client, configured, submitted, monkeypatch
 ):
