@@ -20,6 +20,7 @@ from decimal import Decimal
 
 from assistant.tools.base import ToolContext, call_tool
 from domain.models import Order
+from tests.checkout_helpers import agree_to_the_summary
 
 CHANNEL = "whatsapp"
 WHO = "201000000555"
@@ -71,6 +72,7 @@ def test_the_total_quoted_before_confirming_is_the_order_total(seeded, cairo_rat
     call_tool(tools, "add_to_cart", {"variant_id": VARIANT})
     quoted = call_tool(tools, "get_shipping_fee", {"governorate": "Cairo"})["checkout"]["total"]
 
+    agree_to_the_summary(tools, "Cairo")
     placed = call_tool(
         tools,
         "confirm_order",

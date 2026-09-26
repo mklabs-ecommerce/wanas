@@ -81,14 +81,15 @@ def test_an_order_sends_one_confirmation_and_the_transcript_keeps_it(seeded, cai
     try:
         provider = RehearsalProvider()
         handle_message(CHANNEL, WHO, f"add {VARIANT} 1", db=seeded, provider=provider)
-        sender.clear()
-        reply = handle_message(
+        handle_message(
             CHANNEL,
             WHO,
             "order Layla | Cairo | 8 Test Street | 01066667777",
             db=seeded,
             provider=provider,
         )
+        sender.clear()
+        reply = handle_message(CHANNEL, WHO, "confirm", db=seeded, provider=provider)
     finally:
         _stop_recording()
         notifications.register_sender(notifications.LogSender())

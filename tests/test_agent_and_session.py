@@ -476,7 +476,10 @@ def test_full_order_through_the_harness_entry_point(seeded):
     assert "الشنطة" in say(f"add {VARIANT} 2").text
     assert "60" in say("ship القاهرة").text
 
-    reply = say("order Omar Ali | Cairo | 12 Test Street, Apt 4 | 01000000000")
+    # The summary first, then the customer's yes: nothing is ordered on the
+    # details alone (`order_tools._not_yet_agreed`).
+    assert "1360" in say("order Omar Ali | Cairo | 12 Test Street, Apt 4 | 01000000000").text
+    reply = say("confirm")
     # The turn itself says nothing: the confirmation the customer reads is the
     # one `notifications.order_confirmed` composed and sent. A model reply on
     # top of it would be a second confirmation for the same order.

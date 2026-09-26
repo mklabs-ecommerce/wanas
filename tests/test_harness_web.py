@@ -154,7 +154,8 @@ def test_an_order_surfaces_its_proactive_confirmation(client, seeded):
     seeded.commit()
 
     send(client, f"add {VARIANT} 1")
-    reply = send(client, "order Omar | Cairo | 5 Test Street | 01000000000")
+    send(client, "order Omar | Cairo | 5 Test Street | 01000000000")
+    reply = send(client, "confirm")
 
     # No reply of its own: the confirmation below is the whole message.
     assert not reply["text"]

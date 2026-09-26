@@ -20,6 +20,7 @@ import pytest
 from assistant.tools.base import ToolContext, call_tool
 from domain.models import Order
 from domain.services import orders
+from tests.checkout_helpers import agree_to_the_summary
 
 CHANNEL = "whatsapp"
 WHO = "201000000444"
@@ -54,6 +55,7 @@ def checkout(session, *customer_messages: str) -> ToolContext:
 
 
 def confirm(ctx, phone: str) -> dict:
+    agree_to_the_summary(ctx, "Cairo")
     return call_tool(
         ctx,
         "confirm_order",

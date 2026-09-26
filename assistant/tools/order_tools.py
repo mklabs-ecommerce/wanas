@@ -58,7 +58,9 @@ from domain.services.notifications import item_add_requested, item_swap_requeste
     "mobile the customer actually gave -- typed in this conversation, saved on their profile, or "
     "the WhatsApp number they are writing from; never one you reconstructed. invalid_phone means "
     "it is not a mobile a courier can call; phone_not_given means they never sent it -- ask them "
-    "to type it.",
+    "to type it. not_confirmed_by_customer means your last message was not a summary with the "
+    "checkout total, or the customer did not say yes to it: send the summary, ask «أأكد "
+    "الأوردر؟», and call this again after they agree.",
     properties={
         "customer_name": {"type": "string"},
         "governorate": {"type": "string", "description": "From the fixed list; ask, do not infer."},
@@ -92,6 +94,9 @@ def confirm_order(
             "do_instead": "Ask the customer to type the phone number the courier should call, "
             "then confirm with exactly the digits they sent.",
         }
+    unconfirmed = _not_yet_agreed(ctx, governorate)
+    if unconfirmed is not None:
+        return unconfirmed
     result = orders.place_order(
         ctx.session,
         channel=ctx.channel,
@@ -112,6 +117,69 @@ def confirm_order(
         ctx.end_turn = "order_confirmed"
         result["confirmation_sent"] = True
     return result
+
+
+#: A customer agreeing, in the words they use for it. Read from their own
+#: words only (`assistant/customer_words.py`).
+_YES = re.compile(
+    r"(?<![\w])(?:اه|آه|أه|ااه|ايوه|أيوه|ايوا|أيوا|ايوة|أيوة|تمام|ماشي|اكد|أكد|أكّد|اكده|أكده|"
+    r"اكديه|أكديه|موافق|موافقة|تم|يلا|اوك|أوك|اوكي|أوكي|حاضر|اكيد|أكيد|طبعا|طبعًا|كمل|كمّل|نكمل|"
+    r"ok|okay|yes|yep|sure|confirm)(?![\w])",
+    re.IGNORECASE,
+)
+_NO = re.compile(r"^\s*(?:لا|لأ|لاء|no)(?![\w])|مش عايز|استنى|لسه", re.IGNORECASE)
+
+
+def _not_yet_agreed(ctx: ToolContext, governorate: str) -> dict | None:
+    """A refusal when the customer has not said yes to a summary, else None.
+
+    instagram, 2026-09-25 21:57:20: order #1042 was placed on «قوله عند النادي
+    وهو هيعرف» and a phone number -- an address detail, not an answer. The
+    total had been said once, before the name, the address and the phone were
+    collected; no summary followed them and nobody agreed to anything. The
+    prompt has always asked for «ملخص → موافقة صريحة → confirm_order»; this is
+    the tool that refuses when it did not happen.
+
+    The rule: the bot's last message before the customer's latest one states
+    the total this order will charge (the same `checkout` get_shipping_fee
+    gives), and the customer's latest words agree. A cart that is already
+    empty or a governorate with no rate is left to `place_order`, which has its
+    own answers for both (`already_confirmed`, `no_rate_set`).
+    """
+    from assistant import customer_words, reply_facts
+    from assistant.tools.catalog_tools import _checkout
+    from domain.services import shipping
+
+    resolved = shipping.resolve(ctx.session, governorate)
+    fee = shipping.get_fee(ctx.session, resolved) if resolved else None
+    checkout = _checkout(ctx, fee) if fee is not None else None
+    if checkout is None:
+        return None
+    total = reply_facts._decimal(str(checkout["total"]))
+
+    history = ctx.history
+    last_user = next((i for i in range(len(history) - 1, -1, -1) if history[i].get("role") == USER), None)
+    said_before = next(
+        (
+            (history[i].get("content") or "")
+            for i in range(last_user - 1, -1, -1)
+            if history[i].get("role") == "assistant" and (history[i].get("content") or "").strip()
+        ),
+        "",
+    ) if last_user is not None else ""
+    shown: set = set()
+    reply_facts._numbers_in(said_before, shown)
+    words = customer_words.latest(history)
+    agreed = bool(_YES.search(words)) and not _NO.search(words)
+    if total in shown and agreed:
+        return None
+    return {
+        "error": "not_confirmed_by_customer",
+        "total": checkout["total"],
+        "do_instead": "Send the summary first: the lines, the shipping and the total from "
+        "get_shipping_fee's checkout, with the name, address and phone -- then ask «أأكد "
+        "الأوردر؟». Call confirm_order only after the customer says yes to that message.",
+    }
 
 
 #: A run of digits the way a number is typed: spaces and dashes allowed

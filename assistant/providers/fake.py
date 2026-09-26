@@ -106,7 +106,7 @@ HELP = (
     "  ship <governorate>\n"
     "  gov [region]                    | the tappable governorate picker\n"
     "  profile | link yes | link no\n"
-    "  order <name> | <governorate> | <address> | <phone>\n"
+    "  order <name> | <governorate> | <address> | <phone>   then: confirm\n"
     "  orders [all] | qty <order_id> <variant_id> <n> | cancel <order_id>\n"
     "  swap <order_id> <variant_id> [note] | rate <order_id> <1-5> [text]\n"
     "  human <reason> <summary>\n"
@@ -133,11 +133,11 @@ class RehearsalProvider(LLMProvider):
             return ModelReply(text=self._render(last["results"]))
         if last.get("role") != USER:
             return ModelReply(text="…")
-        return self._plan(last.get("content", "").strip())
+        return self._plan(last.get("content", "").strip(), history)
 
     # -- planning ---------------------------------------------------------
 
-    def _plan(self, text: str) -> ModelReply:
+    def _plan(self, text: str, history: list[dict] | None = None) -> ModelReply:
         lowered = text.lower()
 
         def call(name: str, arguments: dict | None = None) -> ModelReply:
@@ -159,6 +159,13 @@ class RehearsalProvider(LLMProvider):
             return call("link_client", {"confirmed": False})
         if lowered in {"orders", "orders all"}:
             return call("get_my_orders", {"include_closed": lowered.endswith("all")})
+        if lowered in {"confirm", "yes", "أكد", "اكد", "اه", "أيوه", "ايوه"}:
+            # The yes to the summary `confirm_order` asked for: the same order,
+            # now agreed to (`order_tools._not_yet_agreed`).
+            previous = _last_order_arguments(history or [])
+            if previous is None:
+                return ModelReply(text="مفيش أوردر مستني تأكيد.")
+            return call("confirm_order", previous)
 
         if match := re.match(r"^products?\s*(.*)$", lowered):
             query = match.group(1).strip()
@@ -243,6 +250,8 @@ class RehearsalProvider(LLMProvider):
         return "\n".join(self._render_one(r["name"], r["content"]) for r in results)
 
     def _render_one(self, name: str, content: dict) -> str:
+        if content.get("error") == "not_confirmed_by_customer":
+            return f"الإجمالي {content['total']} جنيه كاش عند الاستلام. أأكد الأوردر؟ (confirm)"
         if "error" in content:
             detail = {k: v for k, v in content.items() if k != "error"}
             return f"[{content['error']}] {detail}" if detail else f"[{content['error']}]"
@@ -357,3 +366,12 @@ class RehearsalProvider(LLMProvider):
             return "تمام، ربطت الحساب." if content.get("linked") else "تمام، هفضل أعاملك كعميل جديد."
 
         return str(content)
+
+
+def _last_order_arguments(history: list[dict]) -> dict | None:
+    """The arguments of the newest `confirm_order` call in the conversation."""
+    for message in reversed(history):
+        for call in message.get("tool_calls") or []:
+            if call.get("name") == "confirm_order":
+                return dict(call.get("arguments") or {})
+    return None

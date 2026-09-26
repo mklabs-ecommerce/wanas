@@ -21,6 +21,7 @@ from domain.services import (
     queues,
     waitlist,
 )
+from tests.checkout_helpers import agree_to_the_summary
 
 load_all()
 
@@ -491,6 +492,7 @@ def test_confirm_order_items_out_of_stock_writes_nothing(ctx, shopify):
     ctx.session.get(Variant, VARIANT).stock_qty = 1
     ctx.session.flush()
 
+    agree_to_the_summary(ctx, "Cairo")
     result = call(
         ctx,
         "confirm_order",
@@ -515,6 +517,7 @@ def test_confirm_order_client_blocked(ctx):
     ctx.session.flush()
 
     call(ctx, "add_to_cart", variant_id=VARIANT)
+    agree_to_the_summary(ctx, "Cairo")
     assert call(
         ctx,
         "confirm_order",
@@ -528,6 +531,7 @@ def test_confirm_order_client_blocked(ctx):
 def test_confirm_order_success_shape(ctx):
     ctx.session.get(ShippingRate, "Cairo").fee = 60
     call(ctx, "add_to_cart", variant_id=VARIANT)
+    agree_to_the_summary(ctx, "Cairo")
     result = call(
         ctx,
         "confirm_order",
@@ -566,6 +570,7 @@ def test_confirm_order_success_shape(ctx):
 def placed(ctx):
     ctx.session.get(ShippingRate, "Cairo").fee = 60
     call(ctx, "add_to_cart", variant_id=VARIANT, quantity=2)
+    agree_to_the_summary(ctx, "Cairo")
     result = call(
         ctx,
         "confirm_order",

@@ -197,9 +197,10 @@ def test_a_full_conversation_ends_with_a_live_shopify_order(priced, shopify):
 
     provider = RehearsalProvider()
     handle_message(CHANNEL, WHO, f"add {VARIANT} 2", db=priced, provider=provider)
-    reply = handle_message(
+    handle_message(
         CHANNEL, WHO, "order Nour | Cairo | 5 Test Street | 01055500022", db=priced, provider=provider
     )
+    reply = handle_message(CHANNEL, WHO, "confirm", db=priced, provider=provider)
 
     assert reply.silent and not reply.text, reply.text
     priced.commit()  # the turn's own session write, which the adapter commits

@@ -225,6 +225,7 @@ def test_an_order_can_be_placed_over_the_webhook(client, configured, sent, seede
         [
             "add wanas-hoodie-s-olive 1",
             "order Omar | Cairo | 5 Test Street | 01000000123",
+            "confirm",
         ]
     ):
         assert post(client, webhook_body(text, message_id=f"wamid.{index}")).status_code == 200
