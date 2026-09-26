@@ -11,6 +11,7 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import select
 
+from assistant import messages as msg
 from assistant.tools.base import REGISTRY, ToolContext, call_tool, load_all
 from domain.models import Client, Order, QueueKind, ShippingRate, Variant, utcnow
 from domain.services import (
@@ -841,6 +842,14 @@ def test_link_client_confirmed_and_declined(ctx):
     identity = identities.get_or_create(ctx.session, ctx.channel, ctx.external_id)
     identities.detect_pending_link_from_external_id(ctx.session, identity)
 
+    # Asked in one turn, answered in the next -- the only order it links in.
+    profile = call(ctx, "get_my_profile")
+    ctx.history[:] = [
+        msg.user("عايز أكمل الأوردر"),
+        msg.tool_results([msg.tool_result("p", "get_my_profile", profile)]),
+        msg.assistant("عندنا سجل بنفس رقمك — ده انت؟"),
+        msg.user("اه"),
+    ]
     result = call(ctx, "link_client", confirmed=True)
     assert result["linked"] is True
     assert result["address"] == "Old"

@@ -315,11 +315,39 @@ def save_customer_name(ctx: ToolContext, name: str) -> dict:
     return {"saved": True, "name": cleaned}
 
 
+def _asked_before_their_answer(history: list[dict]) -> bool:
+    """Whether the pending link was put to the customer before their latest
+    message -- i.e. whether that message can be the answer to it.
+
+    The question comes from `get_my_profile` returning `pending_link`; the
+    answer is the customer's next message. A `get_my_profile` in the same turn
+    as `link_client` means nobody has answered anything yet.
+    """
+    last_user = next(
+        (i for i in range(len(history) - 1, -1, -1) if history[i].get("role") == "user"), None
+    )
+    if last_user is None:
+        return False
+    for message in history[:last_user]:
+        if message.get("role") != "tool_results":
+            continue
+        for result in message.get("results") or []:
+            content = result.get("content")
+            if (
+                result.get("name") == "get_my_profile"
+                and isinstance(content, dict)
+                and content.get("pending_link")
+            ):
+                return True
+    return False
+
+
 @tool(
     "link_client",
-    "Answer the 'is this you?' question raised by pending_link. true attaches this conversation to "
-    "the existing customer record; false leaves them separate. Nothing is ever linked without this "
-    "call.",
+    "Answer the 'is this you?' question raised by pending_link, with the customer's answer. true "
+    "attaches this conversation to the existing customer record; false leaves them separate. "
+    "Nothing is ever linked without this call, and true is refused (not_asked_yet) in the same "
+    "turn the question is asked: ask, then call it after they reply.",
     properties={"confirmed": {"type": "boolean"}},
     required=("confirmed",),
 )
@@ -333,6 +361,18 @@ def link_client(ctx: ToolContext, confirmed: bool) -> dict:
         # outcome, not a failure.
         identities.decline_link(ctx.session, identity)
         return {"linked": False}
+
+    if not _asked_before_their_answer(ctx.history):
+        # whatsapp/201021233010, 2026-09-22 15:08: «عندنا سجل تاني بنفس رقم
+        # تليفون حضرتك — ده انت؟» and link_client(confirmed=true) in the same
+        # hop, before the customer could answer -- then the other record's
+        # saved address read back into this chat. "Yes" is the customer's
+        # word or it is nobody's.
+        return {
+            "error": "not_asked_yet",
+            "detail": "Ask 'is this you?' and wait: call link_client in the turn after the "
+            "customer answers, with their answer.",
+        }
 
     client_pk = identity.pending_link.get("_client_pk")
     client = ctx.session.get(Client, client_pk) if client_pk else None
