@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-from assistant import interactive
+from assistant import customer_words, interactive
 from assistant.tools.base import ToolContext, last_product, tool
 from common.money import money, to_decimal
 from config.settings import settings
@@ -163,10 +163,35 @@ def _garment_we_do_not_sell(
 #: Words that are *about* sizing rather than words that name a size. A chart
 #: answers "which size am I?", and nothing else -- «عايز مقاس L» has already
 #: answered it.
-_SIZING_WORDS = (
-    "مقاس", "مقاسات", "سايز", "سيز", "شارت", "قياس", "قياسات", "جدول",
-    "size", "sizes", "sizing", "measurement", "measurements", "chart",
-    "fit", "فيت", "يضبط", "هيضبط", "مظبوط", "يجيلي", "هيجيلي", "واسع", "ضيق",
+#:
+#: Matched as whole words (with the prefixes Arabic glues on: «المقاسات»,
+#: «بالمقاس», «مقاسي»), never as substrings. As substrings, «سايز» fired on
+#: «اوفر سايز» and "size" on "oversized", and production withheld every
+#: product photo from «انا عايز تيشيرت اوفر سايز» -- a product question.
+_AR = "؀-ۿ"
+_SIZING = re.compile(
+    rf"(?<![{_AR}])(?:و|ف|ب|ل)?(?:ال|لل)?"
+    rf"(?:مقاس|قياس|سايز|سيز|شارت|تشارت|جدول)[{_AR}]*"
+    rf"|(?<![{_AR}])(?:و)?(?:ال)?(?:فيت|يضبط|هيضبط|مظبوط|يجيلي|هيجيلي|يجيني|هيجيني|واسع|ضيق)(?![{_AR}])"
+    r"|\b(?:size|sizes|sizing|measurements?|chart|fit|fits|fitting)\b",
+    re.IGNORECASE,
+)
+
+#: Words that ask for the chart whatever else the message names.
+_CHART_ASKED = re.compile(
+    rf"(?<![{_AR}])(?:و|ب|ل)?(?:ال|لل)?(?:جدول|شارت|تشارت|قياسات)|\b(?:chart|measurements?)\b",
+    re.IGNORECASE,
+)
+
+#: The names of a cut, which say "size" or "fit" and ask nothing about either:
+#: «اوفر سايز» / «وافر سايز» / "oversized", "boxy fit" (half of "RINGER BOXY
+#: FIT TSHIRT"). Removed before the sizing words are read.
+_STYLE_NAMES = re.compile(
+    rf"(?<![{_AR}])(?:و|ب|ف|ل)?(?:ال)?[اأإ]?و?فر\s*-?\s*(?:سايز|سيز)[{_AR}]*"
+    r"|\bover\s*-?\s*sized?\b"
+    r"|\b(?:boxy|regular|slim|relaxed|loose|wide|oversized?)\s*-?\s*fit\b"
+    rf"|(?<![{_AR}])(?:بوكسي|ريجولار|سليم|اوفر|أوفر)\s*فيت(?![{_AR}])",
+    re.IGNORECASE,
 )
 
 #: A message naming one of these has *chosen* a size, not asked about one.
@@ -196,18 +221,17 @@ def asked_about_sizing(ctx: ToolContext) -> bool:
 
     Naming a size is not asking about sizing. «عايز مقاس L» is a decision, and
     answering a decision with a measurements chart reads as not having listened.
+
+    Only the customer's *latest* message, and only their own words in it
+    (`assistant/customer_words.py`): the runtime's note about a photo they
+    sent says «المقاسات» to the model, and was read as them asking.
     """
-    text = next(iter(_recent_customer_text(ctx)), "")
-    if not text:
+    text = _STYLE_NAMES.sub(" ", customer_words.latest(ctx.history))
+    if not text or not _SIZING.search(text):
         return False
-    lowered = text.lower()
-    if not any(word in lowered for word in _SIZING_WORDS):
-        return False
-    words = {w.lower() for w in _WORD.findall(text)}
-    #: `جدول` / `chart` / `measurements` are unambiguous -- a customer who says
-    #: those is asking for the chart whatever else the message names.
-    if any(word in lowered for word in ("جدول", "chart", "شارت", "قياسات", "measurement")):
+    if _CHART_ASKED.search(text):
         return True
+    words = {w.lower() for w in _WORD.findall(text)}
     return not (words & set(_NAMED_SIZES))
 
 
@@ -535,16 +559,7 @@ def _recent_customer_text(ctx: ToolContext) -> list[str]:
     Only their messages: a governorate the *bot* named is not the customer
     stating where they live.
     """
-    texts: list[str] = []
-    for message in reversed(ctx.history):
-        if message.get("role") != "user":
-            continue
-        content = (message.get("content") or "").strip()
-        if content:
-            texts.append(content)
-        if len(texts) >= ADDRESS_SCAN_MESSAGES:
-            break
-    return texts
+    return customer_words.recent(ctx.history, ADDRESS_SCAN_MESSAGES)
 
 
 def _governorate_already_given(ctx: ToolContext) -> dict | None:

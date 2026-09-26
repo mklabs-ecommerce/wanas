@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
+from assistant.customer_words import own_words
+
 log = logging.getLogger("wanas.tools")
 
 
@@ -635,7 +637,9 @@ def asked_for_colors(ctx: ToolContext) -> bool:
     for message in reversed(ctx.history):
         if message.get("role") != "user":
             continue
-        content = (message.get("content") or "").lower()
+        # Their own words: a quoted bot sentence («الألوان المتاحة: ...») is
+        # not the customer asking for every colour (`customer_words`).
+        content = own_words(message.get("content")).lower()
         if any(phrase in content for phrase in _COLOR_REQUEST):
             return True
         seen += 1

@@ -886,7 +886,7 @@ def run_turn(
             # A size chart or garment photos, not both, unless both were
             # asked for -- on the pictures actually leaving, and before the
             # claim checks below read them.
-            showcase.keep_chart_or_photos(ctx)
+            showcase.keep_chart_or_photos(ctx, called, text_out)
 
             # Blaming the customer's phone for our own failed send. Checked
             # before the claim guard because it is the more expensive mistake

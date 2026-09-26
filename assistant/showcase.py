@@ -35,9 +35,17 @@ from __future__ import annotations
 import logging
 import re
 
+from assistant import customer_words
 from assistant.messages import TOOL_RESULTS
 from assistant.photo_claims import _BOTH, _GENERIC_NAME_WORDS
-from assistant.tools.base import ToolContext, _image_labels, _matching_color, asked_for_colors
+from assistant.tools.base import (
+    ToolContext,
+    _chart_label,
+    _image_labels,
+    _matching_color,
+    asked_for_colors,
+    last_product,
+)
 from domain.services import catalog, search_terms
 
 log = logging.getLogger("wanas.showcase")
@@ -389,26 +397,18 @@ _ABOUT_THE_CHART = re.compile(
 )
 
 
-def _latest_customer_text(ctx: ToolContext) -> str:
-    return next(
-        (
-            (m.get("content") or "").strip()
-            for m in reversed(ctx.history)
-            if m.get("role") == "user" and (m.get("content") or "").strip()
-        ),
-        "",
-    )
-
-
 def asked_for_photos(ctx: ToolContext) -> bool:
     """Did the customer's own last message ask to see the garment itself?
 
     Read from what they wrote, like `catalog_tools.asked_about_sizing` -- the
-    two together decide whether a reply may carry garment photos at all.
+    two together decide whether a reply may carry garment photos at all. What
+    they wrote, not what the runtime wrote beside it: the note about a photo
+    *they* sent begins «[الزبون بعت صورة]», and its «صورة» was read as a
+    request for ours (`assistant/customer_words.py`).
     """
     from assistant.tools.catalog_tools import asked_about_sizing
 
-    text = _latest_customer_text(ctx)
+    text = customer_words.latest(ctx.history)
     for match in _PHOTO_NOUN.finditer(text):
         if not _ABOUT_THE_CHART.match(text, match.end()):
             return True
@@ -417,7 +417,41 @@ def asked_for_photos(ctx: ToolContext) -> bool:
     return bool(_SEE_VERB.search(text)) or asked_for_colors(ctx)
 
 
-def keep_chart_or_photos(ctx: ToolContext) -> list[str]:
+def _ensure_chart(ctx: ToolContext, text: str) -> str | None:
+    """Attach the chart a sizing question is owed, when nothing attached one.
+
+    The product is the one the reply names, if it names exactly one, else the
+    one the conversation is about (`tools.base.last_product`) -- never a
+    guess between two. Forced past "already sent": asking for the chart
+    again is asking to see it again, the same rule `get_size_chart` keeps.
+    """
+    from assistant.tools.catalog_tools import _chart_image
+
+    if any(path not in ctx.photo_products for path in ctx.attachments):
+        return None  # a chart is already going
+    named = {pid for pid, *_ in named_products(text or "", known_products(ctx.history))}
+    if len(named) == 1:
+        (product_id,) = named
+    elif not named:
+        current = last_product(ctx.history)
+        product_id = (current or {}).get("product_id")
+    else:
+        return None
+    if not product_id:
+        return None
+    chart = _chart_image(ctx.session, product_id)
+    if not chart:
+        return None
+    name = next((n for n, pid in known_products(ctx.history).items() if pid == product_id), None)
+    if ctx.attach(
+        chart, force=True, chart=True, label=_chart_label({"name": name or product_id}, product_id)
+    ):
+        log.info("attached the %s size chart the sizing question was owed", product_id)
+        return chart
+    return None
+
+
+def keep_chart_or_photos(ctx: ToolContext, called=(), text: str = "") -> list[str]:
     """A size-chart question gets no garment photo; a product question gets no
     chart. Returns what it took off.
 
@@ -445,13 +479,24 @@ def keep_chart_or_photos(ctx: ToolContext) -> list[str]:
     What is taken off is taken off entirely, so it is never recorded as
     delivered: the photo a chart reply withheld is still unseen when the
     customer asks for it next.
+
+    Two more facts decide it besides the words, both from production on
+    2026-09-25. A turn that called `get_size_chart` is a sizing turn, whatever
+    the customer's phrasing. And a sizing question gets the chart even when
+    the model answered it from memory: «طيب السايز شارت بتاع ringer boxy
+    fit» was answered with the numbers and no tool call, and what went out
+    was three photos of the shirt and no chart (`_ensure_chart`).
     """
     from assistant.tools.catalog_tools import asked_about_sizing
 
+    wants_photos = asked_for_photos(ctx)
+    asked_sizing = asked_about_sizing(ctx)
+    wants_chart = asked_sizing or "get_size_chart" in (called or ())
+    if asked_sizing and not wants_photos:
+        _ensure_chart(ctx, text)
+
     photos = [path for path in ctx.attachments if path in ctx.photo_products]
     charts = [path for path in ctx.attachments if path not in ctx.photo_products]
-    wants_photos = asked_for_photos(ctx)
-    wants_chart = asked_about_sizing(ctx)
     if wants_photos and wants_chart:
         return []
     if wants_chart:
