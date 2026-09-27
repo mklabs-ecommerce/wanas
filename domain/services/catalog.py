@@ -362,8 +362,20 @@ def get_products(
         # nothing like that".
         products = [p for p in products if _matches_query(p, category)]
     if style:
+        # The facet, *or* what the product says about itself. `style` is
+        # wanas.db-only metadata, and a product created in Shopify Admin is
+        # imported with none (`product_import`), so an exact match on it made
+        # every such product invisible to any style search: production asked
+        # `get_products(category='T-shirts', style='oversized')` and was told
+        # nothing plain existed -- beside the `oversized plain t-shirt`,
+        # whose own name says oversized. Folded through the same matcher as
+        # free text, so «اوفر سايز» and «واسع» reach it too.
         wanted = style.lower()
-        products = [p for p in products if any(wanted == s.lower() for s in (p.style or []))]
+        products = [
+            p
+            for p in products
+            if any(wanted == s.lower() for s in (p.style or [])) or _matches_query(p, style)
+        ]
     unmatched: list[str] = []
     if query:
         candidates = products

@@ -52,3 +52,38 @@ def test_a_query_of_nothing_but_unknown_words_stays_empty_and_says_why(seeded):
     assert result["count"] == 0
     assert result["unmatched_terms"] == ["بيجامه"]
     assert result["partial_match"] is False
+
+
+def test_a_product_created_in_shopify_is_found_by_its_style(seeded):
+    """Production, from the logs: a voice note «السلام عليكم كنت محتاج تيشرت
+    اوفر سايز ساده» became `get_products(category='T-shirts',
+    style='oversized')`, and the answer was "every oversized tee is printed"
+    -- because the plain one was created in Shopify Admin, imported with
+    `style=[]`, and the style filter was an exact match on that field."""
+    from domain.models import Product
+
+    seeded.add(
+        Product(
+            product_id="oversized-plain-t-shirt-4",
+            name="oversized plain t-shirt",
+            category="T-Shirts",
+            department="unisex",
+            style=[],
+            price=300,
+            original_price=300,
+            description="an oversized fit for maximum comfort",
+        )
+    )
+    seeded.flush()
+    names = [
+        p["name"]
+        for p in catalog.get_products(seeded, category="T-shirts", style="oversized")["products"]
+    ]
+    assert "oversized plain t-shirt" in names
+    # The facet still works for the products that carry it.
+    tagged = [
+        p["name"]
+        for p in catalog.get_products(seeded, style="oversized")["products"]
+        if p["style"]
+    ]
+    assert tagged
