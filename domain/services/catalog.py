@@ -181,6 +181,16 @@ def _product_summary(product: Product, live_map=None) -> dict:
         for v, priced in zip(product.variants, variants, strict=True)
         if v.color and priced.stock_qty > 0
     }
+    # And which sizes. Without this a search could say which colours are for
+    # sale but not which sizes, so the first reply about the `oversized plain
+    # t-shirt` gave colours and price, and «متاح S بس» only arrived a message
+    # later, after a get_variants call -- the same fact, split across two
+    # replies.
+    stocked_sizes = {
+        v.size
+        for v, priced in zip(product.variants, variants, strict=True)
+        if v.size and priced.stock_qty > 0
+    }
     return {
         "product_id": product.product_id,
         "name": product.name,
@@ -212,6 +222,7 @@ def _product_summary(product: Product, live_map=None) -> dict:
         # size can actually be bought in right now. `colors` describes the
         # product; this is the slice of it that is for sale.
         "in_stock_colors": [c for c in (product.colors or []) if c in stocked],
+        "in_stock_sizes": in_order(sorted(stocked_sizes)),
         "any_in_stock": any(v.stock_qty > 0 for v in variants),
         "description": product.description,
     }

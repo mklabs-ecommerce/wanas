@@ -682,3 +682,61 @@ def violation(
     ):
         return "repeat: the previous reply, sent again"
     return ""
+
+
+# --------------------------------------------------------------------------
+# a choice question asked twice in a row
+# --------------------------------------------------------------------------
+
+#: One question clause: everything back to the previous sentence break, up to
+#: and including its question mark.
+_QUESTION_CLAUSE = re.compile(r"[^.!؟?\n،]*[؟?]")
+
+#: What a choice question is about. Only these two: they are the questions a
+#: product reply ends on, and the ones production asked twice.
+_CHOICE_KINDS = {
+    "colour": re.compile(r"لون|الوان|ألوان|colou?r", re.IGNORECASE),
+    "size": re.compile(r"مقاس|سايز|\bsize\b", re.IGNORECASE),
+}
+
+
+def _asked_kinds(text: str) -> set[str]:
+    kinds: set[str] = set()
+    for clause in _QUESTION_CLAUSE.findall(text or ""):
+        kinds.update(kind for kind, pattern in _CHOICE_KINDS.items() if pattern.search(clause))
+    return kinds
+
+
+def drop_repeated_choice_question(text: str, previous: str, customer: str) -> str:
+    """The reply without a colour/size question the previous reply already asked.
+
+    From production: a reply ended «تحب لون إيه؟», the customer sent photos,
+    and the next reply ended on the same «تحب لون إيه؟ Black / Navy / White»
+    -- read as a bot that had forgotten what it just asked. The question is
+    still open; asking it again adds nothing. Deterministic rather than a
+    regeneration, because the rest of the reply is usually right and the
+    fallback for a rule broken twice is worse than a repeated question.
+
+    Only when the customer's message carried no words of their own -- a photo,
+    a sticker: they did not answer the question, so it is still standing. A
+    customer who wrote something («الاتنين») may well have answered it, and
+    what follows is a new question that happens to share a word. Also kept
+    when removing it would leave nothing to send.
+    """
+    if (customer or "").strip():
+        return text
+    repeated = _asked_kinds(previous) & _asked_kinds(text)
+    if not repeated:
+        return text
+
+    def _drop(match: re.Match) -> str:
+        clause = match.group(0)
+        if any(_CHOICE_KINDS[kind].search(clause) for kind in repeated):
+            return ""
+        return clause
+
+    trimmed = _QUESTION_CLAUSE.sub(_drop, text)
+    # Tidy what the removal leaves: a dangling comma, empty lines.
+    trimmed = re.sub(r"[ \t]*،[ \t]*(?=\n|$)", "", trimmed)
+    trimmed = re.sub(r"\n{3,}", "\n\n", trimmed).strip()
+    return trimmed or text

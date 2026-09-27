@@ -42,6 +42,8 @@ def get_categories(ctx: ToolContext) -> dict:
     "`colors` lists every colourway the product comes in including sold-out ones -- it describes "
     "the product, it is not an offer; `in_stock_colors` is the only list you may present as "
     "available. Never deny a colour that is in `in_stock_colors`, and never offer one that is not. "
+    "`in_stock_sizes` is the same for sizes, across all colours: when it is short -- one or two "
+    "sizes -- say so in the same reply as the colours and price, not in a later one. "
     "`sleeve` filters by sleeve length -- half, long or sleeveless -- and is how you answer "
     "'do you have anything half sleeve'. Every product also carries `sleeve` in the result, and it "
     "is always one of those three: there is no null and no 'not recorded'. Never say you do not "
