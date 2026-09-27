@@ -44,6 +44,15 @@ log = logging.getLogger("wanas.dispatcher")
 #: because anyone expects to reach it.
 _FRAGMENTER_MEMORY = 5000
 
+#: The longest an open batch is held for a message still being ingested (a
+#: media download). Past it the batch is answered anyway.
+_MEDIA_HOLD_SECONDS = 20.0
+
+#: How many times one batch may give way to a newer message before it is
+#: answered regardless -- a customer sending a message every few seconds must
+#: still get replies.
+MAX_SUPERSEDES = 2
+
 
 @dataclass
 class Pending:
@@ -230,6 +239,16 @@ class MessageDispatcher:
         self._last_release: dict[str, float] = {}
         self._pending: dict[str, Pending] = {}
         self._timers: dict[str, threading.Timer] = {}
+        #: Messages the webhook has accepted but not yet submitted -- a photo
+        #: or voice note still downloading. A text and the photo it is about
+        #: arrive as two platform messages, and the photo reaches `submit`
+        #: seconds later, after its download: long enough that the text had
+        #: already been answered on its own and the photo got a second,
+        #: separate reply. See `announce`.
+        self._incoming: dict[str, int] = {}
+        #: A batch whose turn was superseded by a newer message, waiting to be
+        #: folded into the turn that answers both. See `supersede`.
+        self._carry: dict[str, Pending] = {}
         #: One conversation is answered one message at a time. Without this a
         #: fragment that arrives while the previous turn is mid-flight produces
         #: two agent turns racing over the same session row.
@@ -308,6 +327,86 @@ class MessageDispatcher:
             timer.daemon = True
             self._timers[key] = timer
             timer.start()
+
+    # -- one reply per thought --------------------------------------------
+
+    def announce(self, key: str) -> None:
+        """A message for this conversation has arrived and is being ingested.
+
+        Called by the webhook *before* the slow part (a media download), and
+        paired with exactly one `settle`. While any message is announced and
+        not settled, an open batch for the conversation is held rather than
+        released, and a running turn is told a newer message exists.
+        """
+        with self._lock:
+            self._incoming[key] = self._incoming.get(key, 0) + 1
+
+    def settle(self, key: str) -> None:
+        """The announced message turned out to need no turn."""
+        self._uncount(key)
+        self._flush_carry(key)
+
+    def settle_and_submit(self, key: str, item: Pending) -> None:
+        """The announced message is ready: it stops being "incoming" at the
+        moment it becomes a batch -- never after, or a turn run inline would
+        see its own message as a newer one."""
+        self._uncount(key)
+        self.submit(key, item)
+
+    def _uncount(self, key: str) -> None:
+        with self._lock:
+            left = self._incoming.get(key, 0) - 1
+            if left > 0:
+                self._incoming[key] = left
+            else:
+                self._incoming.pop(key, None)
+
+    def has_newer(self, key: str) -> bool:
+        """Whether something arrived for this conversation after the batch now
+        being answered: still downloading, buffered, or queued behind it."""
+        with self._lock:
+            return (
+                self._incoming.get(key, 0) > 0
+                or key in self._pending
+                or self._lock_users.get(key, 0) > 1
+            )
+
+    def supersede(self, key: str, item: Pending) -> None:
+        """Hand a batch whose reply was not sent to the next turn.
+
+        The turn that answers the newer message answers this one too, in one
+        reply -- rather than two replies, each unaware of the other's message.
+        """
+        item.extras["superseded"] = int(item.extras.get("superseded", 0)) + 1
+        with self._lock:
+            carried = self._carry.pop(key, None)
+            if carried is not None:
+                carried.merge(item)
+                item = carried
+            self._carry[key] = item
+
+    def _take_carry(self, key: str, item: Pending) -> Pending:
+        with self._lock:
+            carried = self._carry.pop(key, None)
+        if carried is None:
+            return item
+        carried.merge(item)
+        return carried
+
+    def _flush_carry(self, key: str) -> None:
+        """A carried batch whose newer message never became a turn (a
+        duplicate, an unsupported type) is answered on its own -- never
+        dropped."""
+        with self._lock:
+            if (
+                key not in self._carry
+                or self._incoming.get(key, 0) > 0
+                or key in self._pending
+                or self._lock_users.get(key, 0) > 0
+            ):
+                return
+            item = self._carry.pop(key)
+        self.submit(key, item)
 
     @property
     def _fragment_memory_window(self) -> float:
@@ -406,6 +505,23 @@ class MessageDispatcher:
 
     def _release(self, key: str) -> None:
         with self._lock:
+            held = self._pending.get(key)
+            if (
+                held is not None
+                and self._incoming.get(key, 0) > 0
+                and held.first_seen
+                and time.perf_counter() - held.first_seen < _MEDIA_HOLD_SECONDS
+            ):
+                # A message for this conversation is still being ingested --
+                # a photo downloading. Answering now would answer the text
+                # without the photo it is about, and then the photo on its
+                # own. Look again shortly; bounded, so a download that hangs
+                # cannot hold the reply forever.
+                timer = threading.Timer(0.5, self._release, args=(key,))
+                timer.daemon = True
+                self._timers[key] = timer
+                timer.start()
+                return
             self._timers.pop(key, None)
             item = self._pending.pop(key, None)
         if item is None:
@@ -438,6 +554,9 @@ class MessageDispatcher:
             # conversation waited behind its own previous turn. Separated
             # because the first is a tuning decision and the second is
             # contention, and they are fixed by completely different things.
+            # A batch an earlier turn gave up on because this one was coming
+            # is answered here, together with it.
+            item = self._take_carry(key, item)
             if item.last_seen:
                 item.spent("debounce_wait", queued - item.last_seen)
             item.spent("turn_queue_wait", time.perf_counter() - queued)
@@ -450,6 +569,7 @@ class MessageDispatcher:
                 log.exception("failed to handle buffered messages for %s", key)
             finally:
                 self._release_conversation_lock(key, lock)
+        self._flush_carry(key)
 
     def _conversation_lock(self, key: str) -> threading.Lock:
         with self._lock:

@@ -23,7 +23,7 @@ from fastapi import APIRouter, Request, Response
 
 from assistant import session as session_store, showcase, turn_retry
 from assistant.agent import GENERIC_FAILURE
-from assistant.dispatcher import MessageDispatcher, Pending
+from assistant.dispatcher import MAX_SUPERSEDES, MessageDispatcher, Pending
 from assistant.runtime import (
     claim_message,
     handle_message,
@@ -412,6 +412,32 @@ def _accept(message: dict, contact_name: str | None, *, verify_seconds: float = 
     # nobody could establish about the three numbers that went unanswered.
     log.info("inbound whatsapp %s from %s (%s)", message_type, external_id, message_id)
 
+    # Announced before the slow part (a media download) and settled however
+    # this ends: while it is in flight, an open batch for this customer waits
+    # for it and a turn already composing a reply knows it is coming -- so a
+    # text and the photo it is about get one reply, not two. See
+    # `MessageDispatcher.announce`.
+    dispatcher.announce(external_id)
+    submitted = False
+    try:
+        submitted = _ingest(
+            message, contact_name, external_id, message_id, message_type, verify_seconds
+        )
+    finally:
+        if not submitted:
+            dispatcher.settle(external_id)
+
+
+def _ingest(
+    message: dict,
+    contact_name: str | None,
+    external_id: str,
+    message_id: str | None,
+    message_type: str | None,
+    verify_seconds: float,
+) -> bool:
+    """The rest of `_accept`, for a message that is claimed and announced.
+    True once the message has been handed to the dispatcher."""
     client = WhatsAppClient()
     pending = Pending(last_message_id=message_id)
     # Everything the webhook spends before the debounce window even opens is
@@ -493,7 +519,7 @@ def _accept(message: dict, contact_name: str | None, *, verify_seconds: float = 
         record_outbound(CHANNEL, external_id, UNSUPPORTED_ACK, delivered=ack.delivered)
         if ack.message_ids:
             record_outbound(CHANNEL, external_id, UNSUPPORTED_ACK, message_ids=list(ack.message_ids))
-        return
+        return False
     else:
         # A reaction, a system notice, a type Meta has not documented here.
         # There is deliberately no reply -- but it is recorded and named, at
@@ -507,7 +533,7 @@ def _accept(message: dict, contact_name: str | None, *, verify_seconds: float = 
             external_id,
             message_id,
         )
-        return
+        return False
 
     if contact_name:
         pending.extras["contact_name"] = contact_name
@@ -538,7 +564,8 @@ def _accept(message: dict, contact_name: str | None, *, verify_seconds: float = 
     # and may not be moved here.
     offthread.run_later("whatsapp read receipt", client.mark_as_read, message_id)
 
-    dispatcher.submit(external_id, pending)
+    dispatcher.settle_and_submit(external_id, pending)
+    return True
 
 
 # --------------------------------------------------------------------------
@@ -590,6 +617,7 @@ def _deliver_turn(external_id: str, pending: Pending) -> None:
                 # runtime resolves it against the stored transcript.
                 reply_to=pending.unresolved_reply_to() or None,
                 mids=_batch_ids(pending) or None,
+                superseded=_superseded_check(external_id, pending),
             ),
             channel=CHANNEL,
             external_id=external_id,
@@ -608,6 +636,12 @@ def _deliver_turn(external_id: str, pending: Pending) -> None:
         return
 
     if reply.duplicate:
+        return
+    if reply.superseded:
+        # A newer message arrived while this reply was being written. Nothing
+        # was sent or stored; the claims stay taken, and the next turn
+        # answers this batch together with the new one.
+        dispatcher.supersede(external_id, pending)
         return
     if not (reply.text or reply.interactive):
         if reply.silent:
@@ -664,6 +698,16 @@ def _deliver_turn(external_id: str, pending: Pending) -> None:
         pictures = showcase.sent_pictures(outcomes, reply.attachment_labels)
         if pictures:
             log.info("sent to %s: %s", external_id, pictures)
+
+
+def _superseded_check(external_id: str, pending: Pending):
+    """What the turn asks before sending: has something newer arrived?
+
+    None once this batch has already given way `MAX_SUPERSEDES` times, so a
+    customer writing every few seconds is still answered."""
+    if int(pending.extras.get("superseded", 0)) >= MAX_SUPERSEDES:
+        return None
+    return lambda: dispatcher.has_newer(external_id)
 
 
 def _batch_ids(pending: Pending) -> list[str]:

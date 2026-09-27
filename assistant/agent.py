@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -557,9 +558,28 @@ def _sent_images(history: list[dict]) -> set[str]:
     return seen
 
 
+#: Tools that only read. A turn that called nothing else can be dropped
+#: unsent when a newer message supersedes it, because it changed nothing.
+READ_ONLY_TOOLS = frozenset(
+    {
+        "get_categories",
+        "get_products",
+        "get_variants",
+        "get_size_chart",
+        "get_shipping_fee",
+        "get_my_orders",
+        "get_return_terms",
+        "get_my_profile",
+    }
+)
+
+
 @dataclass
 class AgentReply:
     text: str
+    #: The reply was dropped unsent because a newer message arrived while it
+    #: was composed; the caller hands the batch to the next turn.
+    superseded: bool = False
     attachments: list[str] = field(default_factory=list)
     #: What each attached photo is of, keyed by path. Carried to the channel
     #: adapter so the platform message id a photo goes out as can be recorded
@@ -651,7 +671,13 @@ def run_turn(
     reply_to: list[str] | None = None,
     mids: list[str] | None = None,
     system_extra: str | None = None,
+    superseded: Callable[[], bool] | None = None,
 ) -> AgentReply:
+    """`superseded`, when given, is asked once the reply is composed: True
+    means a newer message for this conversation has arrived meanwhile. If this
+    turn only *read* (no cart, order, queue or profile write), the reply is
+    dropped unsent and unsaved -- `AgentReply.superseded` -- so the next turn
+    answers both messages in one reply. See `assistant/dispatcher.py`."""
     provider = provider or get_provider()
     specs = tool_specs()
     telemetry.note(loop_cap=settings.tool_loop_cap)
@@ -814,6 +840,23 @@ def run_turn(
             )
 
         if not reply.tool_calls:
+            if (
+                superseded is not None
+                and set(called) <= READ_ONLY_TOOLS
+                and superseded()
+            ):
+                # The customer said something else while this was being
+                # written -- typically the photo that goes with the text this
+                # turn answered. Sending now is two replies to one thought,
+                # each unaware of the other's message. Nothing is saved: the
+                # customer's message stays in the transcript as it arrived,
+                # and the next turn answers it together with the new one.
+                log.info(
+                    "reply to %s/%s superseded by a newer message; answering both together",
+                    channel,
+                    external_id,
+                )
+                return AgentReply(text="", tool_calls=called, superseded=True)
             if reply.text and _is_truncated(reply):
                 # The model ran into the completion ceiling mid-sentence.
                 # There is nothing in the text to catch this on, and it is the

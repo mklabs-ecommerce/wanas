@@ -71,6 +71,9 @@ class RuntimeReply:
     #: What the customer actually said, after a voice note was transcribed.
     #: The adapter logs it; nothing branches on it.
     transcript: str | None = None
+    #: True when the reply was dropped unsent because a newer message arrived
+    #: while it was composed; the adapter hands the batch to the next turn.
+    superseded: bool = False
 
 
 def claim_message(platform_message_id: str | None, *, db: Session | None = None) -> bool:
@@ -318,6 +321,7 @@ def handle_message(
     recorded_ids: set[str] | None = None,
     reply_to: list[str] | None = None,
     mids: list[str] | None = None,
+    superseded=None,
 ) -> RuntimeReply:
     """`recorded_ids` are the platform message ids already stored on arrival by
     `record_inbound`. Their provisional copies are folded into the real message
@@ -340,6 +344,7 @@ def handle_message(
             recorded_ids,
             reply_to,
             mids,
+            superseded,
         )
     with session_scope() as session:
         return _handle(
@@ -354,6 +359,7 @@ def handle_message(
             recorded_ids,
             reply_to,
             mids,
+            superseded,
         )
 
 
@@ -369,6 +375,7 @@ def _handle(
     recorded_ids: set[str] | None = None,
     reply_to: list[str] | None = None,
     mids: list[str] | None = None,
+    superseded=None,
 ) -> RuntimeReply:
     if _already_processed(db, platform_message_id):
         log.info("ignoring duplicate delivery %s", platform_message_id)
@@ -564,7 +571,10 @@ def _handle(
             reply_to=reply_to,
             mids=mids,
             system_extra=resumed,
+            superseded=superseded,
         )
+    if reply.superseded:
+        return RuntimeReply(superseded=True, tool_calls=reply.tool_calls)
     return RuntimeReply(
         text=reply.text,
         attachments=reply.attachments,
