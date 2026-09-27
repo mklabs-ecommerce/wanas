@@ -447,7 +447,7 @@ def test_the_acknowledgement_of_an_unsupported_attachment_is_in_the_transcript(
 
     assert post_message(
         client,
-        {"attachments": [{"type": "template", "payload": {}}]},
+        {"attachments": [{"type": "video", "payload": {"url": LOOKASIDE}}]},
         mid="aWdfdGVtcGxhdGU=",
     ).status_code == 200
 
@@ -456,6 +456,38 @@ def test_the_acknowledgement_of_an_unsupported_attachment_is_in_the_transcript(
     shop_lines = [m for m in history if m["role"] == "assistant"]
     assert [m["content"] for m in shop_lines] == [adapter.UNSUPPORTED_ACK]
     assert shop_lines[0].get("by") == "system"
+
+
+def test_the_card_instagram_builds_beside_a_phone_number_is_not_a_handoff(
+    client, configured, sent, submitted, seeded
+):
+    """instagram, twice (2026-09-25 and again at checkout since): the customer
+    answered «والتليفون بتاعك إيه؟» with their number, Instagram delivered a
+    `template` card beside it, and the card -- listed as unsupported -- handed
+    the conversation to a person and sent «حد من الفريق هيرد عليك حالاً»
+    mid-checkout. The card is Instagram's, not the customer's."""
+    from domain.models import StaffQueueItem
+
+    assert post_message(client, {"text": "01067177129"}, mid="aWdfcGhvbmU=").status_code == 200
+    assert post_message(
+        client, {"attachments": [{"type": "template", "payload": {}}]}, mid="aWdfY2FyZA=="
+    ).status_code == 200
+
+    assert not any("الفريق" in (m.get("message") or {}).get("text", "") for m in sent)
+    with SessionLocal() as db:
+        assert db.query(StaffQueueItem).count() == 0
+    assert [p.texts for _, p in submitted] == [["01067177129"]]
+
+
+def test_a_card_s_words_join_the_message(client, configured, submitted):
+    payload = {"generic": {"elements": [{"title": "oversized plain t-shirt", "subtitle": "300 EGP"}]}}
+    assert post_message(
+        client,
+        {"text": "ده متاح؟", "attachments": [{"type": "template", "payload": payload}]},
+        mid="aWdfc2hhcmU=",
+    ).status_code == 200
+    _, pending = submitted[0]
+    assert pending.texts == ["ده متاح؟ oversized plain t-shirt 300 EGP"]
 
 
 def test_a_failed_download_still_leaves_a_chaseable_path(

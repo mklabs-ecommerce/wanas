@@ -244,6 +244,12 @@ def _accept_message(messaging: dict, *, verify_seconds: float = 0.0) -> None:
         return
 
     if not (pending.texts or pending.image_paths or pending.audio_paths):
+        if all(
+            (a or {}).get("type") in CARD_ATTACHMENT_TYPES
+            for a in message.get("attachments") or [{}]
+        ) and message.get("attachments"):
+            # An empty card Instagram generated beside the real message.
+            return
         log.warning(
             "nothing actionable in instagram message %s from %s; no reply will be sent",
             mid,
@@ -340,10 +346,41 @@ UNSUPPORTED_ATTACHMENT_TYPES = {
     "video",
     "file",
     "location",
-    "template",
     "like_heart",
-    "fallback",
 }
+
+#: Cards Instagram builds on its own from what the customer typed -- a link
+#: preview (`fallback`), and a `template` it generates beside a message
+#: holding a phone number, a link or a shared product. Never something the
+#: customer chose to send, and often a *second* message with the same mid
+#: moment as the text itself. They used to be in the unsupported list: from
+#: production, a customer answering «والتليفون بتاعك إيه؟» with their number
+#: was told «حد من الفريق هيرد عليك حالاً», the conversation was handed to a
+#: person and the bot paused -- mid-checkout, over a card nobody sent. Now
+#: whatever words the card carries join the message, and an empty one is
+#: dropped.
+CARD_ATTACHMENT_TYPES = {"template", "fallback"}
+
+
+def _card_text(payload: dict) -> str:
+    """The readable words in an Instagram card: titles, subtitles, a link."""
+    found: list[str] = []
+
+    def walk(node) -> None:
+        if isinstance(node, dict):
+            for key in ("title", "subtitle", "text", "url"):
+                value = node.get(key)
+                if isinstance(value, str) and value.strip() and value.strip() not in found:
+                    found.append(value.strip())
+            for value in node.values():
+                if isinstance(value, dict | list):
+                    walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(payload)
+    return " ".join(found)
 
 STORY_REPLY_MARKER = "[رد على ستوري]"
 STORY_MENTION_MARKER = "[الزبون منشنك في ستوري]"
@@ -414,6 +451,14 @@ def _collect_message(
             downloaded = client.download_attachment(url, INBOUND_MEDIA_DIR)
             pending.image_paths.append(downloaded or _chase_path(url))
             pending.image_ids.append(mid)
+            continue
+
+        if att_type in CARD_ATTACHMENT_TYPES:
+            words = _card_text(payload)
+            if words and words not in text:
+                text = f"{text} {words}".strip()
+            log.info("instagram %s card from %s: %s", att_type, sender_id,
+                     "words kept" if words else "empty, dropped")
             continue
 
         if att_type in UNSUPPORTED_ATTACHMENT_TYPES:
