@@ -212,7 +212,29 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "وايد": ("wide-leg",),
     "اوفر": ("oversized",),
     "اوفرسايز": ("oversized",),
+    # The cut's name as two words. «اوفر» alone already reached `oversized`,
+    # but «سايز» was then a token of its own that no product carries, and the
+    # all-tokens rule vetoed the whole query: «تيشرت اوفر سايز» found nothing
+    # in a shop full of oversized tees. The pair is one word here, so «سايز»
+    # is consumed only as part of the cut's name -- on its own it still
+    # reaches the size-chart logic, which reads the customer's raw message.
+    "اوفر سايز": ("oversized",),
+    "اوفر سيز": ("oversized",),
+    "وافر سايز": ("oversized",),
+    "over size": ("oversized",),
+    "over sized": ("oversized",),
     "لوز": ("oversized",),
+    # «ساده» -- no print. From a real conversation: «عايز تيشرت ساده اوفر
+    # سايز» was told nothing plain existed, and a minute later, searched in
+    # English, was offered the `oversized plain t-shirt` that is on the shelf.
+    "ساده": ("plain",),
+    "سادا": ("plain",),
+    "بلين": ("plain",),
+    "سيمبل": ("plain",),
+    "من غير طباعه": ("plain",),
+    "بدون طباعه": ("plain",),
+    "من غير رسمه": ("plain",),
+    "بدون رسمه": ("plain",),
     "ضيق": ("fitted",),
     "فيتد": ("fitted",),
     "بوكسي": ("boxy-fit",),
@@ -414,6 +436,11 @@ def query_tokens(query: str) -> list[set[str]]:
     An empty list means the query was nothing but padding -- «لو سمحت» on its
     own -- which the caller should treat as "no filter", not as "no results".
     """
+    return [group for _, group in _token_groups(query)]
+
+
+def _token_groups(query: str) -> list[tuple[str, set[str]]]:
+    """`query_tokens`, with the word each group was read from kept beside it."""
     normalized = normalize(query)
     if not normalized:
         return []
@@ -423,15 +450,45 @@ def query_tokens(query: str) -> list[set[str]]:
         if phrase in normalized:
             normalized = normalized.replace(phrase, phrase.replace(" ", "_"))
 
-    groups: list[set[str]] = []
+    groups: list[tuple[str, set[str]]] = []
     for raw in normalized.split():
         token = raw.replace("_", " ")
         if token in STOPWORDS or _strip_article(token) in STOPWORDS:
             continue
         if len(token) < 2 and not token.isdigit():
             continue
-        groups.append(expand(token))
+        groups.append((token, expand(token)))
     return groups
+
+
+def _group_matches(hay: str, group: set[str]) -> bool:
+    return any(_contains_word(hay, alternative) for alternative in group)
+
+
+def unmatched_terms(haystacks: list[str], query: str) -> list[str]:
+    """The words of a query that no haystack carries under any spelling.
+
+    Such a word can only ever empty the result: under the all-tokens rule one
+    unknown word -- a synonym nobody wrote down yet -- turns a question about
+    something on the shelf into "we have nothing like that".
+    """
+    hays = [normalize(h) for h in haystacks]
+    return [
+        token
+        for token, group in _token_groups(query)
+        if not any(_group_matches(hay, group) for hay in hays)
+    ]
+
+
+def matches_except(haystack: str, query: str, ignored: list[str]) -> bool:
+    """`matches`, with the words in `ignored` left out of the all-tokens rule."""
+    skip = set(ignored)
+    hay = normalize(haystack)
+    return all(
+        _group_matches(hay, group)
+        for token, group in _token_groups(query)
+        if token not in skip
+    )
 
 
 def _contains_word(haystack: str, needle: str) -> bool:

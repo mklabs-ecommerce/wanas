@@ -56,6 +56,12 @@ def get_categories(ctx: ToolContext) -> dict:
     "never say 'أيوه عندنا' to a garment_not_sold. `products` is empty on purpose: there is "
     "nothing here that answers their question. An empty `alternatives` means there is nothing "
     "close either -- say so and stop. "
+    "`unmatched_terms` lists words of your query that no product carries under any spelling; "
+    "with `partial_match` true the products matched everything else. That is not 'we do not "
+    "have it': never deny the unmatched word on the strength of it -- offer what came back, "
+    "describe it from its own name and fields, and let the customer judge. An empty result "
+    "that still carries `unmatched_terms` is the same: try a different wording or a broader "
+    "search before saying the shop has none. "
     "Search for what the customer actually asked for, not for a product name you happen to know. "
     "The result is what you may choose from, not what you should list: for a vague request, offer "
     "two or three that fit and let them narrow it down.",

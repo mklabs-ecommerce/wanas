@@ -353,8 +353,27 @@ def get_products(
     if style:
         wanted = style.lower()
         products = [p for p in products if any(wanted == s.lower() for s in (p.style or []))]
+    unmatched: list[str] = []
     if query:
+        candidates = products
         products = [p for p in products if _matches_query(p, query)]
+        if not products and candidates:
+            # Zero hits is read as "the shop has none", so it has to mean that.
+            # A word no product carries under any spelling -- «ساده» before it
+            # had a synonym -- vetoes the whole query under the all-tokens
+            # rule, and the same customer, searched a minute later in English,
+            # was offered what they had just been told did not exist. Search
+            # again without those words and say which were dropped, so the
+            # result is a partial match the model can qualify, never a denial.
+            unmatched = search_terms.unmatched_terms(
+                [_haystack(p) for p in candidates], query
+            )
+            if unmatched and len(unmatched) < len(search_terms.query_tokens(query)):
+                products = [
+                    p
+                    for p in candidates
+                    if search_terms.matches_except(_haystack(p), query, unmatched)
+                ]
         if len(products) > 1:
             products = _named_in_full(products, query) or products
 
@@ -371,6 +390,9 @@ def get_products(
     live_map = shopify_catalog.live_map()
     summaries = [_product_summary(p, live_map) for p in products]
     result = {"products": summaries, "count": len(summaries)}
+    if unmatched:
+        result["unmatched_terms"] = unmatched
+        result["partial_match"] = bool(summaries)
     if len(products) == 1:
         # A search that lands on exactly one product *is* an answer about that
         # product, and a clothes shop answering one in words alone is the one
