@@ -56,6 +56,24 @@ def test_girls_vocabulary_finds_the_shelf(seeded):
     assert names("بادي كم طويل")
 
 
+def test_sold_out_is_said_in_egyptian():
+    from assistant import reply_rules
+
+    for badge in ("SOLD OUT", "sold out", "Sold-Out", "soldout"):
+        text, fixes = reply_rules.correct(
+            f"اللون الأسود {badge} حاليًا", vocabulary={}, references={}, states_money=False
+        )
+        assert "خلصانة" in text and "sold" not in text.lower(), text
+        assert "SOLD OUT -> خلصانة" in fixes
+
+
+def test_the_prompt_speaks_to_her():
+    from assistant.prompt import SYSTEM_PROMPT
+
+    assert "بصيغة المؤنث دايمًا" in SYSTEM_PROMPT
+    assert "SOLD OUT" in SYSTEM_PROMPT  # named only to forbid it
+
+
 def test_what_rehla_does_not_sell():
     assert garments.not_sold("عندكم طرح؟")[0] == "طرح"
     assert garments.not_sold("فيه فساتين")[0] == "فساتين"

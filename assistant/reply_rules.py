@@ -565,6 +565,10 @@ def not_egyptian(text: str) -> str:
     return ""
 
 
+#: "SOLD OUT", "sold out", "Sold-Out", "soldout" -- any case, any joiner.
+_SOLD_OUT = re.compile(r"\bsold[\s_-]*out\b", re.IGNORECASE)
+
+
 def correct(
     text: str, *, vocabulary, references: dict[str, str], states_money: bool
 ) -> tuple[str, list[str]]:
@@ -575,6 +579,11 @@ def correct(
     they were given (`#1040`) -- the one they can quote to staff.
     """
     text, fixes = fix_arabic(text)
+
+    # Rehla: stock is said in Egyptian, never as the storefront's English badge.
+    text, sold_out = _SOLD_OUT.subn("خلصانة", text or "")
+    if sold_out:
+        fixes.append("SOLD OUT -> خلصانة")
 
     def _order(match: re.Match) -> str:
         reference = references.get(match.group(0))

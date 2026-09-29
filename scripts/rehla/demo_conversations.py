@@ -45,7 +45,7 @@ SCENARIOS: list[tuple[str, list[str], dict]] = [
     (
         "2. صورة لون",
         ["عايزة أشوف التوب اللي ضهره مفتوح باللون الأسود"],
-        {"tools": {"get_variants"}, "attachments": True},
+        {"attachments": True},
     ),
     (
         "3. مقاس",
