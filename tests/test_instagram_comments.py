@@ -336,29 +336,22 @@ def test_the_client_itself_refuses_a_second_completed_private_reply(
 # --- the rest of the filter chain --------------------------------------------
 
 
-def test_an_emoji_only_comment_is_dropped_and_costs_nothing(
+def test_an_emoji_only_comment_is_greeted_not_dropped(
     client, comments_on, fake_graph, classifier
 ):
-    """It receives nothing, so it must not spend one of the commenter's three
-    hourly slots on the way to receiving it: no reply row, and the real
-    question that follows still gets its DM."""
+    """Rehla: a "🔥🔥" gets one warm public line and one greeting DM -- no
+    classifier call, and still exactly one reply row."""
     assert post_comment(client, comment_body("🔥🔥")).status_code == 200
-    assert public_replies(fake_graph) == []
-    assert private_replies(fake_graph) == []
-    with SessionLocal() as db:
-        assert db.query(InstagramCommentReply).count() == 0
-
-    for index in range(comments_on.instagram_comment_rate_limit):
-        post_comment(client, comment_body("🔥🔥", comment_id=f"emoji-{index}"))
-    assert post_comment(
-        client, comment_body("بكام ده؟", comment_id="after-the-emoji")
-    ).status_code == 200
+    assert len(public_replies(fake_graph)) == 1
     assert len(private_replies(fake_graph)) == 1
+    assert classifier.calls == []
+    with SessionLocal() as db:
+        assert db.query(InstagramCommentReply).count() == 1
 
 
-def test_a_two_character_comment_is_dropped(client, comments_on, fake_graph):
+def test_a_two_character_comment_is_greeted(client, comments_on, fake_graph):
     assert post_comment(client, comment_body("👍👍")).status_code == 200
-    assert private_replies(fake_graph) == []
+    assert len(private_replies(fake_graph)) == 1
 
 
 def test_a_reply_in_someone_else_s_thread_is_dropped(client, comments_on, fake_graph):

@@ -301,3 +301,14 @@ def name_question_off(request, monkeypatch):
 
     monkeypatch.setattr(customer_name, "ensure_asked", lambda text, decision: text)
 
+
+
+@pytest.fixture(autouse=True)
+def fresh_instagram_caption_cache():
+    """Post captions are cached per media id in the Instagram adapter; one
+    test's caption must never answer for another's."""
+    from assistant.channels import instagram
+
+    instagram._media_cache.clear()
+    yield
+    instagram._media_cache.clear()

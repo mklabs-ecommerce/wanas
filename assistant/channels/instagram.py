@@ -543,6 +543,86 @@ def _post_context_note(media: dict | None) -> str:
     )
 
 
+#: Rehla: post captions, cached per media id for a few minutes. A comment
+#: burst on one post must not cost one Graph call per comment. Only a real
+#: answer is cached -- a failed read is retried next time.
+_CAPTION_TTL_SECONDS = 900.0
+_media_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _cached_media(client, media_id) -> dict | None:
+    if not media_id:
+        return None
+    key = str(media_id)
+    now = time.monotonic()
+    hit = _media_cache.get(key)
+    if hit is not None and now - hit[0] < _CAPTION_TTL_SECONDS:
+        return hit[1]
+    media = client.get_media(key)
+    if media:
+        _media_cache[key] = (now, media)
+    return media
+
+
+#: The garment words a caption may name a category by, for the colour + type
+#: fallback. Normalised through search_terms before comparing.
+_CAPTION_TYPE_WORDS: dict[str, tuple[str, ...]] = {
+    "T-Shirts": ("t shirt", "tshirt", "tee", "تيشيرت", "تيشرت", "تي شيرت"),
+    "Tops": ("top", "tops", "توب", "بلوزه", "بادي"),
+    "Pants": ("pants", "trousers", "بنطلون"),
+    "Hoodies & Jackets": ("hoodie", "jacket", "هودي", "جاكيت"),
+    "Caps": ("cap", "كاب"),
+}
+
+
+def _product_from_caption(caption: str) -> dict | None:
+    """The ONE catalog product a post caption is about, as a `get_products`
+    summary, or None when it names none or more than one.
+
+    First by full product name (the longest match wins, so "Rehla Black
+    T-Shirt 2" is not also "Rehla Black T-Shirt"), then by colour + garment
+    type. Two candidates is an ambiguity and stays one: the old opener asks.
+    """
+    from domain.services import catalog, search_terms
+
+    norm = search_terms.normalize
+    text = f" {norm(caption)} "
+    if not text.strip():
+        return None
+    with session_scope() as db:
+        products = catalog.get_products(db).get("products") or []
+
+    def says(word: str) -> bool:
+        word = norm(word)
+        return bool(word) and f" {word} " in text
+
+    named = [p for p in products if says(p["name"])]
+    named = [
+        p for p in named
+        if not any(o is not p and f" {norm(p['name'])} " in f" {norm(o['name'])} " for o in named)
+    ]
+    if named:
+        return named[0] if len(named) == 1 else None
+
+    def colour_words(colour: str) -> list[str]:
+        target = norm(colour)
+        return [colour] + [k for k, v in search_terms.SYNONYMS.items() if target in v]
+
+    hits = [
+        p for p in products
+        if any(says(w) for w in _CAPTION_TYPE_WORDS.get(p.get("category") or "", ()))
+        and any(says(w) for c in (p.get("colors") or []) for w in colour_words(c))
+    ]
+    return hits[0] if len(hits) == 1 else None
+
+
+#: Categories whose DM may be answered from the post's product. A complaint or
+#: an order question is about something else and keeps its own opener.
+_PRODUCT_DM_CATEGORIES = frozenset(
+    {"price", "availability", "size", "variant", "product_info", "other", "short"}
+)
+
+
 #: What a classifier outage classifies as. Not a category the model can pick:
 #: an outage must not look like a customer who said nothing, and it must not
 #: produce a public reply or a DM either -- see `_classify`.
@@ -801,9 +881,11 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     # 6. Empty, emoji-only, under three real characters. Checked *before* the
     #    reply row is written: a "🔥" receives nothing, so it must not spend
     #    one of the commenter's hourly slots on the way to receiving it.
-    if _comment_says_nothing(text):
-        log.info("dropping comment %s: no actionable text", comment_id)
-        return
+    #    Rehla: not dropped any more -- a short comment gets a warm public
+    #    line and one greeting DM (step 10), never the classifier.
+    short = _comment_says_nothing(text)
+    if short:
+        log.info("comment %s: no actionable text -- short-comment greeting", comment_id)
 
     # 7. Which budget this comment spends, decided before it is counted.
     #    Matching is a pure lookup -- no model call, no send (see
@@ -811,7 +893,11 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     #    replies switched off there is no public answer to give and the
     #    question falls through to the DM handoff: that flag means "do not
     #    speak in public", never "ignore the customer".
-    faq_key = comment_faq.match(text) if settings.instagram_public_reply_enabled else None
+    faq_key = (
+        None if short
+        else comment_faq.match(text) if settings.instagram_public_reply_enabled
+        else None
+    )
 
     # 8. Per-commenter cap inside a rolling hour. One person spamming a post
     #    must cost staff's attention once, not forty model-free sends.
@@ -940,6 +1026,25 @@ def _accept_comment(value: dict, entry_time=None) -> None:
     #     `assistant/comment_replies.py`, one bank per category rather than
     #     one line, because two people asking the same question used to get
     #     byte-identical text back.
+    if short:
+        _mark_comment(comment_id, category="other", sentiment=comment_sentiment("other"))
+        public = (
+            comment_replies.short_public(comment_id)
+            if settings.instagram_public_reply_enabled else None
+        )
+        if settings.instagram_comments_dm_enabled and _dm_budget_available(
+            recent_dms, comment_id=comment_id, commenter=commenter, media_id=media_id
+        ):
+            _dm_handoff(client, comment_id, text, media_id, category="short", public_reply=public)
+            return
+        if public is not None:
+            result = client.reply_to_comment(comment_id, public)
+            if result.delivered:
+                _mark_comment(comment_id, public_replied=True, public_reply_text=public)
+            else:
+                log.error("public reply to comment %s failed: %s", comment_id, result.error)
+        return
+
     category = _classify(text, comment_id=comment_id, media_id=media_id, commenter=commenter)
     # Written before the routing, not after: a classified comment that then
     # fails to send is still a classified comment, and the dashboard showing
@@ -1088,7 +1193,20 @@ def _dm_handoff(
     # b) The private reply -- what actually starts the conversation. Worded
     #    for the category, so a size question opens on sizes and a complaint
     #    opens on an apology, rather than all of them opening identically.
-    opener = comment_replies.dm_opener(category, comment_id, text)
+    media = _cached_media(client, media_id)
+    product = None
+    if media and category in _PRODUCT_DM_CATEGORIES:
+        try:
+            product = _product_from_caption(media.get("caption") or "")
+        except Exception:
+            log.exception("could not match the caption of %s to the catalog", media_id)
+    if product is not None:
+        log.info("comment %s: post %s is about %s", comment_id, media_id, product["product_id"])
+        opener = comment_replies.product_dm(product, greeting=category == "short")
+    elif category == "short":
+        opener = comment_replies.SHORT_DM
+    else:
+        opener = comment_replies.dm_opener(category, comment_id, text)
     private = client.send_private_reply(comment_id, opener)
     if not private.delivered:
         # The row written at ingest keeps any retry from double-DMing; staff
@@ -1108,20 +1226,33 @@ def _dm_handoff(
     # InstagramClient.get_media), so the agent has something to infer the
     # product from instead of asking cold.
     seed_text = f"[كومنت على بوست {media_id}] {text}"
-    if media_id:
-        note = _post_context_note(client.get_media(media_id))
-        if note:
-            seed_text = f"{seed_text}\n{note}"
+    note = _post_context_note(media)
+    if note:
+        seed_text = f"{seed_text}\n{note}"
+    seeded = msg.user(seed_text)
+    if product is not None:
+        # The same key a reply-to-photo carries, so `tools.base.last_product`
+        # resolves "المقاسات إيه؟" to this product without asking which.
+        seeded["refers_to"] = {"product_id": product["product_id"], "name": product["name"], "color": None}
 
     with session_scope() as db:
         identities.get_or_create(db, CHANNEL, igsid)
-        session_store.append(
-            db,
-            CHANNEL,
-            igsid,
-            msg.user(seed_text),
-            msg.assistant(opener),
-        )
+        session_store.append(db, CHANNEL, igsid, seeded, msg.assistant(opener))
+
+    # The product's own photo, best-effort: Instagram may hold further sends
+    # until she answers the private reply, and that must not cost anything.
+    if product is not None:
+        try:
+            from domain.models import Product
+
+            with session_scope() as db:
+                row = db.get(Product, product["product_id"])
+                image = (row.images or [None])[0] if row is not None else None
+            if image:
+                sent = client.send_image(igsid, image)
+                log.info("comment %s: product photo %s", comment_id, "sent" if sent.delivered else f"not sent ({sent.error})")
+        except Exception:
+            log.exception("comment %s: product photo failed", comment_id)
 
 
 def _mark_comment(comment_id: str, **fields) -> None:
