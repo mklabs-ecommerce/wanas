@@ -124,7 +124,7 @@ def known_products(history: list[dict]) -> dict[str, str]:
 #: The shop's own name. Half the catalog is "WANAS <garment>", so the word
 #: names the brand, not a product: «منتجات WANAS كلها قطن» is not a request to
 #: see the one WANAS product this conversation happened to look up.
-_BRAND_WORDS = frozenset({"wanas", "wns", "gallery"})
+_BRAND_WORDS = frozenset({"rehla", "rehlaa", "wanas", "wns", "gallery"})
 
 
 def _distinctive(name: str) -> str:

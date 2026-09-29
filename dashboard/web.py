@@ -74,7 +74,7 @@ APP_PAGE = _DIR / "dashboard.html"
 #: replace the file without anyone editing HTML. It sits next to the two pages
 #: that use it, and like them it is public -- the login page shows it before
 #: anybody has a session, and a logo is not customer data.
-LOGO_FILE = _DIR / "wanas.webp"
+LOGO_FILE = _DIR / "rehla.webp"
 
 COOKIE_NAME = "wanas_staff"
 

@@ -32,8 +32,8 @@ questions. The other half is not here:
   that", and the alternatives are offered *as alternatives*, never as the
   thing itself. That difference is the whole of it.
 
-The shop's six categories are T-Shirts, Polo Shirts, Hoodies & Sweatshirts,
-Joggers & Sweatpants, Jackets and Tops. Everything else a customer can name --
+Rehla's five categories are Tops, T-Shirts, Pants, Hoodies & Jackets and
+Caps. Everything else a customer can name --
 shoes, a suit, shorts, a tracksuit set, jeans, a bag -- belongs here. Adding a
 product category means moving its words from one half to the other, and
 `tests/test_garment_vocabulary.py` fails if a word is in both.
@@ -53,65 +53,94 @@ from domain.services.search_terms import normalize
 #: and a suit there genuinely is not, and inventing a bridge to a hoodie is
 #: how "we don't sell that" turns back into "here are four t-shirts".
 NOT_SOLD: dict[str, tuple[str, tuple[str, ...]]] = {
-    # --- the one that started this ---------------------------------------
-    # A button-up shirt. Not a تيشيرت, not a بولو -- a different garment with
-    # a different collar, a different placket and a different occasion. MSA
-    # uses قميص generically; Egyptian does not, and the shop writes Egyptian.
-    "قميص": ("قميص", ("T-Shirts", "Polo Shirts")),
-    "قمصان": ("قميص", ("T-Shirts", "Polo Shirts")),
-    "قميس": ("قميص", ("T-Shirts", "Polo Shirts")),
-    "كاچوال شيرت": ("قميص", ("T-Shirts", "Polo Shirts")),
-    "button up": ("قميص", ("T-Shirts", "Polo Shirts")),
-    "button-up": ("قميص", ("T-Shirts", "Polo Shirts")),
-    "dress shirt": ("قميص", ("T-Shirts", "Polo Shirts")),
-    "formal shirt": ("قميص", ("T-Shirts", "Polo Shirts")),
-    # --- a matching set, which is not the same as the two halves ----------
-    # The shop sells sweatpants and it sells sweatshirts; it does not sell
-    # them as a set, and a customer asking for a تراكسوت is asking for the
-    # set. Saying yes and sending a sweatpant is the قميص mistake again -- so
-    # the two halves are offered, named as two separate pieces.
-    "تراكسوت": ("تراكسوت كامل", ("Joggers & Sweatpants", "Hoodies & Sweatshirts")),
-    "تراك سوت": ("تراكسوت كامل", ("Joggers & Sweatpants", "Hoodies & Sweatshirts")),
-    "طقم رياضي": ("تراكسوت كامل", ("Joggers & Sweatpants", "Hoodies & Sweatshirts")),
-    "tracksuit": ("تراكسوت كامل", ("Joggers & Sweatpants", "Hoodies & Sweatshirts")),
-    # --- trousers we do not make ------------------------------------------
-    "شورت": ("شورت", ("Joggers & Sweatpants",)),
-    "شورتات": ("شورت", ("Joggers & Sweatpants",)),
-    "شور": ("شورت", ("Joggers & Sweatpants",)),
-    "برمودا": ("شورت", ("Joggers & Sweatpants",)),
-    "shorts": ("شورت", ("Joggers & Sweatpants",)),
-    "جينز": ("بنطلون جينز", ("Joggers & Sweatpants",)),
-    "جنز": ("بنطلون جينز", ("Joggers & Sweatpants",)),
-    "jeans": ("بنطلون جينز", ("Joggers & Sweatpants",)),
-    # --- not clothes at all, or nothing like them on the shelf ------------
-    # No alternatives on purpose. There is no nearest thing to a pair of
-    # shoes in a shop that sells none, and offering a hoodie to someone
-    # asking for trainers is the same sentence this module exists to stop.
+    "قميص": ("قميص", ("T-Shirts", "Tops")),
+    "قمصان": ("قميص", ("T-Shirts", "Tops")),
+    "قميس": ("قميص", ("T-Shirts", "Tops")),
+    "button up": ("قميص", ("T-Shirts", "Tops")),
+    "button-up": ("قميص", ("T-Shirts", "Tops")),
+    "dress shirt": ("قميص", ("T-Shirts", "Tops")),
+    "formal shirt": ("قميص", ("T-Shirts", "Tops")),
+    "طرحه": ("طرح", ("Tops",)),
+    "طرح": ("طرح", ("Tops",)),
+    "طرحة": ("طرح", ("Tops",)),
+    "حجاب قماش": ("طرح", ("Tops",)),
+    "اسكارف": ("طرح", ("Tops",)),
+    "سكارف": ("طرح", ("Tops",)),
+    "ايشارب": ("طرح", ("Tops",)),
+    "شال": ("طرح", ("Tops",)),
+    "scarf": ("طرح", ("Tops",)),
+    "hijab": ("طرح", ("Tops",)),
+    "اسدال": ("إسدال", ()),
+    "إسدال": ("إسدال", ()),
+    "خمار": ("إسدال", ()),
+    "نقاب": ("إسدال", ()),
+    "عبايه": ("عبايات", ("Tops",)),
+    "عباية": ("عبايات", ("Tops",)),
+    "عبايات": ("عبايات", ("Tops",)),
+    "abaya": ("عبايات", ("Tops",)),
+    "فستان": ("فساتين", ("Tops",)),
+    "فساتين": ("فساتين", ("Tops",)),
+    "دريس": ("فساتين", ("Tops",)),
+    "dress": ("فساتين", ("Tops",)),
+    "dresses": ("فساتين", ("Tops",)),
+    "جيبه": ("جيبات", ("Pants",)),
+    "جيبة": ("جيبات", ("Pants",)),
+    "جيب": ("جيبات", ("Pants",)),
+    "جيبات": ("جيبات", ("Pants",)),
+    "سكيرت": ("جيبات", ("Pants",)),
+    "skirt": ("جيبات", ("Pants",)),
+    "جينز": ("جينز", ("Pants",)),
+    "جنز": ("جينز", ("Pants",)),
+    "jeans": ("جينز", ("Pants",)),
+    "denim": ("جينز", ("Pants",)),
+    "شورت": ("شورتات", ("Pants",)),
+    "شورتات": ("شورتات", ("Pants",)),
+    "برمودا": ("شورتات", ("Pants",)),
+    "shorts": ("شورتات", ("Pants",)),
+    "ترينج": ("ترينج كامل", ("Hoodies & Jackets", "Pants")),
+    "تراكسوت": ("ترينج كامل", ("Hoodies & Jackets", "Pants")),
+    "تراك سوت": ("ترينج كامل", ("Hoodies & Jackets", "Pants")),
+    "طقم": ("ترينج كامل", ("Hoodies & Jackets", "Pants")),
+    "طقم رياضي": ("ترينج كامل", ("Hoodies & Jackets", "Pants")),
+    "set": ("ترينج كامل", ("Hoodies & Jackets", "Pants")),
+    "tracksuit": ("ترينج كامل", ("Hoodies & Jackets", "Pants")),
+    "بيجامه": ("بيجامات", ()),
+    "بيجامة": ("بيجامات", ()),
+    "بيچامة": ("بيجامات", ()),
+    "بيجامات": ("بيجامات", ()),
+    "لانجري": ("بيجامات", ()),
+    "pajamas": ("بيجامات", ()),
+    "جزمه": ("جزم", ()),
     "جزمة": ("جزم", ()),
     "جزم": ("جزم", ()),
     "شوز": ("جزم", ()),
     "سنيكرز": ("جزم", ()),
     "كوتشي": ("جزم", ()),
+    "صندل": ("جزم", ()),
     "بوت": ("جزم", ()),
     "shoes": ("جزم", ()),
     "sneakers": ("جزم", ()),
-    "بدلة": ("بدلة", ()),
-    "بدل": ("بدلة", ()),
-    "بدله": ("بدلة", ()),
-    "suit": ("بدلة", ()),
+    "شنطه": ("شنط", ()),
     "شنطة": ("شنط", ()),
     "شنط": ("شنط", ()),
     "باك باك": ("شنط", ()),
-    "كاب": ("كابات", ()),
-    "كابات": ("كابات", ()),
-    "طاقية": ("كابات", ()),
+    "bag": ("شنط", ()),
+    "اكسسوار": ("إكسسوارات", ()),
+    "اكسسوارات": ("إكسسوارات", ()),
+    "سلسله": ("إكسسوارات", ()),
+    "حلق": ("إكسسوارات", ()),
+    "خاتم": ("إكسسوارات", ()),
+    "اسورة": ("إكسسوارات", ()),
+    "accessories": ("إكسسوارات", ()),
     "شراب": ("شرابات", ()),
     "شرابات": ("شرابات", ()),
-    "فستان": ("فساتين", ("Tops",)),
-    "فساتين": ("فساتين", ("Tops",)),
-    "عباية": ("عبايات", ()),
-    "بيجامة": ("بيجامات", ()),
-    "بيچامة": ("بيجامات", ()),
+    "socks": ("شرابات", ()),
+    "بدله": ("بدل", ()),
+    "بدلة": ("بدل", ()),
+    "بدل": ("بدل", ()),
+    "بليزر": ("بدل", ()),
+    "blazer": ("بدل", ()),
+    "suit": ("بدل", ()),
 }
 
 
@@ -134,8 +163,9 @@ _NOT_SOLD_ORDER: tuple[str, ...] = tuple(
 #: does sell. Matched as a standalone word whose *preceding* word is not one
 #: of the garment kinds below.
 _ENGLISH_SHIRT = ("shirt", "shirts")
-_SHIRT_PREFIXES = frozenset({"t", "tee", "tees", "polo", "polos", "sweat", "sweats"})
-_SHIRT_ANSWER = ("قميص", ("T-Shirts", "Polo Shirts"))
+_SHIRT_PREFIXES = frozenset({"t", "tee", "tees", "polo", "polos", "sweat", "sweats",
+                             "white", "black", "printed", "rehla"})
+_SHIRT_ANSWER = ("قميص", ("T-Shirts", "Tops"))
 
 
 def _words(text: str) -> list[str]:

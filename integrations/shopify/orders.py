@@ -839,3 +839,38 @@ def try_cancel(shopify_order_id: str, *, reason: str = "OTHER") -> bool:
             exc,
         )
         return False
+
+
+# No Shopify at all (Rehla): the local order row is the record; edits on a
+# Shopify order that does not exist are refused as unavailable.
+def _local_mode(fn, local):
+    import functools
+
+    from integrations.shopify import local_shelf
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if local_shelf.active():
+            return local(*args, **kwargs)
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def _no_store(*_args, **_kwargs):
+    raise ShopifyUnavailable("no Shopify store configured (local store mode)")
+
+
+def _local_create_order(**kwargs):
+    from integrations.shopify import local_shelf
+
+    return local_shelf.create_order(**kwargs)
+
+
+create_order = _local_mode(create_order, _local_create_order)
+try_cancel = _local_mode(try_cancel, lambda *a, **k: True)
+cancel_order = _local_mode(cancel_order, lambda *a, **k: None)
+set_line_quantity = _local_mode(set_line_quantity, _no_store)
+swap_line = _local_mode(swap_line, _no_store)
+add_line = _local_mode(add_line, _no_store)
+current_total = _local_mode(current_total, lambda *a, **k: None)

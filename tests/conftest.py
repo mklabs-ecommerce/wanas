@@ -50,6 +50,9 @@ os.environ["MESSAGE_DEBOUNCE_SECONDS"] = "0"
 # module needs it mounted. Set here rather than in that module so `app` is only
 # ever imported once, with the flag already in place.
 os.environ["HARNESS_ENABLED"] = "1"
+# The suite's own fake Shopify answers every store call; the local shelf
+# (no-Shopify mode) is opted into per test.
+os.environ["LOCAL_STORE"] = "0"
 
 # The suite must not read the developer's .env. python-dotenv skips any name
 # already present in the environment, so pinning these to blank here is what

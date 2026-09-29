@@ -24,9 +24,9 @@ SEED_PATH = DATA_DIR / "products_seed.json"
 #: The assertions merge_catalog.py makes about its own output, restated here
 #: so a bad or truncated seed file fails the import instead of quietly
 #: producing a half catalog.
-EXPECTED_PRODUCTS = 18
-EXPECTED_VARIANTS = 208
-EXPECTED_IN_STOCK = 114
+EXPECTED_PRODUCTS = 21
+EXPECTED_VARIANTS = 204
+EXPECTED_IN_STOCK = 127
 
 
 class SeedError(RuntimeError):

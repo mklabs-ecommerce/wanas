@@ -64,7 +64,7 @@ _NOT_MONEY_AFTER = re.compile(
 
 #: A number that is an identifier rather than an amount: an order reference,
 #: an internal order id, a phone number.
-_ID_BEFORE = re.compile(r"(?:#|WNS-|رقم\s*(?:الأوردر|الاوردر|الطلب)?\s*)$", re.I)
+_ID_BEFORE = re.compile(r"(?:#|RHL-|WNS-|رقم\s*(?:الأوردر|الاوردر|الطلب)?\s*)$", re.I)
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 _CLAUSE = re.compile(r"[\n.،؛!؟?]+")
@@ -130,12 +130,20 @@ def shop_constants(session) -> set[Decimal]:
     they are kept, never restated."""
     from domain.models import ShippingRate
     from domain.services.orders import EXCHANGE_SURCHARGE, EXCHANGE_WINDOW_HOURS
-    from domain.services.shop_facts import DELIVERY_DAYS
+    from domain.services.shop_facts import (
+        DELIVERY_DAYS,
+        DELIVERY_DAYS_MIN,
+        EXCHANGE_DAYS,
+        RETURN_DAYS,
+    )
 
     found = {
         _decimal(str(EXCHANGE_SURCHARGE)),
         _decimal(str(EXCHANGE_WINDOW_HOURS)),
         _decimal(str(DELIVERY_DAYS)),
+        _decimal(str(DELIVERY_DAYS_MIN)),
+        _decimal(str(EXCHANGE_DAYS)),
+        _decimal(str(RETURN_DAYS)),
     }
     for (fee,) in session.query(ShippingRate.fee).filter(ShippingRate.fee.is_not(None)).all():
         found.add(_decimal(str(fee)))

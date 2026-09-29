@@ -273,6 +273,11 @@ class Settings:
     dashboard_session_secret: str
     dashboard_session_hours: int
 
+    #: With no Shopify credentials, serve price/stock from the local database
+    #: and record orders locally (integrations/shopify/local_shelf.py). On by
+    #: default; the test suite turns it off so its fake Shopify is what answers.
+    local_store: bool
+
     shopify_store_domain: str
     shopify_admin_token: str
     shopify_api_version: str
@@ -404,6 +409,11 @@ class Settings:
         stock, exactly as it did before the move -- degraded, but not broken,
         and logged when it happens."""
         return bool(self.shopify_store_domain and self.shopify_admin_token)
+
+    @property
+    def local_store_active(self) -> bool:
+        """No Shopify at all: the local database is the shelf and the till."""
+        return self.local_store and not self.shopify_configured
 
     @property
     def shopify_webhooks_configured(self) -> bool:
@@ -561,10 +571,11 @@ def load_settings() -> Settings:
         dashboard_enabled=_bool("DASHBOARD_ENABLED", True),
         dashboard_session_secret=os.getenv("DASHBOARD_SESSION_SECRET", "").strip(),
         dashboard_session_hours=_int("DASHBOARD_SESSION_HOURS", 12),
+        local_store=_bool("LOCAL_STORE", True),
         shopify_store_domain=os.getenv("SHOPIFY_STORE_DOMAIN", "").strip(),
         shopify_admin_token=os.getenv("SHOPIFY_ADMIN_TOKEN", "").strip(),
         shopify_api_version=os.getenv("SHOPIFY_API_VERSION", "2026-07").strip(),
-        shopify_vendor=os.getenv("SHOPIFY_VENDOR", "Wanas Gallery").strip(),
+        shopify_vendor=os.getenv("SHOPIFY_VENDOR", "Rehla").strip(),
         shopify_webhook_secret=_first_env(
             "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_API_SECRET", default=""
         ),

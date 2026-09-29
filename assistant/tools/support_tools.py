@@ -24,7 +24,7 @@ from domain.services import (
 #: judgement the model makes, so offering all five in the tool schema was
 #: offering three ways to leave a conversation that nothing behind the schema
 #: would refuse.
-MODEL_HANDOFF_REASONS = ("unclear", "complaint", "customer_asked")
+MODEL_HANDOFF_REASONS = ("unclear", "complaint", "customer_asked", "size_help")
 
 #: Handoffs a customer's own next message may take back, if it arrives soon
 #: enough -- see `assistant/recovery.py` for the window and the conditions.
@@ -49,9 +49,10 @@ RESUMABLE_REASONS = ("unclear", "out_of_scope")
 #: هيكلمك خلال ساعة» -- a time nobody had promised -- could be written. Each
 #: says the one true thing: a person has it now, and will answer here.
 HANDOFF_CLOSINGS = {
-    "complaint": "آسفين جدًا على اللي حصل. حوّلت كلامك لحد من الفريق، وهيرد عليك هنا في أقرب وقت.",
-    "customer_asked": "تمام، حوّلت كلامك لحد من الفريق، وهيرد عليك هنا في أقرب وقت.",
-    "unclear": "معلش مش قادر أفهم طلبك كويس، فحوّلته لحد من الفريق وهيرد عليك هنا في أقرب وقت.",
+    "complaint": "آسفين جدًا على اللي حصل. حوّلت كلامك لحد من الفريق، وهيرد عليكي هنا في أقرب وقت.",
+    "customer_asked": "تمام، حوّلت كلامك لحد من الفريق، وهيرد عليكي هنا في أقرب وقت.",
+    "unclear": "معلش مش قادرة أفهم طلبك كويس، فحوّلته لحد من الفريق وهيرد عليكي هنا في أقرب وقت.",
+    "size_help": "هنبعتلك جدول المقاسات، وحد من الفريق هيساعدك تختاري المقاس المناسب هنا في أقرب وقت.",
 }
 
 #: What a refused scope handoff hands back. The prompt has said since the
@@ -186,7 +187,8 @@ def raise_handoff(
             "description": (
                 "unclear = you have already asked one clarifying question and still cannot tell "
                 "what they mean. complaint = something is wrong with what arrived. "
-                "customer_asked = they asked for a person. A question that is simply not about "
+                "customer_asked = they asked for a person. size_help = they need a size chart or "
+                "help choosing a size and get_size_chart returned has_chart=false. A question that is simply not about "
                 "the shop is NOT one of these -- answer it in one line yourself."
             ),
         },

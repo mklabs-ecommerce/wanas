@@ -30,6 +30,10 @@ _QUEUE_PREFIX = {
 }
 
 
+#: What a customer sees as their order number when there is no Shopify order
+#: name (Rehla runs without Shopify).
+ORDER_PREFIX = "RHL"
+
 def _next(session: Session, name: str) -> int:
     row = session.get(Counter, name, with_for_update=True) if _supports_for_update(session) else session.get(
         Counter, name
@@ -78,7 +82,7 @@ def _seed_value(session: Session, name: str) -> int:
 
 
 def next_order_id(session: Session) -> str:
-    return f"WNS-{_next(session, ORDER_COUNTER)}"
+    return f"{ORDER_PREFIX}-{_next(session, ORDER_COUNTER)}"
 
 
 def next_queue_id(session: Session, kind: str) -> str:

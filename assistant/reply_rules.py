@@ -84,23 +84,23 @@ def offers_another_payment_method(text: str) -> str:
 
 #: The shop is called Wanas Gallery and the short form is Wanas. Both are
 #: correct and nothing else is.
-SHOP_NAME = frozenset({"Wanas", "WANAS"})
+SHOP_NAME = frozenset({"Rehla", "REHLA"})
 
 #: The one product name that legitimately contains the brand abbreviated.
 #: Masked out before the scan, so a bare `WNS` elsewhere is still caught --
 #: `WNS` used as a name for the shop *is* the misspelling this rule is for.
-_BOXY_WNS_TEE = re.compile(r"\bBoxy\s+WNS\s+Tee\b", re.IGNORECASE)
+_BOXY_WNS_TEE = re.compile(r"(?!x)x")  # Wanas-only product name; nothing to mask for Rehla
 
 #: A Latin word built on the brand's consonant skeleton -- w, then n, then s,
 #: with only vowels between. Catches Wnas, Wans, WNS, Wanass and the lowercase
 #: slug forms, and matches almost nothing else a reply from a clothes shop
 #: contains.
-_BRAND_SHAPED = re.compile(r"\b[Ww][AaEeIiOoUu]*[Nn][AaEeIiOoUu]*[Ss]{1,2}[A-Za-z]*\b")
+_BRAND_SHAPED = re.compile(r"\b[Rr][AaEeIi][Hh]?[Ll][AaEe]{1,2}[Hh]?\b")
 
 #: Ordinary English words with the same skeleton. Short list on purpose: these
 #: are the only ones plausible in a reply, and a gate that guessed more widely
 #: would start excusing real misspellings.
-_NOT_THE_BRAND = frozenset({"wins", "wines", "wanes"})
+_NOT_THE_BRAND = frozenset({"real", "rela"})
 
 
 def misspelled_shop_name(text: str) -> list[str]:
@@ -435,9 +435,9 @@ def _catalog_word(word: str, vocabulary) -> str | None:
 #: The brand misspelt as a word the model built from its vowels. `WNS` is
 #: deliberately not rewritten: it is also the start of an internal order id
 #: and part of the Boxy WNS Tee's name, and a "fix" there would be the damage.
-_BRAND_FIX = "Wanas"
+_BRAND_FIX = "Rehla"
 
-_ORDER_ID = re.compile(r"\bWNS-\d+\b")
+_ORDER_ID = re.compile(r"\b(?:RHL|WNS)-\d+\b")
 
 #: Emoji, and the joiners and selectors that make one out of several.
 _EMOJI_CHAR = "[\U0001f000-\U0001faff\u2600-\u27bf\u2b00-\u2bff\u2300-\u23ff]"

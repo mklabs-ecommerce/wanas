@@ -408,3 +408,34 @@ def prime(value: dict[str, LiveVariant] | None) -> None:
     """Inject a snapshot -- used by the verification script and tests so they
     can compare both sides without a second round trip."""
     _turn_cache.set(value)
+
+
+# No Shopify at all (Rehla): the local database answers -- see local_shelf.py.
+def _local_first(fn, local):
+    import functools
+
+    from integrations.shopify import local_shelf
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if local_shelf.active():
+            return local(*args, **kwargs)
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def _local_fetch_all():
+    from integrations.shopify import local_shelf
+
+    return local_shelf.fetch()
+
+
+def _local_fetch_skus(variant_ids):
+    from integrations.shopify import local_shelf
+
+    return local_shelf.fetch(variant_ids)
+
+
+fetch_all = _local_first(fetch_all, _local_fetch_all)
+fetch_skus = _local_first(fetch_skus, _local_fetch_skus)

@@ -274,3 +274,24 @@ def try_release(changes: list[dict], order_ref: str) -> bool:
             changes,
         )
         return False
+
+
+# No Shopify at all (Rehla): the local row is the only stock, and
+# `domain/services/inventory.py` writes it itself -- see local_shelf.py.
+def _skip_when_local(fn, value=None):
+    import functools
+
+    from integrations.shopify import local_shelf
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if local_shelf.active():
+            return value
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+reserve = _skip_when_local(reserve)
+release = _skip_when_local(release)
+try_release = _skip_when_local(try_release, True)

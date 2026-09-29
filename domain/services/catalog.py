@@ -27,12 +27,11 @@ from integrations.shopify import catalog as shopify_catalog
 #: products have no collection, so a reply that opens with collections has
 #: hidden nearly half the shop.
 CATEGORY_ORDER = [
-    "T-Shirts",
-    "Hoodies & Sweatshirts",
-    "Polo Shirts",
-    "Joggers & Sweatpants",
-    "Jackets",
     "Tops",
+    "T-Shirts",
+    "Pants",
+    "Hoodies & Jackets",
+    "Caps",
 ]
 
 

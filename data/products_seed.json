@@ -1,3604 +1,3681 @@
 [
-  {
-    "product_id": "boxy-wns-tee",
-    "name": "Boxy WNS Tee",
-    "category": "T-Shirts",
-    "department": "unisex",
-    "style": [
-      "boxy-fit"
-    ],
-    "collection": null,
-    "sleeve": "half",
-    "size_chart": "wns-boxy-tee",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Grey",
-      "Olive"
-    ],
-    "lengths": [],
-    "price": 590.0,
-    "original_price": 590.0,
-    "on_sale": false,
-    "images": [
-      "data/images/wanas-grey-t-shirt/01.jpg",
-      "data/images/wanas-grey-t-shirt/02.jpg",
-      "data/images/wanas-grey-t-shirt/03.jpg",
-      "data/images/wanas-grey-t-shirt/04.jpg",
-      "data/images/wanas-grey-t-shirt/05.jpg",
-      "data/images/path-to-heaven-t-shirt-copy/01.jpg",
-      "data/images/path-to-heaven-t-shirt-copy/02.jpg",
-      "data/images/path-to-heaven-t-shirt-copy/03.jpg",
-      "data/images/path-to-heaven-t-shirt-copy/04.jpg",
-      "data/images/wanas-olive-t-shirt-1/01.jpg",
-      "data/images/wanas-olive-t-shirt-1/02.jpg",
-      "data/images/wanas-olive-t-shirt-1/03.jpg",
-      "data/images/wanas-olive-t-shirt-1/04.jpg",
-      "data/images/wanas-olive-t-shirt-1/05.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/wanas-grey-t-shirt/01.jpg",
-        "data/images/wanas-grey-t-shirt/02.jpg",
-        "data/images/wanas-grey-t-shirt/03.jpg",
-        "data/images/wanas-grey-t-shirt/04.jpg",
-        "data/images/wanas-grey-t-shirt/05.jpg"
-      ],
-      "Grey": [
-        "data/images/path-to-heaven-t-shirt-copy/01.jpg",
-        "data/images/path-to-heaven-t-shirt-copy/02.jpg",
-        "data/images/path-to-heaven-t-shirt-copy/03.jpg",
-        "data/images/path-to-heaven-t-shirt-copy/04.jpg"
-      ],
-      "Olive": [
-        "data/images/wanas-olive-t-shirt-1/01.jpg",
-        "data/images/wanas-olive-t-shirt-1/02.jpg",
-        "data/images/wanas-olive-t-shirt-1/03.jpg",
-        "data/images/wanas-olive-t-shirt-1/04.jpg",
-        "data/images/wanas-olive-t-shirt-1/05.jpg"
-      ]
-    },
-    "description": "Boxy fit tee. Model wears L (70kg, 178cm).",
-    "source_products": [
-      {
-        "handle": "wanas-grey-t-shirt",
-        "shopify_id": "8390266159254",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-grey-t-shirt"
-      },
-      {
-        "handle": "path-to-heaven-t-shirt-copy",
-        "shopify_id": "8410687930518",
-        "color": "Grey",
-        "url": "https://wanasgallery.myshopify.com/products/path-to-heaven-t-shirt-copy"
-      },
-      {
-        "handle": "wanas-olive-t-shirt-1",
-        "shopify_id": "8393854582934",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-olive-t-shirt-1"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "boxy-wns-tee-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-s-grey",
-        "size": "S",
-        "color": "Grey",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-m-grey",
-        "size": "M",
-        "color": "Grey",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-l-grey",
-        "size": "L",
-        "color": "Grey",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-xl-grey",
-        "size": "XL",
-        "color": "Grey",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "boxy-wns-tee-xl-olive",
-        "size": "XL",
-        "color": "Olive",
-        "length": null,
-        "price": 590.0,
-        "original_price": 590.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
+ {
+  "product_id": "rehla-hijabi-off-shoulder-top",
+  "name": "Rehla Long Sleeve Off Shoulder Top",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "off-shoulder",
+   "hijabi",
+   "basic",
+   "fitted"
+  ],
+  "collection": null,
+  "sleeve": "long",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Burgundy",
+   "Black",
+   "Navy Blue",
+   "White",
+   "Pink"
+  ],
+  "lengths": [],
+  "price": 599.0,
+  "original_price": 599.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-hijabi-off-shoulder-top/01.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/02.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/03.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/04.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/05.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/06.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/07.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/08.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/09.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/10.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/11.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/12.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/13.jpg",
+   "data/images/rehla-hijabi-off-shoulder-top/14.jpg"
+  ],
+  "color_images": {
+   "Burgundy": [
+    "data/images/rehla-hijabi-off-shoulder-top/03.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/07.jpg"
+   ],
+   "Black": [
+    "data/images/rehla-hijabi-off-shoulder-top/02.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/08.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/09.jpg"
+   ],
+   "Navy Blue": [
+    "data/images/rehla-hijabi-off-shoulder-top/04.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/10.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/01.jpg"
+   ],
+   "White": [
+    "data/images/rehla-hijabi-off-shoulder-top/05.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/11.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/12.jpg"
+   ],
+   "Pink": [
+    "data/images/rehla-hijabi-off-shoulder-top/06.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/13.jpg",
+    "data/images/rehla-hijabi-off-shoulder-top/14.jpg"
+   ]
   },
-  {
-    "product_id": "cairokee-tee",
-    "name": "Cairokee T-shirt",
-    "category": "T-Shirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "graphic"
-    ],
-    "collection": "CAIROKEE MERCH",
-    "sleeve": "half",
-    "size_chart": "oversized-graphic-tee",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Brown",
-      "Black"
-    ],
-    "lengths": [],
-    "price": 600.0,
-    "original_price": 600.0,
+  "description": "Long-sleeve off-shoulder top, hijab-friendly. Soft stretchy fabric.",
+  "source_products": [
+   {
+    "handle": "rehla-hijabi-off-shoulder-top",
+    "shopify_id": "8227806183542",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-hijabi-off-shoulder-top"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-burgundy-s",
+    "size": "S",
+    "color": "Burgundy",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
     "on_sale": false,
-    "images": [
-      "data/images/cairokee-t-shirt-copy/01.jpg",
-      "data/images/cairokee-t-shirt-copy/02.jpg",
-      "data/images/cairokee-t-shirt-copy/03.jpg",
-      "data/images/cairokee-t-shirt-copy/04.jpg"
-    ],
-    "color_images": {},
-    "description": "Cairokee band tee, oversized fit.",
-    "source_products": [
-      {
-        "handle": "cairokee-t-shirt-copy",
-        "shopify_id": "8388785832086",
-        "color": null,
-        "url": "https://wanasgallery.myshopify.com/products/cairokee-t-shirt-copy"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "cairokee-tee-s-brown",
-        "size": "S",
-        "color": "Brown",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-m-brown",
-        "size": "M",
-        "color": "Brown",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-l-brown",
-        "size": "L",
-        "color": "Brown",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-xl-brown",
-        "size": "XL",
-        "color": "Brown",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "cairokee-tee-2",
-    "name": "Cairokee T-shirt 2",
-    "category": "T-Shirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "graphic"
-    ],
-    "collection": "CAIROKEE MERCH",
-    "sleeve": "half",
-    "size_chart": "oversized-graphic-tee",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "White"
-    ],
-    "lengths": [],
-    "price": 600.0,
-    "original_price": 600.0,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-black-s",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
     "on_sale": false,
-    "images": [
-      "data/images/cairokee-t-shirt-2/01.jpg",
-      "data/images/cairokee-t-shirt-2/02.jpg",
-      "data/images/cairokee-t-shirt-2/03.jpg",
-      "data/images/cairokee-t-shirt-2/04.jpg"
-    ],
-    "color_images": {},
-    "description": "Cairokee band tee, oversized fit. Female model wears S (56kg, 172cm); male model wears L (93kg, 180cm).",
-    "source_products": [
-      {
-        "handle": "cairokee-t-shirt-2",
-        "shopify_id": "8404148945046",
-        "color": null,
-        "url": "https://wanasgallery.myshopify.com/products/cairokee-t-shirt-2"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "cairokee-tee-2-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-2-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-2-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-2-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-2-s-white",
-        "size": "S",
-        "color": "White",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-2-m-white",
-        "size": "M",
-        "color": "White",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-2-l-white",
-        "size": "L",
-        "color": "White",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-tee-2-xl-white",
-        "size": "XL",
-        "color": "White",
-        "length": null,
-        "price": 600.0,
-        "original_price": 600.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "envy-tee",
-    "name": "Envy T-shirt",
-    "category": "T-Shirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "graphic"
-    ],
-    "collection": null,
-    "sleeve": "half",
-    "size_chart": "oversized-graphic-tee",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Grey"
-    ],
-    "lengths": [],
-    "price": 500.0,
-    "original_price": 500.0,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-navy-blue-s",
+    "size": "S",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
     "on_sale": false,
-    "images": [
-      "data/images/envy-t-shirt-1/01.jpg",
-      "data/images/envy-t-shirt-1/02.jpg",
-      "data/images/envy-t-shirt-1/03.jpg"
-    ],
-    "color_images": {
-      "Grey": [
-        "data/images/envy-t-shirt-1/01.jpg",
-        "data/images/envy-t-shirt-1/02.jpg",
-        "data/images/envy-t-shirt-1/03.jpg"
-      ]
-    },
-    "description": "Oversized tee with a dropped shoulder cut. Female model wears S (56kg, 172cm); male model wears L (93kg, 180cm).",
-    "source_products": [
-      {
-        "handle": "envy-t-shirt-1",
-        "shopify_id": "8388547051670",
-        "color": "Grey",
-        "url": "https://wanasgallery.myshopify.com/products/envy-t-shirt-1"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "envy-tee-s-grey",
-        "size": "S",
-        "color": "Grey",
-        "length": null,
-        "price": 500.0,
-        "original_price": 500.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "envy-tee-m-grey",
-        "size": "M",
-        "color": "Grey",
-        "length": null,
-        "price": 500.0,
-        "original_price": 500.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "envy-tee-l-grey",
-        "size": "L",
-        "color": "Grey",
-        "length": null,
-        "price": 500.0,
-        "original_price": 500.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "envy-tee-xl-grey",
-        "size": "XL",
-        "color": "Grey",
-        "length": null,
-        "price": 500.0,
-        "original_price": 500.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-white-s",
+    "size": "S",
+    "color": "White",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-pink-s",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-burgundy-m",
+    "size": "M",
+    "color": "Burgundy",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-burgundy-l",
+    "size": "L",
+    "color": "Burgundy",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-black-m",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-black-l",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-navy-blue-m",
+    "size": "M",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-navy-blue-l",
+    "size": "L",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-white-m",
+    "size": "M",
+    "color": "White",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-white-l",
+    "size": "L",
+    "color": "White",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-pink-m",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-hijabi-off-shoulder-top-pink-l",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 599.0,
+    "original_price": 599.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-off-shoulder-top",
+  "name": "Rehla Lace Off Shoulder Top",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "off-shoulder",
+   "lace"
+  ],
+  "collection": null,
+  "sleeve": null,
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Burgundy",
+   "Navy Blue",
+   "White",
+   "Pink",
+   "Black"
+  ],
+  "lengths": [],
+  "price": 450.0,
+  "original_price": 699.0,
+  "on_sale": true,
+  "images": [
+   "data/images/rehla-off-shoulder-top/01.jpg",
+   "data/images/rehla-off-shoulder-top/02.jpg",
+   "data/images/rehla-off-shoulder-top/03.jpg",
+   "data/images/rehla-off-shoulder-top/04.jpg",
+   "data/images/rehla-off-shoulder-top/05.jpg",
+   "data/images/rehla-off-shoulder-top/06.jpg",
+   "data/images/rehla-off-shoulder-top/07.jpg",
+   "data/images/rehla-off-shoulder-top/08.jpg",
+   "data/images/rehla-off-shoulder-top/09.jpg",
+   "data/images/rehla-off-shoulder-top/10.jpg",
+   "data/images/rehla-off-shoulder-top/11.jpg",
+   "data/images/rehla-off-shoulder-top/12.jpg",
+   "data/images/rehla-off-shoulder-top/13.jpg",
+   "data/images/rehla-off-shoulder-top/14.jpg",
+   "data/images/rehla-off-shoulder-top/15.jpg"
+  ],
+  "color_images": {
+   "Burgundy": [
+    "data/images/rehla-off-shoulder-top/02.jpg",
+    "data/images/rehla-off-shoulder-top/04.jpg",
+    "data/images/rehla-off-shoulder-top/05.jpg"
+   ],
+   "Navy Blue": [
+    "data/images/rehla-off-shoulder-top/01.jpg",
+    "data/images/rehla-off-shoulder-top/06.jpg",
+    "data/images/rehla-off-shoulder-top/07.jpg"
+   ],
+   "White": [
+    "data/images/rehla-off-shoulder-top/03.jpg",
+    "data/images/rehla-off-shoulder-top/08.jpg",
+    "data/images/rehla-off-shoulder-top/09.jpg"
+   ],
+   "Pink": [
+    "data/images/rehla-off-shoulder-top/10.jpg",
+    "data/images/rehla-off-shoulder-top/11.jpg",
+    "data/images/rehla-off-shoulder-top/12.jpg"
+   ],
+   "Black": [
+    "data/images/rehla-off-shoulder-top/13.jpg",
+    "data/images/rehla-off-shoulder-top/14.jpg",
+    "data/images/rehla-off-shoulder-top/15.jpg"
+   ]
   },
-  {
-    "product_id": "ringer-tee",
-    "name": "Ringer Tee",
-    "category": "T-Shirts",
-    "department": "unisex",
-    "style": [
-      "boxy-fit",
-      "ringer"
-    ],
-    "collection": null,
-    "sleeve": "half",
-    "size_chart": "ringer-boxy-tee",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Beige",
-      "Brown",
-      "Burgundy",
-      "Navy"
-    ],
-    "lengths": [],
-    "price": 500.0,
-    "original_price": 580.0,
+  "description": "Off-shoulder top with lace detail.",
+  "source_products": [
+   {
+    "handle": "rehla-off-shoulder-top",
+    "shopify_id": "8219973582966",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-off-shoulder-top"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "rehla-off-shoulder-top-burgundy-s",
+    "size": "S",
+    "color": "Burgundy",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
     "on_sale": true,
-    "images": [
-      "data/images/beige-ringer-tee/01.png",
-      "data/images/beige-ringer-tee/02.png",
-      "data/images/envy-t-shirt-copy/01.jpg",
-      "data/images/envy-t-shirt-copy/02.jpg",
-      "data/images/envy-t-shirt-copy/03.jpg",
-      "data/images/envy-t-shirt-copy/04.jpg",
-      "data/images/path-to-heaven-t-shirt/01.jpg",
-      "data/images/path-to-heaven-t-shirt/02.png",
-      "data/images/path-to-heaven-t-shirt/03.jpg",
-      "data/images/path-to-heaven-t-shirt/04.jpg",
-      "data/images/path-to-heaven-t-shirt/05.jpg",
-      "data/images/porche-t-shirt/01.jpg",
-      "data/images/porche-t-shirt/02.jpg",
-      "data/images/porche-t-shirt/03.jpg"
-    ],
-    "color_images": {
-      "Beige": [
-        "data/images/beige-ringer-tee/01.png",
-        "data/images/beige-ringer-tee/02.png"
-      ],
-      "Brown": [
-        "data/images/envy-t-shirt-copy/01.jpg",
-        "data/images/envy-t-shirt-copy/02.jpg",
-        "data/images/envy-t-shirt-copy/03.jpg",
-        "data/images/envy-t-shirt-copy/04.jpg"
-      ],
-      "Burgundy": [
-        "data/images/path-to-heaven-t-shirt/01.jpg",
-        "data/images/path-to-heaven-t-shirt/02.png",
-        "data/images/path-to-heaven-t-shirt/03.jpg",
-        "data/images/path-to-heaven-t-shirt/04.jpg",
-        "data/images/path-to-heaven-t-shirt/05.jpg"
-      ],
-      "Navy": [
-        "data/images/porche-t-shirt/01.jpg",
-        "data/images/porche-t-shirt/02.jpg",
-        "data/images/porche-t-shirt/03.jpg"
-      ]
-    },
-    "description": "Ringer tee, boxy fit. Model wears M (70kg, 178cm).",
-    "source_products": [
-      {
-        "handle": "beige-ringer-tee",
-        "shopify_id": "8665448775830",
-        "color": "Beige",
-        "url": "https://wanasgallery.myshopify.com/products/beige-ringer-tee"
-      },
-      {
-        "handle": "envy-t-shirt-copy",
-        "shopify_id": "8388547346582",
-        "color": "Brown",
-        "url": "https://wanasgallery.myshopify.com/products/envy-t-shirt-copy"
-      },
-      {
-        "handle": "path-to-heaven-t-shirt",
-        "shopify_id": "8388784455830",
-        "color": "Burgundy",
-        "url": "https://wanasgallery.myshopify.com/products/path-to-heaven-t-shirt"
-      },
-      {
-        "handle": "porche-t-shirt",
-        "shopify_id": "8388546789526",
-        "color": "Navy",
-        "url": "https://wanasgallery.myshopify.com/products/porche-t-shirt"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "ringer-tee-s-beige",
-        "size": "S",
-        "color": "Beige",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-m-beige",
-        "size": "M",
-        "color": "Beige",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-l-beige",
-        "size": "L",
-        "color": "Beige",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-xl-beige",
-        "size": "XL",
-        "color": "Beige",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-s-brown",
-        "size": "S",
-        "color": "Brown",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-m-brown",
-        "size": "M",
-        "color": "Brown",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-l-brown",
-        "size": "L",
-        "color": "Brown",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-xl-brown",
-        "size": "XL",
-        "color": "Brown",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-s-burgundy",
-        "size": "S",
-        "color": "Burgundy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 580.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-m-burgundy",
-        "size": "M",
-        "color": "Burgundy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 580.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-l-burgundy",
-        "size": "L",
-        "color": "Burgundy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 580.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-xl-burgundy",
-        "size": "XL",
-        "color": "Burgundy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 580.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-s-navy",
-        "size": "S",
-        "color": "Navy",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-m-navy",
-        "size": "M",
-        "color": "Navy",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-l-navy",
-        "size": "L",
-        "color": "Navy",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "ringer-tee-xl-navy",
-        "size": "XL",
-        "color": "Navy",
-        "length": null,
-        "price": 580.0,
-        "original_price": 580.0,
-        "on_sale": false,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "cairokee-hoodie",
-    "name": "Cairokee Hoodie",
-    "category": "Hoodies & Sweatshirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "graphic",
-      "pullover"
-    ],
-    "collection": "CAIROKEE MERCH",
-    "sleeve": "long",
-    "size_chart": "oversized-hoodie",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Brown",
-      "Black"
-    ],
-    "lengths": [],
-    "price": 800.0,
-    "original_price": 950.0,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-navy-blue-s",
+    "size": "S",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
     "on_sale": true,
-    "images": [
-      "data/images/cairokee-hoodie/01.jpg",
-      "data/images/cairokee-hoodie/02.jpg",
-      "data/images/cairokee-hoodie/03.jpg",
-      "data/images/cairokee-hoodie/04.jpg"
-    ],
-    "color_images": {},
-    "description": "Cairokee band hoodie, oversized pullover fit.",
-    "source_products": [
-      {
-        "handle": "cairokee-hoodie",
-        "shopify_id": "8510404460694",
-        "color": null,
-        "url": "https://wanasgallery.myshopify.com/products/cairokee-hoodie"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "cairokee-hoodie-s-brown",
-        "size": "S",
-        "color": "Brown",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-hoodie-m-brown",
-        "size": "M",
-        "color": "Brown",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-hoodie-l-brown",
-        "size": "L",
-        "color": "Brown",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-hoodie-xl-brown",
-        "size": "XL",
-        "color": "Brown",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-hoodie-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-hoodie-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-hoodie-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "cairokee-hoodie-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 800.0,
-        "original_price": 950.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "wanas-crewneck",
-    "name": "WANAS Crewneck",
-    "category": "Hoodies & Sweatshirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "crewneck"
-    ],
-    "collection": "WINTER COLLECTION",
-    "sleeve": "long",
-    "size_chart": "oversized-crewneck",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Burgundy",
-      "Navy",
-      "Olive"
-    ],
-    "lengths": [],
-    "price": 549.0,
-    "original_price": 900.0,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-white-s",
+    "size": "S",
+    "color": "White",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
     "on_sale": true,
-    "images": [
-      "data/images/wanas-burgandy-crewneck/01.png",
-      "data/images/wanas-burgandy-crewneck/02.png",
-      "data/images/wanas-navy-crewneck/01.png",
-      "data/images/wanas-navy-crewneck/02.png",
-      "data/images/wanas-olive-crewneck/01.png",
-      "data/images/wanas-olive-crewneck/02.png"
-    ],
-    "color_images": {
-      "Burgundy": [
-        "data/images/wanas-burgandy-crewneck/01.png",
-        "data/images/wanas-burgandy-crewneck/02.png"
-      ],
-      "Navy": [
-        "data/images/wanas-navy-crewneck/01.png",
-        "data/images/wanas-navy-crewneck/02.png"
-      ],
-      "Olive": [
-        "data/images/wanas-olive-crewneck/01.png",
-        "data/images/wanas-olive-crewneck/02.png"
-      ]
-    },
-    "description": "Oversized crewneck sweatshirt. Model wears M (60kg, 178cm).",
-    "source_products": [
-      {
-        "handle": "wanas-burgandy-crewneck",
-        "shopify_id": "8608433373334",
-        "color": "Burgundy",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-burgandy-crewneck"
-      },
-      {
-        "handle": "wanas-navy-crewneck",
-        "shopify_id": "8608429441174",
-        "color": "Navy",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-navy-crewneck"
-      },
-      {
-        "handle": "wanas-olive-crewneck",
-        "shopify_id": "8608433504406",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-olive-crewneck"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "wanas-crewneck-s-burgundy",
-        "size": "S",
-        "color": "Burgundy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-m-burgundy",
-        "size": "M",
-        "color": "Burgundy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-l-burgundy",
-        "size": "L",
-        "color": "Burgundy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-xl-burgundy",
-        "size": "XL",
-        "color": "Burgundy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-s-navy",
-        "size": "S",
-        "color": "Navy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-m-navy",
-        "size": "M",
-        "color": "Navy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-l-navy",
-        "size": "L",
-        "color": "Navy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-xl-navy",
-        "size": "XL",
-        "color": "Navy",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-crewneck-xl-olive",
-        "size": "XL",
-        "color": "Olive",
-        "length": null,
-        "price": 549.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-burgundy-m",
+    "size": "M",
+    "color": "Burgundy",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-burgundy-l",
+    "size": "L",
+    "color": "Burgundy",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-navy-blue-m",
+    "size": "M",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-navy-blue-l",
+    "size": "L",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-white-m",
+    "size": "M",
+    "color": "White",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-white-l",
+    "size": "L",
+    "color": "White",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-pink-s",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-pink-m",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-pink-l",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-black-s",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-black-m",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-off-shoulder-top-black-l",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-backless-top",
+  "name": "Rehla V-Halter Neck Backless Top",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "backless",
+   "halter",
+   "v-neck"
+  ],
+  "collection": null,
+  "sleeve": "sleeveless",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Burgundy",
+   "Black",
+   "Navy Blue",
+   "White",
+   "Pink"
+  ],
+  "lengths": [],
+  "price": 450.0,
+  "original_price": 699.0,
+  "on_sale": true,
+  "images": [
+   "data/images/rehla-backless-top/01.jpg",
+   "data/images/rehla-backless-top/02.jpg",
+   "data/images/rehla-backless-top/03.jpg",
+   "data/images/rehla-backless-top/04.jpg",
+   "data/images/rehla-backless-top/05.jpg",
+   "data/images/rehla-backless-top/06.jpg",
+   "data/images/rehla-backless-top/07.jpg",
+   "data/images/rehla-backless-top/08.jpg",
+   "data/images/rehla-backless-top/09.jpg",
+   "data/images/rehla-backless-top/10.jpg",
+   "data/images/rehla-backless-top/11.jpg",
+   "data/images/rehla-backless-top/12.jpg",
+   "data/images/rehla-backless-top/13.jpg",
+   "data/images/rehla-backless-top/14.jpg"
+  ],
+  "color_images": {
+   "Burgundy": [
+    "data/images/rehla-backless-top/08.jpg",
+    "data/images/rehla-backless-top/07.jpg",
+    "data/images/rehla-backless-top/06.jpg"
+   ],
+   "Black": [
+    "data/images/rehla-backless-top/09.jpg",
+    "data/images/rehla-backless-top/11.jpg",
+    "data/images/rehla-backless-top/02.jpg"
+   ],
+   "Navy Blue": [
+    "data/images/rehla-backless-top/04.jpg",
+    "data/images/rehla-backless-top/05.jpg"
+   ],
+   "White": [
+    "data/images/rehla-backless-top/01.jpg",
+    "data/images/rehla-backless-top/10.jpg"
+   ],
+   "Pink": [
+    "data/images/rehla-backless-top/03.jpg",
+    "data/images/rehla-backless-top/14.jpg",
+    "data/images/rehla-backless-top/13.jpg"
+   ]
   },
-  {
-    "product_id": "wanas-hoodie",
-    "name": "WANAS Hoodie",
-    "category": "Hoodies & Sweatshirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "pullover"
-    ],
-    "collection": "WINTER COLLECTION",
-    "sleeve": "long",
-    "size_chart": "oversized-hoodie",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Grey",
-      "Olive"
-    ],
-    "lengths": [],
+  "description": "V-neck halter top with an open back.",
+  "source_products": [
+   {
+    "handle": "rehla-backless-top",
+    "shopify_id": "8219973091446",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-backless-top"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "rehla-backless-top-burgundy-s",
+    "size": "S",
+    "color": "Burgundy",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-burgundy-m",
+    "size": "M",
+    "color": "Burgundy",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-burgundy-l",
+    "size": "L",
+    "color": "Burgundy",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-black-s",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-navy-blue-s",
+    "size": "S",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-white-s",
+    "size": "S",
+    "color": "White",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-black-m",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-navy-blue-m",
+    "size": "M",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-white-m",
+    "size": "M",
+    "color": "White",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-black-l",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-navy-blue-l",
+    "size": "L",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-white-l",
+    "size": "L",
+    "color": "White",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-pink-s",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-pink-m",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-backless-top-pink-l",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 450.0,
+    "original_price": 699.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "wide-leg-flare-trousers",
+  "name": "Rehla Yoga Pants",
+  "category": "Pants",
+  "department": "women",
+  "style": [
+   "wide-leg",
+   "flare",
+   "yoga"
+  ],
+  "collection": null,
+  "sleeve": "sleeveless",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black",
+   "Brown"
+  ],
+  "lengths": [],
+  "price": 650.0,
+  "original_price": 850.0,
+  "on_sale": true,
+  "images": [
+   "data/images/wide-leg-flare-trousers/01.jpg",
+   "data/images/wide-leg-flare-trousers/02.jpg",
+   "data/images/wide-leg-flare-trousers/03.jpg",
+   "data/images/wide-leg-flare-trousers/04.jpg",
+   "data/images/wide-leg-flare-trousers/05.jpg",
+   "data/images/wide-leg-flare-trousers/06.jpg",
+   "data/images/wide-leg-flare-trousers/07.jpg",
+   "data/images/wide-leg-flare-trousers/08.jpg",
+   "data/images/wide-leg-flare-trousers/09.jpg",
+   "data/images/wide-leg-flare-trousers/10.jpg",
+   "data/images/wide-leg-flare-trousers/11.jpg",
+   "data/images/wide-leg-flare-trousers/12.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/wide-leg-flare-trousers/11.jpg",
+    "data/images/wide-leg-flare-trousers/10.jpg",
+    "data/images/wide-leg-flare-trousers/08.jpg"
+   ],
+   "Brown": [
+    "data/images/wide-leg-flare-trousers/02.jpg",
+    "data/images/wide-leg-flare-trousers/04.jpg",
+    "data/images/wide-leg-flare-trousers/05.jpg"
+   ]
+  },
+  "description": "Effortlessly refined and tailored for the modern wardrobe, these wide-leg flare trousers combine structure with fluid movement. Cut from a smooth, mid-weight fabric, they feature a high-rise silhouette, a clean front panel, and a dramatic flared hem that elongates the leg. Designed for versatility — style them with a fitted top for a polished day look, or elevate with heels and a blazer for evenin",
+  "source_products": [
+   {
+    "handle": "wide-leg-flare-trousers",
+    "shopify_id": "8053397127286",
+    "color": null,
+    "url": "https://rehlaeg.com/products/wide-leg-flare-trousers"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "wide-leg-flare-trousers-black-s",
+    "size": "S",
+    "color": "Black",
+    "length": null,
     "price": 650.0,
-    "original_price": 900.0,
-    "on_sale": true,
-    "images": [
-      "data/images/wanas-black-hoodie/01.jpg",
-      "data/images/wanas-black-hoodie/02.jpg",
-      "data/images/wanas-black-hoodie/03.jpg",
-      "data/images/wanas-black-hoodie/04.jpg",
-      "data/images/wanas-black-hoodie/05.jpg",
-      "data/images/wanas-grey-hoodie/01.jpg",
-      "data/images/wanas-grey-hoodie/02.jpg",
-      "data/images/wanas-grey-hoodie/03.jpg",
-      "data/images/wanas-grey-hoodie/04.jpg",
-      "data/images/wanas-olive-hoodie/01.jpg",
-      "data/images/wanas-olive-hoodie/02.jpg",
-      "data/images/wanas-olive-hoodie/03.jpg",
-      "data/images/wanas-olive-hoodie/04.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/wanas-black-hoodie/01.jpg",
-        "data/images/wanas-black-hoodie/02.jpg",
-        "data/images/wanas-black-hoodie/03.jpg",
-        "data/images/wanas-black-hoodie/04.jpg",
-        "data/images/wanas-black-hoodie/05.jpg"
-      ],
-      "Grey": [
-        "data/images/wanas-grey-hoodie/01.jpg",
-        "data/images/wanas-grey-hoodie/02.jpg",
-        "data/images/wanas-grey-hoodie/03.jpg",
-        "data/images/wanas-grey-hoodie/04.jpg"
-      ],
-      "Olive": [
-        "data/images/wanas-olive-hoodie/01.jpg",
-        "data/images/wanas-olive-hoodie/02.jpg",
-        "data/images/wanas-olive-hoodie/03.jpg",
-        "data/images/wanas-olive-hoodie/04.jpg"
-      ]
-    },
-    "description": "Oversized pullover hoodie. Model wears M (70kg, 178cm).",
-    "source_products": [
-      {
-        "handle": "wanas-black-hoodie",
-        "shopify_id": "8545683406998",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-black-hoodie"
-      },
-      {
-        "handle": "wanas-grey-hoodie",
-        "shopify_id": "8545684881558",
-        "color": "Grey",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-grey-hoodie"
-      },
-      {
-        "handle": "wanas-olive-hoodie",
-        "shopify_id": "8545686061206",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-olive-hoodie"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "wanas-hoodie-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-s-grey",
-        "size": "S",
-        "color": "Grey",
-        "length": null,
-        "price": 700.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-m-grey",
-        "size": "M",
-        "color": "Grey",
-        "length": null,
-        "price": 700.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-l-grey",
-        "size": "L",
-        "color": "Grey",
-        "length": null,
-        "price": 700.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-xl-grey",
-        "size": "XL",
-        "color": "Grey",
-        "length": null,
-        "price": 700.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-hoodie-xl-olive",
-        "size": "XL",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "wanas-quarter-zip",
-    "name": "WANAS Quarter-Zip",
-    "category": "Hoodies & Sweatshirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "quarter-zip"
-    ],
-    "collection": "WINTER COLLECTION",
-    "sleeve": "long",
-    "size_chart": "quarter-zip",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Camel Brown",
-      "Light Brown",
-      "Navy"
-    ],
-    "lengths": [],
-    "price": 500.0,
-    "original_price": 900.0,
-    "on_sale": true,
-    "images": [
-      "data/images/wanas-navy-quartrzip-1/01.png",
-      "data/images/wanas-navy-quartrzip-1/02.png",
-      "data/images/wanas-navy-quartrzip-1/03.png",
-      "data/images/wanas-lightbrown-quartrzip/01.png",
-      "data/images/wanas-lightbrown-quartrzip/02.png",
-      "data/images/wanas-navy-quartrzip/01.jpg",
-      "data/images/wanas-navy-quartrzip/02.png"
-    ],
-    "color_images": {
-      "Camel Brown": [
-        "data/images/wanas-navy-quartrzip-1/01.png",
-        "data/images/wanas-navy-quartrzip-1/02.png",
-        "data/images/wanas-navy-quartrzip-1/03.png"
-      ],
-      "Light Brown": [
-        "data/images/wanas-lightbrown-quartrzip/01.png",
-        "data/images/wanas-lightbrown-quartrzip/02.png"
-      ],
-      "Navy": [
-        "data/images/wanas-navy-quartrzip/01.jpg",
-        "data/images/wanas-navy-quartrzip/02.png"
-      ]
-    },
-    "description": "Oversized quarter-zip sweatshirt. Model wears XL (95kg, 180cm).",
-    "source_products": [
-      {
-        "handle": "wanas-navy-quartrzip-1",
-        "shopify_id": "8608443039894",
-        "color": "Camel Brown",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-navy-quartrzip-1"
-      },
-      {
-        "handle": "wanas-lightbrown-quartrzip",
-        "shopify_id": "8608434520214",
-        "color": "Light Brown",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-lightbrown-quartrzip"
-      },
-      {
-        "handle": "wanas-navy-quartrzip",
-        "shopify_id": "8608442777750",
-        "color": "Navy",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-navy-quartrzip"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "wanas-quarter-zip-s-camel-brown",
-        "size": "S",
-        "color": "Camel Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-m-camel-brown",
-        "size": "M",
-        "color": "Camel Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-l-camel-brown",
-        "size": "L",
-        "color": "Camel Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-xl-camel-brown",
-        "size": "XL",
-        "color": "Camel Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-s-light-brown",
-        "size": "S",
-        "color": "Light Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-m-light-brown",
-        "size": "M",
-        "color": "Light Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-l-light-brown",
-        "size": "L",
-        "color": "Light Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-xl-light-brown",
-        "size": "XL",
-        "color": "Light Brown",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-s-navy",
-        "size": "S",
-        "color": "Navy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-m-navy",
-        "size": "M",
-        "color": "Navy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-l-navy",
-        "size": "L",
-        "color": "Navy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-quarter-zip-xl-navy",
-        "size": "XL",
-        "color": "Navy",
-        "length": null,
-        "price": 500.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "wanas-zip-hoodie",
-    "name": "WANAS Zip-Hoodie",
-    "category": "Hoodies & Sweatshirts",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "zip-through"
-    ],
-    "collection": "WINTER COLLECTION",
-    "sleeve": "long",
-    "size_chart": "wanas-zip-hoodie",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Grey",
-      "Olive"
-    ],
-    "lengths": [],
-    "price": 750.0,
-    "original_price": 1000.0,
-    "on_sale": true,
-    "images": [
-      "data/images/wanas-black-zip-hoodie/01.jpg",
-      "data/images/wanas-black-zip-hoodie/02.jpg",
-      "data/images/wanas-black-zip-hoodie/03.jpg",
-      "data/images/wanas-black-zip-hoodie/04.jpg",
-      "data/images/wanas-grey-zip-hoodie/01.jpg",
-      "data/images/wanas-grey-zip-hoodie/02.jpg",
-      "data/images/wanas-grey-zip-hoodie/03.jpg",
-      "data/images/wanas-grey-zip-hoodie/04.jpg",
-      "data/images/wanas-olive-zip-hoodie/01.jpg",
-      "data/images/wanas-olive-zip-hoodie/02.jpg",
-      "data/images/wanas-olive-zip-hoodie/03.jpg",
-      "data/images/wanas-olive-zip-hoodie/04.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/wanas-black-zip-hoodie/01.jpg",
-        "data/images/wanas-black-zip-hoodie/02.jpg",
-        "data/images/wanas-black-zip-hoodie/03.jpg",
-        "data/images/wanas-black-zip-hoodie/04.jpg"
-      ],
-      "Grey": [
-        "data/images/wanas-grey-zip-hoodie/01.jpg",
-        "data/images/wanas-grey-zip-hoodie/02.jpg",
-        "data/images/wanas-grey-zip-hoodie/03.jpg",
-        "data/images/wanas-grey-zip-hoodie/04.jpg"
-      ],
-      "Olive": [
-        "data/images/wanas-olive-zip-hoodie/01.jpg",
-        "data/images/wanas-olive-zip-hoodie/02.jpg",
-        "data/images/wanas-olive-zip-hoodie/03.jpg",
-        "data/images/wanas-olive-zip-hoodie/04.jpg"
-      ]
-    },
-    "description": "Oversized zip-through hoodie. Model wears M (70kg, 178cm).",
-    "source_products": [
-      {
-        "handle": "wanas-black-zip-hoodie",
-        "shopify_id": "8545692909718",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-black-zip-hoodie"
-      },
-      {
-        "handle": "wanas-grey-zip-hoodie",
-        "shopify_id": "8545693827222",
-        "color": "Grey",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-grey-zip-hoodie"
-      },
-      {
-        "handle": "wanas-olive-zip-hoodie",
-        "shopify_id": "8545692975254",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-olive-zip-hoodie"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "wanas-zip-hoodie-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-s-grey",
-        "size": "S",
-        "color": "Grey",
-        "length": null,
-        "price": 800.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-m-grey",
-        "size": "M",
-        "color": "Grey",
-        "length": null,
-        "price": 800.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-l-grey",
-        "size": "L",
-        "color": "Grey",
-        "length": null,
-        "price": 800.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-xl-grey",
-        "size": "XL",
-        "color": "Grey",
-        "length": null,
-        "price": 800.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-zip-hoodie-xl-olive",
-        "size": "XL",
-        "color": "Olive",
-        "length": null,
-        "price": 750.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "zipup",
-    "name": "Zipup",
-    "category": "Hoodies & Sweatshirts",
-    "department": "unisex",
-    "style": [
-      "zip-through"
-    ],
-    "collection": "WINTER COLLECTION",
-    "sleeve": "long",
-    "size_chart": "zipup",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Pink",
-      "Vintage Green"
-    ],
-    "lengths": [],
-    "price": 600.0,
     "original_price": 850.0,
     "on_sale": true,
-    "images": [
-      "data/images/black-zipup-1/01.jpg",
-      "data/images/black-zipup-1/02.jpg",
-      "data/images/pink-zipup/01.jpg",
-      "data/images/pink-zipup/02.jpg",
-      "data/images/vintage-green-zipup-1/01.jpg",
-      "data/images/vintage-green-zipup-1/02.jpg",
-      "data/images/vintage-green-zipup-1/03.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/black-zipup-1/01.jpg",
-        "data/images/black-zipup-1/02.jpg"
-      ],
-      "Pink": [
-        "data/images/pink-zipup/01.jpg",
-        "data/images/pink-zipup/02.jpg"
-      ],
-      "Vintage Green": [
-        "data/images/vintage-green-zipup-1/01.jpg",
-        "data/images/vintage-green-zipup-1/02.jpg",
-        "data/images/vintage-green-zipup-1/03.jpg"
-      ]
-    },
-    "description": "Zip-through hoodie.",
-    "source_products": [
-      {
-        "handle": "black-zipup-1",
-        "shopify_id": "8393203056790",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/black-zipup-1"
-      },
-      {
-        "handle": "pink-zipup",
-        "shopify_id": "8390024790166",
-        "color": "Pink",
-        "url": "https://wanasgallery.myshopify.com/products/pink-zipup"
-      },
-      {
-        "handle": "vintage-green-zipup-1",
-        "shopify_id": "8393204138134",
-        "color": "Vintage Green",
-        "url": "https://wanasgallery.myshopify.com/products/vintage-green-zipup-1"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "zipup-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-s-pink",
-        "size": "S",
-        "color": "Pink",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-m-pink",
-        "size": "M",
-        "color": "Pink",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-l-pink",
-        "size": "L",
-        "color": "Pink",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-xl-pink",
-        "size": "XL",
-        "color": "Pink",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-s-vintage-green",
-        "size": "S",
-        "color": "Vintage Green",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-m-vintage-green",
-        "size": "M",
-        "color": "Vintage Green",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-l-vintage-green",
-        "size": "L",
-        "color": "Vintage Green",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "zipup-xl-vintage-green",
-        "size": "XL",
-        "color": "Vintage Green",
-        "length": null,
-        "price": 600.0,
-        "original_price": 850.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "knitted-polo",
-    "name": "Knitted Polo",
-    "category": "Polo Shirts",
-    "department": "unisex",
-    "style": [
-      "boxy-fit",
-      "knitted"
-    ],
-    "collection": null,
-    "sleeve": "half",
-    "size_chart": "knitted-polo",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Burgundy",
-      "Navy",
-      "Olive",
-      "White"
-    ],
-    "lengths": [],
-    "price": 499.0,
-    "original_price": 780.0,
-    "on_sale": true,
-    "images": [
-      "data/images/burgandy-knitted-polo/01.jpg",
-      "data/images/burgandy-knitted-polo/02.jpg",
-      "data/images/burgandy-knitted-polo/03.png",
-      "data/images/burgandy-knitted-polo/04.jpg",
-      "data/images/burgandy-knitted-polo/05.jpg",
-      "data/images/burgandy-knitted-polo/06.jpg",
-      "data/images/burgandy-knitted-polo/07.jpg",
-      "data/images/navy-knitted-polo/01.jpg",
-      "data/images/navy-knitted-polo/02.jpg",
-      "data/images/navy-knitted-polo/03.jpg",
-      "data/images/navy-knitted-polo/04.jpg",
-      "data/images/navy-knitted-polo/05.jpg",
-      "data/images/olive-knitted-polo/01.png",
-      "data/images/olive-knitted-polo/02.jpg",
-      "data/images/olive-knitted-polo/03.jpg",
-      "data/images/olive-knitted-polo/04.jpg",
-      "data/images/olive-knitted-polo/05.jpg",
-      "data/images/white-knitted-polo/01.jpg",
-      "data/images/white-knitted-polo/02.png",
-      "data/images/white-knitted-polo/03.jpg",
-      "data/images/white-knitted-polo/04.jpg",
-      "data/images/white-knitted-polo/05.jpg"
-    ],
-    "color_images": {
-      "Burgundy": [
-        "data/images/burgandy-knitted-polo/01.jpg",
-        "data/images/burgandy-knitted-polo/02.jpg",
-        "data/images/burgandy-knitted-polo/03.png",
-        "data/images/burgandy-knitted-polo/04.jpg",
-        "data/images/burgandy-knitted-polo/05.jpg",
-        "data/images/burgandy-knitted-polo/06.jpg",
-        "data/images/burgandy-knitted-polo/07.jpg"
-      ],
-      "Navy": [
-        "data/images/navy-knitted-polo/01.jpg",
-        "data/images/navy-knitted-polo/02.jpg",
-        "data/images/navy-knitted-polo/03.jpg",
-        "data/images/navy-knitted-polo/04.jpg",
-        "data/images/navy-knitted-polo/05.jpg"
-      ],
-      "Olive": [
-        "data/images/olive-knitted-polo/01.png",
-        "data/images/olive-knitted-polo/02.jpg",
-        "data/images/olive-knitted-polo/03.jpg",
-        "data/images/olive-knitted-polo/04.jpg",
-        "data/images/olive-knitted-polo/05.jpg"
-      ],
-      "White": [
-        "data/images/white-knitted-polo/01.jpg",
-        "data/images/white-knitted-polo/02.png",
-        "data/images/white-knitted-polo/03.jpg",
-        "data/images/white-knitted-polo/04.jpg",
-        "data/images/white-knitted-polo/05.jpg"
-      ]
-    },
-    "description": "Knitted polo, boxy fit. Female model wears M (66kg, 180cm); male model wears M (70kg, 178cm).",
-    "source_products": [
-      {
-        "handle": "burgandy-knitted-polo",
-        "shopify_id": "8650132488342",
-        "color": "Burgundy",
-        "url": "https://wanasgallery.myshopify.com/products/burgandy-knitted-polo"
-      },
-      {
-        "handle": "navy-knitted-polo",
-        "shopify_id": "8650136387734",
-        "color": "Navy",
-        "url": "https://wanasgallery.myshopify.com/products/navy-knitted-polo"
-      },
-      {
-        "handle": "olive-knitted-polo",
-        "shopify_id": "8650131767446",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/olive-knitted-polo"
-      },
-      {
-        "handle": "white-knitted-polo",
-        "shopify_id": "8650137010326",
-        "color": "White",
-        "url": "https://wanasgallery.myshopify.com/products/white-knitted-polo"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "knitted-polo-s-burgundy",
-        "size": "S",
-        "color": "Burgundy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-m-burgundy",
-        "size": "M",
-        "color": "Burgundy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-l-burgundy",
-        "size": "L",
-        "color": "Burgundy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-xl-burgundy",
-        "size": "XL",
-        "color": "Burgundy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-s-navy",
-        "size": "S",
-        "color": "Navy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-m-navy",
-        "size": "M",
-        "color": "Navy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-l-navy",
-        "size": "L",
-        "color": "Navy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-xl-navy",
-        "size": "XL",
-        "color": "Navy",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-xl-olive",
-        "size": "XL",
-        "color": "Olive",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-s-white",
-        "size": "S",
-        "color": "White",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-m-white",
-        "size": "M",
-        "color": "White",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-l-white",
-        "size": "L",
-        "color": "White",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "knitted-polo-xl-white",
-        "size": "XL",
-        "color": "White",
-        "length": null,
-        "price": 499.0,
-        "original_price": 780.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "wanas-polo",
-    "name": "WANAS Polo",
-    "category": "Polo Shirts",
-    "department": "unisex",
-    "style": [
-      "oversized"
-    ],
-    "collection": "WINTER COLLECTION",
-    "sleeve": "long",
-    "size_chart": "oversized-polo",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Grey",
-      "Olive"
-    ],
-    "lengths": [],
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "wide-leg-flare-trousers-brown-s",
+    "size": "S",
+    "color": "Brown",
+    "length": null,
     "price": 650.0,
-    "original_price": 900.0,
+    "original_price": 850.0,
     "on_sale": true,
-    "images": [
-      "data/images/wanas-black-polo/01.jpg",
-      "data/images/wanas-black-polo/02.jpg",
-      "data/images/wanas-black-polo/03.jpg",
-      "data/images/wanas-grey-polo/01.jpg",
-      "data/images/wanas-grey-polo/02.jpg",
-      "data/images/wanas-grey-polo/03.jpg",
-      "data/images/wanas-grey-polo/04.jpg",
-      "data/images/wanas-grey-polo/05.jpg",
-      "data/images/wanas-olive-polo/01.jpg",
-      "data/images/wanas-olive-polo/02.jpg",
-      "data/images/wanas-olive-polo/03.jpg",
-      "data/images/wanas-olive-polo/04.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/wanas-black-polo/01.jpg",
-        "data/images/wanas-black-polo/02.jpg",
-        "data/images/wanas-black-polo/03.jpg"
-      ],
-      "Grey": [
-        "data/images/wanas-grey-polo/01.jpg",
-        "data/images/wanas-grey-polo/02.jpg",
-        "data/images/wanas-grey-polo/03.jpg",
-        "data/images/wanas-grey-polo/04.jpg",
-        "data/images/wanas-grey-polo/05.jpg"
-      ],
-      "Olive": [
-        "data/images/wanas-olive-polo/01.jpg",
-        "data/images/wanas-olive-polo/02.jpg",
-        "data/images/wanas-olive-polo/03.jpg",
-        "data/images/wanas-olive-polo/04.jpg"
-      ]
-    },
-    "description": "Oversized polo. Model wears M (66kg, 182cm).",
-    "source_products": [
-      {
-        "handle": "wanas-black-polo",
-        "shopify_id": "8545695367318",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-black-polo"
-      },
-      {
-        "handle": "wanas-grey-polo",
-        "shopify_id": "8545695727766",
-        "color": "Grey",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-grey-polo"
-      },
-      {
-        "handle": "wanas-olive-polo",
-        "shopify_id": "8545695563926",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-olive-polo"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "wanas-polo-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-s-grey",
-        "size": "S",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-m-grey",
-        "size": "M",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-l-grey",
-        "size": "L",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-xl-grey",
-        "size": "XL",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-polo-xl-olive",
-        "size": "XL",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 900.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "lightweight-sweatpant",
-    "name": "Lightweight Sweatpant",
-    "category": "Joggers & Sweatpants",
-    "department": "unisex",
-    "style": [
-      "wide-leg",
-      "lightweight"
-    ],
-    "collection": null,
-    "sleeve": "sleeveless",
-    "size_chart": "wide-leg-sweatpants",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Grey",
-      "Navy"
-    ],
-    "lengths": [],
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "wide-leg-flare-trousers-black-m",
+    "size": "M",
+    "color": "Black",
+    "length": null,
     "price": 650.0,
-    "original_price": 720.0,
+    "original_price": 850.0,
     "on_sale": true,
-    "images": [
-      "data/images/olive-sweatpants/01.jpg",
-      "data/images/olive-sweatpants/02.jpg",
-      "data/images/olive-sweatpants/03.jpg",
-      "data/images/olive-sweatpants/04.jpg",
-      "data/images/olive-sweatpants/05.jpg",
-      "data/images/grey-sweatpants-copy/01.jpg",
-      "data/images/grey-sweatpants-copy/02.jpg",
-      "data/images/grey-sweatpants-copy/03.jpg",
-      "data/images/grey-sweatpants-copy/04.jpg",
-      "data/images/black-sweatpants/01.jpg",
-      "data/images/black-sweatpants/02.jpg",
-      "data/images/black-sweatpants/03.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/olive-sweatpants/01.jpg",
-        "data/images/olive-sweatpants/02.jpg",
-        "data/images/olive-sweatpants/03.jpg",
-        "data/images/olive-sweatpants/04.jpg",
-        "data/images/olive-sweatpants/05.jpg"
-      ],
-      "Grey": [
-        "data/images/grey-sweatpants-copy/01.jpg",
-        "data/images/grey-sweatpants-copy/02.jpg",
-        "data/images/grey-sweatpants-copy/03.jpg",
-        "data/images/grey-sweatpants-copy/04.jpg"
-      ],
-      "Navy": [
-        "data/images/black-sweatpants/01.jpg",
-        "data/images/black-sweatpants/02.jpg",
-        "data/images/black-sweatpants/03.jpg"
-      ]
-    },
-    "description": "Lightweight sweatpants, wide leg. Model wears L (90kg, 180cm).",
-    "source_products": [
-      {
-        "handle": "olive-sweatpants",
-        "shopify_id": "8484442833046",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/olive-sweatpants"
-      },
-      {
-        "handle": "grey-sweatpants-copy",
-        "shopify_id": "8484442636438",
-        "color": "Grey",
-        "url": "https://wanasgallery.myshopify.com/products/grey-sweatpants-copy"
-      },
-      {
-        "handle": "black-sweatpants",
-        "shopify_id": "8484442177686",
-        "color": "Navy",
-        "url": "https://wanasgallery.myshopify.com/products/black-sweatpants"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "lightweight-sweatpant-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-s-grey",
-        "size": "S",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-m-grey",
-        "size": "M",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-l-grey",
-        "size": "L",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-xl-grey",
-        "size": "XL",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-s-navy",
-        "size": "S",
-        "color": "Navy",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-m-navy",
-        "size": "M",
-        "color": "Navy",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-l-navy",
-        "size": "L",
-        "color": "Navy",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "lightweight-sweatpant-xl-navy",
-        "size": "XL",
-        "color": "Navy",
-        "length": null,
-        "price": 650.0,
-        "original_price": 720.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
-  },
-  {
-    "product_id": "wanas-sweatpant",
-    "name": "WANAS Sweatpant",
-    "category": "Joggers & Sweatpants",
-    "department": "unisex",
-    "style": [
-      "wide-leg"
-    ],
-    "collection": "WINTER COLLECTION",
-    "sleeve": "sleeveless",
-    "size_chart": "wide-leg-sweatpants",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Grey",
-      "Olive"
-    ],
-    "lengths": [],
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "wide-leg-flare-trousers-black-l",
+    "size": "L",
+    "color": "Black",
+    "length": null,
     "price": 650.0,
-    "original_price": 1000.0,
+    "original_price": 850.0,
     "on_sale": true,
-    "images": [
-      "data/images/wanas-black-sweatpant/01.jpg",
-      "data/images/wanas-black-sweatpant/02.jpg",
-      "data/images/wanas-black-sweatpant/03.jpg",
-      "data/images/wanas-black-sweatpant/04.jpg",
-      "data/images/wanas-grey-sweatpant/01.jpg",
-      "data/images/wanas-grey-sweatpant/02.jpg",
-      "data/images/wanas-grey-sweatpant/03.jpg",
-      "data/images/wanas-grey-sweatpant/04.jpg",
-      "data/images/wanas-grey-sweatpant/05.jpg",
-      "data/images/wanas-olive-sweatpant/01.jpg",
-      "data/images/wanas-olive-sweatpant/02.jpg",
-      "data/images/wanas-olive-sweatpant/03.jpg",
-      "data/images/wanas-olive-sweatpant/04.jpg",
-      "data/images/wanas-olive-sweatpant/05.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/wanas-black-sweatpant/01.jpg",
-        "data/images/wanas-black-sweatpant/02.jpg",
-        "data/images/wanas-black-sweatpant/03.jpg",
-        "data/images/wanas-black-sweatpant/04.jpg"
-      ],
-      "Grey": [
-        "data/images/wanas-grey-sweatpant/01.jpg",
-        "data/images/wanas-grey-sweatpant/02.jpg",
-        "data/images/wanas-grey-sweatpant/03.jpg",
-        "data/images/wanas-grey-sweatpant/04.jpg",
-        "data/images/wanas-grey-sweatpant/05.jpg"
-      ],
-      "Olive": [
-        "data/images/wanas-olive-sweatpant/01.jpg",
-        "data/images/wanas-olive-sweatpant/02.jpg",
-        "data/images/wanas-olive-sweatpant/03.jpg",
-        "data/images/wanas-olive-sweatpant/04.jpg",
-        "data/images/wanas-olive-sweatpant/05.jpg"
-      ]
-    },
-    "description": "Winter melton sweatpants, wide leg. Model wears S (70kg, 178cm).",
-    "source_products": [
-      {
-        "handle": "wanas-black-sweatpant",
-        "shopify_id": "8545698021526",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-black-sweatpant"
-      },
-      {
-        "handle": "wanas-grey-sweatpant",
-        "shopify_id": "8545698119830",
-        "color": "Grey",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-grey-sweatpant"
-      },
-      {
-        "handle": "wanas-olive-sweatpant",
-        "shopify_id": "8545701036182",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/wanas-olive-sweatpant"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "wanas-sweatpant-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-xl-black",
-        "size": "XL",
-        "color": "Black",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-s-grey",
-        "size": "S",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-m-grey",
-        "size": "M",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-l-grey",
-        "size": "L",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-xl-grey",
-        "size": "XL",
-        "color": "Grey",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "wanas-sweatpant-xl-olive",
-        "size": "XL",
-        "color": "Olive",
-        "length": null,
-        "price": 650.0,
-        "original_price": 1000.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "wide-leg-flare-trousers-brown-m",
+    "size": "M",
+    "color": "Brown",
+    "length": null,
+    "price": 650.0,
+    "original_price": 850.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "wide-leg-flare-trousers-brown-l",
+    "size": "L",
+    "color": "Brown",
+    "length": null,
+    "price": 650.0,
+    "original_price": 850.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-tops",
+  "name": "Rehla Tops",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "basic",
+   "fitted"
+  ],
+  "collection": null,
+  "sleeve": null,
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Charcoal",
+   "White",
+   "Lavender",
+   "Olive",
+   "Baby Blue",
+   "Royal Blue",
+   "Mint Green",
+   "Brown",
+   "Burgundy",
+   "Violet",
+   "Navy Blue"
+  ],
+  "lengths": [],
+  "price": 445.0,
+  "original_price": 500.0,
+  "on_sale": true,
+  "images": [
+   "data/images/rehla-tops/01.jpg",
+   "data/images/rehla-tops/02.jpg",
+   "data/images/rehla-tops/03.jpg",
+   "data/images/rehla-tops/04.jpg",
+   "data/images/rehla-tops/05.jpg",
+   "data/images/rehla-tops/06.jpg",
+   "data/images/rehla-tops/07.jpg",
+   "data/images/rehla-tops/08.jpg",
+   "data/images/rehla-tops/09.jpg",
+   "data/images/rehla-tops/10.jpg",
+   "data/images/rehla-tops/11.jpg",
+   "data/images/rehla-tops/12.jpg",
+   "data/images/rehla-tops/13.jpg",
+   "data/images/rehla-tops/14.jpg",
+   "data/images/rehla-tops/15.jpg",
+   "data/images/rehla-tops/16.jpg",
+   "data/images/rehla-tops/17.jpg",
+   "data/images/rehla-tops/18.jpg",
+   "data/images/rehla-tops/19.jpg",
+   "data/images/rehla-tops/20.jpg",
+   "data/images/rehla-tops/21.jpg",
+   "data/images/rehla-tops/22.jpg",
+   "data/images/rehla-tops/23.jpg",
+   "data/images/rehla-tops/24.jpg",
+   "data/images/rehla-tops/25.jpg",
+   "data/images/rehla-tops/26.jpg",
+   "data/images/rehla-tops/27.jpg",
+   "data/images/rehla-tops/28.jpg",
+   "data/images/rehla-tops/29.jpg",
+   "data/images/rehla-tops/30.jpg",
+   "data/images/rehla-tops/31.jpg"
+  ],
+  "color_images": {
+   "Charcoal": [
+    "data/images/rehla-tops/02.jpg",
+    "data/images/rehla-tops/03.jpg",
+    "data/images/rehla-tops/05.jpg"
+   ],
+   "White": [
+    "data/images/rehla-tops/06.jpg",
+    "data/images/rehla-tops/07.jpg",
+    "data/images/rehla-tops/08.jpg"
+   ],
+   "Lavender": [
+    "data/images/rehla-tops/09.jpg",
+    "data/images/rehla-tops/10.jpg",
+    "data/images/rehla-tops/01.jpg"
+   ],
+   "Olive": [
+    "data/images/rehla-tops/11.jpg",
+    "data/images/rehla-tops/12.jpg",
+    "data/images/rehla-tops/13.jpg"
+   ],
+   "Baby Blue": [
+    "data/images/rehla-tops/14.jpg",
+    "data/images/rehla-tops/18.jpg",
+    "data/images/rehla-tops/19.jpg"
+   ],
+   "Royal Blue": [
+    "data/images/rehla-tops/15.jpg",
+    "data/images/rehla-tops/16.jpg",
+    "data/images/rehla-tops/17.jpg"
+   ],
+   "Brown": [
+    "data/images/rehla-tops/20.jpg",
+    "data/images/rehla-tops/21.jpg",
+    "data/images/rehla-tops/22.jpg"
+   ],
+   "Burgundy": [
+    "data/images/rehla-tops/23.jpg",
+    "data/images/rehla-tops/24.jpg",
+    "data/images/rehla-tops/25.jpg"
+   ],
+   "Violet": [
+    "data/images/rehla-tops/26.jpg",
+    "data/images/rehla-tops/29.jpg",
+    "data/images/rehla-tops/30.jpg"
+   ],
+   "Navy Blue": [
+    "data/images/rehla-tops/27.jpg",
+    "data/images/rehla-tops/28.jpg",
+    "data/images/rehla-tops/31.jpg"
+   ]
   },
-  {
-    "product_id": "worker-jacket",
-    "name": "Worker Jacket",
-    "category": "Jackets",
-    "department": "unisex",
-    "style": [
-      "oversized",
-      "worker"
-    ],
-    "collection": null,
-    "sleeve": "long",
-    "size_chart": "worker-jacket",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "colors": [
-      "Black",
-      "Olive"
-    ],
-    "lengths": [
-      "Long",
-      "Short"
-    ],
-    "price": 500.0,
-    "original_price": 800.0,
+  "description": "Rehla TopsThe perfect top doesn't just complete an outfit — it defines it. The Rehla Tops collection brings together refined design and everyday wearability, giving you a wardrobe staple that works as hard as you do. Soft, premium fabric — gentle on the skin, durable through every wear and wash Thoughtful fit — available in S, M, and L to flatter every body type Effortless versatility — styled up ",
+  "source_products": [
+   {
+    "handle": "rehla-tops",
+    "shopify_id": "8023010836598",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-tops"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-3264964",
+    "size": "S",
+    "color": "Charcoal",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
     "on_sale": true,
-    "images": [
-      "data/images/black-worker-jacket/01.jpg",
-      "data/images/black-worker-jacket/02.jpg",
-      "data/images/black-worker-jacket/03.jpg",
-      "data/images/black-worker-jacket/04.jpg",
-      "data/images/black-worker-jacket/05.jpg",
-      "data/images/black-worker-jacket/06.jpg",
-      "data/images/black-worker-jacket-copy/01.jpg",
-      "data/images/black-worker-jacket-copy/02.jpg",
-      "data/images/black-worker-jacket-copy/03.jpg",
-      "data/images/black-worker-jacket-copy/04.jpg",
-      "data/images/black-worker-jacket-copy/05.jpg",
-      "data/images/black-worker-jacket-copy/06.jpg"
-    ],
-    "color_images": {
-      "Black": [
-        "data/images/black-worker-jacket/01.jpg",
-        "data/images/black-worker-jacket/02.jpg",
-        "data/images/black-worker-jacket/03.jpg",
-        "data/images/black-worker-jacket/04.jpg",
-        "data/images/black-worker-jacket/05.jpg",
-        "data/images/black-worker-jacket/06.jpg"
-      ],
-      "Olive": [
-        "data/images/black-worker-jacket-copy/01.jpg",
-        "data/images/black-worker-jacket-copy/02.jpg",
-        "data/images/black-worker-jacket-copy/03.jpg",
-        "data/images/black-worker-jacket-copy/04.jpg",
-        "data/images/black-worker-jacket-copy/05.jpg",
-        "data/images/black-worker-jacket-copy/06.jpg"
-      ]
-    },
-    "description": "Oversized worker jacket, available with long or short sleeves. Female model wears M (56kg, 172cm); male model wears L (93kg, 180cm).",
-    "source_products": [
-      {
-        "handle": "black-worker-jacket",
-        "shopify_id": "8392264745110",
-        "color": "Black",
-        "url": "https://wanasgallery.myshopify.com/products/black-worker-jacket"
-      },
-      {
-        "handle": "black-worker-jacket-copy",
-        "shopify_id": "8392264843414",
-        "color": "Olive",
-        "url": "https://wanasgallery.myshopify.com/products/black-worker-jacket-copy"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "worker-jacket-s-black-long",
-        "size": "S",
-        "color": "Black",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-s-black-short",
-        "size": "S",
-        "color": "Black",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-m-black-long",
-        "size": "M",
-        "color": "Black",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-m-black-short",
-        "size": "M",
-        "color": "Black",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-l-black-long",
-        "size": "L",
-        "color": "Black",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-l-black-short",
-        "size": "L",
-        "color": "Black",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-xl-black-long",
-        "size": "XL",
-        "color": "Black",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-xl-black-short",
-        "size": "XL",
-        "color": "Black",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-s-olive-long",
-        "size": "S",
-        "color": "Olive",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-s-olive-short",
-        "size": "S",
-        "color": "Olive",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-m-olive-long",
-        "size": "M",
-        "color": "Olive",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-m-olive-short",
-        "size": "M",
-        "color": "Olive",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-l-olive-long",
-        "size": "L",
-        "color": "Olive",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-l-olive-short",
-        "size": "L",
-        "color": "Olive",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-xl-olive-long",
-        "size": "XL",
-        "color": "Olive",
-        "length": "Long",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "worker-jacket-xl-olive-short",
-        "size": "XL",
-        "color": "Olive",
-        "length": "Short",
-        "price": 500.0,
-        "original_price": 800.0,
-        "on_sale": true,
-        "stock_qty": 0,
-        "low_stock_threshold": 2
-      }
-    ]
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1724058",
+    "size": "S",
+    "color": "White",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741527",
+    "size": "S",
+    "color": "Lavender",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3265054",
+    "size": "S",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1724085",
+    "size": "S",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741537",
+    "size": "S",
+    "color": "Royal Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741521",
+    "size": "S",
+    "color": "Mint Green",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741534",
+    "size": "S",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1723973",
+    "size": "S",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3265612",
+    "size": "S",
+    "color": "Violet",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1730447",
+    "size": "S",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3264963",
+    "size": "M",
+    "color": "Charcoal",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1724060",
+    "size": "M",
+    "color": "White",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741525",
+    "size": "M",
+    "color": "Lavender",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3265056",
+    "size": "M",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1724086",
+    "size": "M",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741538",
+    "size": "M",
+    "color": "Royal Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741522",
+    "size": "M",
+    "color": "Mint Green",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741533",
+    "size": "M",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1723974",
+    "size": "M",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3265611",
+    "size": "M",
+    "color": "Violet",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1730449",
+    "size": "M",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3264965",
+    "size": "L",
+    "color": "Charcoal",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1724061",
+    "size": "L",
+    "color": "White",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741526",
+    "size": "L",
+    "color": "Lavender",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3265055",
+    "size": "L",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1724065",
+    "size": "L",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741539",
+    "size": "L",
+    "color": "Royal Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741523",
+    "size": "L",
+    "color": "Mint Green",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741535",
+    "size": "L",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1723975",
+    "size": "L",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-3265610",
+    "size": "L",
+    "color": "Violet",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1730448",
+    "size": "L",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-orignal-tops",
+  "name": "Rehla Original Tops",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "basic",
+   "fitted"
+  ],
+  "collection": null,
+  "sleeve": null,
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black",
+   "Gray",
+   "Pink"
+  ],
+  "lengths": [],
+  "price": 445.0,
+  "original_price": 500.0,
+  "on_sale": true,
+  "images": [
+   "data/images/rehla-orignal-tops/01.jpg",
+   "data/images/rehla-orignal-tops/02.jpg",
+   "data/images/rehla-orignal-tops/03.jpg",
+   "data/images/rehla-orignal-tops/04.jpg",
+   "data/images/rehla-orignal-tops/05.jpg",
+   "data/images/rehla-orignal-tops/06.jpg",
+   "data/images/rehla-orignal-tops/07.jpg",
+   "data/images/rehla-orignal-tops/08.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehla-orignal-tops/02.jpg",
+    "data/images/rehla-orignal-tops/04.jpg",
+    "data/images/rehla-orignal-tops/08.jpg"
+   ],
+   "Gray": [
+    "data/images/rehla-orignal-tops/01.jpg",
+    "data/images/rehla-orignal-tops/05.jpg",
+    "data/images/rehla-orignal-tops/06.jpg"
+   ],
+   "Pink": [
+    "data/images/rehla-orignal-tops/03.jpg",
+    "data/images/rehla-orignal-tops/07.jpg"
+   ]
   },
-  {
-    "product_id": "feelin-fine-top",
-    "name": "Feelin Fine Top",
-    "category": "Tops",
-    "department": "women",
-    "style": [
-      "fitted"
-    ],
-    "collection": null,
-    "sleeve": "half",
-    "size_chart": "wns-tops",
-    "sizes": [
-      "S",
-      "M",
-      "L"
-    ],
-    "colors": [
-      "Black",
-      "Olive",
-      "Pink",
-      "White"
-    ],
-    "lengths": [],
-    "price": 200.0,
-    "original_price": 380.0,
+  "description": "Rehla Original TopsElevate your everyday wardrobe with the Rehla Original Tops — where effortless style meets premium comfort. Designed for the modern woman who moves with confidence, these tops are crafted to complement every occasion, from casual outings to curated looks. Premium fabric — soft, breathable, and built to last Flattering fit — available in S, M, and L for a silhouette that feels as",
+  "source_products": [
+   {
+    "handle": "rehla-orignal-tops",
+    "shopify_id": "8024935170166",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-orignal-tops"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1642135",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
     "on_sale": true,
-    "images": [
-      "data/images/white-top/01.jpg",
-      "data/images/white-top/02.jpg",
-      "data/images/white-top/03.jpg",
-      "data/images/white-top/04.jpg",
-      "data/images/white-top/05.jpg",
-      "data/images/white-top/06.jpg",
-      "data/images/white-top/07.jpg",
-      "data/images/white-top/08.jpg"
-    ],
-    "color_images": {},
-    "description": "Fitted top. Female model wears M (66kg, 180cm).",
-    "source_products": [
-      {
-        "handle": "white-top",
-        "shopify_id": "8650150772886",
-        "color": null,
-        "url": "https://wanasgallery.myshopify.com/products/white-top"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "feelin-fine-top-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-s-pink",
-        "size": "S",
-        "color": "Pink",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-s-white",
-        "size": "S",
-        "color": "White",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-m-pink",
-        "size": "M",
-        "color": "Pink",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-m-white",
-        "size": "M",
-        "color": "White",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-l-pink",
-        "size": "L",
-        "color": "Pink",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "feelin-fine-top-l-white",
-        "size": "L",
-        "color": "White",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642139",
+    "size": "S",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642145",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642136",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642140",
+    "size": "M",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642146",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642137",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642141",
+    "size": "L",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1642147",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 500.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehlaa-pink-hoodie",
+  "name": "Rehla Pink Hoodie",
+  "category": "Hoodies & Jackets",
+  "department": "women",
+  "style": [
+   "hoodie",
+   "pullover"
+  ],
+  "collection": null,
+  "sleeve": "long",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Pink"
+  ],
+  "lengths": [],
+  "price": 700.0,
+  "original_price": 850.0,
+  "on_sale": true,
+  "images": [
+   "data/images/rehlaa-pink-hoodie/01.jpg",
+   "data/images/rehlaa-pink-hoodie/02.jpg",
+   "data/images/rehlaa-pink-hoodie/03.jpg",
+   "data/images/rehlaa-pink-hoodie/04.jpg",
+   "data/images/rehlaa-pink-hoodie/05.jpg",
+   "data/images/rehlaa-pink-hoodie/06.jpg",
+   "data/images/rehlaa-pink-hoodie/07.jpg",
+   "data/images/rehlaa-pink-hoodie/08.jpg"
+  ],
+  "color_images": {
+   "Pink": [
+    "data/images/rehlaa-pink-hoodie/01.jpg",
+    "data/images/rehlaa-pink-hoodie/02.jpg",
+    "data/images/rehlaa-pink-hoodie/03.jpg",
+    "data/images/rehlaa-pink-hoodie/04.jpg",
+    "data/images/rehlaa-pink-hoodie/05.jpg",
+    "data/images/rehlaa-pink-hoodie/06.jpg",
+    "data/images/rehlaa-pink-hoodie/07.jpg",
+    "data/images/rehlaa-pink-hoodie/08.jpg"
+   ]
   },
-  {
-    "product_id": "heart-top",
-    "name": "Heart Top",
-    "category": "Tops",
-    "department": "women",
-    "style": [
-      "fitted"
-    ],
-    "collection": null,
-    "sleeve": "half",
-    "size_chart": "wns-tops",
-    "sizes": [
-      "S",
-      "M",
-      "L"
-    ],
-    "colors": [
-      "Black",
-      "Olive",
-      "Pink",
-      "White"
-    ],
-    "lengths": [],
-    "price": 200.0,
-    "original_price": 380.0,
+  "description": "",
+  "source_products": [
+   {
+    "handle": "rehlaa-pink-hoodie",
+    "shopify_id": "7728930619510",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehlaa-pink-hoodie"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1991065",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 700.0,
+    "original_price": 850.0,
     "on_sale": true,
-    "images": [
-      "data/images/black-top/01.jpg",
-      "data/images/black-top/02.jpg",
-      "data/images/black-top/03.jpg",
-      "data/images/black-top/04.jpg",
-      "data/images/black-top/05.jpg",
-      "data/images/black-top/06.jpg",
-      "data/images/black-top/07.jpg",
-      "data/images/black-top/08.jpg",
-      "data/images/black-top/09.jpg"
-    ],
-    "color_images": {},
-    "description": "Fitted top. Female model wears M (66kg, 180cm).",
-    "source_products": [
-      {
-        "handle": "black-top",
-        "shopify_id": "8650145988758",
-        "color": null,
-        "url": "https://wanasgallery.myshopify.com/products/black-top"
-      }
-    ],
-    "variants": [
-      {
-        "variant_id": "heart-top-s-black",
-        "size": "S",
-        "color": "Black",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-s-olive",
-        "size": "S",
-        "color": "Olive",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-s-pink",
-        "size": "S",
-        "color": "Pink",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-s-white",
-        "size": "S",
-        "color": "White",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-m-black",
-        "size": "M",
-        "color": "Black",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-m-olive",
-        "size": "M",
-        "color": "Olive",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-m-pink",
-        "size": "M",
-        "color": "Pink",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-m-white",
-        "size": "M",
-        "color": "White",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-l-black",
-        "size": "L",
-        "color": "Black",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-l-olive",
-        "size": "L",
-        "color": "Olive",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-l-pink",
-        "size": "L",
-        "color": "Pink",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      },
-      {
-        "variant_id": "heart-top-l-white",
-        "size": "L",
-        "color": "White",
-        "length": null,
-        "price": 200.0,
-        "original_price": 380.0,
-        "on_sale": true,
-        "stock_qty": 10,
-        "low_stock_threshold": 2
-      }
-    ]
-  }
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1991066",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 700.0,
+    "original_price": 850.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1991067",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 700.0,
+    "original_price": 850.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-long-sleve-black-top",
+  "name": "Rehla Long Sleeve Top",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "basic",
+   "fitted",
+   "long-sleeve"
+  ],
+  "collection": null,
+  "sleeve": "long",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black",
+   "Pink",
+   "Brown",
+   "Gray",
+   "Navy Blue",
+   "Silver",
+   "Burgundy",
+   "Baby Blue",
+   "Olive"
+  ],
+  "lengths": [],
+  "price": 445.0,
+  "original_price": 445.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-long-sleve-black-top/01.jpg",
+   "data/images/rehla-long-sleve-black-top/02.jpg",
+   "data/images/rehla-long-sleve-black-top/03.jpg",
+   "data/images/rehla-long-sleve-black-top/04.jpg",
+   "data/images/rehla-long-sleve-black-top/05.jpg",
+   "data/images/rehla-long-sleve-black-top/06.jpg",
+   "data/images/rehla-long-sleve-black-top/07.jpg",
+   "data/images/rehla-long-sleve-black-top/08.jpg",
+   "data/images/rehla-long-sleve-black-top/09.jpg",
+   "data/images/rehla-long-sleve-black-top/10.jpg",
+   "data/images/rehla-long-sleve-black-top/11.jpg",
+   "data/images/rehla-long-sleve-black-top/12.jpg",
+   "data/images/rehla-long-sleve-black-top/13.jpg",
+   "data/images/rehla-long-sleve-black-top/14.jpg",
+   "data/images/rehla-long-sleve-black-top/15.jpg",
+   "data/images/rehla-long-sleve-black-top/16.jpg",
+   "data/images/rehla-long-sleve-black-top/17.jpg",
+   "data/images/rehla-long-sleve-black-top/18.jpg",
+   "data/images/rehla-long-sleve-black-top/19.jpg",
+   "data/images/rehla-long-sleve-black-top/20.jpg",
+   "data/images/rehla-long-sleve-black-top/21.jpg",
+   "data/images/rehla-long-sleve-black-top/22.jpg",
+   "data/images/rehla-long-sleve-black-top/23.jpg",
+   "data/images/rehla-long-sleve-black-top/24.jpg",
+   "data/images/rehla-long-sleve-black-top/25.jpg",
+   "data/images/rehla-long-sleve-black-top/26.jpg",
+   "data/images/rehla-long-sleve-black-top/27.jpg",
+   "data/images/rehla-long-sleve-black-top/28.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehla-long-sleve-black-top/01.jpg",
+    "data/images/rehla-long-sleve-black-top/09.jpg",
+    "data/images/rehla-long-sleve-black-top/17.jpg"
+   ],
+   "Pink": [
+    "data/images/rehla-long-sleve-black-top/02.jpg",
+    "data/images/rehla-long-sleve-black-top/10.jpg",
+    "data/images/rehla-long-sleve-black-top/18.jpg"
+   ],
+   "Brown": [
+    "data/images/rehla-long-sleve-black-top/03.jpg",
+    "data/images/rehla-long-sleve-black-top/11.jpg",
+    "data/images/rehla-long-sleve-black-top/19.jpg"
+   ],
+   "Gray": [
+    "data/images/rehla-long-sleve-black-top/04.jpg",
+    "data/images/rehla-long-sleve-black-top/12.jpg",
+    "data/images/rehla-long-sleve-black-top/20.jpg"
+   ],
+   "Navy Blue": [
+    "data/images/rehla-long-sleve-black-top/05.jpg",
+    "data/images/rehla-long-sleve-black-top/13.jpg",
+    "data/images/rehla-long-sleve-black-top/22.jpg"
+   ],
+   "Silver": [
+    "data/images/rehla-long-sleve-black-top/06.jpg",
+    "data/images/rehla-long-sleve-black-top/14.jpg",
+    "data/images/rehla-long-sleve-black-top/23.jpg"
+   ],
+   "Burgundy": [
+    "data/images/rehla-long-sleve-black-top/07.jpg",
+    "data/images/rehla-long-sleve-black-top/15.jpg",
+    "data/images/rehla-long-sleve-black-top/24.jpg"
+   ],
+   "Baby Blue": [
+    "data/images/rehla-long-sleve-black-top/08.jpg",
+    "data/images/rehla-long-sleve-black-top/16.jpg",
+    "data/images/rehla-long-sleve-black-top/25.jpg"
+   ],
+   "Olive": [
+    "data/images/rehla-long-sleve-black-top/28.jpg",
+    "data/images/rehla-long-sleve-black-top/26.jpg",
+    "data/images/rehla-long-sleve-black-top/27.jpg"
+   ]
+  },
+  "description": "Simple, clean, and made to fit you right. Soft elastic fabric hugs your body comfortably, giving you a smooth fit you can rely on every day. No extra details — just a comfortable cut, easy sleeves, and a natural shape that works with anything. Effortless to style, easy to wear, and always on point. Your everyday essential. The basic you’ll always reach for — the Rehla way.",
+  "source_products": [
+   {
+    "handle": "rehla-long-sleve-black-top",
+    "shopify_id": "7905868611702",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-long-sleve-black-top"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-2098519",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098531",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098528",
+    "size": "S",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098912",
+    "size": "S",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098522",
+    "size": "S",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098905",
+    "size": "S",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098518",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098520",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098532",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098533",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098527",
+    "size": "M",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098529",
+    "size": "L",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098913",
+    "size": "M",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098914",
+    "size": "L",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098523",
+    "size": "M",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098524",
+    "size": "L",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098906",
+    "size": "M",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098907",
+    "size": "L",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098539",
+    "size": "S",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098540",
+    "size": "M",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098541",
+    "size": "L",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098547",
+    "size": "S",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098548",
+    "size": "M",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098549",
+    "size": "L",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098900",
+    "size": "S",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098901",
+    "size": "M",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098902",
+    "size": "L",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-flares-long-sleeves-top",
+  "name": "Rehla Flared Long Sleeve Top",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "flared-sleeve",
+   "fitted",
+   "long-sleeve"
+  ],
+  "collection": null,
+  "sleeve": "long",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Olive",
+   "Baby Blue",
+   "Burgundy",
+   "Silver",
+   "Gray",
+   "Navy Blue",
+   "Brown",
+   "Pink",
+   "Black"
+  ],
+  "lengths": [],
+  "price": 445.0,
+  "original_price": 445.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-flares-long-sleeves-top/01.jpg",
+   "data/images/rehla-flares-long-sleeves-top/02.jpg",
+   "data/images/rehla-flares-long-sleeves-top/03.jpg",
+   "data/images/rehla-flares-long-sleeves-top/04.jpg",
+   "data/images/rehla-flares-long-sleeves-top/05.jpg",
+   "data/images/rehla-flares-long-sleeves-top/06.jpg",
+   "data/images/rehla-flares-long-sleeves-top/07.jpg",
+   "data/images/rehla-flares-long-sleeves-top/08.jpg",
+   "data/images/rehla-flares-long-sleeves-top/09.jpg",
+   "data/images/rehla-flares-long-sleeves-top/10.jpg",
+   "data/images/rehla-flares-long-sleeves-top/11.jpg",
+   "data/images/rehla-flares-long-sleeves-top/12.jpg",
+   "data/images/rehla-flares-long-sleeves-top/13.jpg",
+   "data/images/rehla-flares-long-sleeves-top/14.jpg",
+   "data/images/rehla-flares-long-sleeves-top/15.jpg",
+   "data/images/rehla-flares-long-sleeves-top/16.jpg",
+   "data/images/rehla-flares-long-sleeves-top/17.jpg",
+   "data/images/rehla-flares-long-sleeves-top/18.jpg",
+   "data/images/rehla-flares-long-sleeves-top/19.jpg",
+   "data/images/rehla-flares-long-sleeves-top/20.jpg",
+   "data/images/rehla-flares-long-sleeves-top/21.jpg",
+   "data/images/rehla-flares-long-sleeves-top/22.jpg",
+   "data/images/rehla-flares-long-sleeves-top/23.jpg",
+   "data/images/rehla-flares-long-sleeves-top/24.jpg",
+   "data/images/rehla-flares-long-sleeves-top/25.jpg",
+   "data/images/rehla-flares-long-sleeves-top/26.jpg",
+   "data/images/rehla-flares-long-sleeves-top/27.jpg"
+  ],
+  "color_images": {
+   "Olive": [
+    "data/images/rehla-flares-long-sleeves-top/02.jpg",
+    "data/images/rehla-flares-long-sleeves-top/04.jpg",
+    "data/images/rehla-flares-long-sleeves-top/03.jpg"
+   ],
+   "Baby Blue": [
+    "data/images/rehla-flares-long-sleeves-top/11.jpg",
+    "data/images/rehla-flares-long-sleeves-top/17.jpg",
+    "data/images/rehla-flares-long-sleeves-top/22.jpg"
+   ],
+   "Burgundy": [
+    "data/images/rehla-flares-long-sleeves-top/23.jpg",
+    "data/images/rehla-flares-long-sleeves-top/18.jpg"
+   ],
+   "Silver": [
+    "data/images/rehla-flares-long-sleeves-top/13.jpg",
+    "data/images/rehla-flares-long-sleeves-top/19.jpg",
+    "data/images/rehla-flares-long-sleeves-top/24.jpg"
+   ],
+   "Gray": [
+    "data/images/rehla-flares-long-sleeves-top/27.jpg",
+    "data/images/rehla-flares-long-sleeves-top/20.jpg",
+    "data/images/rehla-flares-long-sleeves-top/14.jpg"
+   ],
+   "Navy Blue": [
+    "data/images/rehla-flares-long-sleeves-top/05.jpg",
+    "data/images/rehla-flares-long-sleeves-top/06.jpg",
+    "data/images/rehla-flares-long-sleeves-top/07.jpg"
+   ],
+   "Brown": [
+    "data/images/rehla-flares-long-sleeves-top/15.jpg",
+    "data/images/rehla-flares-long-sleeves-top/21.jpg",
+    "data/images/rehla-flares-long-sleeves-top/25.jpg"
+   ],
+   "Pink": [
+    "data/images/rehla-flares-long-sleeves-top/26.jpg",
+    "data/images/rehla-flares-long-sleeves-top/01.jpg"
+   ],
+   "Black": [
+    "data/images/rehla-flares-long-sleeves-top/08.jpg",
+    "data/images/rehla-flares-long-sleeves-top/09.jpg",
+    "data/images/rehla-flares-long-sleeves-top/10.jpg"
+   ]
+  },
+  "description": "Designed to move with you and fit you just right. Made from soft elastic fabric that hugs your body perfectly, shaping a smooth and confident silhouette without feeling tight. Featuring comfortable sleeves and a wide flared hem, giving you freedom of movement and a balanced, flattering shape. The clean finish elevates your everyday look — effortless, comfortable, and always on point. Elastic. Flat",
+  "source_products": [
+   {
+    "handle": "rehla-flares-long-sleeves-top",
+    "shopify_id": "7920236724342",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-flares-long-sleeves-top"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-2101364",
+    "size": "S",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101372",
+    "size": "S",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101368",
+    "size": "S",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101337",
+    "size": "S",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101376",
+    "size": "S",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101346",
+    "size": "S",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101354",
+    "size": "S",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101362",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101341",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101365",
+    "size": "M",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101373",
+    "size": "M",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101369",
+    "size": "M",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101338",
+    "size": "M",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101377",
+    "size": "M",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101345",
+    "size": "M",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101355",
+    "size": "M",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101361",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101342",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101366",
+    "size": "L",
+    "color": "Olive",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101374",
+    "size": "L",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101370",
+    "size": "L",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101339",
+    "size": "L",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-flares-long-sleeves-top-gray-l",
+    "size": "L",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101347",
+    "size": "L",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101356",
+    "size": "L",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101360",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2101343",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-squared-long-sleeves-top",
+  "name": "Rehla Square Neck Long Sleeve Top",
+  "category": "Tops",
+  "department": "women",
+  "style": [
+   "square-neck",
+   "fitted",
+   "long-sleeve"
+  ],
+  "collection": null,
+  "sleeve": "long",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Navy Blue",
+   "Silver",
+   "Gray",
+   "Brown",
+   "Pink",
+   "Black",
+   "Baby Blue",
+   "Burgundy"
+  ],
+  "lengths": [],
+  "price": 445.0,
+  "original_price": 445.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-squared-long-sleeves-top/01.jpg",
+   "data/images/rehla-squared-long-sleeves-top/02.jpg",
+   "data/images/rehla-squared-long-sleeves-top/03.jpg",
+   "data/images/rehla-squared-long-sleeves-top/04.jpg",
+   "data/images/rehla-squared-long-sleeves-top/05.jpg",
+   "data/images/rehla-squared-long-sleeves-top/06.jpg",
+   "data/images/rehla-squared-long-sleeves-top/07.jpg",
+   "data/images/rehla-squared-long-sleeves-top/08.jpg",
+   "data/images/rehla-squared-long-sleeves-top/09.jpg",
+   "data/images/rehla-squared-long-sleeves-top/10.jpg",
+   "data/images/rehla-squared-long-sleeves-top/11.jpg",
+   "data/images/rehla-squared-long-sleeves-top/12.jpg",
+   "data/images/rehla-squared-long-sleeves-top/13.jpg",
+   "data/images/rehla-squared-long-sleeves-top/14.jpg",
+   "data/images/rehla-squared-long-sleeves-top/15.jpg",
+   "data/images/rehla-squared-long-sleeves-top/16.jpg",
+   "data/images/rehla-squared-long-sleeves-top/17.jpg",
+   "data/images/rehla-squared-long-sleeves-top/18.jpg",
+   "data/images/rehla-squared-long-sleeves-top/19.jpg",
+   "data/images/rehla-squared-long-sleeves-top/20.jpg",
+   "data/images/rehla-squared-long-sleeves-top/21.jpg",
+   "data/images/rehla-squared-long-sleeves-top/22.jpg",
+   "data/images/rehla-squared-long-sleeves-top/23.jpg",
+   "data/images/rehla-squared-long-sleeves-top/24.jpg"
+  ],
+  "color_images": {
+   "Navy Blue": [
+    "data/images/rehla-squared-long-sleeves-top/02.jpg",
+    "data/images/rehla-squared-long-sleeves-top/11.jpg"
+   ],
+   "Silver": [
+    "data/images/rehla-squared-long-sleeves-top/06.jpg",
+    "data/images/rehla-squared-long-sleeves-top/09.jpg",
+    "data/images/rehla-squared-long-sleeves-top/19.jpg"
+   ],
+   "Gray": [
+    "data/images/rehla-squared-long-sleeves-top/07.jpg",
+    "data/images/rehla-squared-long-sleeves-top/13.jpg",
+    "data/images/rehla-squared-long-sleeves-top/20.jpg"
+   ],
+   "Brown": [
+    "data/images/rehla-squared-long-sleeves-top/05.jpg",
+    "data/images/rehla-squared-long-sleeves-top/14.jpg",
+    "data/images/rehla-squared-long-sleeves-top/21.jpg"
+   ],
+   "Pink": [
+    "data/images/rehla-squared-long-sleeves-top/03.jpg",
+    "data/images/rehla-squared-long-sleeves-top/16.jpg",
+    "data/images/rehla-squared-long-sleeves-top/15.jpg"
+   ],
+   "Black": [
+    "data/images/rehla-squared-long-sleeves-top/04.jpg",
+    "data/images/rehla-squared-long-sleeves-top/17.jpg",
+    "data/images/rehla-squared-long-sleeves-top/23.jpg"
+   ],
+   "Baby Blue": [
+    "data/images/rehla-squared-long-sleeves-top/01.jpg",
+    "data/images/rehla-squared-long-sleeves-top/18.jpg",
+    "data/images/rehla-squared-long-sleeves-top/22.jpg"
+   ],
+   "Burgundy": [
+    "data/images/rehla-squared-long-sleeves-top/08.jpg",
+    "data/images/rehla-squared-long-sleeves-top/24.jpg"
+   ]
+  },
+  "description": "Designed to move with you and fit you just right. Crafted from soft elastic fabric that hugs your body smoothly, giving you a flattering fit without feeling tight. The square neckline adds a clean, modern touch, while the comfortable sleeves and wide flared hem create a balanced, elegant silhouette. Effortless to style, easy to wear, and made to move with you all day. Elastic. Flattering. Effortle",
+  "source_products": [
+   {
+    "handle": "rehla-squared-long-sleeves-top",
+    "shopify_id": "7914196664438",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-squared-long-sleeves-top"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-2098928",
+    "size": "S",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098924",
+    "size": "S",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098958",
+    "size": "S",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098937",
+    "size": "S",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098941",
+    "size": "S",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098917",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098954",
+    "size": "S",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098950",
+    "size": "S",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098929",
+    "size": "M",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098925",
+    "size": "M",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098960",
+    "size": "M",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098936",
+    "size": "M",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098942",
+    "size": "M",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098918",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098955",
+    "size": "M",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098952",
+    "size": "M",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098930",
+    "size": "L",
+    "color": "Navy Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098926",
+    "size": "L",
+    "color": "Silver",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "rehla-squared-long-sleeves-top-gray-l",
+    "size": "L",
+    "color": "Gray",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098935",
+    "size": "L",
+    "color": "Brown",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098943",
+    "size": "L",
+    "color": "Pink",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098919",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098956",
+    "size": "L",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2098951",
+    "size": "L",
+    "color": "Burgundy",
+    "length": null,
+    "price": 445.0,
+    "original_price": 445.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-black-cap",
+  "name": "Rehla Black Cap",
+  "category": "Caps",
+  "department": "women",
+  "style": [
+   "cap"
+  ],
+  "collection": null,
+  "sleeve": "sleeveless",
+  "size_chart": null,
+  "sizes": [
+   "One Size"
+  ],
+  "colors": [
+   "Black"
+  ],
+  "lengths": [],
+  "price": 350.0,
+  "original_price": 350.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-black-cap/01.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehla-black-cap/01.jpg"
+   ]
+  },
+  "description": "",
+  "source_products": [
+   {
+    "handle": "rehla-black-cap",
+    "shopify_id": "7759955886198",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-black-cap"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1745696",
+    "size": "One Size",
+    "color": "Black",
+    "length": null,
+    "price": 350.0,
+    "original_price": 350.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-pink-cap",
+  "name": "Rehla Pink Cap",
+  "category": "Caps",
+  "department": "women",
+  "style": [
+   "cap"
+  ],
+  "collection": null,
+  "sleeve": "sleeveless",
+  "size_chart": null,
+  "sizes": [
+   "One Size"
+  ],
+  "colors": [
+   "Pink"
+  ],
+  "lengths": [],
+  "price": 350.0,
+  "original_price": 350.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-pink-cap/01.jpg"
+  ],
+  "color_images": {
+   "Pink": [
+    "data/images/rehla-pink-cap/01.jpg"
+   ]
+  },
+  "description": "",
+  "source_products": [
+   {
+    "handle": "rehla-pink-cap",
+    "shopify_id": "7759952216182",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-pink-cap"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1745689",
+    "size": "One Size",
+    "color": "Pink",
+    "length": null,
+    "price": 350.0,
+    "original_price": 350.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-t-shirt-black-3",
+  "name": "Rehla T-Shirt Black 3",
+  "category": "T-Shirts",
+  "department": "women",
+  "style": [
+   "tee"
+  ],
+  "collection": null,
+  "sleeve": "half",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black"
+  ],
+  "lengths": [],
+  "price": 600.0,
+  "original_price": 600.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-t-shirt-black-3/01.jpg",
+   "data/images/rehla-t-shirt-black-3/02.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehla-t-shirt-black-3/01.jpg",
+    "data/images/rehla-t-shirt-black-3/02.jpg"
+   ]
+  },
+  "description": "The Rehla T-Shirt Black is a premium everyday essential built for those who move with purpose. Crafted from high-quality fabric with a clean, relaxed fit — designed to keep you comfortable whether you're on the go or keeping it low-key. Premium quality fabric Relaxed, true-to-size fit Available in S, M, and L Limited pre-order quantity — secure yours now",
+  "source_products": [
+   {
+    "handle": "rehla-t-shirt-black-3",
+    "shopify_id": "7747412033654",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-t-shirt-black-3"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1744382",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 600.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1744381",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 600.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1744383",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 600.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-printed-t-shirt-2",
+  "name": "Rehla Black T-Shirt 2",
+  "category": "T-Shirts",
+  "department": "women",
+  "style": [
+   "tee",
+   "graphic"
+  ],
+  "collection": null,
+  "sleeve": "half",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black"
+  ],
+  "lengths": [],
+  "price": 599.99,
+  "original_price": 599.99,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-printed-t-shirt-2/01.jpg",
+   "data/images/rehla-printed-t-shirt-2/02.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehla-printed-t-shirt-2/01.jpg",
+    "data/images/rehla-printed-t-shirt-2/02.jpg"
+   ]
+  },
+  "description": "",
+  "source_products": [
+   {
+    "handle": "rehla-printed-t-shirt-2",
+    "shopify_id": "7745255702646",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-printed-t-shirt-2"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1741530",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741529",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1741531",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-t-shirt-white-3",
+  "name": "Rehla T-Shirt White 3",
+  "category": "T-Shirts",
+  "department": "women",
+  "style": [
+   "tee"
+  ],
+  "collection": null,
+  "sleeve": "half",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "White"
+  ],
+  "lengths": [],
+  "price": 599.99,
+  "original_price": 599.99,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-t-shirt-white-3/01.jpg",
+   "data/images/rehla-t-shirt-white-3/02.jpg"
+  ],
+  "color_images": {
+   "White": [
+    "data/images/rehla-t-shirt-white-3/01.jpg",
+    "data/images/rehla-t-shirt-white-3/02.jpg"
+   ]
+  },
+  "description": "The Rehla T-Shirt White is a premium everyday essential built for those who move with purpose. Crafted from high-quality fabric with a clean, relaxed fit — designed to keep you comfortable whether you're on the go or keeping it low-key. Premium quality fabric Relaxed, true-to-size fit Available in S, M, and L Limited pre-order quantity — secure yours now",
+  "source_products": [
+   {
+    "handle": "rehla-t-shirt-white-3",
+    "shopify_id": "7757534658678",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-t-shirt-white-3"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1744385",
+    "size": "S",
+    "color": "White",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1744386",
+    "size": "M",
+    "color": "White",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1744387",
+    "size": "L",
+    "color": "White",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-baby-blue-t-shirt",
+  "name": "Rehla Baby Blue T-Shirt",
+  "category": "T-Shirts",
+  "department": "women",
+  "style": [
+   "tee"
+  ],
+  "collection": null,
+  "sleeve": "half",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Baby Blue"
+  ],
+  "lengths": [],
+  "price": 599.99,
+  "original_price": 599.99,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-baby-blue-t-shirt/01.jpg",
+   "data/images/rehla-baby-blue-t-shirt/02.jpg"
+  ],
+  "color_images": {
+   "Baby Blue": [
+    "data/images/rehla-baby-blue-t-shirt/01.jpg",
+    "data/images/rehla-baby-blue-t-shirt/02.jpg"
+   ]
+  },
+  "description": "",
+  "source_products": [
+   {
+    "handle": "rehla-baby-blue-t-shirt",
+    "shopify_id": "7755909169270",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-baby-blue-t-shirt"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1746803",
+    "size": "S",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1746804",
+    "size": "M",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1746805",
+    "size": "L",
+    "color": "Baby Blue",
+    "length": null,
+    "price": 599.99,
+    "original_price": 599.99,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-half-printed-black-shirt",
+  "name": "Rehla Half Printed Black T-Shirt",
+  "category": "T-Shirts",
+  "department": "women",
+  "style": [
+   "tee",
+   "graphic"
+  ],
+  "collection": null,
+  "sleeve": "half",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black"
+  ],
+  "lengths": [],
+  "price": 600.0,
+  "original_price": 600.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehla-half-printed-black-shirt/01.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehla-half-printed-black-shirt/01.jpg"
+   ]
+  },
+  "description": "",
+  "source_products": [
+   {
+    "handle": "rehla-half-printed-black-shirt",
+    "shopify_id": "7739991556214",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-half-printed-black-shirt"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1729308",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 600.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1729309",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 600.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1729310",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 600.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "t-shirt-white-shirt",
+  "name": "Rehla White T-Shirt",
+  "category": "T-Shirts",
+  "department": "women",
+  "style": [
+   "tee"
+  ],
+  "collection": null,
+  "sleeve": "half",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "White"
+  ],
+  "lengths": [],
+  "price": 600.0,
+  "original_price": 750.0,
+  "on_sale": true,
+  "images": [
+   "data/images/t-shirt-white-shirt/01.jpg",
+   "data/images/t-shirt-white-shirt/02.jpg",
+   "data/images/t-shirt-white-shirt/03.jpg"
+  ],
+  "color_images": {
+   "White": [
+    "data/images/t-shirt-white-shirt/01.jpg",
+    "data/images/t-shirt-white-shirt/02.jpg",
+    "data/images/t-shirt-white-shirt/03.jpg"
+   ]
+  },
+  "description": "Pre-Order Item This item is available for pre-order only. Orders will be processed and shipped within 7–10 business days from the order date. Why Pre-Order? Be the first to get this limited piece before it sells out. Pre-orders are fulfilled in the order they are received. What to expect Order confirmation sent immediately Shipping notification within 7–10 business days Full refund available if or",
+  "source_products": [
+   {
+    "handle": "t-shirt-white-shirt",
+    "shopify_id": "7728931471478",
+    "color": null,
+    "url": "https://rehlaeg.com/products/t-shirt-white-shirt"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1732697",
+    "size": "S",
+    "color": "White",
+    "length": null,
+    "price": 600.0,
+    "original_price": 750.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1732698",
+    "size": "M",
+    "color": "White",
+    "length": null,
+    "price": 600.0,
+    "original_price": 750.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1732696",
+    "size": "L",
+    "color": "White",
+    "length": null,
+    "price": 600.0,
+    "original_price": 750.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehlaa-of-white-hoodie",
+  "name": "Rehla Off White Hoodie",
+  "category": "Hoodies & Jackets",
+  "department": "women",
+  "style": [
+   "hoodie",
+   "pullover"
+  ],
+  "collection": null,
+  "sleeve": "long",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Off White"
+  ],
+  "lengths": [],
+  "price": 850.0,
+  "original_price": 850.0,
+  "on_sale": false,
+  "images": [
+   "data/images/rehlaa-of-white-hoodie/01.jpg",
+   "data/images/rehlaa-of-white-hoodie/02.jpg",
+   "data/images/rehlaa-of-white-hoodie/03.jpg",
+   "data/images/rehlaa-of-white-hoodie/04.jpg",
+   "data/images/rehlaa-of-white-hoodie/05.jpg",
+   "data/images/rehlaa-of-white-hoodie/06.jpg",
+   "data/images/rehlaa-of-white-hoodie/07.jpg",
+   "data/images/rehlaa-of-white-hoodie/08.jpg",
+   "data/images/rehlaa-of-white-hoodie/09.jpg"
+  ],
+  "color_images": {
+   "Off White": [
+    "data/images/rehlaa-of-white-hoodie/01.jpg",
+    "data/images/rehlaa-of-white-hoodie/02.jpg",
+    "data/images/rehlaa-of-white-hoodie/03.jpg",
+    "data/images/rehlaa-of-white-hoodie/04.jpg",
+    "data/images/rehlaa-of-white-hoodie/05.jpg",
+    "data/images/rehlaa-of-white-hoodie/06.jpg",
+    "data/images/rehlaa-of-white-hoodie/07.jpg",
+    "data/images/rehlaa-of-white-hoodie/08.jpg",
+    "data/images/rehlaa-of-white-hoodie/09.jpg"
+   ]
+  },
+  "description": "",
+  "source_products": [
+   {
+    "handle": "rehlaa-of-white-hoodie",
+    "shopify_id": "7728929243254",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehlaa-of-white-hoodie"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1991076",
+    "size": "L",
+    "color": "Off White",
+    "length": null,
+    "price": 850.0,
+    "original_price": 850.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1991075",
+    "size": "M",
+    "color": "Off White",
+    "length": null,
+    "price": 850.0,
+    "original_price": 850.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1991074",
+    "size": "S",
+    "color": "Off White",
+    "length": null,
+    "price": 850.0,
+    "original_price": 850.0,
+    "on_sale": false,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehlaa-jacket",
+  "name": "Rehla Jacket",
+  "category": "Hoodies & Jackets",
+  "department": "women",
+  "style": [
+   "jacket"
+  ],
+  "collection": null,
+  "sleeve": "long",
+  "size_chart": null,
+  "sizes": [
+   "XS",
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black"
+  ],
+  "lengths": [],
+  "price": 100.0,
+  "original_price": 1200.0,
+  "on_sale": true,
+  "images": [
+   "data/images/rehlaa-jacket/01.jpg",
+   "data/images/rehlaa-jacket/02.jpg",
+   "data/images/rehlaa-jacket/03.jpg",
+   "data/images/rehlaa-jacket/04.jpg",
+   "data/images/rehlaa-jacket/05.jpg",
+   "data/images/rehlaa-jacket/06.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehlaa-jacket/01.jpg",
+    "data/images/rehlaa-jacket/02.jpg",
+    "data/images/rehlaa-jacket/03.jpg",
+    "data/images/rehlaa-jacket/04.jpg",
+    "data/images/rehlaa-jacket/05.jpg",
+    "data/images/rehlaa-jacket/06.jpg"
+   ]
+  },
+  "description": "Made from 100% premium cotton — heavy, soft, and built to last. Crafted with top-tier fabric quality to give you warmth, structure, and a clean premium feel. Designed with an inner lining along the zipper, ensuring the jacket looks clean and polished even when worn open. Every detail is finished with care — from the cut to the stitching — for a sharp, effortless look. Minimal. Clean. Premium. A wi",
+  "source_products": [
+   {
+    "handle": "rehlaa-jacket",
+    "shopify_id": "7728928260214",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehlaa-jacket"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-2011399",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 100.0,
+    "original_price": 1200.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2011398",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 100.0,
+    "original_price": 1200.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2011396",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 100.0,
+    "original_price": 1200.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-2011397",
+    "size": "XS",
+    "color": "Black",
+    "length": null,
+    "price": 100.0,
+    "original_price": 1200.0,
+    "on_sale": true,
+    "stock_qty": 0,
+    "low_stock_threshold": 2
+   }
+  ]
+ },
+ {
+  "product_id": "rehla-black-t-shirt",
+  "name": "Rehla Black T-Shirt",
+  "category": "T-Shirts",
+  "department": "women",
+  "style": [
+   "tee"
+  ],
+  "collection": null,
+  "sleeve": "half",
+  "size_chart": null,
+  "sizes": [
+   "S",
+   "M",
+   "L"
+  ],
+  "colors": [
+   "Black"
+  ],
+  "lengths": [],
+  "price": 600.0,
+  "original_price": 750.0,
+  "on_sale": true,
+  "images": [
+   "data/images/rehla-black-t-shirt/01.jpg",
+   "data/images/rehla-black-t-shirt/02.jpg",
+   "data/images/rehla-black-t-shirt/03.jpg",
+   "data/images/rehla-black-t-shirt/04.jpg"
+  ],
+  "color_images": {
+   "Black": [
+    "data/images/rehla-black-t-shirt/01.jpg",
+    "data/images/rehla-black-t-shirt/02.jpg",
+    "data/images/rehla-black-t-shirt/03.jpg",
+    "data/images/rehla-black-t-shirt/04.jpg"
+   ]
+  },
+  "description": "Pre-Order Item This item is available for pre-order only. Orders will be processed and shipped within 7–10 business days from the order date. Why Pre-Order? Be the first to get this limited piece before it sells out. Pre-orders are fulfilled in the order they are received. What to expect Order confirmation sent immediately Shipping notification within 7–10 business days Full refund available if or",
+  "source_products": [
+   {
+    "handle": "rehla-black-t-shirt",
+    "shopify_id": "7728926752886",
+    "color": null,
+    "url": "https://rehlaeg.com/products/rehla-black-t-shirt"
+   }
+  ],
+  "variants": [
+   {
+    "variant_id": "BO-1649940",
+    "size": "S",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 750.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1649941",
+    "size": "M",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 750.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   },
+   {
+    "variant_id": "BO-1649942",
+    "size": "L",
+    "color": "Black",
+    "length": null,
+    "price": 600.0,
+    "original_price": 750.0,
+    "on_sale": true,
+    "stock_qty": 10,
+    "low_stock_threshold": 2
+   }
+  ]
+ }
 ]

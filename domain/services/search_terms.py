@@ -1,6 +1,6 @@
 """Arabic and franco-Arabic vocabulary for the catalog search.
 
-The catalog is written in English -- `Boxy WNS Tee`, `T-Shirts`, `Olive`,
+The catalog is written in English -- `Rehla Backless Top`, `Tops`, `Burgundy`,
 `boxy-fit` -- and the customers are not. `get_products(query="هودي أسود")`
 matched nothing at all before this module existed; the bot only appeared to
 work because the model happened to translate before calling the tool. That is
@@ -93,269 +93,192 @@ def _strip_article(token: str) -> str:
 #: Written as normalized forms already (no hamza, `ي` not `ى`, `ه` not `ة`)
 #: because that is what `normalize` produces on the way in.
 _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
-    # --- garments -------------------------------------------------------
+    # --- Rehla: girls' clothing. Catalog words: Tops, T-Shirts, Pants,
+    # Hoodies & Jackets, Caps; styles off-shoulder, backless, halter, lace,
+    # hijabi, basic, fitted, long-sleeve, flared-sleeve, square-neck,
+    # wide-leg, flare, yoga, tee, graphic, hoodie, jacket, cap.
+    # tops / blouses
+    "توب": ("top", "tops"),
+    "توبات": ("top", "tops"),
+    "توبس": ("top", "tops"),
+    "بلوزه": ("top", "tops"),
+    "بلوزات": ("top", "tops"),
+    "بلوز": ("top", "tops"),
+    "بادي": ("top", "tops"),
+    "باديهات": ("top", "tops"),
+    "بودي": ("top", "tops"),
+    "بوديسوت": ("top", "tops"),
+    "كروب": ("top", "tops"),
+    "كروب توب": ("top", "tops"),
+    "top": ("top", "tops"),
+    "blouse": ("top", "tops"),
+    "body": ("top", "tops"),
+    "اوف شولدر": ("off-shoulder",),
+    "اوفشولدر": ("off-shoulder",),
+    "اوف شولدرز": ("off-shoulder",),
+    "كتف مفتوح": ("off-shoulder",),
+    "كتاف مفتوحه": ("off-shoulder",),
+    "off shoulder": ("off-shoulder",),
+    "مفتوح من ورا": ("backless",),
+    "ضهر مفتوح": ("backless",),
+    "ظهر مفتوح": ("backless",),
+    "من غير ضهر": ("backless",),
+    "باك لس": ("backless",),
+    "باكلس": ("backless",),
+    "هالتر": ("halter",),
+    "هولتر": ("halter",),
+    "دانتيل": ("lace",),
+    "دانتيله": ("lace",),
+    "ليس": ("lace",),
+    "محجبات": ("hijabi",),
+    "للمحجبات": ("hijabi",),
+    "محجبه": ("hijabi",),
+    "هيجابي": ("hijabi",),
+    "حجاب": ("hijabi",),
+    "بيزك": ("basic",),
+    "بيسك": ("basic",),
+    "basic": ("basic",),
+    "بيزيك": ("basic",),
+    "مربع": ("square-neck",),
+    "سكوير": ("square-neck",),
+    "رقبه مربعه": ("square-neck",),
+    "فلير": ("flare", "flared-sleeve"),
+    "فلاير": ("flare", "flared-sleeve"),
+    "كلوش": ("flare", "flared-sleeve"),
+    "في نك": ("v-neck",),
+    "رقبه في": ("v-neck",),
+    # t-shirts
     "تيشيرت": ("tee", "t-shirts", "t shirt", "tshirt"),
     "تيشرت": ("tee", "t-shirts", "t shirt", "tshirt"),
     "تشيرت": ("tee", "t-shirts", "t shirt", "tshirt"),
     "تيشيرتات": ("tee", "t-shirts"),
-    # «قميص» is deliberately **absent**. In Egyptian it is a button-up shirt,
-    # a garment this shop does not sell, and it used to sit here mapped onto
-    # ("tee", "polo", "shirts") -- so «فيه قمصان» was answered «أيوه، عندنا
-    # تيشيرتات كتير» with four t-shirts under it. That mapping is Modern
-    # Standard Arabic, where قميص is the generic upper-body garment; Egyptian
-    # does not work that way and the shop writes Egyptian. It lives in
-    # `domain/services/garments.py::NOT_SOLD` now, which answers "we don't
-    # have those" and offers the tees as an alternative rather than as a
-    # translation.
+    "تي شيرت": ("tee", "t-shirts"),
+    "تي شرت": ("tee", "t-shirts"),
+    "فانله": ("tee", "t-shirts"),
+    "فانيله": ("tee", "t-shirts"),
     "tshirt": ("tee", "t-shirts"),
     "tee": ("tee", "t-shirts"),
+    "مطبوع": ("graphic", "printed"),
+    "برنت": ("graphic", "printed"),
+    "طباعه": ("graphic", "printed"),
+    # pants
+    "بنطلون": ("pants", "yoga"),
+    "بنطلونات": ("pants", "yoga"),
+    "بنطالون": ("pants",),
+    "بنطال": ("pants",),
+    "بنطرون": ("pants",),
+    "بناطيل": ("pants",),
+    "بانتس": ("pants",),
+    "pantalon": ("pants",),
+    "trousers": ("pants",),
+    "يوجا": ("yoga",),
+    "يوغا": ("yoga",),
+    "وايد": ("wide-leg",),
+    "وايد ليج": ("wide-leg",),
+    "واسع": ("wide-leg", "flare"),
+    "بنطلون واسع": ("wide-leg",),
+    "شارلستون": ("flare", "wide-leg"),
+    # hoodies / jackets
     "هودي": ("hoodie", "hoodies"),
     "هوديز": ("hoodie", "hoodies"),
-    "هوود": ("hoodie",),
     "hoodi": ("hoodie",),
     "hodie": ("hoodie",),
-    "hodi": ("hoodie",),
-    "سويت": ("sweatshirts", "sweatpant"),
-    "سويتشيرت": ("sweatshirts", "crewneck"),
-    "سويت شيرت": ("sweatshirts", "crewneck"),
-    "swetshirt": ("sweatshirts",),
-    "بولو": ("polo",),
-    "polo": ("polo",),
-    "بنطلون": ("sweatpant", "joggers"),
-    "بنطالون": ("sweatpant", "joggers"),
-    "بنطلونات": ("sweatpant", "joggers"),
-    "باتنطلون": ("sweatpant",),
-    "تراك": ("sweatpant", "joggers"),
-    "جوجر": ("joggers", "sweatpant"),
-    "جوجرز": ("joggers", "sweatpant"),
-    "سويت بانت": ("sweatpant",),
-    "سويت بانتس": ("sweatpant", "joggers"),
-    "بانتس": ("sweatpant", "joggers"),
-    "pantalon": ("sweatpant",),
+    "سويت شيرت": ("hoodie",),
+    "سويتشيرت": ("hoodie",),
+    "بلوفر": ("hoodie",),
     "جاكيت": ("jacket", "jackets"),
     "جاكت": ("jacket", "jackets"),
     "چاكيت": ("jacket", "jackets"),
-    "jaket": ("jacket",),
-    "توب": ("top", "tops"),
-    "توبات": ("top", "tops"),
-    "بلوزه": ("top", "tops"),
-    "كروب": ("top", "tops"),
-    "زيب": ("zip", "zipup", "zip-through"),
-    "زيبب": ("zipup",),
-    "سوستة": ("zip", "zipup", "zip-through"),
-    "سوسته": ("zip", "zipup", "zip-through"),
-    "نص سوسته": ("quarter-zip",),
-    "كاروهات": ("knitted",),
-    "تريكو": ("knitted",),
-    "كنزه": ("crewneck", "sweatshirts"),
-    # The Egyptian names for things on the shelf that nothing here could find.
-    # Each of these is a garment this shop really sells, under a word a
-    # customer really types, and every one of them returned *nothing* --
-    # which is the same wrong answer as the قميص bug seen from the other side:
-    # the shop denying something it has.
-    "فانله": ("tee", "t-shirts"),
-    "فانيله": ("tee", "t-shirts"),
-    "فنله": ("tee", "t-shirts"),
-    "فانلات": ("tee", "t-shirts"),
-    "تي شيرت": ("tee", "t-shirts"),
-    "تي شرت": ("tee", "t-shirts"),
-    "بلوفر": ("sweatshirts", "crewneck", "hoodie"),
-    "بلوڤر": ("sweatshirts", "crewneck", "hoodie"),
-    "بلوفرات": ("sweatshirts", "crewneck"),
-    "بولوفر": ("sweatshirts", "crewneck"),
-    "سويتر": ("sweatshirts", "crewneck"),
-    "سوتر": ("sweatshirts", "crewneck"),
-    "كنزات": ("crewneck", "sweatshirts"),
-    "بنطال": ("sweatpant", "joggers"),
-    "بنطرون": ("sweatpant", "joggers"),
-    "بنطرونات": ("sweatpant", "joggers"),
-    "بناطيل": ("sweatpant", "joggers"),
-    "چاكت": ("jacket", "jackets"),
-    "جاكيتات": ("jacket", "jackets"),
     "جواكيت": ("jacket", "jackets"),
-    # --- colours ---------------------------------------------------------
+    "jaket": ("jacket",),
+    "شتوي": ("hoodie", "jacket", "long sleeve"),
+    # caps
+    "كاب": ("cap", "caps"),
+    "كابات": ("cap", "caps"),
+    "كاسكيت": ("cap", "caps"),
+    "طاقيه": ("cap", "caps"),
+    "برنيطه": ("cap", "caps"),
+    # colours
     "اسود": ("black",),
+    "سودا": ("black",),
     "سوده": ("black",),
     "بلاك": ("black",),
-    "eswed": ("black",),
     "ابيض": ("white",),
+    "بيضا": ("white",),
     "بيضه": ("white",),
     "وايت": ("white",),
-    "abyad": ("white",),
-    "رمادي": ("grey", "gray"),
-    "رصاصي": ("grey", "gray"),
-    "جراي": ("grey", "gray"),
-    "grey": ("grey", "gray"),
-    "gray": ("grey", "gray"),
+    "اوف وايت": ("off white",),
+    "كريمي": ("off white",),
+    "رمادي": ("gray", "grey", "charcoal"),
+    "رصاصي": ("gray", "grey", "charcoal"),
+    "جراي": ("gray", "grey"),
+    "grey": ("gray", "grey"),
+    "فضي": ("silver",),
+    "سيلفر": ("silver",),
+    "فحمي": ("charcoal",),
     "زيتي": ("olive",),
     "اوليف": ("olive",),
-    "زيتوني": ("olive",),
     "كحلي": ("navy",),
     "نيفي": ("navy",),
-    "ازرق غامق": ("navy",),
-    "بيج": ("beige",),
+    "ازرق": ("blue",),
+    "ازرق غامق": ("navy", "royal blue"),
+    "لبني": ("baby blue",),
+    "بيبي بلو": ("baby blue",),
+    "ازرق فاتح": ("baby blue",),
+    "رويال": ("royal blue",),
     "بني": ("brown",),
     "بنى": ("brown",),
-    "كافيه": ("brown", "camel brown"),
-    "جملي": ("camel brown", "brown"),
+    "كافيه": ("brown",),
     "نبيتي": ("burgundy",),
     "خمري": ("burgundy",),
     "بوردو": ("burgundy",),
+    "بيرجاندي": ("burgundy",),
+    "burghandy": ("burgundy",),
     "وردي": ("pink",),
     "بينك": ("pink",),
     "زهري": ("pink",),
-    "اخضر": ("vintage green", "green", "olive"),
-    "اخضر فاتح": ("vintage green",),
     "بمبي": ("pink",),
-    # --- fit / style -----------------------------------------------------
-    "واسع": ("oversized", "boxy-fit", "wide-leg"),
-    "وايد": ("wide-leg",),
-    "اوفر": ("oversized",),
-    "اوفرسايز": ("oversized",),
-    # The cut's name as two words. «اوفر» alone already reached `oversized`,
-    # but «سايز» was then a token of its own that no product carries, and the
-    # all-tokens rule vetoed the whole query: «تيشرت اوفر سايز» found nothing
-    # in a shop full of oversized tees. The pair is one word here, so «سايز»
-    # is consumed only as part of the cut's name -- on its own it still
-    # reaches the size-chart logic, which reads the customer's raw message.
-    "اوفر سايز": ("oversized",),
-    "اوفر سيز": ("oversized",),
-    "وافر سايز": ("oversized",),
-    "over size": ("oversized",),
-    "over sized": ("oversized",),
-    "لوز": ("oversized",),
-    # «ساده» -- no print. From a real conversation: «عايز تيشرت ساده اوفر
-    # سايز» was told nothing plain existed, and a minute later, searched in
-    # English, was offered the `oversized plain t-shirt` that is on the shelf.
-    "ساده": ("plain",),
-    "سادا": ("plain",),
-    "بلين": ("plain",),
-    "سيمبل": ("plain",),
-    "من غير طباعه": ("plain",),
-    "بدون طباعه": ("plain",),
-    "من غير رسمه": ("plain",),
-    "بدون رسمه": ("plain",),
+    "روز": ("pink",),
+    "لافندر": ("lavender",),
+    "موف": ("lavender", "violet"),
+    "بنفسجي": ("violet", "lavender"),
+    "منت": ("mint green",),
+    "اخضر": ("olive", "mint green"),
+    "اخضر فاتح": ("mint green",),
+    # fit / sleeve
     "ضيق": ("fitted",),
     "فيتد": ("fitted",),
-    "بوكسي": ("boxy-fit",),
-    "خفيف": ("lightweight",),
-    "صيفي": ("tee", "top", "lightweight"),
-    "شتوي": ("hoodie", "jacket", "sweatshirts"),
-    "مطبوع": ("graphic",),
-    "رسمه": ("graphic",),
-    "برسمه": ("graphic",),
-    # --- sleeve length ----------------------------------------------------
-    # The catalog says "half sleeve" and the customer says «نص كم», and for a
-    # long time neither reached the other: a question about the half-sleeve
-    # polo matched nothing, so the bot answered that it had no data about
-    # sleeve length -- about a polo that is on the shelf and is half-sleeve.
-    # The values on the right are the words `catalog._haystack` now carries
-    # for a product whose `sleeve` is set (`domain/services/sleeves.py`).
-    #
-    # Every spacing and spelling a phone keyboard actually produces is listed
-    # rather than stemmed. «نُص كُم» folds onto «نص كم» in `normalize`, but
-    # «نصكم» typed as one word does not -- a missing space is not a diacritic,
-    # and a customer who leaves it out is asking the same question.
+    "محزق": ("fitted",),
+    "استرتش": ("fitted",),
+    "ساده": ("basic",),
+    "سادا": ("basic",),
     "نص كم": ("half sleeve",),
     "نصكم": ("half sleeve",),
-    "نص كم قصير": ("half sleeve",),
     "نصف كم": ("half sleeve",),
-    "نصفكم": ("half sleeve",),
-    "نص الكم": ("half sleeve",),
     "كم قصير": ("half sleeve",),
-    "كمقصير": ("half sleeve",),
     "هاف": ("half sleeve",),
-    "هاف كم": ("half sleeve",),
-    "هاف سليف": ("half sleeve",),
-    "هافسليف": ("half sleeve",),
     "half": ("half sleeve",),
-    "half sleeve": ("half sleeve",),
-    "half sleeves": ("half sleeve",),
-    "halfsleeve": ("half sleeve",),
     "short sleeve": ("half sleeve",),
-    "short sleeves": ("half sleeve",),
-    "shortsleeve": ("half sleeve",),
-    "nos kom": ("half sleeve",),
-    "noskom": ("half sleeve",),
-    "nous kom": ("half sleeve",),
     "كم طويل": ("long sleeve",),
     "كمطويل": ("long sleeve",),
     "كم كامل": ("long sleeve",),
     "لونج": ("long sleeve",),
     "لونج سليف": ("long sleeve",),
-    "لونجسليف": ("long sleeve",),
     "long": ("long sleeve",),
     "long sleeve": ("long sleeve",),
     "long sleeves": ("long sleeve",),
-    "longsleeve": ("long sleeve",),
     "بدون كم": ("sleeveless",),
     "من غير كم": ("sleeveless",),
-    "مفيش كم": ("sleeveless",),
+    "حمالات": ("sleeveless",),
     "سليفلس": ("sleeveless",),
     "sleeveless": ("sleeveless",),
-    "no sleeve": ("sleeveless",),
-    "no sleeves": ("sleeveless",),
-    # --- department ------------------------------------------------------
+    # department / brand
     "حريمي": ("women",),
     "بناتي": ("women",),
     "ستاتي": ("women",),
-    "رجالي": ("unisex",),
-    "يونيسكس": ("unisex",),
-    # --- collections -----------------------------------------------------
-    "كايروكي": ("cairokee",),
-    "الكايروكي": ("cairokee",),
-    "كيروكي": ("cairokee",),
-    "شتوية": ("winter",),
-    "وناس": ("wanas", "wns"),
-    # --- product names ---------------------------------------------------
-    # The class this table was missing. Everything above translates a word
-    # that describes a garment -- its kind, its colour, its cut -- and those
-    # were written down because the catalog holds no Arabic. A product *name*
-    # is English too, and a customer says it in Arabic letters exactly the
-    # same way: «عايز الرينجر تيشيرت». Only the two names that double as
-    # collections (`cairokee`, `wanas`) were ever listed, so every other
-    # product was reachable in Arabic only by its category -- and «رينجر»
-    # returned nothing at all about a tee that is on the shelf, which is the
-    # wrong answer this module exists to prevent. Names, not descriptions,
-    # so a new product with an English name needs a line here.
-    "رينجر": ("ringer",),
-    "رنجر": ("ringer",),
-    "انفي": ("envy",),
-    "اينفي": ("envy",),
-    "ووركر": ("worker",),
-    "وركر": ("worker",),
-    "هارت": ("heart",),
-    "قلب": ("heart",),
-    "فيلين": ("feelin",),
-    "فيلين فاين": ("feelin fine",),
-    "كرو نك": ("crewneck",),
-    "كرونيك": ("crewneck",),
-    "كرونك": ("crewneck",),
-    "كوارتر": ("quarter-zip",),
-    "كوارتر زيب": ("quarter-zip",),
-    "ربع سوسته": ("quarter-zip",),
-    "زيب اب": ("zipup",),
-    "زيباب": ("zipup",),
-    "زيب هودي": ("zip-through", "zipup"),
-    # --- the model's own English ------------------------------------------
-    # The entries above assume the Arabic reaches this table. Often it does
-    # not: the model translates the customer's words before it calls
-    # `get_products`, and then *its* spelling is what has to match. Measured
-    # against the live model on all eighteen products, three of ten names did
-    # not survive that translation, in two distinct ways.
-    #
-    # It mis-hears a name that is nearly an ordinary English word --
-    # «الرينجر تيشيرت» went out as `Ranger T-shirt`, which is what a customer
-    # asking about a tee that is on the shelf was told we did not have
-    # (production log, `tool get_products({'query': 'Ranger T-shirt'})`).
-    "ranger": ("ringer",),
-    # And it splits the compound names the catalog writes as one word. `zip`
-    # still matches `Zipup` because a prefix is allowed, but `up` and `neck`
-    # can only match at a word start, so the all-tokens rule vetoes the whole
-    # query. A product named as two words here needs the pair spelled out.
-    "crew neck": ("crewneck",),
-    "zip up": ("zipup",),
-    "zip through": ("zip-through",),
+    "رحله": ("rehla",),
+    "rehlaa": ("rehla",),
+    "صيفي": ("tee", "top", "half sleeve"),
 }
 
 #: Padding. Every one of these appears in a real request and none of them is

@@ -225,11 +225,11 @@ def _ensure_shipping_fees_set() -> None:
         if not rows:
             return
         for row in rows:
-            row.fee = _DEFAULT_SHIPPING_FEE
+            row.fee = shop_facts.fee_for(row.governorate)
         count = len(rows)
 
     log.warning(
-        "set the default shipping fee (%s EGP) for %d governorate(s) that had none",
+        "set the published shipping fee (shop_facts.SHIPPING_FEES, else %s EGP) for %d governorate(s) that had none",
         _DEFAULT_SHIPPING_FEE,
         count,
     )
@@ -375,7 +375,9 @@ def _warn_if_shipping_rates_contradict_the_published_fee() -> None:
     with session_scope() as db:
         rates = db.query(ShippingRate).all()
         disagreeing = sorted(
-            (r.governorate, r.fee) for r in rates if r.fee is not None and r.fee != published
+            (r.governorate, r.fee)
+            for r in rates
+            if r.fee is not None and r.fee != shop_facts.fee_for(r.governorate)
         )
         unpriced = sorted(r.governorate for r in rates if r.fee is None)
     if disagreeing:
@@ -564,7 +566,7 @@ async def lifespan(_app: FastAPI):
     instagram_channel.dispatcher.shutdown(wait=True)
 
 
-app = FastAPI(title="Wanas Gallery", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Rehla", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/health")

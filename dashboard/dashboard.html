@@ -18,13 +18,13 @@
   root.dir = lang === "en" ? "ltr" : "rtl";
 })();
 </script>
-<title>Wanas Gallery — نظام إدارة المتجر</title>
+<title>Rehla — نظام إدارة المتجر</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <style>
 /* ==========================================================================
-   ونس — Business OS
+   رحلة — Business OS
    A pastel operating system for an Egyptian streetwear shop.
 
    Palette is "desert dusk": warm sand ground, clay/apricot as the brand
@@ -836,9 +836,9 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
   <!-- ===================== rail ===================== -->
   <aside id="rail">
     <div class="brand">
-      <img class="mark" src="/dashboard/logo.webp" alt="Wanas Gallery" width="38" height="38">
+      <img class="mark" src="/dashboard/logo.webp" alt="Rehla" width="38" height="38">
       <div>
-        <div class="name" dir="ltr">Wanas Gallery</div>
+        <div class="name" dir="ltr">Rehla</div>
         <div class="role" data-i18n="نظام إدارة المتجر">نظام إدارة المتجر</div>
       </div>
     </div>
@@ -1038,7 +1038,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 
 <script>
 /* ==========================================================================
-   ونس Business OS — client
+   رحلة Business OS — client
    One file, no build step, no CDN for anything but the two webfonts. The app
    is a small hand-rolled SPA: a hash router, a fetch wrapper that knows what
    a 401 and a 503 mean here, and one view module per section.
@@ -1593,7 +1593,7 @@ const EN = {
   "مثلاً 1234567890": "e.g. 1234567890",
   "مثلاً بوسطة": "e.g. Bosta",
   "مثلاً: صيف ٢٠٢٦": "e.g. Summer 2026",
-  "مثلاً: هودي ونس الشتوي": "e.g. Wanas winter hoodie",
+  "مثلاً: توب رحلة كم طويل": "e.g. Rehla long sleeve top",
   "مجموعة جديدة": "New collection",
   "مجموعة ذكية": "Smart collection",
   "محادثات نشطة": "Active conversations",
@@ -1666,6 +1666,7 @@ const EN = {
 "مفيش طلب تبديل ولا إضافة ولا تنبيه مستني مراجعة": "No swap request, addition or alert is waiting for review",
   "طلب إضافة": "Add-an-item request",
   "الزبون طلب موظف": "Customer asked for a person",
+  "محتاجة جدول مقاسات": "Needs a size chart",
   "صورة محتاجة نظرة": "A photo that needs a look",
   "رسالة صوتية محتاجة سماع": "A voice note that needs listening to",
   "سؤال برة شغلنا": "A question outside what we do",
@@ -2098,6 +2099,7 @@ const QUEUE_REASONS = {
   unclear: tr("البوت مش فاهم"),
   complaint: tr("شكوى"),
   customer_asked: tr("الزبون طلب موظف"),
+  size_help: tr("محتاجة جدول مقاسات"),
   image_received: tr("صورة محتاجة نظرة"),
   voice_received: tr("رسالة صوتية محتاجة سماع"),
   out_of_scope: tr("سؤال برة شغلنا"),
@@ -2945,7 +2947,7 @@ function translateShell() {
     node.title = text;
     node.setAttribute("aria-label", text);
   });
-  document.title = "Wanas Gallery — " + trText("نظام إدارة المتجر");
+  document.title = "Rehla — " + trText("نظام إدارة المتجر");
 }
 
 function buildNav() {
@@ -3617,7 +3619,7 @@ function renderThread(data) {
 }
 
 const QUICK_REPLIES = [
-  "أهلاً بيك 👋 معاك فريق ونس",
+  "أهلاً بيكي 👋 معاكي فريق رحلة",
   "بنراجع طلبك دلوقتي وهنرد عليك حالاً",
   "الطلب اتشحن وهيوصلك خلال ٢-٤ أيام",
   "آسفين على التأخير، تحت أمرك",
@@ -4716,7 +4718,7 @@ async function saveChart(host, productId, title, image) {
 function productCreateForm() {
   const body = overlay.drawer(tr("منتج جديد"), TR`
     <div class="grid g-2">
-      <div><label class="lbl" for="nTitle">اسم المنتج *</label><input class="inp" id="nTitle" placeholder="مثلاً: هودي ونس الشتوي"></div>
+      <div><label class="lbl" for="nTitle">اسم المنتج *</label><input class="inp" id="nTitle" placeholder="مثلاً: توب رحلة كم طويل"></div>
       <div><label class="lbl" for="nCat">التصنيف *</label>
         <input class="inp" id="nCat" list="nCatList" placeholder="T-Shirts">
         <datalist id="nCatList"></datalist>

@@ -28,7 +28,7 @@ from domain.services import (
 )
 
 BANNER = """
-┌─ Wanas Gallery — local chat harness ──────────────────────────────────┐
+┌─ Rehla — local chat harness ──────────────────────────────────────────┐
 │ Same entry point as WhatsApp: handle_message(channel, external_id).   │
 │ Commands:  /reset  clear this conversation's history                  │
 │            /cart   show what the tools see                            │

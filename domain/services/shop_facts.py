@@ -22,18 +22,37 @@ from sqlalchemy.orm import Session
 
 from common.money import money
 
-#: The flat rate the shop set for every governorate on 2026-08-20, confirmed
-#: across ~100 completed orders. Only ever *fills a blank*: `app.py` sets it
-#: on a governorate with no fee yet, and a fee staff set in the dashboard is
-#: never overwritten. What the bot says is read from the table, not from this.
-DEFAULT_SHIPPING_FEE = Decimal("110")
+# ---------------------------------------------------------------------------
+# REHLA -- THE ONE PLACE TO EDIT THE PUBLISHED FACTS (placeholders for now)
+# ---------------------------------------------------------------------------
+#: Shipping fee per governorate key (keys from data/governorates.json). Any
+#: governorate not listed pays DEFAULT_SHIPPING_FEE. These only ever *fill a
+#: blank* in the rate table at boot (`app._ensure_shipping_fees_set`); once a
+#: fee is stored, change it from the dashboard or `manage.py set-fee`.
+SHIPPING_FEES: dict[str, Decimal] = {
+    "Cairo": Decimal("70"),
+    "Giza": Decimal("70"),
+}
+DEFAULT_SHIPPING_FEE = Decimal("85")
 
-#: The published delivery promise, in days, to every governorate.
-DELIVERY_DAYS = 4
+#: The published delivery promise, in days: "من 3 لـ 5 أيام".
+DELIVERY_DAYS_MIN = 3
+DELIVERY_DAYS = 5
 
-#: The two ways this shop can be paid, in the one sentence it says them in.
-#: `scripts/quality_gate.py` fails any reply offering a third.
-PAYMENT_LINE = "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع."
+#: Cash on delivery only.
+PAYMENT_LINE = "الدفع كاش عند الاستلام."
+
+#: Rehla's refund policy (data/rehla_source/pages/policies_refund-policy.txt):
+#: exchange within 14 days of delivery (size issue or defect, unused, tags on),
+#: return within 7 days with shipping deducted; a defect is on the shop.
+EXCHANGE_DAYS = 14
+RETURN_DAYS = 7
+# ---------------------------------------------------------------------------
+
+
+def fee_for(governorate: str) -> Decimal:
+    """The published fee for one governorate key."""
+    return SHIPPING_FEES.get(governorate, DEFAULT_SHIPPING_FEE)
 
 
 def shipping_fees(session: Session | None) -> list[Decimal]:
@@ -63,18 +82,44 @@ def shipping_line(session: Session | None = None) -> str:
     the governorate, because quoting one of them as the price is quoting the
     wrong price to everyone else. Without a table to read, the default.
     """
-    fees = shipping_fees(session) or [DEFAULT_SHIPPING_FEE]
+    by_fee = _governorates_by_fee(session)
+    fees = sorted(by_fee)
     if len(fees) == 1:
         return f"{_egp(fees[0])} جنيه لكل محافظات مصر"
+    if len(fees) == 2 and len(by_fee[fees[0]]) <= 3:
+        cheap = " وال".join(by_fee[fees[0]])
+        return f"{_egp(fees[0])} جنيه لل{cheap}، و{_egp(fees[1])} جنيه لباقي المحافظات"
     return f"من {_egp(fees[0])} لـ {_egp(fees[-1])} جنيه حسب المحافظة"
+
+
+_LABELS_AR = {"Cairo": "قاهرة", "Giza": "جيزة", "Alexandria": "إسكندرية"}
+
+
+def _governorates_by_fee(session: Session | None) -> dict[Decimal, list[str]]:
+    """Fee -> the governorates charged it (Arabic, article-less), from the
+    rate table when there is one, else from the published constants."""
+    pairs: list[tuple[str, str, Decimal]] = []
+    if session is not None:
+        from domain.models import ShippingRate
+
+        for rate in session.query(ShippingRate).filter(ShippingRate.fee.is_not(None)).all():
+            pairs.append((rate.governorate, rate.label_ar or rate.governorate, Decimal(str(rate.fee))))
+    if not pairs:
+        pairs = [(key, key, fee) for key, fee in SHIPPING_FEES.items()]
+        pairs.append(("*", "*", DEFAULT_SHIPPING_FEE))
+    out: dict[Decimal, list[str]] = {}
+    for key, label, fee in pairs:
+        name = _LABELS_AR.get(key) or (label[2:] if label.startswith("ال") else label)
+        out.setdefault(fee, []).append(name)
+    return out
 
 
 def example_fee(session: Session | None = None) -> str:
     """A fee the shop really charges, for the prompt's layout examples -- so an
     example the model copies is never a number the shop does not use."""
-    fees = shipping_fees(session) or [DEFAULT_SHIPPING_FEE]
+    fees = shipping_fees(session) or sorted({*SHIPPING_FEES.values(), DEFAULT_SHIPPING_FEE})
     return _egp(fees[0])
 
 
 def delivery_line() -> str:
-    return f"بياخد لغاية {DELIVERY_DAYS} أيام"
+    return f"من {DELIVERY_DAYS_MIN} لـ {DELIVERY_DAYS} أيام"

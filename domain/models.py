@@ -114,6 +114,7 @@ HANDOFF_REASONS = (
     "unclear",
     "complaint",
     "customer_asked",
+    "size_help",
     "image_received",
     "voice_received",
     "out_of_scope",

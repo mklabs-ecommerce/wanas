@@ -1,0 +1,172 @@
+[
+  {
+    "id": 342491332726,
+    "title": "ALL TOPS",
+    "handle": "all-tops",
+    "description": null,
+    "published_at": "2026-08-22T16:00:45+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": null,
+    "products_count": 8
+  },
+  {
+    "id": 341665579126,
+    "title": "Best Sellers",
+    "handle": "best-sellers",
+    "description": null,
+    "published_at": "2026-08-19T11:33:48+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": null,
+    "products_count": 5
+  },
+  {
+    "id": 306575769718,
+    "title": "Home page",
+    "handle": "frontpage",
+    "description": null,
+    "published_at": "2025-05-04T01:28:04+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": null,
+    "products_count": 2
+  },
+  {
+    "id": 306576097398,
+    "title": "Hoodies",
+    "handle": "hoodies",
+    "description": "",
+    "published_at": "2025-05-04T01:42:57+03:00",
+    "updated_at": "2026-08-22T16:28:12+03:00",
+    "image": {
+      "id": 1607560757366,
+      "created_at": "2025-05-04T01:42:56+03:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/re_hoodies.jpg?v=1746312177",
+      "alt": null
+    },
+    "products_count": 4
+  },
+  {
+    "id": 307471843446,
+    "title": "New Arrivals",
+    "handle": "new-products-1",
+    "description": "",
+    "published_at": "2025-05-24T22:41:02+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": {
+      "id": 1612871467126,
+      "created_at": "2026-08-01T09:41:31+03:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/0767AEFE-DDCC-4F7F-AB1F-C8FF37AB7EAF.jpg?v=1785566492",
+      "alt": null
+    },
+    "products_count": 3
+  },
+  {
+    "id": 322021326966,
+    "title": "Pants",
+    "handle": "pants",
+    "description": "<h2>Elevated Essentials — Pants</h2><p>Discover our curated edit of premium pants, designed for the modern wardrobe. From tailored wide-leg silhouettes to sleek straight cuts, each piece is crafted with precision and intention.</p><ul>\n<li>Premium fabrics with a refined finish</li>\n<li>Versatile styles that transition from day to evening</li>\n<li>Thoughtfully fitted for a flattering, confident look</li>\n</ul><p>Dress them up or keep it minimal — these are the pants your wardrobe has been waiting for.</p>",
+    "published_at": "2026-05-18T03:05:04+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": null,
+    "products_count": 1
+  },
+  {
+    "id": 315492073590,
+    "title": "Rehla Long sleeves basics",
+    "handle": "rehla-w-basics",
+    "description": null,
+    "published_at": "2025-12-16T18:27:22+02:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": {
+      "id": 1611034886262,
+      "created_at": "2025-12-16T18:27:21+02:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/IMG-3179.png?v=1765902835",
+      "alt": ""
+    },
+    "products_count": 4
+  },
+  {
+    "id": 306576031862,
+    "title": "Rehla pants",
+    "handle": "rehlaa-pants",
+    "description": "",
+    "published_at": "2025-05-04T01:40:56+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": {
+      "id": 1607560691830,
+      "created_at": "2025-05-04T01:40:55+03:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/A19883B3-E5D0-4436-9757-92308AEAD260.jpg?v=1787426109",
+      "alt": null
+    },
+    "products_count": 1
+  },
+  {
+    "id": 306575999094,
+    "title": "Rehlaa jackets and hodies",
+    "handle": "rehlaa-jacket",
+    "description": "",
+    "published_at": "2025-05-04T01:39:49+03:00",
+    "updated_at": "2026-09-29T02:25:12+03:00",
+    "image": {
+      "id": 1607560659062,
+      "created_at": "2025-05-04T01:39:48+03:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/IMG-2915.heic?v=1765903457",
+      "alt": ""
+    },
+    "products_count": 4
+  },
+  {
+    "id": 306576064630,
+    "title": "Sets",
+    "handle": "sets",
+    "description": "",
+    "published_at": "2025-05-04T01:42:12+03:00",
+    "updated_at": "2026-08-31T14:18:58+03:00",
+    "image": {
+      "id": 1607560724598,
+      "created_at": "2025-05-04T01:42:11+03:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/re_sets.jpg?v=1746312131",
+      "alt": null
+    },
+    "products_count": 3
+  },
+  {
+    "id": 307470073974,
+    "title": "Summer Collection",
+    "handle": "new-products",
+    "description": "",
+    "published_at": "2025-05-24T21:29:08+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": null,
+    "products_count": 8
+  },
+  {
+    "id": 306575868022,
+    "title": "T-shirts",
+    "handle": "t_shirts",
+    "description": "",
+    "published_at": "2025-05-04T01:37:29+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": {
+      "id": 1607560560758,
+      "created_at": "2025-05-04T01:37:28+03:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/re_tees.png?v=1746311849",
+      "alt": null
+    },
+    "products_count": 7
+  },
+  {
+    "id": 306575933558,
+    "title": "Tops",
+    "handle": "tops",
+    "description": "",
+    "published_at": "2025-05-04T01:38:32+03:00",
+    "updated_at": "2026-09-28T14:16:13+03:00",
+    "image": {
+      "id": 1607560593526,
+      "created_at": "2025-05-04T01:38:31+03:00",
+      "src": "https://cdn.shopify.com/s/files/1/0631/7473/8038/collections/re_tops.png?v=1746311912",
+      "alt": null
+    },
+    "products_count": 3
+  }
+]

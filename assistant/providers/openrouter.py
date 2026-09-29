@@ -457,7 +457,7 @@ class OpenRouterProvider(LLMProvider):
             "Authorization": f"Bearer {self.api_key}",
             "content-type": "application/json",
             # Optional attribution OpenRouter asks for; never required.
-            "X-Title": "Wanas Gallery",
+            "X-Title": "Rehla",
         }
         if settings.public_base_url:
             headers["HTTP-Referer"] = settings.public_base_url

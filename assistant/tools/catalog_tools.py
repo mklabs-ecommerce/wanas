@@ -36,7 +36,7 @@ def get_categories(ctx: ToolContext) -> dict:
     "get_products",
     "Find products by category, style, department, collection, or free text. `query` is matched "
     "against product name, category, style and variant colours together, so a phrase like "
-    "'olive hoodie' resolves even though colour is not part of any product name. All arguments "
+    "'black backless top' resolves even though colour is not part of any product name. All arguments "
     "are optional; with none it returns the whole catalog. price_from/price_to are the real "
     "min and max of that product's variant prices -- quote 'from X' when they differ. "
     "`colors` lists every colourway the product comes in including sold-out ones -- it describes "
@@ -51,10 +51,10 @@ def get_categories(ctx: ToolContext) -> dict:
     "front of you. An empty result under a `sleeve` filter means the shop genuinely has none of "
     "that kind; say so and offer what it does have. "
     "`garment_not_sold` means the customer named a garment this shop does not stock at all -- a "
-    "قميص (a button-up shirt, which is NOT a تيشيرت), a تراكسوت set, a شورت, a جزمة, a بدلة. Say "
+    "قميص (a button-up shirt, which is NOT a تيشيرت), a طرحة, a فستان, a جينز, a جزمة. Say "
     "plainly that we do not have it, using `garment` -- the customer's own word -- and then offer "
-    "`alternatives` **as a different thing**: 'مفيش قمصان عندنا، بس عندنا تيشيرتات وبولو لو "
-    "تحب تشوفهم'. Never present an alternative as the thing they asked for, never rename it, and "
+    "`alternatives` **as a different thing**: 'مفيش طرح عندنا، بس عندنا توبات كم طويل تنفع "
+    "للمحجبات لو تحبي تشوفيهم'. Never present an alternative as the thing they asked for, never rename it, and "
     "never say 'أيوه عندنا' to a garment_not_sold. `products` is empty on purpose: there is "
     "nothing here that answers their question. An empty `alternatives` means there is nothing "
     "close either -- say so and stop. "
@@ -69,15 +69,15 @@ def get_categories(ctx: ToolContext) -> dict:
     "two or three that fit and let them narrow it down.",
     properties={
         "category": {"type": "string", "description": "One of the categories from get_categories."},
-        "style": {"type": "string", "description": "A style facet, e.g. oversized, zip-through."},
-        "department": {"type": "string", "description": "unisex or women."},
+        "style": {"type": "string", "description": "A style facet, e.g. off-shoulder, backless, hijabi, wide-leg."},
+        "department": {"type": "string", "description": "women (every Rehla product)."},
         "collection": {"type": "string", "description": "Optional; most products have none."},
         "sleeve": {
             "type": "string",
             "enum": list(sleeves.SLEEVES),
             "description": "Sleeve length: half (also called short sleeve, «نص كم»), long, or "
             "sleeveless. Use it whenever the customer names one, on its own or beside a category "
-            "-- 'polo نص كم' is category plus sleeve, not a product name. A product whose "
+            "-- 'توب كم طويل' is category plus sleeve, not a product name. A product whose "
             "`sleeve` is null has none recorded, so it is never returned by this filter; its "
             "sleeve length is not something to state.",
         },
@@ -404,8 +404,9 @@ def get_variants(
 @tool(
     "get_size_chart",
     "The published measurements for one product, plus the chart image, which the runtime attaches "
-    "to your reply automatically. If it returns has_chart false there is no chart for that product: "
-    "say so. If it returns image_only the picture is the whole chart -- send it and let the customer "
+    "to your reply automatically. If it returns has_chart false there is no chart for that product "
+    "yet: call request_human with reason size_help in the same turn (the shop then tells the customer "
+    "the chart is coming and a person will help with the size). If it returns image_only the picture is the whole chart -- send it and let the customer "
     "read it; there are no measurements to quote. Never estimate a measurement and never quote "
     "another product's chart. This is the tool for a customer who does not know their size: call it "
     "instead of asking them to work it out or promising to come back to them. `product_id` may be "

@@ -12,7 +12,7 @@
   document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
 })();
 </script>
-<title>Wanas Gallery — دخول الفريق</title>
+<title>Rehla — دخول الفريق</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&amp;family=Inter:wght@500;700&amp;display=swap" rel="stylesheet">
@@ -129,8 +129,8 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
 </head>
 <body>
 <main>
-  <img class="mark" src="/dashboard/logo.webp" alt="Wanas Gallery" width="52" height="52">
-  <h1 dir="ltr">Wanas Gallery</h1>
+  <img class="mark" src="/dashboard/logo.webp" alt="Rehla" width="52" height="52">
+  <h1 dir="ltr">Rehla</h1>
   <p class="sub" data-i18n="نظام إدارة المتجر — المحادثات والطلبات والمخزون في مكان واحد.">نظام إدارة المتجر — المحادثات والطلبات والمخزون في مكان واحد.</p>
 
   <form id="login" novalidate>
@@ -181,7 +181,7 @@ const tr = (s) => (LANG === "en" && EN[s]) || s;
 document.querySelectorAll("[data-i18n]").forEach((node) => {
   node.textContent = tr(node.dataset.i18n);
 });
-document.title = "Wanas Gallery — " + tr("دخول الفريق");
+document.title = "Rehla — " + tr("دخول الفريق");
 
 const langBtn = document.getElementById("langBtn");
 langBtn.textContent = LANG === "en" ? "ع" : "EN";

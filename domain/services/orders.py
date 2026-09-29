@@ -36,6 +36,7 @@ from domain.services import (
     inventory,
     notifications,
     queues,
+    shop_facts,
 )
 from domain.services.ids import next_order_id
 from domain.services.shipping import get_fee, resolve as resolve_governorate
@@ -959,10 +960,10 @@ def modify_quantity(session: Session, order: Order, variant_id: str, quantity: i
 #: prompt for the same reason the status rule is: a number the model recites
 #: from memory is a number it can get wrong, and this one is charged at the
 #: door in cash.
-EXCHANGE_WINDOW_HOURS = 24
-#: On top of the regular shipping fee, and only when the customer changed
-#: their mind. A defect or a wrong item is the shop's to pay for.
-EXCHANGE_SURCHARGE = to_decimal(20)
+EXCHANGE_WINDOW_HOURS = shop_facts.EXCHANGE_DAYS * 24
+#: Rehla charges no surcharge on an exchange: the customer pays shipping only,
+#: and a defect or a wrong item is the shop's to pay for.
+EXCHANGE_SURCHARGE = to_decimal(0)
 
 
 def return_terms(order: Order | None = None) -> dict:
@@ -984,11 +985,15 @@ def return_terms(order: Order | None = None) -> dict:
     """
     terms: dict = {
         "exchange_window_hours": EXCHANGE_WINDOW_HOURS,
+        "exchange_window_days": shop_facts.EXCHANGE_DAYS,
+        "return_window_days": shop_facts.RETURN_DAYS,
         "exchange_surcharge": money(EXCHANGE_SURCHARGE),
-        "exchange_condition": "original_packaging_unworn_clean",
+        "exchange_condition": "unused_with_tags_and_original_packaging",
+        "exchange_reasons": "size_issue_or_manufacturing_defect",
+        "not_returnable": "used_or_washed, no_tags_or_packaging, sale_items_except_defects",
         "defective_or_wrong_item": "shop_pays_shipping",
-        "changed_mind": "customer_pays_shipping_plus_surcharge",
-        "returns_accepted": "at_the_door_only",
+        "changed_mind": "customer_pays_shipping",
+        "returns_accepted": "within_return_window_days_shipping_fee_deducted_from_refund",
     }
     if order is None:
         return terms

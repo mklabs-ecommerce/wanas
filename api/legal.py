@@ -63,10 +63,10 @@ footer { margin-top: 3rem; padding-top: 1.4rem; border-top: 1px solid var(--rule
 """
 
 _BODY = f"""
-<h1>Wanas Gallery — Privacy Policy</h1>
+<h1>Rehla — Privacy Policy</h1>
 <p class="updated">Last updated {LAST_UPDATED}</p>
 
-<p>Wanas Gallery is a streetwear brand based in Egypt. We sell through an
+<p>Rehla is a women's clothing brand based in Egypt. We sell through an
 assistant on WhatsApp that answers questions about our products and takes
 orders. This page explains what that assistant collects, who it shares data
 with, and how to have your data removed.</p>
@@ -109,11 +109,9 @@ purpose:</p>
           what you said, and compares photos you send against our product
           catalogue. The relevant message content is sent through OpenRouter's
           service in order to produce these.</td></tr>
-  <tr><th>Shopify</th>
-      <td>Holds our product catalogue and our orders. When you place an order,
-          your name, phone number, delivery address and items are stored there.</td></tr>
   <tr><th>Railway</th>
-      <td>Hosts the assistant and its database.</td></tr>
+      <td>Hosts the assistant and its database, which holds our product catalogue and
+          your orders (name, phone number, delivery address and items).</td></tr>
 </table>
 <p>We may also disclose data where the law requires it. Because these providers
 operate internationally, your data may be processed outside Egypt.</p>
@@ -151,7 +149,7 @@ and we will remove it.</p>
 <p>Questions about this policy, or about your data:
 <a href="mailto:{CONTACT_EMAIL}">{CONTACT_EMAIL}</a>.</p>
 
-<footer>Wanas Gallery · Egypt</footer>
+<footer>Rehla · Egypt</footer>
 """
 
 PRIVACY_HTML = f"""<!doctype html>
@@ -159,7 +157,7 @@ PRIVACY_HTML = f"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy — Wanas Gallery</title>
+<title>Privacy Policy — Rehla</title>
 <style>{_STYLE}</style>
 </head>
 <body><main>{_BODY}</main></body>
