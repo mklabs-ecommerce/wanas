@@ -87,6 +87,11 @@ THEME_FONTS = {
         "&family=Martian+Mono:wdth,wght@75..112.5,400..700"
         "&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
     ),
+    "v2": (
+        "https://fonts.googleapis.com/css2?family=Geist:wght@400..700"
+        "&family=Geist+Mono:wght@400;500"
+        "&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+    ),
 }
 
 COOKIE_NAME = "rehla_staff"

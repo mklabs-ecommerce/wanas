@@ -255,8 +255,11 @@ def wrapped_keys(page: str, script: str) -> set[str]:
                 keys.update(segments(text[1:-1]))
 
     walk(script)
-    for attr in ("data-i18n", "data-i18n-title"):
-        keys.update(k for k in re.findall(attr + r'="([^"]+)"', page) if ARABIC.search(k))
+    for attr in ("data-i18n", "data-i18n-title", "data-i18n-placeholder"):
+        # Segmented like everything else: `translateShell` runs the value
+        # through `trText`, which looks each Arabic run up on its own.
+        for value in re.findall(attr + r'="([^"]+)"', page):
+            keys.update(segments(value))
     return keys
 
 

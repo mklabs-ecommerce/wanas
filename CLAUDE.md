@@ -422,7 +422,8 @@ dashboard/                 staff dashboard, its own top-level package:
                             team, and every other JSON answer reaches it with
                             its money fields stripped by money.py's route
                             class -- every router is built with it.
-                            DASHBOARD_THEME=mklabs|legacy picks the skin
+                            DASHBOARD_THEME=v2|mklabs|legacy picks the skin
+                            (v2, "Ink rail", is the default)
                             (themes/*.css, injected by web.skinned).
                             ranges.py parses the one date window both analytics
                             tabs use (presets, or an explicit start/end).

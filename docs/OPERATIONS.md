@@ -805,5 +805,6 @@ photo on Shopify yet keeps serving `data/images/` exactly as before. See
   settings, staff accounts, WhatsApp/Instagram configuration or Shopify --
   and the dashboard's store-wide sales figures are read live from Shopify,
   so those stay as Shopify has them.
-- `DASHBOARD_THEME=legacy` puts the dashboard back in its original design;
-  `mklabs` (the default) is the "Tag & Ledger" skin.
+- `DASHBOARD_THEME` picks the dashboard's skin: `v2` (the default, "Ink
+  rail"), `mklabs` (the "Tag & Ledger" skin) or `legacy` (the original
+  design). Each is one variable away; none needs a code change.

@@ -300,6 +300,7 @@ nav#nav { flex: 1; overflow-y: auto; overflow-x: hidden; display: flex; flex-dir
 #topbar .sub { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #topbar .actions { display: flex; align-items: center; gap: var(--s-2); }
 #menuBtn { display: none; }
+#tabbar { display: none; }
 
 #viewport { flex: 1; min-height: 0; overflow: hidden; display: flex; }
 .view { flex: 1; min-width: 0; min-height: 0; display: none; }
@@ -886,7 +887,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
   <!-- ===================== main ===================== -->
   <div id="main">
     <header id="topbar">
-      <button class="btn icon ghost" id="menuBtn" type="button" aria-label="القائمة" aria-expanded="false">
+      <button class="btn icon ghost" id="menuBtn" type="button" aria-label="القائمة" data-i18n-title="القائمة" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       <div class="titles">
@@ -909,7 +910,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
           <div class="inbox-tools">
             <div class="field">
               <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-              <input id="inboxSearch" type="search" placeholder="ابحث في الرسايل والأسماء…" aria-label="بحث في الوارد">
+              <input id="inboxSearch" type="search" placeholder="ابحث في الرسايل والأسماء…" aria-label="بحث في الوارد" data-i18n-placeholder="ابحث في الرسايل والأسماء…">
             </div>
             <div class="inbox-filters" id="inboxStatus" role="group" aria-label="فلتر الحالة"></div>
             <div class="inbox-filters" id="inboxChannel" role="group" aria-label="فلتر القناة"></div>
@@ -919,7 +920,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 
         <div class="thread">
           <div class="thread-head" id="threadHead" hidden>
-            <button class="btn sm icon ghost" id="backToList" type="button" aria-label="رجوع للقائمة" style="display:none">
+            <button class="btn sm icon ghost" id="backToList" type="button" aria-label="رجوع للقائمة" data-i18n-title="رجوع للقائمة" style="display:none">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
             <div class="avatar" id="threadAvatar" aria-hidden="true"></div>
@@ -933,18 +934,18 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
           <div id="log">
             <div class="empty" style="margin:auto">
               <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="ic" aria-hidden="true"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M5.4 5h13.2a2 2 0 0 1 1.9 1.4L22 13v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5l1.5-6.6A2 2 0 0 1 5.4 5Z"/></svg>
-              <div class="t">اختار محادثة من القايمة</div>
-              <div class="d">المحادثات المستنية رد بتيجي في الأول، والأقدم انتظارًا فوق.</div>
+              <div class="t" data-i18n="اختار محادثة من القايمة">اختار محادثة من القايمة</div>
+              <div class="d" data-i18n="المحادثات المستنية رد بتيجي في الأول، والأقدم انتظارًا فوق.">المحادثات المستنية رد بتيجي في الأول، والأقدم انتظارًا فوق.</div>
             </div>
           </div>
 
           <div class="composer" id="composer" hidden>
             <div class="quickreplies" id="quickReplies"></div>
             <div class="box">
-              <textarea id="replyText" rows="1" placeholder="اكتب ردك للعميل… (Ctrl+Enter للإرسال)" aria-label="نص الرد"></textarea>
+              <textarea id="replyText" rows="1" placeholder="اكتب ردك للعميل… (Ctrl+Enter للإرسال)" aria-label="نص الرد" data-i18n-placeholder="اكتب ردك للعميل… (Ctrl+Enter للإرسال)"></textarea>
               <button class="btn primary" id="sendBtn" type="button">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
-                إرسال
+                <span data-i18n="إرسال">إرسال</span>
               </button>
             </div>
             <div class="note" id="composerNote"></div>
@@ -1006,6 +1007,10 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 
     </div>
   </div>
+
+  <!-- Phone-width navigation. Built by buildTabbar(); hidden unless a skin
+       shows it (themes/v2.css does, under 900px). -->
+  <nav id="tabbar" aria-label="أقسام اللوحة" data-i18n-title="أقسام اللوحة"></nav>
 </div>
 
 <!-- ===================== overlays ===================== -->
@@ -1036,13 +1041,13 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
 <div id="palette" hidden role="dialog" aria-modal="true" aria-label="لوحة الأوامر">
   <div class="pinput">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true" style="color:var(--ink-3)"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input id="paletteInput" type="text" placeholder="اقفز لقسم، أو ابحث عن طلب أو عميل…" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list">
+    <input id="paletteInput" type="text" placeholder="اقفز لقسم، أو ابحث عن طلب أو عميل…" data-i18n-placeholder="اقفز لقسم، أو ابحث عن طلب أو عميل…" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list">
   </div>
   <div class="plist" id="paletteList" role="listbox" aria-label="النتائج"></div>
   <div class="pfoot">
-    <span><kbd>↑</kbd> <kbd>↓</kbd> تنقل</span>
-    <span><kbd>Enter</kbd> فتح</span>
-    <span><kbd>Esc</kbd> إغلاق</span>
+    <span><kbd>↑</kbd> <kbd>↓</kbd> <span data-i18n="تنقل">تنقل</span></span>
+    <span><kbd>Enter</kbd> <span data-i18n="فتح">فتح</span></span>
+    <span><kbd>Esc</kbd> <span data-i18n="إغلاق">إغلاق</span></span>
   </div>
 </div>
 
@@ -1852,6 +1857,18 @@ const EN = {
   "٢": "2",
   "٣": "3",
   "٨ حروف على الأقل.": "At least 8 characters.",
+  "ابحث في الرسايل والأسماء…": "Search messages and names…",
+  "اكتب ردك للعميل…": "Write your reply…",
+  "Ctrl+Enter للإرسال": "Ctrl+Enter to send",
+  "اقفز لقسم، أو ابحث عن طلب أو عميل…": "Jump to a section, or find an order or customer…",
+  "اختار محادثة من القايمة": "Pick a conversation from the list",
+  "المحادثات المستنية رد بتيجي في الأول، والأقدم انتظارًا فوق.": "Conversations waiting for a reply come first, longest-waiting on top.",
+  "إرسال": "Send",
+  "تنقل": "move",
+  "فتح": "open",
+  "رجوع للقائمة": "Back to the list",
+  "القائمة": "Menu",
+  "المزيد": "More",
 };
 /* ---- 8< ---- END EN DICTIONARY ---- 8< ---- */
 
@@ -1953,6 +1970,7 @@ const ICON_PATHS = {
   money:     '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/>',
   spark:     '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
   trash:     '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4h6v3"/>',
+  menu:      '<path d="M4 6h16M4 12h16M4 18h16"/>',
   download:  '<path d="M12 3v12"/><path d="m7.5 11 4.5 4 4.5-4"/><path d="M4 20h16"/>',
 };
 
@@ -2984,6 +3002,7 @@ function translateShell() {
     node.title = text;
     node.setAttribute("aria-label", text);
   });
+  $$("[data-i18n-placeholder]").forEach((node) => { node.placeholder = trText(node.dataset.i18nPlaceholder); });
   document.title = "Rehla — " + trText("نظام إدارة المتجر");
 }
 
@@ -3011,6 +3030,52 @@ function buildNav() {
   }
 }
 
+/* The phone's bottom bar: the first four sections this account may open,
+   in sidebar order, and "More" for the rest (it opens the rail). Every skin
+   builds it; only a skin that styles it shows it. */
+const TABBAR_ROUTES = ["overview", "inbox", "queue", "orders", "products"];
+
+function buildTabbar() {
+  const bar = $("#tabbar");
+  bar.innerHTML = "";
+  const items = TABBAR_ROUTES.filter((id) => may(ROUTES[id].perm)).slice(0, 4).map((id) => ROUTES[id]);
+  for (const item of items) {
+    const button = el("button", {
+      class: "tab", type: "button", dataset: { route: item.id },
+      onclick: () => go(item.id),
+    });
+    button.innerHTML = `${icon(item.icon, 20)}<span class="label">${esc(item.label)}</span>` +
+      (item.badge ? `<span class="count" data-badge="${item.badge}" hidden></span>` : "");
+    bar.append(button);
+  }
+  const more = el("button", { class: "tab", type: "button", onclick: () => toggleRail(true) });
+  more.innerHTML = `${icon("menu", 20)}<span class="label">${esc(tr("المزيد"))}</span>`;
+  bar.append(more);
+}
+
+/* A table on a phone is read as a list of cards (themes/v2.css), each cell
+   captioned by its column. The headers are copied onto the cells here, once
+   per table, rather than threaded through every view that builds one. */
+function labelTableCells(root = document) {
+  $$("table.tbl", root).forEach((table) => {
+    const heads = $$("thead th", table).map((th) => th.textContent.trim());
+    if (!heads.length) return;
+    $$("tbody tr", table).forEach((row) => {
+      if (row.dataset.labelled) return;
+      row.dataset.labelled = "1";
+      Array.from(row.children).forEach((cell, i) => {
+        if (heads[i] && !cell.hasAttribute("colspan")) cell.dataset.label = heads[i];
+      });
+    });
+  });
+}
+let labelPending = false;
+new MutationObserver(() => {
+  if (labelPending) return;
+  labelPending = true;
+  requestAnimationFrame(() => { labelPending = false; labelTableCells(); });
+}).observe(document.body, { childList: true, subtree: true });
+
 function setBadge(name, count, tone = "urgent") {
   $$(`[data-badge="${name}"]`).forEach((node) => {
     node.hidden = !count;
@@ -3024,6 +3089,13 @@ function toggleRail(open) {
   $("#menuBtn").setAttribute("aria-expanded", String(!!open));
 }
 $("#menuBtn").addEventListener("click", () => toggleRail(!$("#rail").classList.contains("in")));
+// On a phone the rail is a sheet over the page: a tap anywhere else closes it.
+document.addEventListener("click", (event) => {
+  const rail = $("#rail");
+  if (!rail.classList.contains("in") || rail.contains(event.target)) return;
+  if (event.target.closest("#menuBtn, #tabbar")) return;
+  toggleRail(false);
+});
 
 const VIEWS = {};   // id -> { mount(force) }
 
@@ -3037,7 +3109,7 @@ function go(route, options = {}) {
   if (location.hash.slice(1) !== route) history.replaceState(null, "", `#${route}`);
 
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${route}`));
-  $$(".nav-item").forEach((b) => {
+  $$(".nav-item, #tabbar .tab[data-route]").forEach((b) => {
     const current = b.dataset.route === route;
     b.setAttribute("aria-current", current ? "page" : "false");
     if (!current) b.removeAttribute("aria-current");
@@ -6635,6 +6707,7 @@ async function boot() {
 
   translateShell();
   buildNav();
+  buildTabbar();
   $("#boot").remove();
   $("#app").hidden = false;
 
