@@ -2,7 +2,7 @@
 
     customer: «عندكم هوديز؟»
     log:      tool get_products({'query': 'hoodie'})
-    bot:      «عندنا WANAS Hoodie و WANAS Zip-Hoodie ...»        -> no photo
+    bot:      «عندنا REHLA Hoodie و REHLA Zip-Hoodie ...»        -> no photo
     customer: «طب ابعتلي صورة»                                 -> now one
 
 The photographs used to depend on the model deciding to call `get_variants`,
@@ -60,10 +60,10 @@ def test_a_browse_answer_shows_each_product_it_names(seeded):
         seeded,
         "عندكم هوديز؟",
         calls(("get_products", {"query": "hoodie"})),
-        ModelReply(text="أيوه، عندنا WANAS Hoodie و WANAS Zip-Hoodie. تحب تشوف أنهي فيهم أكتر؟"),
+        ModelReply(text="أيوه، عندنا REHLA Hoodie و REHLA Zip-Hoodie. تحب تشوف أنهي فيهم أكتر؟"),
     )
     photos = shown(reply)
-    assert set(photos) == {"wanas-hoodie", "wanas-zip-hoodie"}
+    assert set(photos) == {"rehla-hoodie", "rehla-zip-hoodie"}
     assert all(len(paths) == 1 for paths in photos.values()), "a list shows one photo each"
     assert reply.error is None
 
@@ -82,15 +82,15 @@ def test_one_product_shown_alone_the_first_time_brings_its_colourways(seeded):
 
 
 def test_only_colourways_that_can_be_bought_are_offered(seeded):
-    """The WANAS Hoodie's grey is sold out: showing it is inviting an order
+    """The REHLA Hoodie's grey is sold out: showing it is inviting an order
     the shop cannot take."""
     reply, _ = turn(
         seeded,
         "الهودي",
-        calls(("get_variants", {"product_id": "wanas-hoodie"})),
-        ModelReply(text="ده WANAS Hoodie، متاح Black و Olive."),
+        calls(("get_variants", {"product_id": "rehla-hoodie"})),
+        ModelReply(text="ده REHLA Hoodie، متاح Black و Olive."),
     )
-    colours = {colour_of(reply, p) for p in shown(reply)["wanas-hoodie"]}
+    colours = {colour_of(reply, p) for p in shown(reply)["rehla-hoodie"]}
     assert colours == {"Black", "Olive"}
 
 
@@ -99,9 +99,9 @@ def test_a_colour_named_in_arabic_beside_the_product_leads(seeded):
         seeded,
         "عندكم هوديز؟",
         calls(("get_products", {"query": "hoodie"})),
-        ModelReply(text="عندنا WANAS Hoodie الزيتي متاح بكل المقاسات."),
+        ModelReply(text="عندنا REHLA Hoodie الزيتي متاح بكل المقاسات."),
     )
-    photos = shown(reply)["wanas-hoodie"]
+    photos = shown(reply)["rehla-hoodie"]
     assert colour_of(reply, photos[0]) == "Olive"
 
 
@@ -113,10 +113,10 @@ def test_a_product_nothing_of_which_can_be_bought_is_not_shown(seeded):
         seeded,
         "عندكم هوديز؟",
         calls(("get_products", {"query": "hoodie"})),
-        ModelReply(text="الـ Cairokee Hoodie خلص للأسف، بس عندنا WANAS Hoodie."),
+        ModelReply(text="الـ Cairokee Hoodie خلص للأسف، بس عندنا REHLA Hoodie."),
     )
     assert "cairokee-hoodie" not in shown(reply)
-    assert "wanas-hoodie" in shown(reply)
+    assert "rehla-hoodie" in shown(reply)
 
 
 def test_a_name_no_tool_returned_gets_no_photo(seeded):
@@ -126,7 +126,7 @@ def test_a_name_no_tool_returned_gets_no_photo(seeded):
         seeded,
         "عندكم جينز؟",
         calls(("get_products", {"query": "hoodie"})),
-        ModelReply(text="دي صورة WANAS Denim Jacket 👆"),
+        ModelReply(text="دي صورة REHLA Denim Jacket 👆"),
         ModelReply(text="للأسف مفيش جينز عندنا."),
     )
     assert reply.attachments == []
@@ -152,20 +152,20 @@ def test_an_order_turn_shows_no_merchandise(seeded):
                         "id": "p1",
                         "name": "get_products",
                         "content": {
-                            "products": [{"product_id": "wanas-hoodie", "name": "WANAS Hoodie"}],
+                            "products": [{"product_id": "rehla-hoodie", "name": "REHLA Hoodie"}],
                             "count": 1,
                         },
                     }
                 ],
             },
-            {"role": "assistant", "content": "عندنا WANAS Hoodie."},
+            {"role": "assistant", "content": "عندنا REHLA Hoodie."},
         ],
     )
     reply, _ = turn(
         seeded,
         "أوردري فين؟",
         calls(("get_my_orders", {})),
-        ModelReply(text="أوردرك فيه WANAS Hoodie ولسه ماتشحنش."),
+        ModelReply(text="أوردرك فيه REHLA Hoodie ولسه ماتشحنش."),
     )
     assert reply.attachments == []
 
@@ -189,8 +189,8 @@ def test_a_new_colour_of_a_product_already_shown_is_shown(seeded):
     turn(
         seeded,
         "الهودي الأسود",
-        calls(("get_variants", {"product_id": "wanas-hoodie", "color": "Black"})),
-        ModelReply(text="ده WANAS Hoodie الأسود."),
+        calls(("get_variants", {"product_id": "rehla-hoodie", "color": "Black"})),
+        ModelReply(text="ده REHLA Hoodie الأسود."),
     )
     # The first showing sent every in-stock colourway; forget the olive one
     # to ask the question the rule is about.
@@ -200,8 +200,8 @@ def test_a_new_colour_of_a_product_already_shown_is_shown(seeded):
             message["attachments"] = message["attachments"][:1]
     session_store.save(seeded, CHANNEL, WHO, history)
 
-    reply, _ = turn(seeded, "والزيتي؟", ModelReply(text="WANAS Hoodie الزيتي متاح كمان."))
-    photos = shown(reply)["wanas-hoodie"]
+    reply, _ = turn(seeded, "والزيتي؟", ModelReply(text="REHLA Hoodie الزيتي متاح كمان."))
+    photos = shown(reply)["rehla-hoodie"]
     assert [colour_of(reply, p) for p in photos] == ["Olive"]
 
 
@@ -211,14 +211,14 @@ def test_two_products_asked_for_by_both_get_one_photo_each(seeded):
         seeded,
         "الاتنين",
         calls(
-            ("get_variants", {"product_id": "wanas-sweatpant"}),
+            ("get_variants", {"product_id": "rehla-sweatpant"}),
             ("get_variants", {"product_id": "lightweight-sweatpant"}),
         ),
-        ModelReply(text="دي صورة WANAS Sweatpant ودي صورة Lightweight Sweatpant 👆"),
+        ModelReply(text="دي صورة REHLA Sweatpant ودي صورة Lightweight Sweatpant 👆"),
     )
     photos = shown(reply)
     assert {k: len(v) for k, v in photos.items()} == {
-        "wanas-sweatpant": 1,
+        "rehla-sweatpant": 1,
         "lightweight-sweatpant": 1,
     }
 
@@ -229,14 +229,14 @@ def test_a_long_list_shows_the_first_few(seeded):
         "وريني كل حاجة",
         calls(("get_products", {})),
         ModelReply(
-            text="عندنا WANAS Hoodie و WANAS Polo و Knitted Polo و Worker Jacket "
+            text="عندنا REHLA Hoodie و REHLA Polo و Knitted Polo و Worker Jacket "
             "و Ringer Tee و Lightweight Sweatpant."
         ),
     )
     photos = shown(reply)
     assert len(photos) == showcase.MAX_SHOWCASE_PRODUCTS
     assert sum(len(v) for v in photos.values()) <= showcase.MAX_SHOWCASE_PHOTOS
-    assert list(photos)[:2] == ["wanas-hoodie", "wanas-polo"], "in the order the reply names them"
+    assert list(photos)[:2] == ["rehla-hoodie", "rehla-polo"], "in the order the reply names them"
 
 
 def test_a_retried_reply_does_not_keep_the_photos_of_the_sentence_it_replaced(seeded):
@@ -244,7 +244,7 @@ def test_a_retried_reply_does_not_keep_the_photos_of_the_sentence_it_replaced(se
         seeded,
         "الصورة مش واصلة",
         calls(("get_products", {"query": "polo"})),
-        ModelReply(text="دي صورة WANAS Polo 👆 ولو مش ظاهرة جرب اقفل الواتس وافتحه."),
+        ModelReply(text="دي صورة REHLA Polo 👆 ولو مش ظاهرة جرب اقفل الواتس وافتحه."),
         ModelReply(text="معلش المشكلة من عندنا، ده Knitted Polo 👆"),
     )
     assert set(shown(reply)) == {"knitted-polo"}
@@ -257,8 +257,8 @@ KNOWN = {
     "Cairokee T-shirt": "cairokee-tee",
     "Cairokee T-shirt 2": "cairokee-tee-2",
     "Ringer Tee": "ringer-tee",
-    "WANAS Hoodie": "wanas-hoodie",
-    "WANAS Zip-Hoodie": "wanas-zip-hoodie",
+    "REHLA Hoodie": "rehla-hoodie",
+    "REHLA Zip-Hoodie": "rehla-zip-hoodie",
 }
 
 
@@ -269,17 +269,17 @@ def ids(text: str) -> list[str]:
 def test_a_longer_name_is_not_also_read_as_the_shorter_one():
     assert ids("عندنا Cairokee T-shirt 2 بالأسود") == ["cairokee-tee-2"]
     assert ids("Cairokee T-shirt 2 و Cairokee T-shirt") == ["cairokee-tee-2", "cairokee-tee"]
-    assert ids("WANAS Zip-Hoodie") == ["wanas-zip-hoodie"]
+    assert ids("REHLA Zip-Hoodie") == ["rehla-zip-hoodie"]
 
 
 def test_a_distinctive_word_is_enough_and_a_shared_one_is_not():
     assert ids("الـ Ringer متاح") == ["ringer-tee"]
     assert ids("عندنا حاجات Cairokee كتير") == [], "three products share that word"
-    assert ids("WANAS") == []
+    assert ids("REHLA") == []
 
 
 def test_names_match_whatever_the_case():
-    assert ids("wanas hoodie") == ["wanas-hoodie"]
+    assert ids("rehla hoodie") == ["rehla-hoodie"]
     assert ids("RINGER TEE") == ["ringer-tee"]
 
 

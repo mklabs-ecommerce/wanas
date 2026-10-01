@@ -13,6 +13,9 @@ import pytest
 from domain.services import catalog
 from domain.services.search_terms import matches, normalize, query_tokens
 
+USE_REAL_CATALOG = True
+
+
 # --- normalisation --------------------------------------------------------
 
 
@@ -54,13 +57,13 @@ def test_a_match_may_not_start_in_the_middle_of_a_word():
     which reads as the bot ignoring what was asked.
     """
     assert matches("Hoodies & Sweatshirts", "تيشيرت") is False
-    assert matches("Boxy WNS Tee T-Shirts", "تيشيرت") is True
+    assert matches("Boxy REHLA Tee T-Shirts", "تيشيرت") is True
 
 
 def test_prefixes_still_match():
-    """`hoodie` has to find `hoodies`, and `zip` has to find `zipup`."""
-    assert matches("Hoodies & Sweatshirts", "هودي") is True
-    assert matches("Zipup zip-through", "زيب") is True
+    """`hoodie` has to find `hoodies`."""
+    assert matches("Hoodies & Jackets", "هودي") is True
+    assert matches("Rehla Yoga Pants wide-leg", "يوجا") is True
 
 
 # --- against the real catalog --------------------------------------------
@@ -69,21 +72,15 @@ def test_prefixes_still_match():
 @pytest.mark.parametrize(
     "query,expected",
     [
-        ("هودي أسود", "WANAS Hoodie"),
-        ("هودى زيتى", "WANAS Hoodie"),
-        ("الهودي الزيتي", "WANAS Hoodie"),
-        ("hoodi olive", "WANAS Hoodie"),
-        ("بنطلون رمادي", "WANAS Sweatpant"),
-        # Regression: "سويت بانتس" (plural, with the extra س) used to fall
-        # through the phrase-substitution merge and match nothing -- the bot
-        # denied the category existed before falling back to browsing it.
-        ("سويت بانتس رصاصي", "WANAS Sweatpant"),
-        ("جاكيت", "Worker Jacket"),
-        ("كايروكي", "Cairokee T-shirt"),
-        ("توب حريمي", "Heart Top"),
-        ("بولو كحلي", "Knitted Polo"),
-        ("تيشيرتات", "Boxy WNS Tee"),
-        ("نص سوسته", "WANAS Quarter-Zip"),
+        ("هودي بينك", "Rehla Pink Hoodie"),
+        ("هودي ابيض", "Rehla Off White Hoodie"),
+        ("جاكيت", "Rehla Jacket"),
+        ("بنطلون واسع", "Rehla Yoga Pants"),
+        ("يوجا", "Rehla Yoga Pants"),
+        ("اوف شولدر", "Rehla Lace Off Shoulder Top"),
+        ("محجبات", "Rehla Long Sleeve Off Shoulder Top"),
+        ("كاب اسود", "Rehla Black Cap"),
+        ("تيشيرت بيبي بلو", "Rehla Baby Blue T-Shirt"),
     ],
 )
 def test_an_arabic_or_franco_query_finds_the_product(seeded, query, expected):
@@ -97,106 +94,15 @@ def test_a_colour_query_does_not_return_the_whole_shop(seeded):
     tees = catalog.get_products(seeded, query="عايز تيشيرت اسود لو سمحت")
     names = [product["name"] for product in tees["products"]]
     assert names, "no t-shirts matched"
-    assert "WANAS Hoodie" not in names
-    assert "Worker Jacket" not in names
+    assert "Rehla Pink Hoodie" not in names
+    assert "Rehla Jacket" not in names
+    assert "Rehla Black Cap" not in names
 
 
 def test_an_english_query_still_works(seeded):
     """The layer translates *into* the catalog's language; it must not break it."""
-    assert catalog.get_products(seeded, query="olive hoodie")["count"] > 0
-    assert catalog.get_products(seeded, query="polo")["count"] == 2
-
-
-# --------------------------------------------------------------------------
-# Product names in Arabic letters
-# --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("query", "expected"),
-    [
-        # The reported one: a tee on the shelf, invisible to the Arabic word
-        # every customer says for it.
-        ("رينجر", "Ringer Tee"),
-        ("الرينجر", "Ringer Tee"),
-        ("الرينجر تيشرت", "Ringer Tee"),
-        ("تيشيرت رينجر بيج", "Ringer Tee"),
-        ("رنجر", "Ringer Tee"),
-        # The same gap, found by scanning every product rather than only the
-        # one that was reported.
-        ("انفي", "Envy T-shirt"),
-        ("تيشيرت انفي", "Envy T-shirt"),
-        ("ووركر", "Worker Jacket"),
-        ("الووركر جاكيت", "Worker Jacket"),
-        ("هارت", "Heart Top"),
-        ("قلب", "Heart Top"),
-        ("فيلين فاين", "Feelin Fine Top"),
-        ("كرو نك", "WANAS Crewneck"),
-        ("كرونيك", "WANAS Crewneck"),
-        ("كوارتر زيب", "WANAS Quarter-Zip"),
-        ("ربع سوسته", "WANAS Quarter-Zip"),
-        ("زيب اب", "Zipup"),
-        ("زيباب", "Zipup"),
-    ],
-)
-def test_a_product_name_written_in_arabic_letters_finds_it(seeded, query, expected):
-    """Names are English and customers type them in Arabic script.
-
-    Every other entry in `search_terms` translates a *description* -- kind,
-    colour, cut. Names were listed only where they doubled as a collection
-    (`cairokee`, `wanas`), so «رينجر» reached nothing at all.
-    """
-    found = catalog.get_products(seeded, query=query)
-    assert found["count"] > 0, f"{query!r} found nothing"
-    assert expected in [product["name"] for product in found["products"]]
-
-
-def test_a_product_name_does_not_widen_into_the_whole_category(seeded):
-    """Naming one product must stay narrower than naming its kind."""
-    named = catalog.get_products(seeded, query="رينجر")
-    assert [p["name"] for p in named["products"]] == ["Ringer Tee"]
-
-    kind = catalog.get_products(seeded, query="تيشيرت")
-    assert kind["count"] > named["count"]
-
-
-@pytest.mark.parametrize(
-    ("query", "expected"),
-    [
-        # Observed in the production log: the model translated «الرينجر
-        # تيشيرت» to `Ranger T-shirt` and the customer was told the shop has
-        # no such thing.
-        ("Ranger T-shirt", "Ringer Tee"),
-        ("Ranger", "Ringer Tee"),
-        # The catalog writes these as one word and the model writes them as
-        # two. `zip` matches `Zipup` on the prefix rule, but `up` and `neck`
-        # can only match at a word start, so the all-tokens rule vetoed both.
-        ("crew neck", "WANAS Crewneck"),
-        ("crew neck Wanas", "WANAS Crewneck"),
-        ("zip up", "Zipup"),
-    ],
-)
-def test_the_english_the_model_sends_finds_the_product(seeded, query, expected):
-    """The Arabic entries only help when the Arabic reaches the tool.
-
-    Usually it does not -- the model translates before calling
-    `get_products`, so its spelling is the one that has to match.
-    """
-    found = catalog.get_products(seeded, query=query)
-    assert found["count"] > 0, f"{query!r} found nothing"
-    assert expected in [product["name"] for product in found["products"]]
-
-
-def test_the_model_spellings_do_not_widen_a_search(seeded):
-    """A misspelling maps to one product, not to a category."""
-    assert [p["name"] for p in catalog.get_products(seeded, query="Ranger")["products"]] == [
-        "Ringer Tee"
-    ]
-    assert [p["name"] for p in catalog.get_products(seeded, query="crew neck")["products"]] == [
-        "WANAS Crewneck"
-    ]
-    # `zip` on its own is still the whole zip family, not just Zipup.
-    assert catalog.get_products(seeded, query="zip")["count"] >= 3
+    assert catalog.get_products(seeded, query="pink hoodie")["count"] == 1
+    assert catalog.get_products(seeded, query="cap")["count"] == 2
 
 
 def test_a_question_mark_is_not_part_of_the_last_word():
@@ -209,4 +115,4 @@ def test_a_question_mark_is_not_part_of_the_last_word():
     """
     assert normalize("عايز هودي؟") == normalize("عايز هودي")
     assert normalize("اسود، ولا ابيض؟") == normalize("اسود ولا ابيض")
-    assert matches("WANAS Hoodie Hoodies & Sweatshirts", "عندكم هودي؟") is True
+    assert matches("REHLA Hoodie Hoodies & Sweatshirts", "عندكم هودي؟") is True

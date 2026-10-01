@@ -142,7 +142,7 @@ def test_a_measurement_missing_from_one_size_is_still_a_column():
 
 
 def test_a_chart_with_no_diagram_on_disk_is_not_an_error():
-    """`wns-boxy-tee` is exactly this today: real measurements, no picture.
+    """`rehla-boxy-tee` is exactly this today: real measurements, no picture.
     The table is the part customers read."""
     assert size_charts.chart_image({"image": "data/size-charts/not-here.png"}) is None
     assert size_charts.chart_image({}) is None

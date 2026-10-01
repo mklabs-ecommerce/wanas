@@ -60,9 +60,9 @@ def test_collections_are_optional(seeded):
 
 
 def test_colour_is_a_variant_axis(seeded):
-    """One WANAS Hoodie in three colours, not three hoodies -- and it is
+    """One REHLA Hoodie in three colours, not three hoodies -- and it is
     priced per colour, which is why a product-level price is not quotable."""
-    hoodie = seeded.get(Product, "wanas-hoodie")
+    hoodie = seeded.get(Product, "rehla-hoodie")
     assert hoodie is not None
     assert sorted(hoodie.colors) == ["Black", "Grey", "Olive"]
     by_colour = {v.color: float(v.price) for v in hoodie.variants}
@@ -99,7 +99,7 @@ def test_size_charts_cover_every_product(seeded):
 
 
 def test_conditional_charts():
-    """worker-jacket is length-aware; wns-tops has no XL. Both are the cases a
+    """worker-jacket is length-aware; rehla-tops has no XL. Both are the cases a
     model would otherwise pattern-match its way past."""
     jacket = get_chart("worker-jacket")
     assert jacket["length_specific"] is True
@@ -107,16 +107,16 @@ def test_conditional_charts():
     assert applies["short_sleeve"] == "Short"
     assert applies["long_sleeve"] == "Long"
 
-    tops = get_chart("wns-tops")
+    tops = get_chart("rehla-tops")
     assert "length_specific" not in tops  # absent, and the tool fills in False
     assert sorted(tops["sizes"]) == ["L", "M", "S"]
 
 
 def test_image_paths_come_from_the_seed_not_from_the_handle(seeded):
     """The source handle is a meaningless Shopify leftover: the black tee
-    lives under a folder called `wanas-grey-t-shirt`."""
-    tee = seeded.get(Product, "boxy-wns-tee")
-    assert any("wanas-grey-t-shirt" in path for path in tee.images)
+    lives under a folder called `rehla-grey-t-shirt`."""
+    tee = seeded.get(Product, "boxy-rehla-tee")
+    assert any("rehla-grey-t-shirt" in path for path in tee.images)
     assert set(tee.color_images) <= set(tee.colors)
 
 
@@ -128,7 +128,7 @@ def test_governorates_seeded_with_blank_fees(seeded):
 
 
 def test_reimport_is_idempotent_and_preserves_stock(seeded):
-    variant = seeded.get(Variant, "wanas-hoodie-s-olive")
+    variant = seeded.get(Variant, "rehla-hoodie-s-olive")
     variant.stock_qty = 3
     seeded.commit()
 
@@ -139,7 +139,7 @@ def test_reimport_is_idempotent_and_preserves_stock(seeded):
     assert stats["products"] == 18
     assert stats["variants"] == 208
     # A re-run must not undo a sale or a staff stock edit.
-    assert seeded.get(Variant, "wanas-hoodie-s-olive").stock_qty == 3
+    assert seeded.get(Variant, "rehla-hoodie-s-olive").stock_qty == 3
     assert seeded.scalar(select(func.count()).select_from(Variant)) == 208
 
 
@@ -153,7 +153,7 @@ def test_reimport_preserves_a_fee_already_set(seeded):
 
 
 def test_variant_status_is_computed(seeded):
-    variant = seeded.get(Variant, "wanas-hoodie-s-olive")
+    variant = seeded.get(Variant, "rehla-hoodie-s-olive")
     variant.stock_qty = 0
     assert variant.status == "sold_out"
     variant.stock_qty = 2  # threshold is 2
@@ -187,8 +187,8 @@ def test_staff_password_round_trip(db):
 def test_order_and_queue_ids(db):
     from domain.services.ids import next_order_id, next_queue_id
 
-    assert next_order_id(db) == "WNS-1001"
-    assert next_order_id(db) == "WNS-1002"
+    assert next_order_id(db) == "RHL-1001"
+    assert next_order_id(db) == "RHL-1002"
     assert next_queue_id(db, "item_swap") == "SWAP-1"
     assert next_queue_id(db, "handoff") == "HO-2"
     assert next_queue_id(db, "alert") == "ALERT-3"

@@ -69,7 +69,7 @@ def _swap_request(session, to_variant_id, queue_id="Q-1"):
         status=QueueStatus.OPEN.value,
         channel=CHANNEL,
         external_id=WHO,
-        summary="WNS-1: swap Sync Tee (Olive, S)",
+        summary="RHL-1: swap Sync Tee (Olive, S)",
         payload={"channel": CHANNEL, "external_id": WHO,
                  "from_variant_id": "other-variant", "to_variant_id": to_variant_id},
     ))
@@ -77,7 +77,7 @@ def _swap_request(session, to_variant_id, queue_id="Q-1"):
     return queue_id
 
 
-def _sold(session, variant_id, order_id="WNS-SYNC-1"):
+def _sold(session, variant_id, order_id="RHL-SYNC-1"):
     client = Client(full_name="Sara", phone="201000000001", address="somewhere")
     session.add(client)
     session.flush()
@@ -141,11 +141,11 @@ def test_deleting_a_size_takes_the_dead_swap_target_off_the_queue(seeded, shopif
 
 def test_a_swap_pointing_somewhere_else_is_untouched(seeded, shopify):
     _product(seeded)
-    _swap_request(seeded, "wanas-hoodie-s-olive")
+    _swap_request(seeded, "rehla-hoodie-s-olive")
 
     sap.delete_variant(seeded, "sync-tee-m-olive")
 
-    assert _open_swap(seeded).payload["to_variant_id"] == "wanas-hoodie-s-olive"
+    assert _open_swap(seeded).payload["to_variant_id"] == "rehla-hoodie-s-olive"
 
 
 def test_a_swap_already_dealt_with_is_left_alone(seeded, shopify):

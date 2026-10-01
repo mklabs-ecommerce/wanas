@@ -38,7 +38,7 @@ def test_in_stock_colors_is_never_wider_than_colors(ctx):
 def test_sold_out_colourways_stay_described_but_are_not_offered(ctx):
     # Black and Grey are fully sold out in the seed; `colors` still names them,
     # which is correct -- what changed is that they cannot be offered.
-    product = _by_id(ctx, query="sweatpant")["wanas-sweatpant"]
+    product = _by_id(ctx, query="sweatpant")["rehla-sweatpant"]
     assert {"Black", "Grey", "Olive"} <= set(product["colors"])
     assert product["any_in_stock"] is True
     assert product["in_stock_colors"] == ["Olive"]

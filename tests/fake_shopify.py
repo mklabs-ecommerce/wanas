@@ -8,7 +8,7 @@ This is not a mock that records calls and asserts on them. It is a working
 shelf: it holds quantities, honours the compare-and-swap, and refuses to go
 negative, so the tests exercise the real reserve-and-compensate logic rather
 than a script of expected calls. Seeded from the same `Variant` rows the tests
-already assert against, so "Shopify agrees with wanas.db" is the default and a
+already assert against, so "Shopify agrees with rehla.db" is the default and a
 test that cares about disagreement creates it explicitly.
 """
 
@@ -99,7 +99,7 @@ class FakeShopify:
         this fake itself created.
 
         Run once, while fixtures are being built, so the default state is
-        "Shopify and wanas.db agree". A test that wants them to disagree --
+        "Shopify and rehla.db agree". A test that wants them to disagree --
         "someone bought the last one on the storefront" -- says so with `set`,
         which is also the only honest way to express it now: changing a
         `Variant` row no longer changes what the order path checks.
@@ -806,7 +806,7 @@ class FakeShopify:
                 if "compareAtPrice" in entry:
                     self.shelf[sku]["compare"] = Decimal(entry["compareAtPrice"]) if entry["compareAtPrice"] else None
                 # `shopify_product_import.py` re-keys a variant that has no
-                # SKU wanas.db recognises yet -- rename the shelf entry (and
+                # SKU rehla.db recognises yet -- rename the shelf entry (and
                 # everything else keyed by sku) rather than only tracking
                 # price/stock, the way every other caller of this mutation
                 # has used it until now.

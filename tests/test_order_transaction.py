@@ -3,7 +3,7 @@
 Two concurrent orders for the last unit: exactly one succeeds. A failure
 mid-transaction leaves no stock decremented and no order written.
 
-These run against whatever WANAS_TEST_DATABASE_URL points at (the suite's own
+These run against whatever REHLA_TEST_DATABASE_URL points at (the suite's own
 throwaway SQLite file unless it is set), so the same assertions can be re-run
 on PostgreSQL without editing anything here.
 """
@@ -22,7 +22,7 @@ from domain.services import (
     orders,
 )
 
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 @pytest.fixture()
@@ -96,13 +96,13 @@ def test_refusal_writes_nothing(cairo_rate, shopify):
     savepoint to roll back for us."""
     with session_scope() as session:
         session.get(Variant, VARIANT).stock_qty = 5
-        session.get(Variant, "wanas-hoodie-m-black").stock_qty = 0
+        session.get(Variant, "rehla-hoodie-m-black").stock_qty = 0
     shopify.set(VARIANT, qty=5)
-    shopify.set("wanas-hoodie-m-black", qty=0)
+    shopify.set("rehla-hoodie-m-black", qty=0)
 
     with session_scope() as session:
         carts.add(session, "whatsapp", "201999", VARIANT, 2)
-        carts.add(session, "whatsapp", "201999", "wanas-hoodie-m-black", 1)
+        carts.add(session, "whatsapp", "201999", "rehla-hoodie-m-black", 1)
         result = orders.place_order(
             session,
             channel="whatsapp",
@@ -114,7 +114,7 @@ def test_refusal_writes_nothing(cairo_rate, shopify):
         )
 
     assert result["error"] == "items_out_of_stock"
-    assert [i["variant_id"] for i in result["items"]] == ["wanas-hoodie-m-black"]
+    assert [i["variant_id"] for i in result["items"]] == ["rehla-hoodie-m-black"]
     # The successful decrement on the first line was rolled back with it.
     assert _stock() == 5
     with SessionLocal() as session:
@@ -168,7 +168,7 @@ def test_successful_order_decrements_and_clears_the_cart(cairo_rate):
             contact_phone="01077777777",
         )
 
-    assert result["order_id"] == "WNS-1001"
+    assert result["order_id"] == "RHL-1001"
     assert result["status"] == "Confirmed"
     assert result["payment_method"] == "cash_on_delivery"
     assert result["subtotal"] == 1300  # 2 x 650
@@ -179,13 +179,13 @@ def test_successful_order_decrements_and_clears_the_cart(cairo_rate):
 
     with SessionLocal() as session:
         assert carts.is_empty(session, "whatsapp", "201777")
-        order = session.get(Order, "WNS-1001")
+        order = session.get(Order, "RHL-1001")
         assert order.governorate == "Cairo"
         assert order.payment_status == "pending"
         item = order.items[0]
         # Snapshots, not joins: the packing slip has to survive a rename.
         assert (item.product_name, item.size, item.color, item.length) == (
-            "WANAS Hoodie",
+            "REHLA Hoodie",
             "S",
             "Olive",
             None,
@@ -208,7 +208,7 @@ def test_order_ids_are_sequential_from_1001(cairo_rate):
                     contact_phone=f"0106660000{n}",
                 )["order_id"]
             )
-    assert ids == ["WNS-1001", "WNS-1002", "WNS-1003"]
+    assert ids == ["RHL-1001", "RHL-1002", "RHL-1003"]
 
 
 def test_shipping_fee_is_copied_not_looked_up(cairo_rate):

@@ -17,7 +17,7 @@ from domain.models import Order, QueueKind, ShippingRate, Variant
 from domain.services import queues
 
 WHO = "201000000001"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 @pytest.fixture()
@@ -110,7 +110,7 @@ def test_separate_identities_have_separate_conversations(client):
 def test_a_refusal_is_surfaced_with_its_payload(client):
     """`out_of_stock` is only actionable with its alternatives, so the UI gets
     the whole refusal, not just the code."""
-    reply = send(client, "add wanas-hoodie-m-olive")
+    reply = send(client, "add rehla-hoodie-m-olive")
     refusal = reply["tools"][0]
     assert refusal["name"] == "add_to_cart"
     assert refusal["error"] == "out_of_stock"
@@ -118,20 +118,20 @@ def test_a_refusal_is_surfaced_with_its_payload(client):
 
 
 def test_a_successful_tool_call_is_reported_without_an_error(client):
-    reply = send(client, "variants wanas-hoodie")
+    reply = send(client, "variants rehla-hoodie")
     assert reply["tools"][0]["name"] == "get_variants"
     assert reply["tools"][0]["error"] is None
 
 
 def test_a_size_chart_comes_back_as_an_attachment(client):
-    reply = send(client, "size wanas-sweatpant")
+    reply = send(client, "size rehla-sweatpant")
     assert reply["attachments"] == ["data/size-charts/wide-leg-sweatpants.png"]
     # ...and the numbers are in the text too, for anyone who never opens it.
     assert "31" in reply["text"]
 
 
 def test_the_attachment_is_actually_servable(client):
-    reply = send(client, "size wanas-sweatpant")
+    reply = send(client, "size rehla-sweatpant")
     media = client.get("/harness/media", params={"path": reply["attachments"][0]})
     assert media.status_code == 200
     assert media.headers["content-type"].startswith("image/")
@@ -165,7 +165,7 @@ def test_an_order_surfaces_its_proactive_confirmation(client, seeded):
     assert "710" in body
 
     with SessionLocal() as db:
-        assert db.get(Order, "WNS-1001").status == "Confirmed"
+        assert db.get(Order, "RHL-1001").status == "Confirmed"
         assert db.get(Variant, VARIANT).stock_qty == 9
 
 

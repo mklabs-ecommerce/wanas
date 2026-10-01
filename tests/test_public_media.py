@@ -21,7 +21,7 @@ from common import bidi
 from config.settings import settings
 
 SECRET = "test-media-secret"
-BASE = "https://wanas.example.com"
+BASE = "https://rehla.example.com"
 CHART = "data/size-charts/wide-leg-sweatpants.png"
 
 

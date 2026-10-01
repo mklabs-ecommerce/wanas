@@ -32,8 +32,8 @@ from domain.services import (
 from integrations.shopify import webhooks as hook
 
 SECRET = "test-shopify-secret"
-SHOP = "wanas-test.myshopify.com"
-VARIANT = "wanas-hoodie-s-olive"
+SHOP = "rehla-test.myshopify.com"
+VARIANT = "rehla-hoodie-s-olive"
 WHO = "201555444333"
 SHOPIFY_NUMERIC_ID = 1234567890
 
@@ -318,7 +318,7 @@ def _manual_product(shopify, title="Loose Cargo Pants"):
     """A product on the store that no dashboard create put there."""
     gid = shopify.shopify_create_product(
         title=title, description="", category="Joggers & Sweatpants",
-        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Rehla",
     )
     shopify.shopify_create_variants(
         gid,
@@ -332,7 +332,7 @@ def _manual_product(shopify, title="Loose Cargo Pants"):
 
 
 def test_a_product_created_in_shopify_admin_reaches_the_bot(post, seeded, shopify):
-    """The gap: the bot's search reads wanas.db and never Shopify's live
+    """The gap: the bot's search reads rehla.db and never Shopify's live
     product list, so until this lands the product exists for staff and does
     not exist for customers. It used to wait for the next boot."""
     from domain.services.catalog import get_products
@@ -351,7 +351,7 @@ def test_an_update_is_what_lands_a_product_whose_create_was_a_placeholder(post, 
     why products/update is subscribed too."""
     gid = shopify.shopify_create_product(
         title="Finished Tee", description="", category="T-Shirts",
-        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Rehla",
     )
     assert post("products/create", product_body(gid), delivery_id="whid-p1").status_code == 200
     seeded.expire_all()

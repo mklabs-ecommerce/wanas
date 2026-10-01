@@ -108,11 +108,11 @@ def test_a_chart_shopify_already_agrees_with_is_skipped(seeded):
     file_chart = local_charts.get_chart("oversized-hoodie")
     assert file_chart is not None, "fixture check"
 
-    nodes = [node("gid://p/1", skus_of(seeded, "wanas-hoodie"), data=storefront_payload(file_chart))]
+    nodes = [node("gid://p/1", skus_of(seeded, "rehla-hoodie"), data=storefront_payload(file_chart))]
     plan = size_chart_import.build_plan(seeded, nodes)
 
     assert plan["products"] == []
-    assert plan["unchanged"] == ["wanas-hoodie"]
+    assert plan["unchanged"] == ["rehla-hoodie"]
 
 
 def test_an_edited_measurement_does_come_back(seeded):
@@ -121,7 +121,7 @@ def test_an_edited_measurement_does_come_back(seeded):
     payload = storefront_payload(file_chart)
     payload["sizes"][0]["values"][payload["measurements"][0]["key"]] = 999
 
-    nodes = [node("gid://p/1", skus_of(seeded, "wanas-hoodie"), data=payload)]
+    nodes = [node("gid://p/1", skus_of(seeded, "rehla-hoodie"), data=payload)]
     plan = size_chart_import.build_plan(seeded, nodes)
     size_chart_import.apply_plan(seeded, plan)
 
@@ -141,12 +141,12 @@ def test_the_bot_then_quotes_the_shopify_numbers(seeded):
     key = payload["measurements"][0]["key"]
     payload["sizes"][0]["values"][key] = 999
     plan = size_chart_import.build_plan(
-        seeded, [node("gid://p/1", skus_of(seeded, "wanas-hoodie"), data=payload)]
+        seeded, [node("gid://p/1", skus_of(seeded, "rehla-hoodie"), data=payload)]
     )
     size_chart_import.apply_plan(seeded, plan)
 
     ctx = ToolContext(session=seeded, channel="whatsapp", external_id="201000000001")
-    result = call_tool(ctx, "get_size_chart", {"product_id": "wanas-hoodie"})
+    result = call_tool(ctx, "get_size_chart", {"product_id": "rehla-hoodie"})
     assert result["sizes"][payload["sizes"][0]["name"]][key] == 999
 
 
@@ -179,31 +179,31 @@ def test_a_products_own_picture_lands_where_the_bot_looks_for_it(seeded):
     """A chart that is only a picture -- no measurements published -- is what
     `Product.size_chart_image` is for, and the bot sends it as the whole
     answer."""
-    product = seeded.get(Product, "wanas-hoodie")
+    product = seeded.get(Product, "rehla-hoodie")
     product.size_chart = None
     seeded.flush()
 
     url = "https://cdn.shopify.com/chart.png"
     plan = size_chart_import.build_plan(
-        seeded, [node("gid://p/1", skus_of(seeded, "wanas-hoodie"), image=url)]
+        seeded, [node("gid://p/1", skus_of(seeded, "rehla-hoodie"), image=url)]
     )
     size_chart_import.apply_plan(seeded, plan)
 
-    assert seeded.get(Product, "wanas-hoodie").size_chart_image == url
+    assert seeded.get(Product, "rehla-hoodie").size_chart_image == url
 
 
 def test_a_picture_alongside_a_chart_goes_on_the_chart(seeded):
     payload = storefront_payload({**CHART, "chart_id": None})
     url = "https://cdn.shopify.com/chart.png"
     plan = size_chart_import.build_plan(
-        seeded, [node("gid://p/1", skus_of(seeded, "wanas-hoodie"), data=payload, image=url)]
+        seeded, [node("gid://p/1", skus_of(seeded, "rehla-hoodie"), data=payload, image=url)]
     )
     size_chart_import.apply_plan(seeded, plan)
 
-    row = seeded.get(SizeChart, "shopify-wanas-hoodie")
+    row = seeded.get(SizeChart, "shopify-rehla-hoodie")
     assert row.image_url == url
     assert row.image_file_gid == "gid://shopify/MediaImage/1"
-    assert seeded.get(Product, "wanas-hoodie").size_chart_image is None
+    assert seeded.get(Product, "rehla-hoodie").size_chart_image is None
 
 
 def test_a_picture_does_not_displace_a_chart_the_product_already_has(seeded):
@@ -212,7 +212,7 @@ def test_a_picture_does_not_displace_a_chart_the_product_already_has(seeded):
     can quote."""
     plan = size_chart_import.build_plan(
         seeded,
-        [node("gid://p/1", skus_of(seeded, "wanas-hoodie"), image="https://cdn/x.png")],
+        [node("gid://p/1", skus_of(seeded, "rehla-hoodie"), image="https://cdn/x.png")],
     )
     assert plan["products"] == []
 
@@ -234,14 +234,14 @@ def test_a_generic_file_reference_is_read_too():
 def test_a_product_with_no_metafields_is_left_alone(seeded):
     """Absence in Shopify is not a statement that the local chart is wrong --
     the twelve shipped charts were never published from Admin at all."""
-    before = seeded.get(Product, "wanas-hoodie").size_chart
+    before = seeded.get(Product, "rehla-hoodie").size_chart
     plan = size_chart_import.build_plan(
-        seeded, [node("gid://p/1", skus_of(seeded, "wanas-hoodie"))]
+        seeded, [node("gid://p/1", skus_of(seeded, "rehla-hoodie"))]
     )
     size_chart_import.apply_plan(seeded, plan)
 
     assert plan["products"] == []
-    assert seeded.get(Product, "wanas-hoodie").size_chart == before
+    assert seeded.get(Product, "rehla-hoodie").size_chart == before
 
 
 def test_a_shopify_product_matching_no_local_sku_is_reported_not_guessed(seeded):
@@ -255,7 +255,7 @@ def test_a_shopify_product_matching_no_local_sku_is_reported_not_guessed(seeded)
 def test_unparseable_json_is_logged_and_skipped(seeded, caplog):
     """A metafield somebody hand-edited into invalid JSON is not a reason to
     stop, and it is certainly not a reason to write half a chart."""
-    bad = node("gid://p/1", skus_of(seeded, "wanas-hoodie"))
+    bad = node("gid://p/1", skus_of(seeded, "rehla-hoodie"))
     bad["data"] = "{not json"
     with caplog.at_level("WARNING"):
         plan = size_chart_import.build_plan(seeded, [bad])
@@ -316,10 +316,10 @@ def test_the_read_follows_every_page(monkeypatch):
 def test_applying_twice_changes_nothing_the_second_time(seeded):
     """Idempotent, like every other reconcile in here."""
     payload = storefront_payload({**CHART, "chart_id": None})
-    nodes = [node("gid://p/1", skus_of(seeded, "wanas-hoodie"), data=payload)]
+    nodes = [node("gid://p/1", skus_of(seeded, "rehla-hoodie"), data=payload)]
 
     size_chart_import.apply_plan(seeded, size_chart_import.build_plan(seeded, nodes))
     second = size_chart_import.build_plan(seeded, nodes)
 
     assert second["products"] == []
-    assert second["unchanged"] == ["wanas-hoodie"]
+    assert second["unchanged"] == ["rehla-hoodie"]

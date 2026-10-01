@@ -30,27 +30,37 @@ def test_the_prompt_quotes_the_fee_the_rate_table_holds(seeded):
     set_all_fees(seeded, 125)
     prompt = build_system_prompt(session=seeded)
     assert "«125 جنيه لكل محافظات مصر»" in prompt
-    assert "110 جنيه" not in prompt
+    assert "85 جنيه" not in prompt
     # ...including the layout example, which used to price Cairo at 60.
     assert "• الشحن للقاهرة — 125 جنيه" in prompt
 
 
 def test_fees_that_differ_are_a_range_not_one_of_them(seeded):
-    set_all_fees(seeded, 110)
-    seeded.get(ShippingRate, "Cairo").fee = Decimal("80")
+    set_all_fees(seeded, 85)
+    seeded.get(ShippingRate, "Cairo").fee = Decimal("70")
     seeded.flush()
-    assert shop_facts.shipping_line(seeded) == "من 80 لـ 110 جنيه حسب المحافظة"
+    assert shop_facts.shipping_line(seeded) == "70 جنيه للقاهرة، و85 جنيه لباقي المحافظات"
+
+
+def test_three_different_fees_are_a_range(seeded):
+    set_all_fees(seeded, 85)
+    seeded.get(ShippingRate, "Cairo").fee = Decimal("70")
+    seeded.get(ShippingRate, "Aswan").fee = Decimal("100")
+    seeded.flush()
+    assert shop_facts.shipping_line(seeded) == "من 70 لـ 100 جنيه حسب المحافظة"
 
 
 def test_without_a_table_the_shops_defaults_are_used():
-    assert shop_facts.shipping_line() == "110 جنيه لكل محافظات مصر"
-    assert "«110 جنيه لكل محافظات مصر»" in SYSTEM_PROMPT
+    assert shop_facts.shipping_line() == "70 جنيه للقاهرة والجيزة، و85 جنيه لباقي المحافظات"
+    assert f"«{shop_facts.shipping_line()}»" in SYSTEM_PROMPT
     assert "⟦" not in SYSTEM_PROMPT, "every slot is filled"
 
 
 def test_the_exchange_terms_are_orders_own_numbers():
-    assert f"خلال {EXCHANGE_WINDOW_HOURS} ساعة" in SYSTEM_PROMPT
-    assert f"وزيادة {int(EXCHANGE_SURCHARGE)} جنيه" in SYSTEM_PROMPT
+    assert EXCHANGE_WINDOW_HOURS == shop_facts.EXCHANGE_DAYS * 24
+    assert f"خلال {shop_facts.EXCHANGE_DAYS} يوم من الاستلام" in SYSTEM_PROMPT
+    assert f"خلال {shop_facts.RETURN_DAYS} أيام من الاستلام" in SYSTEM_PROMPT
+    assert int(EXCHANGE_SURCHARGE) == 0, "Rehla charges nothing extra for an exchange"
 
 
 def test_the_public_answer_and_the_dm_say_the_same_fee(seeded):

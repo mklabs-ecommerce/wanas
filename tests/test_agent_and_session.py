@@ -20,7 +20,7 @@ from domain.services import (
 
 CHANNEL = "whatsapp"
 WHO = "201000000001"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 def reply_with(name: str, arguments: dict | None = None) -> ModelReply:
@@ -132,8 +132,8 @@ def test_all_tool_calls_in_one_turn_run_together(seeded):
         [
             ModelReply(
                 tool_calls=[
-                    {"id": "a", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}},
-                    {"id": "b", "name": "get_variants", "arguments": {"product_id": "wanas-polo"}},
+                    {"id": "a", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}},
+                    {"id": "b", "name": "get_variants", "arguments": {"product_id": "rehla-polo"}},
                 ]
             ),
             ModelReply(text="الاتنين موجودين"),
@@ -155,7 +155,7 @@ def test_the_loop_is_capped(seeded):
 def test_attachments_are_collected_not_pasted_into_the_text(seeded):
     provider = ScriptedProvider(
         [
-            reply_with("get_size_chart", {"product_id": "wanas-sweatpant"}),
+            reply_with("get_size_chart", {"product_id": "rehla-sweatpant"}),
             ModelReply(text="مقاس M: الوسط 34 سم، مقاس الهدوم مفرودة"),
         ]
     )
@@ -249,7 +249,7 @@ def test_a_stock_check_promise_never_ends_the_turn(seeded):
     provider = ScriptedProvider(
         [
             ModelReply(text="تمام يا فندم، ثواني بس هشوفلك المتاح في اللون ده وأقولك"),
-            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            reply_with("get_variants", {"product_id": "rehla-hoodie"}),
             ModelReply(text="الزيتي متاح في S و M بـ 650 جنيه"),
         ]
     )
@@ -286,7 +286,7 @@ def test_promising_photos_and_attaching_none_is_retried(seeded):
     provider = ScriptedProvider(
         [
             ModelReply(text="تمام، هبعتلك صور كل الألوان دلوقتي"),
-            reply_with("get_variants", {"product_id": "wanas-hoodie", "more_images": True}),
+            reply_with("get_variants", {"product_id": "rehla-hoodie", "more_images": True}),
             ModelReply(text="دي كل الألوان المتاحة"),
         ]
     )
@@ -316,7 +316,7 @@ def test_a_reply_that_really_attached_photos_is_not_touched(seeded):
     pictures *while sending them* is the normal, correct case."""
     provider = ScriptedProvider(
         [
-            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
+            reply_with("get_variants", {"product_id": "rehla-hoodie"}),
             ModelReply(text="اتفضل صورة الهودي"),
         ]
     )
@@ -342,7 +342,7 @@ def test_answering_a_customers_own_photo_is_not_a_broken_promise(seeded):
         seeded,
         CHANNEL,
         WHO,
-        "قراءة آلية للصورة: أقرب منتج عندنا هو WANAS HOODIE.",
+        "قراءة آلية للصورة: أقرب منتج عندنا هو REHLA HOODIE.",
         provider=provider,
         images=["data/inbound/whatsapp/x.jpg"],
     )
@@ -363,7 +363,7 @@ def test_a_real_answer_that_mentions_a_promise_word_is_sent_untouched(seeded):
         "الأسود متاح في S و M بـ 650 جنيه، ولو حبيت أي لون تاني قولي وأشوفلك"
     )
     provider = ScriptedProvider(
-        [reply_with("get_variants", {"product_id": "wanas-hoodie"}), ModelReply(text=answer)]
+        [reply_with("get_variants", {"product_id": "rehla-hoodie"}), ModelReply(text=answer)]
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "الأسود؟", provider=provider)
     assert reply.text == answer
@@ -471,8 +471,8 @@ def test_full_order_through_the_harness_entry_point(seeded):
         return handle_message(CHANNEL, WHO, text, db=seeded, provider=provider, **kw)
 
     assert "T-Shirts" in say("categories").text
-    assert "wanas-hoodie" in say("products hoodie").text
-    assert VARIANT in say("variants wanas-hoodie").text
+    assert "rehla-hoodie" in say("products hoodie").text
+    assert VARIANT in say("variants rehla-hoodie").text
     assert "الشنطة" in say(f"add {VARIANT} 2").text
     assert "60" in say("ship القاهرة").text
 
@@ -487,17 +487,17 @@ def test_full_order_through_the_harness_entry_point(seeded):
     confirmation = notifications.get_sender(CHANNEL).sent[-1].text
     assert "1360" in confirmation  # 2 x 650 + 60
 
-    order = seeded.get(Order, "WNS-1001")
+    order = seeded.get(Order, "RHL-1001")
     assert order.status == "Confirmed"
     assert order.items[0].quantity == 2
     assert seeded.get(SessionRow, (CHANNEL, WHO)) is not None
 
     # The reference the customer can quote to staff, never the internal id --
-    # a reply that names `WNS-1001` is corrected before it leaves.
+    # a reply that names `RHL-1001` is corrected before it leaves.
     orders_reply = say("orders").text
-    assert "#1001" in orders_reply and "WNS-1001" not in orders_reply
-    assert "710" in say(f"qty WNS-1001 {VARIANT} 1").text
-    assert "اتلغى" in say("cancel WNS-1001").text
+    assert "#1001" in orders_reply and "RHL-1001" not in orders_reply
+    assert "710" in say(f"qty RHL-1001 {VARIANT} 1").text
+    assert "اتلغى" in say("cancel RHL-1001").text
 
 
 def test_sizing_question_sends_the_chart_image(seeded):
@@ -535,8 +535,8 @@ def test_not_knowing_your_size_gets_the_chart_not_the_fallback(seeded):
     """
     provider = ScriptedProvider(
         [
-            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
-            ModelReply(text="WANAS Hoodie موجود، قولي اللون"),
+            reply_with("get_variants", {"product_id": "rehla-hoodie"}),
+            ModelReply(text="REHLA Hoodie موجود، قولي اللون"),
             # No product_id: the customer's question never named one.
             reply_with("get_size_chart"),
             ModelReply(text="مقاس M عرضه 56 سم والطول 70 سم، قيسها على هدومك"),
@@ -574,8 +574,8 @@ def test_a_wrong_product_id_is_refused_never_resolved(seeded):
     garment's measurements -- confident, precise and wrong."""
     provider = ScriptedProvider(
         [
-            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
-            ModelReply(text="WANAS Hoodie موجود"),
+            reply_with("get_variants", {"product_id": "rehla-hoodie"}),
+            ModelReply(text="REHLA Hoodie موجود"),
             reply_with("get_size_chart", {"product_id": "no-such-product"}),
             ModelReply(text="معلش مش لاقي المنتج ده"),
         ]
@@ -592,8 +592,8 @@ def test_an_implicit_chart_follows_the_product_not_the_first_one_asked(seeded):
     product's chart."""
     provider = ScriptedProvider(
         [
-            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
-            ModelReply(text="WANAS Hoodie"),
+            reply_with("get_variants", {"product_id": "rehla-hoodie"}),
+            ModelReply(text="REHLA Hoodie"),
             reply_with("get_size_chart"),
             ModelReply(text="أهو الجدول"),
             reply_with("get_variants", {"product_id": "ringer-tee"}),
@@ -615,8 +615,8 @@ def test_the_last_resort_names_the_product_instead_of_forgetting_it(seeded):
     half that read as amnesia. It asks only for what is still missing."""
     provider = ScriptedProvider(
         [
-            reply_with("get_variants", {"product_id": "wanas-hoodie"}),
-            ModelReply(text="WANAS Hoodie موجود"),
+            reply_with("get_variants", {"product_id": "rehla-hoodie"}),
+            ModelReply(text="REHLA Hoodie موجود"),
             ModelReply(text="ثواني هشوفلك"),
             ModelReply(text="هقولك دلوقتي"),
             ModelReply(text="لحظة هتأكدلك"),
@@ -627,7 +627,7 @@ def test_the_last_resort_names_the_product_instead_of_forgetting_it(seeded):
 
     assert reply.error == "dangling_promise"
     assert reply.text != agent.PROMISE_FALLBACK
-    assert "WANAS Hoodie" in reply.text
+    assert "REHLA Hoodie" in reply.text
 
 
 def test_the_last_resort_stays_context_free_when_nothing_was_established(seeded):
@@ -651,14 +651,14 @@ def test_the_fallback_carries_the_colour_when_one_was_picked(seeded):
         msg.user("عايز الهودي الزيتي"),
         msg.assistant(
             "",
-            [{"id": "c1", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie", "color": "Olive"}}],
+            [{"id": "c1", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie", "color": "Olive"}}],
         ),
         msg.tool_results(
-            [{"id": "c1", "name": "get_variants", "content": {"product_id": "wanas-hoodie", "name": "WANAS Hoodie"}}]
+            [{"id": "c1", "name": "get_variants", "content": {"product_id": "rehla-hoodie", "name": "REHLA Hoodie"}}]
         ),
     ]
     assert agent.promise_fallback(history) == agent.PROMISE_FALLBACK_WITH_COLOR.format(
-        product="WANAS Hoodie", color="Olive"
+        product="REHLA Hoodie", color="Olive"
     )
 
 

@@ -30,7 +30,7 @@ from domain.services import carts, identities, notifications, orders, queues
 
 CHANNEL = "whatsapp"
 WHO = "201000000001"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 def _recording():
@@ -171,7 +171,7 @@ def test_a_status_push_outside_the_window_uses_an_approved_template(cairo_rate, 
     monkeypatch.setattr(
         notifications,
         "settings",
-        dataclasses.replace(settings, whatsapp_template_order_update="wanas_order_update"),
+        dataclasses.replace(settings, whatsapp_template_order_update="rehla_order_update"),
     )
     sender = notifications.LogSender()
     notifications.register_sender(sender)
@@ -186,7 +186,7 @@ def test_a_status_push_outside_the_window_uses_an_approved_template(cairo_rate, 
         _stop_recording()
         notifications.register_sender(notifications.LogSender())
 
-    assert [m.template for m in sender.sent] == ["wanas_order_update"]
+    assert [m.template for m in sender.sent] == ["rehla_order_update"]
 
     with SessionLocal() as session:
         bubbles = display_history(session_store.transcript(session, CHANNEL, WHO))
@@ -205,7 +205,7 @@ def test_the_feedback_request_obeys_the_window_too(cairo_rate, monkeypatch):
         "settings",
         dataclasses.replace(
             settings,
-            whatsapp_template_order_update="wanas_order_update",
+            whatsapp_template_order_update="rehla_order_update",
             whatsapp_template_feedback_request="",
         ),
     )
@@ -225,7 +225,7 @@ def test_the_feedback_request_obeys_the_window_too(cairo_rate, monkeypatch):
 
     # The three status pushes went as the approved template; the rating ask
     # has none, so it was not sent at all.
-    assert [m.template for m in sender.sent] == ["wanas_order_update"] * 3
+    assert [m.template for m in sender.sent] == ["rehla_order_update"] * 3
 
     with SessionLocal() as session:
         bubbles = display_history(session_store.transcript(session, CHANNEL, WHO))

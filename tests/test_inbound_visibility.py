@@ -202,7 +202,7 @@ def test_an_unanswered_message_keeps_its_provisional_mark(seeded):
 def test_a_message_type_with_no_handler_is_recorded_not_dropped(client, configured, sent, caplog):
     """`reaction`, `system`, anything Meta adds later. No reply -- but it is
     named at WARNING with the number on it, and it shows in the dashboard."""
-    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+    with caplog.at_level("WARNING", logger="rehla.channel.whatsapp"):
         assert post(client, webhook_body("", message_type="reaction")).status_code == 200
     adapter.dispatcher.wait_idle()
 
@@ -284,7 +284,7 @@ def test_a_delivery_with_no_message_says_so_with_its_shape(client, configured, c
             }
         ],
     }
-    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+    with caplog.at_level("WARNING", logger="rehla.channel.whatsapp"):
         assert post(client, body).status_code == 200
 
     assert "no inbound message extracted" in caplog.text
@@ -297,7 +297,7 @@ def test_the_shape_log_never_carries_what_the_customer_wrote(client, configured,
     body = webhook_body("رقم حسابي السري")
     body["entry"][0]["changes"][0]["value"]["messages"][0].pop("from")
 
-    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+    with caplog.at_level("WARNING", logger="rehla.channel.whatsapp"):
         assert post(client, body).status_code == 200
     adapter.dispatcher.wait_idle()
 
@@ -309,7 +309,7 @@ def test_a_message_with_no_sender_is_named_rather_than_dropped(client, configure
     body = webhook_body("hi", message_id="wamid.nosender")
     body["entry"][0]["changes"][0]["value"]["messages"][0].pop("from")
 
-    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+    with caplog.at_level("WARNING", logger="rehla.channel.whatsapp"):
         assert post(client, body).status_code == 200
 
     assert "wamid.nosender" in caplog.text

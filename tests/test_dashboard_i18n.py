@@ -356,8 +356,8 @@ def test_the_canned_customer_replies_are_never_wrapped(page):
 
 
 def test_the_brand_name_is_not_translated(page):
-    """It is a name, not a label: 'Wanas Gallery' in both languages."""
-    assert 'class="name" dir="ltr">Wanas Gallery<' in page
+    """It is a name, not a label: 'Rehla' in both languages."""
+    assert 'class="name" dir="ltr">Rehla<' in page
     assert "ونس جاليري" not in page
 
 
@@ -374,7 +374,7 @@ def test_direction_is_set_before_first_paint(page):
     """Flipping `dir` after the page has drawn swings the whole layout in
     front of the reader, so it happens in a head script, like the theme."""
     head = page[: page.index("</head>")]
-    assert 'localStorage.getItem("wanas.lang")' in head
+    assert 'localStorage.getItem("rehla.lang")' in head
     assert 'root.dir = lang === "en" ? "ltr" : "rtl"' in head
 
 
@@ -393,8 +393,8 @@ def test_the_stylesheet_uses_logical_properties_only(page):
 
 
 def test_both_pages_share_one_language_key(page):
-    assert '"wanas.lang"' in page
-    assert '"wanas.lang"' in LOGIN.read_text(encoding="utf-8")
+    assert '"rehla.lang"' in page
+    assert '"rehla.lang"' in LOGIN.read_text(encoding="utf-8")
 
 
 def test_the_login_page_translates_its_own_strings():

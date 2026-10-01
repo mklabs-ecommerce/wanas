@@ -14,7 +14,7 @@ from domain.db import SessionLocal, engine, session_scope
 from domain.models import Base, Variant
 from domain.schema_drift import add_column_sql, addable, apply_additive, detect, log_drift
 
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 def test_a_matching_schema_has_no_drift(db):
@@ -39,7 +39,7 @@ def test_the_drift_is_logged_as_an_error_with_the_fix(db, caplog):
     db.execute(text("ALTER TABLE orders DROP COLUMN source_external_id"))
     db.commit()
     try:
-        with caplog.at_level("ERROR", logger="wanas.schema"):
+        with caplog.at_level("ERROR", logger="rehla.schema"):
             drift = log_drift(engine)
 
         assert not drift.clean
@@ -79,7 +79,7 @@ def test_apply_additive_puts_a_missing_column_back(db, caplog):
     db.execute(text("ALTER TABLE orders DROP COLUMN source_external_id"))
     db.commit()
     try:
-        with caplog.at_level("WARNING", logger="wanas.schema"):
+        with caplog.at_level("WARNING", logger="rehla.schema"):
             ran = apply_additive(engine)
 
         assert len(ran) == 1 and "source_external_id" in ran[0]

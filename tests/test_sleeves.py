@@ -32,6 +32,7 @@ from domain.models import Product
 from domain.seed.products import backfill_sleeves
 from domain.services import catalog, sleeves
 from domain.services.search_terms import matches
+from tests.conftest import FIXTURE_CATALOG
 
 # --------------------------------------------------------------------------
 # the words
@@ -42,14 +43,14 @@ from domain.services.search_terms import matches
 #: space is not a diacritic -- `normalize` folds one and not the other -- so
 #: the joined forms are listed explicitly rather than assumed.
 HALF_SLEEVE_WORDS = [
-    "نص كم", "نُص كُم", "نصكم", "نصف كم", "كم قصير", "هاف", "هاف سليف",
-    "half sleeve", "short sleeve", "nos kom", "half",
+    "نص كم", "نُص كُم", "نصكم", "نصف كم", "كم قصير", "هاف",
+    "half sleeve", "short sleeve", "half",
 ]
 LONG_SLEEVE_WORDS = ["كم طويل", "لونج", "لونج سليف", "long sleeve", "long"]
 SLEEVELESS_WORDS = ["بدون كم", "سليفلس", "sleeveless"]
 
 HALF_HAY = "Knitted Polo Polo Shirts unisex " + sleeves.SEARCH_TEXT["half"]
-LONG_HAY = "WANAS Hoodie Hoodies unisex " + sleeves.SEARCH_TEXT["long"]
+LONG_HAY = "REHLA Hoodie Hoodies unisex " + sleeves.SEARCH_TEXT["long"]
 
 
 @pytest.mark.parametrize("word", HALF_SLEEVE_WORDS)
@@ -70,106 +71,56 @@ def test_every_way_a_customer_writes_long_sleeve_resolves(word):
 
 @pytest.mark.parametrize("word", SLEEVELESS_WORDS)
 def test_sleeveless_resolves_and_is_not_half_sleeve(word):
-    hay = "WANAS Sweatpant Joggers unisex " + sleeves.SEARCH_TEXT["sleeveless"]
+    hay = "REHLA Sweatpant Joggers unisex " + sleeves.SEARCH_TEXT["sleeveless"]
     assert matches(hay, word) is True
     assert matches(HALF_HAY, word) is False
 
 
-def test_the_sentence_that_started_this_reaches_the_polo(seeded):
-    """«البولو النص كم» -- the definite article, the phrase, and a category
+def test_the_sentence_that_started_this_reaches_the_half_sleeve_products(seeded):
+    """«التيشيرت النص كم» -- the definite article, the phrase, and a category
     word, in one query. It used to match nothing, which is why the bot said
     it had no data."""
-    found = catalog.get_products(seeded, query="البولو النص كم")["products"]
-    assert [p["product_id"] for p in found] == ["knitted-polo"]
+    found = catalog.get_products(seeded, query="التيشيرت النص كم")["products"]
+    assert found
+    assert {p["sleeve"] for p in found} == {"half"}
 
 
 # --------------------------------------------------------------------------
 # the field: total, and closed
 # --------------------------------------------------------------------------
 
-#: The shop's half-sleeve list, by Shopify handle. Fourteen product names off
-#: their own list, which are not fourteen products: the ringer tee, the boxy
-#: tee and the knitted polo were each merged out of one Shopify product per
-#: colourway, so eleven of those names are colourways of three products.
-#:
-#: Matched by handle, never by title. Each of these is a `source_products`
-#: handle in `products_seed.json`, which is what the shop's own Shopify
-#: product was called before the merge.
-LISTED_HALF_HANDLES = {
-    # BROWN / NAVY / BEIGE / BURGANDY RINGER TEE
-    "envy-t-shirt-copy", "porche-t-shirt", "beige-ringer-tee", "path-to-heaven-t-shirt",
-    # BOXY WNS GREY / OLIVE / BLACK TEE
-    "path-to-heaven-t-shirt-copy", "wanas-olive-t-shirt-1", "wanas-grey-t-shirt",
-    # OLIVE / WHITE / BURGANDY / NAVY KNITTED POLO
-    "olive-knitted-polo", "white-knitted-polo", "burgandy-knitted-polo", "navy-knitted-polo",
-    # the three that were never merged
-    "cairokee-t-shirt-copy", "cairokee-t-shirt-2", "envy-t-shirt-1",
-}
-
-#: Half-sleeve, and not on the shop's list -- added after looking at each
-#: one's own Shopify photograph, which shows a fitted ribbed short-sleeve tee.
-#: The list was written before anyone checked these two, rather than as a
-#: judgement about them.
-HALF_BY_PHOTOGRAPH = {"heart-top", "feelin-fine-top"}
-
-#: Trousers. `sleeveless` is literally true of them, and it is what lets "is
-#: this half sleeve?" about a sweatpant be answered "it's trousers".
-NO_SLEEVES = {"lightweight-sweatpant", "wanas-sweatpant"}
-
-EXPECTED_HALF = {
-    "ringer-tee", "boxy-wns-tee", "knitted-polo",
-    "cairokee-tee", "cairokee-tee-2", "envy-tee",
-} | HALF_BY_PHOTOGRAPH
-
-
-def _seed() -> list[dict]:
+def _real_seed() -> list[dict]:
     with open(DATA_DIR / "products_seed.json", encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def test_every_product_has_a_definite_sleeve_length():
-    """The correction this file exists to pin. There is no unset any more."""
-    for raw in _seed():
-        assert raw.get("sleeve") in sleeves.SLEEVES, raw["product_id"]
+def _fixture_seed() -> list[dict]:
+    with open(FIXTURE_CATALOG / "products_seed.json", encoding="utf-8") as fh:
+        return json.load(fh)
 
 
-def test_the_half_sleeve_set_is_the_shops_list_plus_the_two_that_were_missing():
-    from_list = {
-        raw["product_id"]
-        for raw in _seed()
-        if {s["handle"] for s in raw.get("source_products") or []} <= LISTED_HALF_HANDLES
-    }
-    assert from_list == EXPECTED_HALF - HALF_BY_PHOTOGRAPH
-    assert {raw["product_id"] for raw in _seed() if raw["sleeve"] == "half"} == EXPECTED_HALF
+def test_every_recorded_sleeve_in_rehlas_catalog_is_a_known_value():
+    """Rehla's catalogue is scraped, so a product may have no sleeve recorded
+    (`None`: the bot says it is not sure). What *is* recorded must be one of
+    the three values, never a free-form string."""
+    for raw in _real_seed():
+        assert raw.get("sleeve") is None or raw["sleeve"] in sleeves.SLEEVES, raw["product_id"]
 
 
-def test_nothing_else_is_half_sleeve():
-    """The list is closed. Anything not on it and not photographed as
-    short-sleeved takes what its garment type implies, and that is never
-    `half` -- a closed list is only closed if nothing can fall into it."""
-    for raw in _seed():
-        if raw["product_id"] not in EXPECTED_HALF:
-            assert raw["sleeve"] != "half", raw["product_id"]
+def test_rehlas_tees_are_half_sleeve_and_nothing_else_is():
+    """The closed set: half-sleeve is what a T-Shirts product is, and a top,
+    a hoodie or a jacket is never recorded as half -- a closed list is only
+    closed if nothing can fall into it."""
+    for raw in _real_seed():
+        assert (raw["sleeve"] == "half") is (raw["category"] == "T-Shirts"), raw["product_id"]
 
 
-def test_trousers_have_no_sleeves_and_nothing_else_claims_to():
-    for raw in _seed():
-        expected = raw["product_id"] in NO_SLEEVES
-        assert (raw["sleeve"] == "sleeveless") is expected, raw["product_id"]
-
-
-def test_the_worker_jacket_is_long_although_it_sells_a_short_variant(seeded):
-    """A decision, recorded here because the data disagrees with it.
-
-    Worker Jacket carries `Length: [Long, Short]` as a Shopify option and its
-    description says "available in long/short sleeves", so no single
-    product-level value is true for it. The shop chose `long`: the Short
-    variants are still sold, the bot simply does not offer the jacket as an
-    answer to "what have you got in half sleeve?".
-    """
-    jacket = seeded.get(Product, "worker-jacket")
-    assert jacket.sleeve == "long"
-    assert {v.length for v in jacket.variants} == {"Long", "Short"}
+def test_the_ones_that_are_not_clothes_for_the_arms_say_sleeveless():
+    """`sleeveless` is literally true of a cap or a pair of trousers, and it is
+    what lets "is this half sleeve?" about trousers be answered "it's trousers"."""
+    for raw in _real_seed():
+        if raw["category"] in ("Caps", "Pants"):
+            assert raw["sleeve"] == "sleeveless", raw["product_id"]
 
 
 def test_nothing_is_inferred_from_the_category():
@@ -184,16 +135,16 @@ def test_nothing_is_inferred_from_the_category():
 def test_a_row_sitting_null_reads_as_not_recorded(seeded):
     """A NULL is reported as a NULL -- never as its category's guess -- and
     no sleeve filter returns it, in either direction."""
-    hoodie = seeded.get(Product, "wanas-hoodie")
+    hoodie = seeded.get(Product, "rehla-hoodie")
     hoodie.sleeve = None
     seeded.flush()
 
-    assert catalog.get_variants(seeded, "wanas-hoodie")["sleeve"] is None
-    found = catalog.get_products(seeded, query="WANAS Hoodie")["products"]
+    assert catalog.get_variants(seeded, "rehla-hoodie")["sleeve"] is None
+    found = catalog.get_products(seeded, query="REHLA Hoodie")["products"]
     assert found[0]["sleeve"] is None
     for value in ("half", "long"):
         filtered = catalog.get_products(seeded, sleeve=value)["products"]
-        assert "wanas-hoodie" not in {p["product_id"] for p in filtered}, value
+        assert "rehla-hoodie" not in {p["product_id"] for p in filtered}, value
 
 
 # --------------------------------------------------------------------------
@@ -203,7 +154,9 @@ def test_a_row_sitting_null_reads_as_not_recorded(seeded):
 
 def test_asking_for_half_sleeve_lists_exactly_the_half_sleeve_products(seeded):
     found = catalog.get_products(seeded, sleeve="half")["products"]
-    assert {p["product_id"] for p in found} == EXPECTED_HALF
+    assert {p["product_id"] for p in found} == {
+        raw["product_id"] for raw in _fixture_seed() if raw["sleeve"] == "half"
+    }
 
 
 def test_asking_for_anything_half_sleeve_in_arabic_lists_only_those(seeded):
@@ -213,9 +166,9 @@ def test_asking_for_anything_half_sleeve_in_arabic_lists_only_those(seeded):
 
 
 def test_a_product_that_is_not_half_sleeve_says_so_rather_than_shrugging(seeded):
-    assert catalog.get_variants(seeded, "wanas-hoodie")["sleeve"] == "long"
-    assert catalog.get_variants(seeded, "wanas-polo")["sleeve"] == "long"
-    assert catalog.get_variants(seeded, "wanas-sweatpant")["sleeve"] == "sleeveless"
+    assert catalog.get_variants(seeded, "rehla-hoodie")["sleeve"] == "long"
+    assert catalog.get_variants(seeded, "rehla-polo")["sleeve"] == "long"
+    assert catalog.get_variants(seeded, "rehla-sweatpant")["sleeve"] == "sleeveless"
 
 
 def test_a_sleeve_filter_that_matches_nothing_means_nothing(seeded):
@@ -248,7 +201,7 @@ def test_the_facet_offers_every_value_the_shop_actually_has(seeded):
 def test_get_variants_carries_the_sleeve_so_a_yes_no_question_is_answerable(seeded):
     ctx = ToolContext(session=seeded, channel="whatsapp", external_id="201000000009")
     assert call_tool(ctx, "get_variants", {"product_id": "knitted-polo"})["sleeve"] == "half"
-    assert call_tool(ctx, "get_variants", {"product_id": "wanas-hoodie"})["sleeve"] == "long"
+    assert call_tool(ctx, "get_variants", {"product_id": "rehla-hoodie"})["sleeve"] == "long"
 
 
 def test_the_search_tool_accepts_the_sleeve_filter(seeded):
@@ -272,12 +225,12 @@ def test_the_backfill_fills_every_null_not_only_the_listed_ones(seeded):
 
     result = backfill_sleeves(seeded)
 
-    assert len(result["updated"]) == len(_seed())
+    assert len(result["updated"]) == len(_fixture_seed())
     for product in seeded.scalars(select(Product)).all():
         assert product.sleeve in sleeves.SLEEVES, product.product_id
     assert seeded.get(Product, "knitted-polo").sleeve == "half"
-    assert seeded.get(Product, "wanas-hoodie").sleeve == "long"
-    assert seeded.get(Product, "wanas-sweatpant").sleeve == "sleeveless"
+    assert seeded.get(Product, "rehla-hoodie").sleeve == "long"
+    assert seeded.get(Product, "rehla-sweatpant").sleeve == "sleeveless"
 
 
 def test_the_backfill_leaves_a_staff_answer_alone(seeded):

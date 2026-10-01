@@ -21,7 +21,7 @@ from domain.services import (
 )
 
 SECRET = "test-dashboard-secret"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 def _order(*, total, cancelled=False, fulfillment_status="UNFULFILLED", source="chatbot",
@@ -46,7 +46,7 @@ def _order(*, total, cancelled=False, fulfillment_status="UNFULFILLED", source="
         "shipping_fee": str(shipping_fee),
         "tax": str(tax),
         "refunded": str(refunded),
-        "line_items": line_items or [{"title": "WANAS Hoodie", "quantity": 1, "sku": VARIANT}],
+        "line_items": line_items or [{"title": "REHLA Hoodie", "quantity": 1, "sku": VARIANT}],
         "source": source,
     }
 
@@ -289,7 +289,7 @@ def test_stats_endpoint_separates_net_from_total_on_a_real_shopify_read(logged_i
     shipping fee has to arrive as three different numbers, not one repeated."""
     shopify.seed_order(
         customer_name="Web Buyer", phone="201555000111", governorate="Cairo",
-        items=[{"variant_id": "1", "quantity": 2, "unit_price": 500, "title": "WANAS Hoodie"}],
+        items=[{"variant_id": "1", "quantity": 2, "unit_price": 500, "title": "REHLA Hoodie"}],
         shipping_fee=60, discount=100,
     )
     body = logged_in.get("/dashboard/api/stats?days=30").json()
@@ -310,7 +310,7 @@ def test_a_tax_inclusive_shop_does_not_count_its_vat_twice(logged_in, shopify):
     """
     shopify.seed_order(
         customer_name="Web Buyer", phone="201555000222", governorate="Cairo",
-        items=[{"variant_id": "1", "quantity": 1, "unit_price": 590, "title": "WANAS Hoodie"}],
+        items=[{"variant_id": "1", "quantity": 1, "unit_price": 590, "title": "REHLA Hoodie"}],
         shipping_fee=118, tax="72.46", taxes_included=True,
     )
     body = logged_in.get("/dashboard/api/stats?days=30").json()

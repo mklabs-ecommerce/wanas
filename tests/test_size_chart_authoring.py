@@ -118,7 +118,7 @@ def test_nothing_is_written_by_reading(logged_in, vision, seeded):
     _read(logged_in)
     seeded.expire_all()
 
-    assert seeded.get(SizeChart, "wanas-hoodie") is None
+    assert seeded.get(SizeChart, "rehla-hoodie") is None
 
 
 def test_a_provider_that_cannot_read_says_so_instead_of_failing(logged_in, vision):
@@ -215,8 +215,8 @@ def test_a_nonsense_unit_falls_back_to_cm(seeded):
 
 def _save(client, **kwargs):
     body = {
-        "product_id": "wanas-hoodie",
-        "title": "WANAS Hoodie",
+        "product_id": "rehla-hoodie",
+        "title": "REHLA Hoodie",
         "unit": "cm",
         "measurements": [{"key": "width", "label_en": "Width", "label_ar": "العرض"}],
         "sizes": {"S": {"width": 54}, "M": {"width": 56}},
@@ -236,10 +236,10 @@ def test_a_saved_chart_is_what_the_bot_reads(logged_in, seeded, shopify):
     assert res.status_code == 200, res.text
     seeded.expire_all()
 
-    chart = get_chart("wanas-hoodie", seeded)
+    chart = get_chart("rehla-hoodie", seeded)
     assert chart["sizes"]["S"]["width"] == 54
     assert chart["measurements"][0]["label_ar"] == "العرض"
-    assert seeded.get(Product, "wanas-hoodie").size_chart == res.json()["chart_id"]
+    assert seeded.get(Product, "rehla-hoodie").size_chart == res.json()["chart_id"]
 
 
 def test_a_database_chart_overlays_the_file_on_the_same_id(logged_in, seeded, shopify):
@@ -263,7 +263,7 @@ def test_the_file_charts_are_all_still_listed(logged_in, seeded, shopify):
     charts = all_charts(seeded)
 
     assert "ringer-boxy-tee" in charts
-    assert "wanas-hoodie" in charts
+    assert "rehla-hoodie" in charts
 
 
 def test_the_storefront_gets_the_table_too(logged_in, seeded, shopify):
@@ -271,7 +271,7 @@ def test_the_storefront_gets_the_table_too(logged_in, seeded, shopify):
     than only the picture."""
     _save(logged_in, image_file_gid="gid://shopify/MediaImage/chart")
 
-    gid = shopify.variant_to_product["wanas-hoodie-s-olive"]
+    gid = shopify.variant_to_product["rehla-hoodie-s-olive"]
     assert shopify.chart_metafields[gid] == "gid://shopify/MediaImage/chart"
     assert shopify.chart_data[gid]["sizes"][0]["name"] == "S"
 
@@ -280,7 +280,7 @@ def test_a_blank_cell_is_never_saved_as_zero(logged_in, seeded, shopify):
     _save(logged_in, sizes={"S": {"width": 54}, "M": {"width": ""}})
     seeded.expire_all()
 
-    chart = get_chart("wanas-hoodie", seeded)
+    chart = get_chart("rehla-hoodie", seeded)
     assert "M" not in chart["sizes"]
     assert chart["sizes"]["S"] == {"width": 54}
 
@@ -289,7 +289,7 @@ def test_a_column_the_chart_does_not_declare_is_dropped(logged_in, seeded, shopi
     _save(logged_in, sizes={"S": {"width": 54, "sleeve": 20}})
     seeded.expire_all()
 
-    assert get_chart("wanas-hoodie", seeded)["sizes"]["S"] == {"width": 54}
+    assert get_chart("rehla-hoodie", seeded)["sizes"]["S"] == {"width": 54}
 
 
 def test_a_chart_with_no_numbers_at_all_is_refused(logged_in, shopify):
@@ -312,7 +312,7 @@ def test_who_read_the_numbers_is_recorded(logged_in, seeded, shopify):
     _save(logged_in, read_from_image=True)
     seeded.expire_all()
 
-    assert seeded.get(SizeChart, "wanas-hoodie").source == "vision"
+    assert seeded.get(SizeChart, "rehla-hoodie").source == "vision"
 
 
 def test_the_chart_still_saves_when_shopify_is_down(logged_in, seeded, shopify):
@@ -325,7 +325,7 @@ def test_the_chart_still_saves_when_shopify_is_down(logged_in, seeded, shopify):
 
     assert res.status_code == 200
     assert res.json()["warnings"]
-    assert get_chart("wanas-hoodie", seeded)["sizes"]["S"]["width"] == 54
+    assert get_chart("rehla-hoodie", seeded)["sizes"]["S"]["width"] == 54
 
 
 def test_the_bot_quotes_a_dashboard_chart_like_any_other(logged_in, seeded, shopify):
@@ -337,7 +337,7 @@ def test_the_bot_quotes_a_dashboard_chart_like_any_other(logged_in, seeded, shop
     class Ctx:
         session = seeded
 
-    answer = get_size_chart(Ctx(), "wanas-hoodie")
+    answer = get_size_chart(Ctx(), "rehla-hoodie")
 
     assert answer["has_chart"] is True
     assert answer.get("image_only") is not True

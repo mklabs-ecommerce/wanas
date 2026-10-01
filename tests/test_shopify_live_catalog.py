@@ -1,4 +1,4 @@
-"""The live read: what the customer is told when Shopify and wanas.db differ.
+"""The live read: what the customer is told when Shopify and rehla.db differ.
 
 Nothing here touches the network. `shopify_catalog.prime` injects the snapshot
 the client would have returned, which is the whole point of keeping the fetch
@@ -41,7 +41,7 @@ def live(variant_id, price, stock, *, compare=None, active=True, image_url=None)
 
 
 def snapshot_of(db, product_id, **overrides):
-    """Start from what wanas.db says, then change only what a test cares
+    """Start from what rehla.db says, then change only what a test cares
     about. Keeps each test about one difference."""
     out = {}
     for variant in db.query(Variant).filter(Variant.product_id == product_id):
@@ -64,12 +64,12 @@ def turn():
 
 
 def test_the_quoted_price_is_shopifys_not_the_databases(seeded, turn):
-    target = seeded.query(Variant).filter_by(product_id="wanas-hoodie").first()
+    target = seeded.query(Variant).filter_by(product_id="rehla-hoodie").first()
     shopify_catalog.prime(
-        snapshot_of(seeded, "wanas-hoodie", **{target.variant_id: live(target.variant_id, 999, 5)})
+        snapshot_of(seeded, "rehla-hoodie", **{target.variant_id: live(target.variant_id, 999, 5)})
     )
 
-    payload = catalog.get_variants(seeded, "wanas-hoodie")
+    payload = catalog.get_variants(seeded, "rehla-hoodie")
     quoted = next(v for v in payload["variants"] if v["variant_id"] == target.variant_id)
 
     assert quoted["price"] == 999
@@ -78,30 +78,30 @@ def test_the_quoted_price_is_shopifys_not_the_databases(seeded, turn):
 
 
 def test_a_products_price_range_follows_shopify(seeded, turn):
-    variants = seeded.query(Variant).filter_by(product_id="wanas-hoodie").all()
+    variants = seeded.query(Variant).filter_by(product_id="rehla-hoodie").all()
     snapshot = {v.variant_id: live(v.variant_id, 650, 5) for v in variants}
     snapshot[variants[0].variant_id] = live(variants[0].variant_id, 700, 5)
     shopify_catalog.prime(snapshot)
 
     listed = catalog.get_products(seeded)["products"]
-    product = next(p for p in listed if p["product_id"] == "wanas-hoodie")
+    product = next(p for p in listed if p["product_id"] == "rehla-hoodie")
     assert product["price_from"] == 650
     assert product["price_to"] == 700
 
 
 def test_a_discount_is_read_from_compare_at_price(seeded, turn):
-    target = seeded.query(Variant).filter_by(product_id="wanas-hoodie").first()
+    target = seeded.query(Variant).filter_by(product_id="rehla-hoodie").first()
     shopify_catalog.prime(
         snapshot_of(
             seeded,
-            "wanas-hoodie",
+            "rehla-hoodie",
             **{target.variant_id: live(target.variant_id, 600, 5, compare=800)},
         )
     )
 
     quoted = next(
         v
-        for v in catalog.get_variants(seeded, "wanas-hoodie")["variants"]
+        for v in catalog.get_variants(seeded, "rehla-hoodie")["variants"]
         if v["variant_id"] == target.variant_id
     )
     assert quoted["on_sale"] is True
@@ -109,14 +109,14 @@ def test_a_discount_is_read_from_compare_at_price(seeded, turn):
 
 
 def test_no_compare_at_price_means_no_sale(seeded, turn):
-    target = seeded.query(Variant).filter_by(product_id="wanas-hoodie").first()
+    target = seeded.query(Variant).filter_by(product_id="rehla-hoodie").first()
     shopify_catalog.prime(
-        snapshot_of(seeded, "wanas-hoodie", **{target.variant_id: live(target.variant_id, 600, 5)})
+        snapshot_of(seeded, "rehla-hoodie", **{target.variant_id: live(target.variant_id, 600, 5)})
     )
 
     quoted = next(
         v
-        for v in catalog.get_variants(seeded, "wanas-hoodie")["variants"]
+        for v in catalog.get_variants(seeded, "rehla-hoodie")["variants"]
         if v["variant_id"] == target.variant_id
     )
     assert quoted["on_sale"] is False
@@ -179,10 +179,10 @@ def test_a_product_not_active_on_shopify_reads_as_sold_out(seeded, turn):
 
 
 def test_alternatives_are_only_offered_for_stock_shopify_confirms(seeded, turn):
-    variants = seeded.query(Variant).filter_by(product_id="wanas-hoodie").all()
+    variants = seeded.query(Variant).filter_by(product_id="rehla-hoodie").all()
     wanted, *siblings = variants
 
-    # Everything sold out on Shopify, whatever wanas.db believes.
+    # Everything sold out on Shopify, whatever rehla.db believes.
     shopify_catalog.prime({v.variant_id: live(v.variant_id, v.price, 0) for v in variants})
     assert catalog.alternatives_for(seeded, wanted) == []
 
@@ -208,29 +208,29 @@ def test_a_photo_staff_set_on_shopify_leads_the_colours_gallery(seeded, turn):
     """The variant's own Shopify photo becomes photo #1 for its colour; the
     local gallery for that colour still follows behind it, so "another angle"
     still has something to reach for."""
-    target = seeded.query(Variant).filter_by(product_id="wanas-hoodie", color="Olive").first()
+    target = seeded.query(Variant).filter_by(product_id="rehla-hoodie", color="Olive").first()
     url = "https://cdn.shopify.com/s/files/1/hoodie-olive.jpg"
     shopify_catalog.prime(
         snapshot_of(
-            seeded, "wanas-hoodie", **{target.variant_id: live(target.variant_id, target.price, 5, image_url=url)}
+            seeded, "rehla-hoodie", **{target.variant_id: live(target.variant_id, target.price, 5, image_url=url)}
         )
     )
 
-    gallery = catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"]
+    gallery = catalog.get_variants(seeded, "rehla-hoodie")["color_images"]["Olive"]
     assert gallery[0] == url
     assert len(gallery) > 1
 
 
 def test_no_shopify_photo_leaves_the_local_gallery_untouched(seeded, turn):
-    shopify_catalog.prime(snapshot_of(seeded, "wanas-hoodie"))
+    shopify_catalog.prime(snapshot_of(seeded, "rehla-hoodie"))
 
-    gallery = catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"]
+    gallery = catalog.get_variants(seeded, "rehla-hoodie")["color_images"]["Olive"]
     assert gallery[0].startswith("data/images/")
 
 
 def test_a_shopify_photo_does_not_fragment_a_gallery_the_local_data_never_split_by_colour(seeded, turn):
     """cairokee-tee's photos are one undifferentiated set (`color_images` is
-    empty in wanas.db). A Shopify photo for its Black variant must overlay
+    empty in rehla.db). A Shopify photo for its Black variant must overlay
     onto that shared set, not invent a partial `color_images` split that would
     make `_candidate_images` (assistant/tools/base.py) show Black's photo and
     silently drop Brown's out of the gallery for everyone else."""
@@ -265,14 +265,14 @@ def test_full_shopify_coverage_replaces_the_seeded_gallery(seeded, turn):
     the RINGER TEE's four colours were seeded with a different product's
     folder -- so a colour Shopify has answered for must not trail them."""
     urls = {c: f"https://cdn.shopify.com/s/files/1/hoodie-{c.lower()}.jpg" for c in ("Black", "Grey", "Olive")}
-    shopify_catalog.prime(_cover(seeded, "wanas-hoodie", urls))
+    shopify_catalog.prime(_cover(seeded, "rehla-hoodie", urls))
 
-    payload = catalog.get_variants(seeded, "wanas-hoodie")
+    payload = catalog.get_variants(seeded, "rehla-hoodie")
     assert payload["color_images"] == {c: [urls[c]] for c in ("Black", "Grey", "Olive")}
     assert not any(p.startswith("data/images/") for p in payload["images"])
 
 
-def test_full_coverage_splits_a_product_wanas_db_never_split_by_colour(seeded, turn):
+def test_full_coverage_splits_a_product_rehla_db_never_split_by_colour(seeded, turn):
     """cairokee-tee's local photos are one undifferentiated set. Shopify knows
     which photo is the brown one and which is the black one, and refusing to
     use that is how "the brown one" got answered with the black photo."""
@@ -288,22 +288,22 @@ def test_one_variant_photographed_wrong_on_shopify_does_not_lead_its_colour(seed
     """HEART TOP's large olive has the black photo attached to it in Shopify
     Admin. Every other olive variant says otherwise, and the majority is what
     the colour's lead photo follows."""
-    rows = list(seeded.query(Variant).filter_by(product_id="wanas-hoodie", color="Olive"))
+    rows = list(seeded.query(Variant).filter_by(product_id="rehla-hoodie", color="Olive"))
     assert len(rows) > 2
     right = "https://cdn.shopify.com/s/files/1/hoodie-olive.jpg"
     wrong = "https://cdn.shopify.com/s/files/1/hoodie-black.jpg"
     urls = {"Black": wrong, "Grey": "https://cdn.shopify.com/s/files/1/hoodie-grey.jpg", "Olive": right}
-    snapshot = _cover(seeded, "wanas-hoodie", urls)
+    snapshot = _cover(seeded, "rehla-hoodie", urls)
     snapshot[rows[0].variant_id] = live(rows[0].variant_id, rows[0].price, 5, image_url=wrong)
     shopify_catalog.prime(snapshot)
 
-    assert catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"][0] == right
+    assert catalog.get_variants(seeded, "rehla-hoodie")["color_images"]["Olive"][0] == right
 
 
 def test_when_shopify_cannot_be_reached_the_local_photos_are_served(seeded, turn):
     shopify_catalog.prime(None)
 
-    gallery = catalog.get_variants(seeded, "wanas-hoodie")["color_images"]["Olive"]
+    gallery = catalog.get_variants(seeded, "rehla-hoodie")["color_images"]["Olive"]
     assert gallery[0].startswith("data/images/")
 
 
@@ -315,10 +315,10 @@ def test_when_shopify_cannot_be_reached_the_local_photos_are_served(seeded, turn
 def test_when_shopify_cannot_be_reached_the_local_numbers_are_served(seeded, turn):
     shopify_catalog.prime(None)
 
-    row = seeded.query(Variant).filter_by(product_id="wanas-hoodie").first()
+    row = seeded.query(Variant).filter_by(product_id="rehla-hoodie").first()
     quoted = next(
         v
-        for v in catalog.get_variants(seeded, "wanas-hoodie")["variants"]
+        for v in catalog.get_variants(seeded, "rehla-hoodie")["variants"]
         if v["variant_id"] == row.variant_id
     )
     assert quoted["price"] == row.price
@@ -330,19 +330,19 @@ def test_a_variant_missing_from_shopify_falls_back_rather_than_vanishing(seeded,
     the local row is wrong-ish; dropping the variant from the reply entirely
     would be worse, because the bot would tell the customer the size does not
     exist."""
-    row = seeded.query(Variant).filter_by(product_id="wanas-hoodie").first()
-    snapshot = snapshot_of(seeded, "wanas-hoodie")
+    row = seeded.query(Variant).filter_by(product_id="rehla-hoodie").first()
+    snapshot = snapshot_of(seeded, "rehla-hoodie")
     del snapshot[row.variant_id]
     shopify_catalog.prime(snapshot)
 
-    payload = catalog.get_variants(seeded, "wanas-hoodie")
+    payload = catalog.get_variants(seeded, "rehla-hoodie")
     quoted = next(v for v in payload["variants"] if v["variant_id"] == row.variant_id)
     assert quoted["price"] == row.price
     assert quoted["stock_qty"] == row.stock_qty
 
 
 def test_an_untracked_variant_is_not_mistaken_for_sold_out(seeded, turn):
-    row = seeded.query(Variant).filter_by(product_id="wanas-hoodie").first()
+    row = seeded.query(Variant).filter_by(product_id="rehla-hoodie").first()
     untracked = LiveVariant(
         variant_id=row.variant_id,
         shopify_id="gid://shopify/ProductVariant/1",
@@ -353,9 +353,9 @@ def test_an_untracked_variant_is_not_mistaken_for_sold_out(seeded, turn):
         tracked=False,
         product_active=True,
     )
-    shopify_catalog.prime(snapshot_of(seeded, "wanas-hoodie", **{row.variant_id: untracked}))
+    shopify_catalog.prime(snapshot_of(seeded, "rehla-hoodie", **{row.variant_id: untracked}))
 
-    payload = catalog.get_variants(seeded, "wanas-hoodie")
+    payload = catalog.get_variants(seeded, "rehla-hoodie")
     assert row.variant_id in payload["in_stock"]
 
 
@@ -375,7 +375,7 @@ def test_the_snapshot_is_taken_once_per_turn_not_once_per_tool(seeded, monkeypat
 
     with shopify_catalog.turn_scope():
         catalog.get_products(seeded, query="hoodie")
-        catalog.get_variants(seeded, "wanas-hoodie")
+        catalog.get_variants(seeded, "rehla-hoodie")
         catalog.get_products(seeded, category="T-Shirts")
 
     assert len(calls) == 1
@@ -392,7 +392,7 @@ def test_a_failure_is_not_retried_three_times_inside_one_reply(seeded, monkeypat
 
     with shopify_catalog.turn_scope():
         catalog.get_products(seeded, query="hoodie")
-        catalog.get_variants(seeded, "wanas-hoodie")
+        catalog.get_variants(seeded, "rehla-hoodie")
 
     assert len(calls) == 1
 
@@ -430,7 +430,7 @@ def test_the_prefetch_is_still_one_read_per_turn(seeded, monkeypatch):
     with shopify_catalog.turn_scope():
         shopify_catalog.prefetch()
         catalog.get_products(seeded, query="hoodie")
-        catalog.get_variants(seeded, "wanas-hoodie")
+        catalog.get_variants(seeded, "rehla-hoodie")
         catalog.get_products(seeded, category="T-Shirts")
 
     assert len(calls) == 1
@@ -439,14 +439,14 @@ def test_the_prefetch_is_still_one_read_per_turn(seeded, monkeypatch):
 def test_a_prefetched_snapshot_is_what_the_tools_read(seeded, monkeypatch):
     """Not merely "a read happened" -- the numbers the customer is quoted have
     to be the prefetched ones."""
-    shelf = {"wanas-hoodie-s-olive": live("wanas-hoodie-s-olive", 111, 7)}
+    shelf = {"rehla-hoodie-s-olive": live("rehla-hoodie-s-olive", 111, 7)}
     monkeypatch.setattr(shopify_catalog, "try_fetch_all", lambda: shelf)
 
     with shopify_catalog.turn_scope():
         shopify_catalog.prefetch()
-        payload = catalog.get_variants(seeded, "wanas-hoodie")
+        payload = catalog.get_variants(seeded, "rehla-hoodie")
 
-    olive = next(v for v in payload["variants"] if v["variant_id"] == "wanas-hoodie-s-olive")
+    olive = next(v for v in payload["variants"] if v["variant_id"] == "rehla-hoodie-s-olive")
     assert olive["price"] == 111
 
 
@@ -469,9 +469,9 @@ def test_a_prefetch_that_fails_degrades_exactly_as_a_lazy_one_does(seeded, monke
 
     with shopify_catalog.turn_scope():
         shopify_catalog.prefetch()
-        payload = catalog.get_variants(seeded, "wanas-hoodie")
+        payload = catalog.get_variants(seeded, "rehla-hoodie")
 
-    # wanas.db's own numbers, which is the documented fallback.
+    # rehla.db's own numbers, which is the documented fallback.
     assert payload["variants"]
 
 
@@ -530,7 +530,7 @@ def test_a_primed_snapshot_still_wins_over_the_prefetch(seeded, monkeypatch):
 )
 def test_a_variant_with_no_usable_price_is_left_out_of_the_live_map(raw):
     node = {
-        "sku": "boxy-wns-tee-l-black",
+        "sku": "boxy-rehla-tee-l-black",
         "id": "gid://shopify/ProductVariant/1",
         "inventoryItem": {"id": "gid://shopify/InventoryItem/1", "tracked": True},
         "inventoryQuantity": 5,
@@ -542,7 +542,7 @@ def test_a_variant_with_no_usable_price_is_left_out_of_the_live_map(raw):
 
 def test_a_normal_price_still_comes_through():
     node = {
-        "sku": "boxy-wns-tee-l-black",
+        "sku": "boxy-rehla-tee-l-black",
         "id": "gid://shopify/ProductVariant/1",
         "inventoryItem": {"id": "gid://shopify/InventoryItem/1", "tracked": True},
         "inventoryQuantity": 5,
@@ -556,7 +556,7 @@ def test_a_null_compare_at_price_is_still_just_no_discount():
     """The other field keeps folding onto zero, and should: `compareAtPrice`
     is null on everything that is not discounted."""
     node = {
-        "sku": "boxy-wns-tee-l-black",
+        "sku": "boxy-rehla-tee-l-black",
         "id": "gid://shopify/ProductVariant/1",
         "inventoryItem": {"id": "gid://shopify/InventoryItem/1", "tracked": True},
         "inventoryQuantity": 5,
@@ -570,10 +570,10 @@ def test_a_null_compare_at_price_is_still_just_no_discount():
 
 
 def test_the_customer_is_quoted_the_local_price_not_zero(seeded, turn):
-    """Browse path: falling back to wanas.db's number is the documented
+    """Browse path: falling back to rehla.db's number is the documented
     behaviour for a variant Shopify does not show, and it is a far better
     answer than "free"."""
-    variant = seeded.query(Variant).filter_by(variant_id="boxy-wns-tee-l-black").one()
+    variant = seeded.query(Variant).filter_by(variant_id="boxy-rehla-tee-l-black").one()
     local_price = variant.price
     shopify_catalog.prime({})
     priced = catalog._overlay(variant, shopify_catalog.live_map())

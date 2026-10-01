@@ -17,7 +17,7 @@ from domain.services import (
     shipping,
 )
 
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 # --- Inventory ------------------------------------------------------------
@@ -102,7 +102,7 @@ def test_threshold_breach(seeded):
 
 def test_categories_lead_collections_trail(seeded):
     payload = catalog.get_categories(seeded)
-    assert [c["category"] for c in payload["categories"]][0] == "T-Shirts"
+    assert [c["category"] for c in payload["categories"]][0] == "Tops"
     assert sum(c["product_count"] for c in payload["categories"]) == 18
     assert payload["departments"] == ["unisex", "women"]
     assert payload["collections"] == ["CAIROKEE MERCH", "WINTER COLLECTION"]
@@ -110,8 +110,8 @@ def test_categories_lead_collections_trail(seeded):
 
 
 def test_price_from_and_to_are_computed_from_variants(seeded):
-    result = catalog.get_products(seeded, query="WANAS Hoodie")
-    hoodie = next(p for p in result["products"] if p["product_id"] == "wanas-hoodie")
+    result = catalog.get_products(seeded, query="REHLA Hoodie")
+    hoodie = next(p for p in result["products"] if p["product_id"] == "rehla-hoodie")
     # Priced per colour: 650 in black and olive, 700 in grey.
     assert hoodie["price_from"] == 650
     assert hoodie["price_to"] == 700
@@ -125,7 +125,7 @@ def test_search_matches_colour_not_just_name(seeded):
     product name."""
     result = catalog.get_products(seeded, query="olive hoodie")
     ids = [p["product_id"] for p in result["products"]]
-    assert "wanas-hoodie" in ids
+    assert "rehla-hoodie" in ids
 
 
 def test_style_and_department_filters(seeded):
@@ -137,7 +137,7 @@ def test_style_and_department_filters(seeded):
 
 
 def test_get_variants_returns_sold_out_too(seeded):
-    payload = catalog.get_variants(seeded, "wanas-hoodie")
+    payload = catalog.get_variants(seeded, "rehla-hoodie")
     assert len(payload["variants"]) > len(payload["in_stock"])
     assert any(v["status"] == "sold_out" for v in payload["variants"])
     assert payload["has_size_chart"] is True
@@ -145,18 +145,18 @@ def test_get_variants_returns_sold_out_too(seeded):
 
 
 def test_alternatives_prefer_same_colour_then_same_size(seeded, shopify):
-    for v in seeded.scalars(select(Variant).where(Variant.product_id == "wanas-hoodie")).all():
+    for v in seeded.scalars(select(Variant).where(Variant.product_id == "rehla-hoodie")).all():
         v.stock_qty = 0
         shopify.set(v.variant_id, qty=0)
-    for vid in ("wanas-hoodie-l-olive", "wanas-hoodie-m-black"):
+    for vid in ("rehla-hoodie-l-olive", "rehla-hoodie-m-black"):
         seeded.get(Variant, vid).stock_qty = 5
         shopify.set(vid, qty=5)
     seeded.flush()
 
-    target = seeded.get(Variant, "wanas-hoodie-m-olive")
+    target = seeded.get(Variant, "rehla-hoodie-m-olive")
     alts = catalog.alternatives_for(seeded, target)
-    assert alts[0]["variant_id"] == "wanas-hoodie-l-olive"  # same colour first
-    assert alts[1]["variant_id"] == "wanas-hoodie-m-black"  # then same size
+    assert alts[0]["variant_id"] == "rehla-hoodie-l-olive"  # same colour first
+    assert alts[1]["variant_id"] == "rehla-hoodie-m-black"  # then same size
 
 
 # --- Shipping -------------------------------------------------------------
@@ -293,7 +293,7 @@ def test_order_confirmed_alerts_staff_and_messages_the_customer(cairo_rate):
     assert result["reference"] in body
     assert result["order_id"] not in body
     # Each item line carries its variant: colour and size, always.
-    assert "WANAS Hoodie — Olive, S" in body
+    assert "REHLA Hoodie — Olive, S" in body
     assert "710" in body  # 650 + 60 shipping
 
 

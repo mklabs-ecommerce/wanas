@@ -1,4 +1,4 @@
-"""The order now exists on Shopify, not only in wanas.db.
+"""The order now exists on Shopify, not only in rehla.db.
 
 The bug this file mostly exists to prevent is the double decrement. Shopify
 takes the stock as part of `orderCreate`, and the previous design also reserved
@@ -20,8 +20,8 @@ from domain.services import (
 )
 from integrations.shopify import orders as shopify_orders
 
-VARIANT = "wanas-hoodie-s-olive"
-OTHER = "wanas-hoodie-m-black"
+VARIANT = "rehla-hoodie-s-olive"
+OTHER = "rehla-hoodie-m-black"
 WHO = "201555000222"
 
 
@@ -75,7 +75,7 @@ def test_the_shopify_number_is_stored_and_is_what_the_customer_is_told(priced, s
     # `order_id` stays the internal handle every other tool takes; `reference`
     # is the only one meant to be said out loud.
     assert result["reference"] == order.shopify_order_name
-    assert result["order_id"].startswith("WNS-")
+    assert result["order_id"].startswith("RHL-")
 
 
 def test_the_stock_is_taken_once_not_twice(priced, shopify):
@@ -129,7 +129,7 @@ def test_local_numbers_are_translated_for_shopify(typed, sent):
 def test_an_unreadable_number_is_dropped_not_guessed(typed):
     """A wrong number on a cash-on-delivery order is a parcel nobody can
     deliver. Better to leave the field empty -- it is still in the note and in
-    wanas.db -- than to invent a plausible one."""
+    rehla.db -- than to invent a plausible one."""
     assert shopify_orders.normalise_phone(typed) is None
 
 
@@ -395,7 +395,7 @@ def sell(monkeypatch, recorder, *, known_customer=None, **overrides):
         lambda **_kw: {"id": known_customer} if known_customer else None,
     )
     args = {
-        "reference": "WNS-1",
+        "reference": "RHL-1",
         "items": [{"shopify_variant_id": "gid://shopify/ProductVariant/1",
                    "quantity": 1, "unit_price": 800}],
         "customer_name": "Hazem Abdelhamid",

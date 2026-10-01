@@ -11,6 +11,8 @@ from domain.models import Order, ShippingRate, Variant
 from domain.services import carts, garments, orders, search_terms, shop_facts
 from domain.services.catalog import get_products
 
+USE_REAL_CATALOG = True
+
 
 def test_seed_is_the_rehla_catalog(seeded):
     from domain.models import Product

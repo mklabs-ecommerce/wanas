@@ -21,7 +21,7 @@ from dashboard import inventory_api, web as dashboard
 from domain.services import auth
 
 SECRET = "test-dashboard-secret"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 @pytest.fixture()

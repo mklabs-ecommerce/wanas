@@ -102,12 +102,11 @@ def test_calling_the_shop_online_is_not_offering_online_payment():
 
 def test_the_sentence_the_prompt_mandates_passes_the_gate():
     """The guard that matters on this rule: paying online through the website
-    is a real option here, and the prompt requires this sentence word for word
-    (43eb403). A gate that failed it would be testing the wrong thing -- and it
-    did, from the day that commit landed until this one."""
+    is not offered here, and the prompt requires this sentence word for word. A
+    gate that failed it would be testing the wrong thing."""
     from assistant.prompt import SYSTEM_PROMPT
 
-    mandated = "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع"
+    mandated = "الدفع كاش عند الاستلام"
     assert mandated in SYSTEM_PROMPT
     assert quality_gate.offers_another_payment_method(mandated) == ""
 
@@ -179,7 +178,7 @@ def test_a_templated_fallback_is_recognised_too():
     reaches."""
     from assistant import agent
 
-    filled = agent.PROMISE_FALLBACK_WITH_PRODUCT.format(product="Boxy WNS Tee")
+    filled = agent.PROMISE_FALLBACK_WITH_PRODUCT.format(product="Boxy REHLA Tee")
     golden = _run(_reply("sizes", 0, "المقاسات M و L", ("get_variants",)))
     fresh = _run(_reply("sizes", 0, filled, ("get_variants",)))
     failures = check(golden, fresh)
@@ -218,72 +217,71 @@ def test_a_silent_turn_is_not_judged_on_its_words():
 
 # --- the shop's own name --------------------------------------------------
 #
-# The model meets the brand in four surface forms -- `Wanas Gallery`, `WANAS
-# Hoodie`, `Boxy WNS Tee` and the Arabic «ونس» -- and Arabic writes no short
-# vowels, so the Arabic form is literally w-n-s. That is the whole mechanism
-# behind a reply that calls the shop `Wnas` or `WNS`.
+# The model meets the brand as `Rehla`, `REHLA <garment>` and the Arabic
+# «رحلة`. Arabic writes no short vowels, so a reply rebuilt from the Arabic is
+# the consonants r-h-l with vowels guessed back in -- `Rahla`, `Rihla`,
+# `Rehlaa`. That is the mechanism behind a reply that misnames the shop.
 
 
 def test_the_shop_name_spelled_correctly_passes():
-    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
-    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Rehla، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Rehla، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
     assert check(golden, fresh) == []
 
 
 def test_the_short_form_is_also_correct():
     golden = _run(_reply("greeting", 0, "أهلاً بيك"))
-    fresh = _run(_reply("greeting", 0, "دي من ماركة Wanas، وعندنا منها كل المقاسات. تحب تشوفها؟"))
+    fresh = _run(_reply("greeting", 0, "دي من ماركة Rehla، وعندنا منها كل المقاسات. تحب تشوفها؟"))
     assert not [f for f in check(golden, fresh) if "shop's name" in f]
 
 
 def test_the_product_name_prefix_is_not_a_misspelling():
-    """`WANAS Hoodie` is the product's real name and is on the label."""
-    golden = _run(_reply("sizes", 0, "هودي WANAS Hoodie متوفر عندنا دلوقتي بكل المقاسات"))
-    fresh = _run(_reply("sizes", 0, "هودي WANAS Hoodie متوفر عندنا دلوقتي بمقاس L وكمان مقاس M"))
+    """`REHLA Hoodie` is the product's real name and is on the label."""
+    golden = _run(_reply("sizes", 0, "هودي REHLA Hoodie متوفر عندنا دلوقتي بكل المقاسات"))
+    fresh = _run(_reply("sizes", 0, "هودي REHLA Hoodie متوفر عندنا دلوقتي بمقاس L وكمان مقاس M"))
     assert not [f for f in check(golden, fresh) if "shop's name" in f]
 
 
-def test_boxy_wns_tee_is_a_product_not_a_misspelling():
+def test_boxy_rehla_tee_is_a_product_not_a_misspelling():
     """The one product name that legitimately contains the brand abbreviated.
-    It is masked out before the scan; a bare `WNS` anywhere else is not."""
-    golden = _run(_reply("product_question", 0, "عندنا دلوقتي تيشيرت Boxy WNS Tee بسعر كويس قوي"))
-    fresh = _run(_reply("product_question", 0, "دي اللي عندنا دلوقتي: • تيشيرت Boxy WNS Tee — 450 جنيه. تحب تشوف حاجة تانية؟"))
+    It is masked out before the scan; a bare `REHLA` anywhere else is not."""
+    golden = _run(_reply("product_question", 0, "عندنا دلوقتي تيشيرت Boxy REHLA Tee بسعر كويس قوي"))
+    fresh = _run(_reply("product_question", 0, "دي اللي عندنا دلوقتي: • تيشيرت Boxy REHLA Tee — 450 جنيه. تحب تشوف حاجة تانية؟"))
     assert not [f for f in check(golden, fresh) if "shop's name" in f]
 
 
-def test_wns_offered_as_the_shop_name_fails():
-    """The failure the rule is named for: the abbreviation floating free of the
-    product name and being used as the shop."""
-    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
-    fresh = _run(_reply("greeting", 0, "أهلاً بيك في WNS، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
-    assert any("shop's name" in f and "WNS" in f for f in check(golden, fresh))
+def test_a_guessed_vowel_offered_as_the_shop_name_fails():
+    """The failure the rule is named for: the name rebuilt from its consonants."""
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Rehla، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Rahla، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    assert any("shop's name" in f and "Rahla" in f for f in check(golden, fresh))
 
 
-def test_the_vowelless_transliteration_fails():
-    """`Wnas` is «ونس» read back letter by letter."""
-    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
-    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Wnas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
-    assert any("Wnas" in f for f in check(golden, fresh))
+def test_a_doubled_vowel_fails():
+    """`Rehlaa` is the Arabic read back with a vowel too many."""
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Rehla، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Rehlaa، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    assert any("Rehlaa" in f for f in check(golden, fresh))
 
 
-def test_a_reordered_transliteration_fails():
-    golden = _run(_reply("greeting", 0, "أهلاً بيك في Wanas Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
-    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Wans Gallery، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
-    assert any("Wans" in f for f in check(golden, fresh))
+def test_another_guessed_vowel_fails():
+    golden = _run(_reply("greeting", 0, "أهلاً بيك في Rehla، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    fresh = _run(_reply("greeting", 0, "أهلاً بيك في Rihla، محل هدوم أونلاين في مصر. تحب أساعدك في إيه؟"))
+    assert any("Rihla" in f for f in check(golden, fresh))
 
 
 def test_a_leaked_product_slug_fails():
     """A slug in a reply is the model reading tool arguments back to the
     customer, and it carries the brand lowercased."""
-    golden = _run(_reply("product_question", 0, "عندنا دلوقتي هودي WANAS Hoodie بكل المقاسات المتاحة"))
-    fresh = _run(_reply("product_question", 0, "المنتج wanas-hoodie متاح عندنا دلوقتي بكل المقاسات"))
+    golden = _run(_reply("product_question", 0, "عندنا دلوقتي هودي REHLA Hoodie بكل المقاسات المتاحة"))
+    fresh = _run(_reply("product_question", 0, "المنتج rehla-hoodie متاح عندنا دلوقتي بكل المقاسات"))
     assert any("shop's name" in f for f in check(golden, fresh))
 
 
 def test_an_ordinary_english_word_is_not_the_brand():
     """`wins` has the same consonant skeleton and is not a misspelling."""
     assert quality_gate.misspelled_shop_name("he wins") == []
-    assert quality_gate.misspelled_shop_name("Wanas Gallery") == []
+    assert quality_gate.misspelled_shop_name("Rehla") == []
 
 
 # --- layout -----------------------------------------------------------------
@@ -295,11 +293,11 @@ def test_an_ordinary_english_word_is_not_the_brand():
 
 def test_the_canonical_shapes_are_not_flagged():
     for line in (
-        "تيشيرت Boxy WNS Tee — السعر 590 جنيه",
+        "تيشيرت Boxy REHLA Tee — السعر 590 جنيه",
         "الألوان المتاحة: Black و Grey و Olive",
         "المقاسات المتاحة: S و M و L و XL",
         "• مقاس L — عرض 61 سم، طول 71 سم",
-        "• تيشيرت Boxy WNS Tee — مقاس L، لون Black، السعر 590 جنيه",
+        "• تيشيرت Boxy REHLA Tee — مقاس L، لون Black، السعر 590 جنيه",
         "• الشحن للقاهرة — 60 جنيه",
         "• الإجمالي — 650 جنيه كاش عند الاستلام",
         "التوصيل بياخد من 2 لـ 4 أيام",
@@ -310,7 +308,7 @@ def test_the_canonical_shapes_are_not_flagged():
 def test_a_line_opening_with_a_latin_word_fails():
     """First strong character decides the whole line's direction, so this one
     is laid out left-to-right among right-to-left neighbours."""
-    assert quality_gate.layout_problems("Boxy WNS Tee متوفر بـ 590 جنيه")
+    assert quality_gate.layout_problems("Boxy REHLA Tee متوفر بـ 590 جنيه")
 
 
 def test_a_bullet_does_not_excuse_a_latin_opening():
@@ -321,7 +319,7 @@ def test_a_bullet_does_not_excuse_a_latin_opening():
 def test_a_number_straight_after_a_latin_word_fails():
     """«لون Black — 590 جنيه» is displayed «لون 590 — Black جنيه»: the customer
     reads the price where the colour is."""
-    problems = quality_gate.layout_problems("• تيشيرت Boxy WNS Tee — لون Black — 590 جنيه")
+    problems = quality_gate.layout_problems("• تيشيرت Boxy REHLA Tee — لون Black — 590 جنيه")
     assert any("swap" in p for p in problems), problems
 
 
@@ -332,7 +330,7 @@ def test_an_arabic_comma_between_them_is_the_same_failure():
 def test_an_arabic_word_between_them_is_correct():
     """This is the whole point of the rule: one Arabic word anchors the
     number, and the line reads the way it was written."""
-    assert quality_gate.layout_problems("• تيشيرت Boxy WNS Tee — لون Black، السعر 590 جنيه") == []
+    assert quality_gate.layout_problems("• تيشيرت Boxy REHLA Tee — لون Black، السعر 590 جنيه") == []
 
 
 def test_a_plain_space_is_not_a_separator():
@@ -344,16 +342,16 @@ def test_a_plain_space_is_not_a_separator():
 def test_a_leading_digit_is_not_flagged():
     """Digits are not strong characters, so the line still takes its direction
     from the Arabic after them."""
-    assert quality_gate.layout_problems("2 قطع من تيشيرت Boxy WNS Tee") == []
+    assert quality_gate.layout_problems("2 قطع من تيشيرت Boxy REHLA Tee") == []
 
 
 def test_a_hyphen_inside_a_product_name_is_not_a_separator():
-    assert quality_gate.layout_problems("هودي WANAS Zip-Hoodie متاح دلوقتي") == []
+    assert quality_gate.layout_problems("هودي REHLA Zip-Hoodie متاح دلوقتي") == []
 
 
 def test_a_badly_laid_out_reply_fails_the_gate():
-    golden = _run(_reply("confirm_order", 2, "• تيشيرت Boxy WNS Tee — لون Black، السعر 590 جنيه"))
-    fresh = _run(_reply("confirm_order", 2, "• تيشيرت Boxy WNS Tee — لون Black — 590 جنيه"))
+    golden = _run(_reply("confirm_order", 2, "• تيشيرت Boxy REHLA Tee — لون Black، السعر 590 جنيه"))
+    fresh = _run(_reply("confirm_order", 2, "• تيشيرت Boxy REHLA Tee — لون Black — 590 جنيه"))
     assert any("swap" in f for f in check(golden, fresh))
 
 
@@ -556,7 +554,7 @@ def _two_step(first, second):
 LISTED = (
     "عندنا نوعين سويت بانتس:\n"
     "• بنطلون Lightweight Sweatpant — السعر 650 جنيه بدل 720\n"
-    "• بنطلون WANAS Sweatpant — السعر 650 جنيه بدل 1000\n"
+    "• بنطلون REHLA Sweatpant — السعر 650 جنيه بدل 1000\n"
     "تحب تشوف صور ولا تعرف المقاسات؟"
 )
 
@@ -572,7 +570,7 @@ def test_actually_answering_the_follow_up_passes():
     answered = (
         "تمام، دي الصور والمقاسات:\n"
         "• بنطلون Lightweight Sweatpant — مقاسات S و M و L\n"
-        "• بنطلون WANAS Sweatpant — مقاس S و M بس\n"
+        "• بنطلون REHLA Sweatpant — مقاس S و M بس\n"
         "تحب أضيف واحد للسلة؟"
     )
     record = _two_step(LISTED, answered)
@@ -646,13 +644,13 @@ def test_the_bench_counts_a_chart_from_the_label_dict_not_its_repr():
     class _Reply:
         attachments = ["a.jpg", "chart.png"]
         attachment_labels = {
-            "a.jpg": {"label": "Boxy WNS Tee (Black)", "product_id": "boxy-wns-tee"},
-            "chart.png": {"label": "Boxy WNS Tee size chart", "product_id": "boxy-wns-tee"},
+            "a.jpg": {"label": "Boxy REHLA Tee (Black)", "product_id": "boxy-rehla-tee"},
+            "chart.png": {"label": "Boxy REHLA Tee size chart", "product_id": "boxy-rehla-tee"},
         }
 
     assert bench_turn.count_charts(_Reply()) == 1
     # And the flattened shape the channel adapters produce.
-    _Reply.attachment_labels = {"chart.png": "Boxy WNS Tee size chart"}
+    _Reply.attachment_labels = {"chart.png": "Boxy REHLA Tee size chart"}
     assert bench_turn.count_charts(_Reply()) == 1
     _Reply.attachment_labels = {}
     assert bench_turn.count_charts(_Reply()) == 0

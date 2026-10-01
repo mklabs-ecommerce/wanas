@@ -21,7 +21,7 @@ from domain.services import (
 )
 
 SECRET = "test-dashboard-secret"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 @pytest.fixture()
@@ -406,7 +406,7 @@ def test_the_filter_now_matches_what_shopify_sends(logged_in, monkeypatch):
 #
 # The store tab used to be Shopify's customer list alone, which was wrong by
 # exactly the orders the bot placed before it attached a customer to them: the
-# buyer is in wanas.db with a name and a governorate, and simply was not in the
+# buyer is in rehla.db with a name and a governorate, and simply was not in the
 # list that called itself everyone.
 
 
@@ -456,7 +456,7 @@ def test_the_store_list_includes_a_bot_customer_shopify_never_recorded(
     assert row["governorate"] == "Cairo"
     # Their order exists in Shopify even though their *customer record* does
     # not, which is the whole shape of this case -- so the money is still
-    # Shopify's number, folded out of the order, never summed from wanas.db.
+    # Shopify's number, folded out of the order, never summed from rehla.db.
     assert row["order_count"] == 1
     assert Decimal(row["amount_spent"]) > 0
     assert row["channels"] == ["whatsapp"]

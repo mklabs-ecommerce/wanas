@@ -136,8 +136,8 @@ def test_voice_notes_can_be_switched_off(seeded, voice, monkeypatch):
 
 def test_a_recognised_photo_keeps_the_conversation_with_the_bot(seeded, photo):
     provider = ScriptedProvider()
-    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي زيتي"))
-    provider.push(ModelReply(text="ده شكله WANAS Hoodie، أجيبلك المقاسات؟"))
+    provider.push_reading(ImageReading(product_id="rehla-hoodie", confidence=0.9, description="هودي زيتي"))
+    provider.push(ModelReply(text="ده شكله REHLA Hoodie، أجيبلك المقاسات؟"))
 
     reply = runtime.handle_message(
         "whatsapp", WHO, "عندكم زي ده؟", image_paths=[photo], db=seeded, provider=provider
@@ -151,8 +151,8 @@ def test_a_recognised_photo_keeps_the_conversation_with_the_bot(seeded, photo):
     assert "عندكم زي ده؟" in asked
     # The product **name**, never its id: a name is safe for the customer to
     # read back, an id is a leak.
-    assert "WANAS Hoodie" in asked
-    assert "wanas-hoodie" not in asked
+    assert "REHLA Hoodie" in asked
+    assert "rehla-hoodie" not in asked
 
 
 def test_the_shortlist_comes_from_the_real_catalog(seeded, photo):
@@ -164,7 +164,7 @@ def test_the_shortlist_comes_from_the_real_catalog(seeded, photo):
 
     _image, _mime, shortlist = provider.image_calls[0]
     names = {item["name"] for item in shortlist}
-    assert "WANAS Hoodie" in names and "Worker Jacket" in names
+    assert "REHLA Hoodie" in names and "Worker Jacket" in names
     assert all(set(item) == {"product_id", "name", "category", "colors"} for item in shortlist)
 
 
@@ -183,7 +183,7 @@ def test_a_product_id_the_shop_does_not_have_is_not_a_match(seeded, photo):
 def test_a_low_confidence_reading_asks_instead_of_claiming(seeded, photo):
     provider = ScriptedProvider()
     provider.push_reading(
-        ImageReading(product_id="wanas-hoodie", confidence=0.2, description="هودي غامق")
+        ImageReading(product_id="rehla-hoodie", confidence=0.2, description="هودي غامق")
     )
     provider.push(ModelReply(text="ممكن تقوللي بتدور على إيه بالظبط؟"))
 
@@ -192,7 +192,7 @@ def test_a_low_confidence_reading_asks_instead_of_claiming(seeded, photo):
     _system, history, _tools = provider.calls[0]
     asked = history[-1]["content"]
     assert "هودي غامق" in asked
-    assert "WANAS Hoodie" not in asked
+    assert "REHLA Hoodie" not in asked
     # And it is told, in as many words, not to claim we have one.
     assert "متقولش" in asked
 
@@ -227,7 +227,7 @@ def test_multiple_photos_are_all_read_not_just_the_first(seeded, tmp_path):
     photo2 = tmp_path / "b.jpg"
     photo2.write_bytes(BLOB)
     provider = ScriptedProvider()
-    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي زيتي"))
+    provider.push_reading(ImageReading(product_id="rehla-hoodie", confidence=0.9, description="هودي زيتي"))
     provider.push_reading(ImageReading(product_id="worker-jacket", confidence=0.9, description="جاكيت"))
     provider.push(ModelReply(text="تمام"))
 
@@ -247,7 +247,7 @@ def test_multiple_photos_are_all_read_not_just_the_first(seeded, tmp_path):
     assert "عايز ده وده" in asked
     assert "Photo 1:" in asked
     assert "Photo 2:" in asked
-    assert "WANAS Hoodie" in asked
+    assert "REHLA Hoodie" in asked
     assert "Worker Jacket" in asked
 
 
@@ -255,7 +255,7 @@ def test_a_single_photo_gets_no_numbered_label(seeded, photo):
     """The common case must read exactly as it always did -- no "Photo 1:"
     noise when there is only one."""
     provider = ScriptedProvider()
-    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي"))
+    provider.push_reading(ImageReading(product_id="rehla-hoodie", confidence=0.9, description="هودي"))
     provider.push(ModelReply(text="تمام"))
 
     runtime.handle_message("whatsapp", WHO, "", image_paths=[photo], db=seeded, provider=provider)
@@ -268,7 +268,7 @@ def test_an_unreadable_photo_alongside_a_readable_one_is_silently_skipped(seeded
     photo2 = tmp_path / "b.jpg"
     photo2.write_bytes(BLOB)
     provider = ScriptedProvider()
-    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي"))
+    provider.push_reading(ImageReading(product_id="rehla-hoodie", confidence=0.9, description="هودي"))
     provider.push(ModelReply(text="تمام"))
 
     reply = runtime.handle_message(
@@ -327,7 +327,7 @@ def test_a_successful_photo_keeps_the_image_in_history(seeded, photo):
     from assistant import session as session_store
 
     provider = ScriptedProvider()
-    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.9, description="هودي"))
+    provider.push_reading(ImageReading(product_id="rehla-hoodie", confidence=0.9, description="هودي"))
     provider.push(ModelReply(text="تمام"))
 
     runtime.handle_message("whatsapp", WHO, "", image_paths=[photo], db=seeded, provider=provider)
@@ -355,7 +355,7 @@ def test_image_understanding_can_be_switched_off(seeded, photo, monkeypatch):
         media, "settings", dataclasses.replace(settings, image_understanding_enabled=False)
     )
     provider = ScriptedProvider()
-    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.99))
+    provider.push_reading(ImageReading(product_id="rehla-hoodie", confidence=0.99))
 
     reply = runtime.handle_message(
         "whatsapp", WHO, "", image_paths=[photo], db=seeded, provider=provider
@@ -372,7 +372,7 @@ def test_an_oversized_file_is_refused_before_it_is_uploaded(seeded, tmp_path):
     fat = tmp_path / "huge.jpg"
     fat.write_bytes(b"0" * (media.MAX_MEDIA_BYTES + 1))
     provider = ScriptedProvider()
-    provider.push_reading(ImageReading(product_id="wanas-hoodie", confidence=0.99))
+    provider.push_reading(ImageReading(product_id="rehla-hoodie", confidence=0.99))
 
     assert media.read_photo(seeded, provider, str(fat)) is None
     assert provider.image_calls == []

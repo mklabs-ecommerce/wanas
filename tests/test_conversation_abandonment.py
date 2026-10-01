@@ -260,7 +260,7 @@ def test_runtime_resumes_and_answers_only_the_latest_message(seeded):
     # if the earlier turns had actually gone through the agent, and it is
     # exactly what `session_store.load` hands back to `recovery`.
     for role, text in [
-        ("user", "عايز WANAS Hoodie أسود مقاس L"),
+        ("user", "عايز REHLA Hoodie أسود مقاس L"),
         ("assistant", "تمام، حطيتلك الأسود L. تحب حاجة تانية؟"),
         ("user", "لأ بس عايز أعرف ليه بتلبسوا ألوان زيتي في الصور؟"),
     ]:
@@ -293,7 +293,7 @@ def test_runtime_resumes_and_answers_only_the_latest_message(seeded):
     # the fix.
     seen_history = provider.calls[0][1]
     seen_text = "\n".join(m.get("content", "") for m in seen_history if m.get("role") == "user")
-    assert "WANAS Hoodie" in seen_text
+    assert "REHLA Hoodie" in seen_text
     assert "طب خلاص، أكد الأوردر" in seen_text
 
     # The original handoff is left open for a person to still see, but marked

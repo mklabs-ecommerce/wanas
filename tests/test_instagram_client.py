@@ -98,7 +98,7 @@ def test_a_chunk_is_still_under_the_cap_after_it_is_laid_out(fake):
     headroom back; this is the check that it actually was."""
     from integrations.instagram.client import MAX_CHUNK_BYTES
 
-    line = "عندنا Boxy WNS Tee باللون Olive والمقاس XL رقم"
+    line = "عندنا Boxy REHLA Tee باللون Olive والمقاس XL رقم"
     text = chr(10).join(f"{line} {n}" for n in range(40))
     assert len(text.encode("utf-8")) > MAX_CHUNK_BYTES
 
@@ -167,7 +167,7 @@ def test_send_template_refuses_and_posts_nothing(fake, caplog):
     lets send_proactive fall through to its staff alert."""
     client = make_client()
 
-    with caplog.at_level(logging.WARNING, logger="wanas.instagram"):
+    with caplog.at_level(logging.WARNING, logger="rehla.instagram"):
         result = client.send_template("1234567890", "order_confirmation")
 
     assert result.delivered is False

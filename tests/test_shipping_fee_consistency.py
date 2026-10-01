@@ -15,6 +15,7 @@ import app
 from assistant.comment_faq import FAQ_REPLIES
 from assistant.prompt import SYSTEM_PROMPT
 from domain.models import ShippingRate
+from domain.services import shop_facts
 
 
 def _only_number(text: str) -> str:
@@ -27,15 +28,16 @@ def test_the_public_answer_and_the_prompt_quote_the_same_fee():
     """One is published under an Instagram post, the other is what the model
     repeats in a DM. A customer asking the same question in two places must
     not get two prices."""
-    published = _only_number(FAQ_REPLIES["shipping_cost"])
-    assert f"الشحن «{published} جنيه لكل محافظات مصر»" in SYSTEM_PROMPT
+    assert FAQ_REPLIES["shipping_cost"] == f"الشحن {shop_facts.shipping_line()}."
+    assert f"الشحن «{shop_facts.shipping_line()}»" in SYSTEM_PROMPT
 
 
 def test_the_boot_default_is_the_published_fee():
     """`_DEFAULT_SHIPPING_FEE` fills in any governorate nobody has priced, so
     if it disagreed with the published sentence the bot would quote one number
     and store another on the very first boot."""
-    assert Decimal(_only_number(FAQ_REPLIES["shipping_cost"])) == app._DEFAULT_SHIPPING_FEE
+    published = {Decimal(n) for n in re.findall(r"[0-9]+", FAQ_REPLIES["shipping_cost"])}
+    assert published == {*shop_facts.SHIPPING_FEES.values(), app._DEFAULT_SHIPPING_FEE}
 
 
 def test_a_governorate_priced_differently_is_reported_at_boot(seeded, caplog):
@@ -53,7 +55,7 @@ def test_a_governorate_priced_differently_is_reported_at_boot(seeded, caplog):
 
 def test_rates_that_all_match_say_nothing(seeded, caplog):
     for rate in seeded.query(ShippingRate).all():
-        rate.fee = app._DEFAULT_SHIPPING_FEE
+        rate.fee = shop_facts.fee_for(rate.governorate)
     seeded.commit()
 
     with caplog.at_level("WARNING"):

@@ -213,7 +213,7 @@ def test_an_instagram_buyer_is_a_bot_customer_not_a_website_one():
 
 
 def test_a_bot_customer_who_has_not_ordered_yet_is_still_a_bot_customer():
-    """They exist in wanas.db because a conversation created them, which
+    """They exist in rehla.db because a conversation created them, which
     nothing on the website does."""
     assert ledger.in_segment({"channels": [], "source": "bot"}, "bot")
     assert not ledger.in_segment({"channels": [], "source": "bot"}, "web")

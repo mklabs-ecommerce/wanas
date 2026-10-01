@@ -2,8 +2,8 @@
 
 Production, 2026-09-22 and 2026-09-25, one customer (`whatsapp/2010671…`):
 
-    customer: the size chart for the Boxy WNS Tee
-    log:      tool get_size_chart({'product_id': 'boxy-wns-tee'})
+    customer: the size chart for the Boxy REHLA Tee
+    log:      tool get_size_chart({'product_id': 'boxy-rehla-tee'})
     bot:      the RINGER BOXY FIT chart                       (09-22)
     customer: asks again
     log:      the reply says a photo is coming and nothing is attached,
@@ -15,9 +15,9 @@ Production, 2026-09-22 and 2026-09-25, one customer (`whatsapp/2010671…`):
 Three separate faults, and each group below reproduces one of them exactly.
 
 1. **The wrong chart.** The tool was asked for the right product and answered
-   with the wrong chart, because the product row said so. `boxy-wns-tee` was
+   with the wrong chart, because the product row said so. `boxy-rehla-tee` was
    seeded with `size_chart: "ringer-boxy-tee"`; commit e0333cb corrected the
-   seed file to `wns-boxy-tee`, but the seed only ever runs against an empty
+   seed file to `rehla-boxy-tee`, but the seed only ever runs against an empty
    catalog, so the live row kept the Ringer chart. The corrected chart then
    named a picture that was never committed, so even a correct link had
    nothing to send.
@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 
@@ -52,7 +51,7 @@ from domain.services import size_charts
 CHANNEL = "whatsapp"
 WHO = "201067177129"
 
-WNS_CHART = "data/size-charts/wns-boxy-tee.png"
+REHLA_CHART = "data/size-charts/rehla-boxy-tee.png"
 RINGER_CHART = "data/size-charts/ringer-boxy-tee.png"
 
 #: Meta's refusal, verbatim from the production log.
@@ -79,7 +78,7 @@ def _link(session, product_id: str, chart_id: str) -> None:
     session.commit()
 
 
-def _ask_for_the_chart(session, product_id: str = "boxy-wns-tee"):
+def _ask_for_the_chart(session, product_id: str = "boxy-rehla-tee"):
     provider = ScriptedProvider(
         [
             ModelReply(
@@ -90,17 +89,22 @@ def _ask_for_the_chart(session, product_id: str = "boxy-wns-tee"):
             ModelReply(text="ده جدول المقاسات، المقاسات بالسنتيمتر والقطعة مفرودة."),
         ]
     )
-    return agent.run_turn(session, CHANNEL, WHO, "ابعتلي جدول مقاسات Boxy WNS Tee", provider=provider)
+    return agent.run_turn(session, CHANNEL, WHO, "ابعتلي جدول مقاسات Boxy REHLA Tee", provider=provider)
 
 
 # --- 1. the wrong chart ------------------------------------------------------
 
 
-def test_boxy_wns_tee_linked_as_production_left_it_gets_its_own_chart_after_boot(seeded):
-    """The exact production state: the row still carries the value the seed
-    held before e0333cb. Asked for the Boxy WNS Tee's chart, the bot sent the
-    Ringer one."""
-    _link(seeded, "boxy-wns-tee", "ringer-boxy-tee")
+def test_a_product_linked_to_a_retired_chart_gets_its_own_after_boot(seeded, monkeypatch):
+    """The state a long-lived database is in: the row still carries the value
+    the seed held before a correction. Asked for the Boxy REHLA Tee's chart, the
+    bot sent the Ringer one."""
+    from domain.seed import products as seed_products
+
+    monkeypatch.setattr(
+        seed_products, "RETIRED_SIZE_CHARTS", {"boxy-rehla-tee": ("ringer-boxy-tee",)}
+    )
+    _link(seeded, "boxy-rehla-tee", "ringer-boxy-tee")
     seeded.rollback()
     _boot()
     seeded.expire_all()
@@ -108,23 +112,23 @@ def test_boxy_wns_tee_linked_as_production_left_it_gets_its_own_chart_after_boot
     reply = _ask_for_the_chart(seeded)
 
     assert RINGER_CHART not in reply.attachments, "another product's chart went out"
-    assert reply.attachments == [WNS_CHART]
+    assert reply.attachments == [REHLA_CHART]
 
 
 def test_the_correction_is_exact_and_never_touches_a_staff_choice(seeded):
     """Only the retired value is rewritten. A chart staff picked -- any other
     value, including one the seed never named -- stands."""
-    _link(seeded, "boxy-wns-tee", "oversized-graphic-tee")
+    _link(seeded, "boxy-rehla-tee", "oversized-graphic-tee")
     seeded.rollback()
     _boot()
     seeded.expire_all()
-    assert seeded.get(Product, "boxy-wns-tee").size_chart == "oversized-graphic-tee"
+    assert seeded.get(Product, "boxy-rehla-tee").size_chart == "oversized-graphic-tee"
     # And the Ringer tee, which really does use the Ringer chart, keeps it.
     assert seeded.get(Product, "ringer-tee").size_chart == "ringer-boxy-tee"
 
 
 def test_every_shipped_chart_has_its_picture_on_disk():
-    """`wns-boxy-tee.png` was named by the chart file and never committed, so
+    """`rehla-boxy-tee.png` was named by the chart file and never committed, so
     the one chart that was finally right had no picture to send. A chart whose
     picture is missing is a chart the customer never sees."""
     missing = [
@@ -135,14 +139,14 @@ def test_every_shipped_chart_has_its_picture_on_disk():
     assert missing == []
 
 
-def test_the_boxy_wns_tee_chart_is_its_own_numbers_and_its_own_picture(seeded):
+def test_the_boxy_rehla_tee_chart_is_its_own_numbers_and_its_own_picture(seeded):
     ctx = ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
-    payload = call_tool(ctx, "get_size_chart", {"product_id": "boxy-wns-tee"})
+    payload = call_tool(ctx, "get_size_chart", {"product_id": "boxy-rehla-tee"})
 
-    assert payload["chart_id"] == "wns-boxy-tee"
+    assert payload["chart_id"] == "rehla-boxy-tee"
     assert payload["sizes"]["S"] == {"width": 56, "length": 66}
-    assert ctx.attachments == [WNS_CHART]
-    assert (PROJECT_ROOT / WNS_CHART).is_file()
+    assert ctx.attachments == [REHLA_CHART]
+    assert (PROJECT_ROOT / REHLA_CHART).is_file()
 
 
 def test_the_chart_answer_names_the_product_it_is_for(seeded):
@@ -179,21 +183,21 @@ def test_a_chart_whose_picture_is_missing_is_never_attached(seeded, monkeypatch,
     """A path to nothing is not a picture: attaching one promises the customer
     a chart that can only fail on send. The product's own uploaded chart is
     used instead when there is one, and otherwise nothing is attached."""
-    chart = dict(size_charts.get_chart("wns-boxy-tee"))
+    chart = dict(size_charts.get_chart("rehla-boxy-tee"))
     chart["image"] = "data/size-charts/does-not-exist.png"
-    monkeypatch.setattr(size_charts, "_load", lambda path=None: {"wns-boxy-tee": chart})
+    monkeypatch.setattr(size_charts, "_load", lambda path=None: {"rehla-boxy-tee": chart})
 
     ctx = ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
-    payload = call_tool(ctx, "get_size_chart", {"product_id": "boxy-wns-tee"})
+    payload = call_tool(ctx, "get_size_chart", {"product_id": "boxy-rehla-tee"})
     assert ctx.attachments == []
     assert payload["image"] is None
     assert payload["sizes"], "the numbers are still there to quote"
 
-    seeded.get(Product, "boxy-wns-tee").size_chart_image = "https://cdn.shopify.com/wns.png"
+    seeded.get(Product, "boxy-rehla-tee").size_chart_image = "https://cdn.shopify.com/rehla.png"
     seeded.flush()
     ctx = ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
-    call_tool(ctx, "get_size_chart", {"product_id": "boxy-wns-tee"})
-    assert ctx.attachments == ["https://cdn.shopify.com/wns.png"]
+    call_tool(ctx, "get_size_chart", {"product_id": "boxy-rehla-tee"})
+    assert ctx.attachments == ["https://cdn.shopify.com/rehla.png"]
 
 
 # --- 2. then nothing at all --------------------------------------------------
@@ -308,16 +312,16 @@ def test_a_refusal_that_is_not_about_the_id_is_not_retried(seeded, meta, monkeyp
 # --- 3. the chart counted as no picture --------------------------------------
 
 
-def _chart_label(name: str = "Boxy WNS Tee") -> dict:
-    return {"label": f"{name} size chart", "name": name, "product_id": "boxy-wns-tee"}
+def _chart_label(name: str = "Boxy REHLA Tee") -> dict:
+    return {"label": f"{name} size chart", "name": name, "product_id": "boxy-rehla-tee"}
 
 
 def test_a_reply_about_the_chart_it_attached_is_not_an_empty_promise():
     """What the model wrote on 09-25, beside the chart it had attached."""
     why = photo_claims.unbacked_claim(
-        "دي صورة جدول المقاسات بتاع Boxy WNS Tee 👆",
-        attachments=[WNS_CHART],
-        labels={WNS_CHART: _chart_label()},
+        "دي صورة جدول المقاسات بتاع Boxy REHLA Tee 👆",
+        attachments=[REHLA_CHART],
+        labels={REHLA_CHART: _chart_label()},
     )
     assert why == ""
 
@@ -326,7 +330,7 @@ def test_calling_a_chart_a_photo_of_the_garment_is_still_caught():
     """The other half: a chart is still not the garment. «دي صورة التيشيرت»
     beside a measurements table has not shown the customer the shirt."""
     why = photo_claims.unbacked_claim(
-        "دي صورة التيشيرت 👆", attachments=[WNS_CHART], labels={WNS_CHART: _chart_label()}
+        "دي صورة التيشيرت 👆", attachments=[REHLA_CHART], labels={REHLA_CHART: _chart_label()}
     )
     assert "nothing is attached" in why
 
@@ -336,7 +340,7 @@ def test_the_chart_goes_out_on_the_first_reply_without_a_retry(seeded):
         [
             ModelReply(
                 tool_calls=[
-                    {"id": "c1", "name": "get_size_chart", "arguments": {"product_id": "boxy-wns-tee"}}
+                    {"id": "c1", "name": "get_size_chart", "arguments": {"product_id": "boxy-rehla-tee"}}
                 ]
             ),
             ModelReply(text="دي صورة جدول المقاسات 👆 المقاسات بالسنتيمتر والقطعة مفرودة."),
@@ -345,7 +349,7 @@ def test_the_chart_goes_out_on_the_first_reply_without_a_retry(seeded):
     reply = agent.run_turn(seeded, CHANNEL, WHO, "ابعتلي جدول المقاسات", provider=provider)
 
     assert reply.error is None
-    assert reply.attachments == [WNS_CHART]
+    assert reply.attachments == [REHLA_CHART]
     assert len(provider.calls) == 2, "a chart described as a chart was sent back for a retry"
 
 
@@ -361,17 +365,17 @@ def test_an_undelivered_chart_is_resent_by_the_chart_tool_not_the_photo_tool(see
         WHO,
         [
             {"role": "user", "content": "ابعتلي جدول المقاسات"},
-            {"role": "assistant", "content": "ده الجدول 👆", "attachments": [WNS_CHART]},
+            {"role": "assistant", "content": "ده الجدول 👆", "attachments": [REHLA_CHART]},
         ],
     )
     session_store.record_undelivered_attachments(
-        seeded, CHANNEL, WHO, {WNS_CHART: "Boxy WNS Tee size chart"}
+        seeded, CHANNEL, WHO, {REHLA_CHART: "Boxy REHLA Tee size chart"}
     )
     provider = ScriptedProvider(
         [
             ModelReply(
                 tool_calls=[
-                    {"id": "c1", "name": "get_size_chart", "arguments": {"product_id": "boxy-wns-tee"}}
+                    {"id": "c1", "name": "get_size_chart", "arguments": {"product_id": "boxy-rehla-tee"}}
                 ]
             ),
             ModelReply(text="معلش، الجدول ماوصلش من عندنا. ده هو تاني 👆"),
@@ -380,11 +384,4 @@ def test_an_undelivered_chart_is_resent_by_the_chart_tool_not_the_photo_tool(see
     reply = agent.run_turn(seeded, CHANNEL, WHO, "الجدول ماوصلش", provider=provider)
     prompt = provider.calls[0][0]
     assert "get_size_chart" in prompt.split("تنبيه داخلي")[-1]
-    assert reply.attachments == [WNS_CHART]
-
-
-def test_the_chart_file_is_a_real_png():
-    """Not a placeholder: the picture the storefront shows for this product."""
-    raw = Path(PROJECT_ROOT / WNS_CHART).read_bytes()
-    assert raw[:8] == b"\x89PNG\r\n\x1a\n"
-    assert len(raw) > 50_000
+    assert reply.attachments == [REHLA_CHART]

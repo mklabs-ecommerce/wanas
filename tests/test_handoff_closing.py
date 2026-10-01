@@ -59,7 +59,7 @@ def test_an_archived_product_is_not_offered_to_the_photo_reader(seeded):
     seeded.flush()
     offered = {item["product_id"] for item in media.catalog_shortlist(seeded)}
     assert "cairokee-hoodie" not in offered
-    assert "wanas-hoodie" in offered
+    assert "rehla-hoodie" in offered
 
 
 def test_a_reading_that_lands_on_an_archived_product_is_no_match(seeded):

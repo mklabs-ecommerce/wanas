@@ -25,19 +25,19 @@ IGSID = "17841400000000001"
 
 
 def test_a_handle_is_stored_on_the_identity(db):
-    identities.set_platform_profile(db, CHANNEL, IGSID, username="wanas_customer", name="Mona")
+    identities.set_platform_profile(db, CHANNEL, IGSID, username="rehla_customer", name="Mona")
     db.commit()
 
     identity = identities.get(db, CHANNEL, IGSID)
-    assert identity.username == "wanas_customer"
+    assert identity.username == "rehla_customer"
     assert identity.profile_name == "Mona"
 
 
 def test_a_leading_at_is_stripped_on_the_way_in():
     """Stored bare, shown with the `@` -- so it round-trips through search
     and a URL without a stray character deciding whether it matches."""
-    assert customer_labels(None, CHANNEL, IGSID, "@wanas_customer")["customer_handle"] == (
-        "@wanas_customer"
+    assert customer_labels(None, CHANNEL, IGSID, "@rehla_customer")["customer_handle"] == (
+        "@rehla_customer"
     )
 
 
@@ -45,18 +45,18 @@ def test_a_blank_read_never_erases_a_handle_already_known(db):
     """The usual reason for a blank is a call that failed, not a handle that
     changed -- and overwriting a good value with the failure is how a
     conversation silently goes back to being a row of digits."""
-    identities.set_platform_profile(db, CHANNEL, IGSID, username="wanas_customer")
+    identities.set_platform_profile(db, CHANNEL, IGSID, username="rehla_customer")
     identities.set_platform_profile(db, CHANNEL, IGSID, username="", name="")
     db.commit()
 
-    assert identities.get(db, CHANNEL, IGSID).username == "wanas_customer"
+    assert identities.get(db, CHANNEL, IGSID).username == "rehla_customer"
 
 
 def test_one_lookup_per_customer_not_per_message(db):
     """`needs_platform_profile` is what keeps an extra round trip to Meta out
     of the webhook path for everyone who has already been looked up."""
     assert identities.needs_platform_profile(db, CHANNEL, IGSID) is True
-    identities.set_platform_profile(db, CHANNEL, IGSID, username="wanas_customer")
+    identities.set_platform_profile(db, CHANNEL, IGSID, username="rehla_customer")
     db.commit()
     assert identities.needs_platform_profile(db, CHANNEL, IGSID) is False
 
@@ -69,8 +69,8 @@ def test_one_lookup_per_customer_not_per_message(db):
 def test_the_handle_titles_a_conversation_with_no_client():
     """The case this exists for: most Instagram conversations have no order
     behind them, so there is no `Client` and nothing else to call them."""
-    labels = customer_labels(None, CHANNEL, IGSID, "wanas_customer")
-    assert labels["display_name"] == "@wanas_customer"
+    labels = customer_labels(None, CHANNEL, IGSID, "rehla_customer")
+    assert labels["display_name"] == "@rehla_customer"
     assert labels["customer_name"] is None
 
 
@@ -78,10 +78,10 @@ def test_a_real_name_still_outranks_the_handle():
     """`Client.full_name` is a name a person typed onto an order. A handle is
     what they call themselves in public, which is second best, not better."""
     client = Client(client_id=1, full_name="Mona Ali", phone="201234567890", address="")
-    labels = customer_labels(client, CHANNEL, IGSID, "wanas_customer")
+    labels = customer_labels(client, CHANNEL, IGSID, "rehla_customer")
     assert labels["display_name"] == "Mona Ali"
     # ...and the handle is still shown, just not as the title.
-    assert labels["customer_handle"] == "@wanas_customer"
+    assert labels["customer_handle"] == "@rehla_customer"
 
 
 def test_without_a_handle_the_id_is_still_the_fallback():
@@ -106,11 +106,11 @@ def test_whatsapp_is_unaffected():
 
 
 def test_the_directory_lists_only_identities_that_have_one(db):
-    identities.set_platform_profile(db, CHANNEL, IGSID, username="wanas_customer")
+    identities.set_platform_profile(db, CHANNEL, IGSID, username="rehla_customer")
     identities.get_or_create(db, CHANNEL, "17841400000000002")
     db.commit()
 
-    assert handle_directory(db) == {(CHANNEL, IGSID): "wanas_customer"}
+    assert handle_directory(db) == {(CHANNEL, IGSID): "rehla_customer"}
 
 
 # --------------------------------------------------------------------------
@@ -163,10 +163,10 @@ def test_a_readable_profile_comes_back_trimmed(ig_client, monkeypatch):
         text = ""
 
         def json(self):
-            return {"username": " wanas_customer ", "name": " Mona ", "id": IGSID}
+            return {"username": " rehla_customer ", "name": " Mona ", "id": IGSID}
 
     monkeypatch.setattr(httpx, "get", lambda *a, **k: _Ok())
-    assert ig_client.get_user_profile(IGSID) == {"username": "wanas_customer", "name": "Mona"}
+    assert ig_client.get_user_profile(IGSID) == {"username": "rehla_customer", "name": "Mona"}
 
 
 def test_an_unconfigured_client_never_calls_out(monkeypatch):

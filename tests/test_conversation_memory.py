@@ -440,7 +440,7 @@ def test_the_colour_that_chose_a_photo_is_written_down_at_attach_time(seeded):
 
     load_all()
     ctx = ToolContext(session=seeded, channel=CHANNEL, external_id=WHO)
-    call_tool(ctx, "get_variants", {"product_id": "wanas-hoodie", "more_images": True})
+    call_tool(ctx, "get_variants", {"product_id": "rehla-hoodie", "more_images": True})
 
     assert ctx.attachments
     labelled = [p for p in ctx.attachments if p in ctx.attachment_labels]
@@ -449,7 +449,7 @@ def test_the_colour_that_chose_a_photo_is_written_down_at_attach_time(seeded):
     assert len({e["color"] for e in entries}) == len(entries)
     # And every one of them knows which product it belongs to, which is what
     # makes a reply to it move the conversation.
-    assert {e["product_id"] for e in entries} == {"wanas-hoodie"}
+    assert {e["product_id"] for e in entries} == {"rehla-hoodie"}
 
 
 def test_replying_to_another_products_photo_moves_the_conversation(seeded):
@@ -486,7 +486,7 @@ def test_replying_to_another_products_photo_moves_the_conversation(seeded):
         CHANNEL,
         WHO,
         ["wamid.hoodie.words", "wamid.hoodie.photo"],
-        mid_labels={"wamid.hoodie.photo": _photo("Black", "wanas-hoodie", "WANAS Hoodie")},
+        mid_labels={"wamid.hoodie.photo": _photo("Black", "rehla-hoodie", "REHLA Hoodie")},
     )
 
     # No tool ran in either turn, so nothing else in this transcript says what

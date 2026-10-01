@@ -24,7 +24,7 @@ from tests.checkout_helpers import agree_to_the_summary
 
 CHANNEL = "whatsapp"
 WHO = "201000000444"
-VARIANT = "wanas-hoodie-s-black"
+VARIANT = "rehla-hoodie-s-black"
 
 
 @pytest.mark.parametrize(

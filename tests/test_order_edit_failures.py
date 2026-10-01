@@ -26,8 +26,8 @@ from domain.models import Order
 from domain.services import carts, orders
 from integrations.shopify import catalog as shopify_catalog, orders as shopify_orders
 
-VARIANT_A = "wanas-hoodie-s-olive"
-VARIANT_B = "wanas-hoodie-s-black"
+VARIANT_A = "rehla-hoodie-s-olive"
+VARIANT_B = "rehla-hoodie-s-black"
 CUSTOMER = "201555000333"
 
 #: The production error, verbatim from the Shopify response.
@@ -220,7 +220,7 @@ def test_the_missing_scope_is_reported_at_boot(monkeypatch, caplog):
     monkeypatch.setattr(
         scopes, "granted", lambda: set(scopes.REQUIRED_SCOPES) - {"write_order_edits"}
     )
-    with caplog.at_level("ERROR", logger="wanas.shopify.scopes"):
+    with caplog.at_level("ERROR", logger="rehla.shopify.scopes"):
         gaps = scopes.log_scope_check()
     assert gaps == ["write_order_edits"]
     message = "\n".join(r.getMessage() for r in caplog.records)

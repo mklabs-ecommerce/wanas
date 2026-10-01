@@ -25,8 +25,8 @@ from tests.checkout_helpers import agree_to_the_summary
 
 load_all()
 
-VARIANT = "wanas-hoodie-s-olive"
-SOLD_OUT = "wanas-hoodie-m-olive"
+VARIANT = "rehla-hoodie-s-olive"
+SOLD_OUT = "rehla-hoodie-m-olive"
 
 
 @pytest.fixture()
@@ -165,14 +165,14 @@ def test_get_variants_product_not_found(ctx):
 
 
 def test_get_variants_returns_sold_out_and_the_offerable_subset(ctx):
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie")
     ids = {v["variant_id"] for v in payload["variants"]}
     assert SOLD_OUT in ids
     assert SOLD_OUT not in payload["in_stock"]
 
 
 def test_stock_qty_is_returned_but_status_is_what_a_reply_uses(ctx):
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie")
     variant = payload["variants"][0]
     assert set(variant) == {
         "variant_id",
@@ -193,9 +193,9 @@ def test_stock_qty_is_returned_but_status_is_what_a_reply_uses(ctx):
 def test_add_to_cart_variant_not_found(ctx):
     """Never resolve to the nearest match: silently correcting an identifier
     ships the wrong size."""
-    assert call(ctx, "add_to_cart", variant_id="wanas-hoodie-m-oliv") == {
+    assert call(ctx, "add_to_cart", variant_id="rehla-hoodie-m-oliv") == {
         "error": "variant_not_found",
-        "variant_id": "wanas-hoodie-m-oliv",
+        "variant_id": "rehla-hoodie-m-oliv",
     }
 
 
@@ -233,7 +233,7 @@ def test_add_to_cart_out_of_stock_joins_the_waitlist(ctx):
 
 
 def test_add_to_cart_insufficient_stock(ctx, shopify):
-    # Set on the shelf, not on the wanas.db row: what a cart may hold follows
+    # Set on the shelf, not on the rehla.db row: what a cart may hold follows
     # Shopify's count, the same as every price and status the bot quotes.
     shopify.set(VARIANT, qty=3)
     assert call(ctx, "add_to_cart", variant_id=VARIANT, quantity=5) == {
@@ -243,7 +243,7 @@ def test_add_to_cart_insufficient_stock(ctx, shopify):
 
 
 def test_add_to_cart_follows_shopify_not_the_stale_local_row(ctx, shopify):
-    """A wanas.db row stuck at zero must not refuse a size Shopify is selling.
+    """A rehla.db row stuck at zero must not refuse a size Shopify is selling.
 
     This is the whole of the phantom-restock bug in one assertion: the refusal
     below used to happen, it joined the stock waitlist, and half an hour later
@@ -301,7 +301,7 @@ def test_remove_from_cart_needs_exactly_one_argument(ctx):
 def test_removing_a_line_that_is_not_there_is_not_an_error(ctx):
     """The customer's intent is already satisfied."""
     call(ctx, "add_to_cart", variant_id=VARIANT)
-    result = call(ctx, "remove_from_cart", variant_id="wanas-hoodie-l-black")
+    result = call(ctx, "remove_from_cart", variant_id="rehla-hoodie-l-black")
     assert "error" not in result
     assert len(result["lines"]) == 1
 
@@ -310,7 +310,7 @@ def test_removing_a_line_that_is_not_there_is_not_an_error(ctx):
 
 
 def test_size_chart_shape_and_supplied_fields(ctx):
-    chart = call(ctx, "get_size_chart", product_id="wanas-sweatpant")
+    chart = call(ctx, "get_size_chart", product_id="rehla-sweatpant")
     assert chart["has_chart"] is True
     assert chart["chart_id"] == "wide-leg-sweatpants"
     # Supplied by the tool, not stored per chart.
@@ -320,7 +320,7 @@ def test_size_chart_shape_and_supplied_fields(ctx):
 
 
 def test_size_chart_image_becomes_an_attachment(ctx):
-    call(ctx, "get_size_chart", product_id="wanas-sweatpant")
+    call(ctx, "get_size_chart", product_id="rehla-sweatpant")
     assert ctx.attachments == ["data/size-charts/wide-leg-sweatpants.png"]
 
 
@@ -330,12 +330,12 @@ def test_an_uploaded_chart_picture_is_a_chart_with_nothing_to_quote(ctx):
     same way they would on the storefront -- but `sizes` is empty, so there is
     nothing here for the model to read a number off."""
     Product = __import__("domain.models", fromlist=["Product"]).Product
-    product = ctx.session.get(Product, "wanas-hoodie")
+    product = ctx.session.get(Product, "rehla-hoodie")
     product.size_chart = None
     product.size_chart_image = "https://cdn.example/hoodie-chart.png"
     ctx.session.flush()
 
-    chart = call(ctx, "get_size_chart", product_id="wanas-hoodie")
+    chart = call(ctx, "get_size_chart", product_id="rehla-hoodie")
 
     assert chart["has_chart"] is True
     assert chart["image_only"] is True
@@ -347,12 +347,12 @@ def test_an_uploaded_chart_picture_is_a_chart_with_nothing_to_quote(ctx):
 def test_no_chart_returns_that_and_nothing_else(ctx):
     """Returning a neighbouring product's chart is the failure this shape
     exists to prevent."""
-    product = ctx.session.get(__import__("domain.models", fromlist=["Product"]).Product, "wanas-hoodie")
+    product = ctx.session.get(__import__("domain.models", fromlist=["Product"]).Product, "rehla-hoodie")
     product.size_chart = None
     ctx.session.flush()
-    assert call(ctx, "get_size_chart", product_id="wanas-hoodie") == {
+    assert call(ctx, "get_size_chart", product_id="rehla-hoodie") == {
         "has_chart": False,
-        "product_id": "wanas-hoodie",
+        "product_id": "rehla-hoodie",
     }
 
 
@@ -376,25 +376,25 @@ def test_different_products_never_return_each_others_chart(ctx):
     """A customer asking about one product must never receive another
     product's chart_id, image, or measurements -- the exact failure
     AGENTS.md calls out as causing returns."""
-    sweatpant = call(ctx, "get_size_chart", product_id="wanas-sweatpant")
-    hoodie = call(ctx, "get_size_chart", product_id="wanas-hoodie")
+    sweatpant = call(ctx, "get_size_chart", product_id="rehla-sweatpant")
+    hoodie = call(ctx, "get_size_chart", product_id="rehla-hoodie")
     assert sweatpant["chart_id"] != hoodie["chart_id"]
     assert sweatpant["image"] != hoodie["image"]
     assert sweatpant["sizes"] != hoodie["sizes"]
 
-    crewneck = call(ctx, "get_size_chart", product_id="wanas-crewneck")
+    crewneck = call(ctx, "get_size_chart", product_id="rehla-crewneck")
     assert crewneck["chart_id"] not in {sweatpant["chart_id"], hoodie["chart_id"]}
     assert crewneck["image"] not in {sweatpant["image"], hoodie["image"]}
 
 
-def test_boxy_wns_tee_and_ringer_tee_have_distinct_charts(ctx):
+def test_boxy_rehla_tee_and_ringer_tee_have_distinct_charts(ctx):
     """Regression: these two products used to share one chart_id
     ("ringer-boxy-tee") even though their real measurements differ, so a
     Boxy Fit customer could be sent the Ringer Tee's numbers/image."""
-    boxy = call(ctx, "get_size_chart", product_id="boxy-wns-tee")
+    boxy = call(ctx, "get_size_chart", product_id="boxy-rehla-tee")
     ringer = call(ctx, "get_size_chart", product_id="ringer-tee")
 
-    assert boxy["chart_id"] == "wns-boxy-tee"
+    assert boxy["chart_id"] == "rehla-boxy-tee"
     assert ringer["chart_id"] == "ringer-boxy-tee"
     assert boxy["chart_id"] != ringer["chart_id"]
     assert boxy["image"] != ringer["image"]
@@ -487,7 +487,7 @@ def test_confirm_order_items_out_of_stock_writes_nothing(ctx, shopify):
     call(ctx, "add_to_cart", variant_id=VARIANT, quantity=2)
     # Someone else buys it while the customer is typing their address -- on the
     # storefront, which is why the shelf that moves is Shopify's and not the
-    # local row. Changing wanas.db here would be changing a copy.
+    # local row. Changing rehla.db here would be changing a copy.
     shopify.set(VARIANT, qty=1)
     ctx.session.get(Variant, VARIANT).stock_qty = 1
     ctx.session.flush()
@@ -556,7 +556,7 @@ def test_confirm_order_success_shape(ctx):
         "shipping_fee",
         "total",
     }
-    assert result["order_id"].startswith("WNS-")
+    assert result["order_id"].startswith("RHL-")
     assert result["reference"].startswith("#")
     assert result["status"] == "Confirmed"
     assert result["total"] == 710
@@ -603,10 +603,10 @@ def test_orders_are_scoped_to_the_identity(ctx, placed):
 
 
 def test_modify_order_quantity_refusals(ctx, placed):
-    assert call(ctx, "modify_order_quantity", order_id="WNS-9999", variant_id=VARIANT, quantity=1)[
+    assert call(ctx, "modify_order_quantity", order_id="RHL-9999", variant_id=VARIANT, quantity=1)[
         "error"
     ] == "order_not_found"
-    assert call(ctx, "modify_order_quantity", order_id=placed, variant_id="wanas-hoodie-l-black", quantity=1)[
+    assert call(ctx, "modify_order_quantity", order_id=placed, variant_id="rehla-hoodie-l-black", quantity=1)[
         "error"
     ] == "line_not_found"
     assert call(ctx, "modify_order_quantity", order_id=placed, variant_id=VARIANT, quantity=11)[
@@ -720,32 +720,32 @@ def test_an_exchange_inside_the_window_is_open(ctx, placed):
     assert terms["route"] == "exchange_within_window"
 
 
-def test_an_exchange_after_twenty_four_hours_is_closed(ctx, placed):
-    _deliver(ctx, placed, hours_ago=30)
+def test_an_exchange_after_the_window_is_closed(ctx, placed):
+    _deliver(ctx, placed, hours_ago=15 * 24)
     terms = call(ctx, "get_return_terms", order_id=placed)
     assert terms["exchange_window"] == "closed"
-    assert terms["exchange_window_hours"] == 24
+    assert terms["exchange_window_hours"] == 14 * 24
 
 
-def test_a_defective_item_ships_at_the_shops_expense_and_a_swap_costs_twenty(ctx, placed):
+def test_a_defective_item_ships_at_the_shops_expense_and_a_swap_costs_the_shipping(ctx, placed):
     """Who pays is decided by *why*, and the model is given both answers
     rather than being trusted to remember which way round they go."""
     _deliver(ctx, placed, hours_ago=2)
     terms = call(ctx, "get_return_terms", order_id=placed)
     assert terms["defective_or_wrong_item"] == "shop_pays_shipping"
-    assert terms["changed_mind"] == "customer_pays_shipping_plus_surcharge"
-    assert terms["exchange_surcharge"] == 20
-    # Regular shipping *plus* the surcharge -- not the surcharge on its own.
-    assert terms["customer_pays"] == 80
-    assert terms["exchange_condition"] == "original_packaging_unworn_clean"
+    assert terms["changed_mind"] == "customer_pays_shipping"
+    assert terms["exchange_surcharge"] == 0
+    # Regular shipping only: Rehla adds no surcharge to an exchange.
+    assert terms["customer_pays"] == terms["shipping_fee"]
+    assert terms["exchange_condition"] == "unused_with_tags_and_original_packaging"
 
 
 def test_the_terms_answer_without_an_order_but_quote_no_amount(ctx):
     """"ممكن أستبدل؟" arrives before any order id does."""
     terms = call(ctx, "get_return_terms")
-    assert terms["exchange_window_hours"] == 24
-    assert terms["exchange_surcharge"] == 20
-    assert terms["returns_accepted"] == "at_the_door_only"
+    assert terms["exchange_window_hours"] == 14 * 24
+    assert terms["exchange_surcharge"] == 0
+    assert terms["returns_accepted"].startswith("within_return_window_days")
     assert "customer_pays" not in terms and "shipping_fee" not in terms
 
 
@@ -756,7 +756,7 @@ def test_return_terms_are_scoped_to_the_asking_customer(ctx, placed, seeded):
 
 
 def test_cancel_order_not_found(ctx):
-    assert call(ctx, "cancel_order", order_id="WNS-4242")["error"] == "order_not_found"
+    assert call(ctx, "cancel_order", order_id="RHL-4242")["error"] == "order_not_found"
 
 
 def test_request_item_swap_queues_and_never_applies(ctx, placed):
@@ -772,14 +772,14 @@ def test_request_item_swap_queues_and_never_applies(ctx, placed):
 
 
 def test_request_item_swap_refusals(ctx, placed):
-    assert call(ctx, "request_item_swap", order_id="WNS-1", from_variant_id=VARIANT)["error"] == "order_not_found"
-    assert call(ctx, "request_item_swap", order_id=placed, from_variant_id="wanas-hoodie-l-black")[
+    assert call(ctx, "request_item_swap", order_id="RHL-1", from_variant_id=VARIANT)["error"] == "order_not_found"
+    assert call(ctx, "request_item_swap", order_id=placed, from_variant_id="rehla-hoodie-l-black")[
         "error"
     ] == "line_not_found"
 
 
 def test_submit_feedback_refusals_and_success(ctx, placed):
-    assert call(ctx, "submit_feedback", order_id="WNS-1", rating=5)["error"] == "order_not_found"
+    assert call(ctx, "submit_feedback", order_id="RHL-1", rating=5)["error"] == "order_not_found"
     assert call(ctx, "submit_feedback", order_id=placed, rating=5)["error"] == "not_delivered"
 
     order = ctx.session.get(Order, placed)
@@ -887,7 +887,7 @@ def test_product_not_found_names_the_product_the_conversation_is_about(ctx):
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "c1", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}
+                    {"id": "c1", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}
                 ],
             },
             {
@@ -904,7 +904,7 @@ def test_product_not_found_names_the_product_the_conversation_is_about(ctx):
     assert result["error"] == "product_not_found"
     assert result["product_id"] == "ringer-boxy-fit-tshirt"
     assert result["product_in_conversation"] == {
-        "product_id": "wanas-hoodie",
+        "product_id": "rehla-hoodie",
         "name": "Cairokee Hoodie",
     }
 
@@ -945,7 +945,7 @@ def test_get_size_chart_not_found_carries_the_same_way_back(ctx):
                 "role": "assistant",
                 "content": "",
                 "tool_calls": [
-                    {"id": "c1", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}
+                    {"id": "c1", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}
                 ],
             },
             {
@@ -958,7 +958,7 @@ def test_get_size_chart_not_found_carries_the_same_way_back(ctx):
     )
     result = call(ctx, "get_size_chart", product_id="not-a-product")
     assert result["error"] == "product_not_found"
-    assert result["product_in_conversation"]["product_id"] == "wanas-hoodie"
+    assert result["product_in_conversation"]["product_id"] == "rehla-hoodie"
 
 
 # --- implicit product memory ----------------------------------------------
@@ -987,13 +987,13 @@ def _turn(ctx, tool, arguments, content, call_id="c"):
 def test_a_follow_up_resolves_to_the_product_already_on_the_table(ctx):
     """(1) The ordinary single-product conversation: they asked about the
     hoodie, then asked what sizes. No id, no question back to them."""
-    first = call(ctx, "get_variants", product_id="wanas-hoodie")
-    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, first)
+    first = call(ctx, "get_variants", product_id="rehla-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "rehla-hoodie"}, first)
 
     again = call(ctx, "get_variants")
 
     assert "error" not in again
-    assert again["product_id"] == "wanas-hoodie"
+    assert again["product_id"] == "rehla-hoodie"
 
 
 def test_a_follow_up_after_a_switch_resolves_to_the_product_switched_to(ctx):
@@ -1004,8 +1004,8 @@ def test_a_follow_up_after_a_switch_resolves_to_the_product_switched_to(ctx):
     "what sizes?" about the hoodie they had stopped talking about is the one
     wrong answer implicit resolution must not give.
     """
-    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
-    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+    hoodie = call(ctx, "get_variants", product_id="rehla-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "rehla-hoodie"}, hoodie, call_id="c1")
 
     found = call(ctx, "get_products", query="worker jacket")
     assert found["count"] == 1, "the fixture must give this search a single hit"
@@ -1020,40 +1020,40 @@ def test_a_search_with_several_hits_does_not_move_the_conversation(ctx):
     """"Which of these" is an ambiguity to keep. A three-hit search is the
     customer browsing, not choosing, and resolving to one of them would be
     the bot picking on their behalf."""
-    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
-    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+    hoodie = call(ctx, "get_variants", product_id="rehla-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "rehla-hoodie"}, hoodie, call_id="c1")
 
     browsing = call(ctx, "get_products", category="T-shirts")
     assert browsing["count"] > 1
     _turn(ctx, "get_products", {"category": "T-shirts"}, browsing, call_id="c2")
 
-    assert call(ctx, "get_variants")["product_id"] == "wanas-hoodie"
+    assert call(ctx, "get_variants")["product_id"] == "rehla-hoodie"
 
 
 def test_a_lookup_that_failed_never_becomes_what_a_follow_up_resolves_to(ctx):
     """An id the model made up names no product. Letting the attempt count as
     a reference would make a hallucination the thing every later question is
     answered about -- the `product_not_found` bug, one level deeper."""
-    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
-    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+    hoodie = call(ctx, "get_variants", product_id="rehla-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "rehla-hoodie"}, hoodie, call_id="c1")
 
     missed = call(ctx, "get_variants", product_id="ringer-boxy-fit-tshirt")
     assert missed["error"] == "product_not_found"
     _turn(ctx, "get_variants", {"product_id": "ringer-boxy-fit-tshirt"}, missed, call_id="c2")
 
-    assert call(ctx, "get_variants")["product_id"] == "wanas-hoodie"
+    assert call(ctx, "get_variants")["product_id"] == "rehla-hoodie"
 
 
 def test_the_size_chart_follows_the_same_switch(ctx):
     """Both implicit tools read the one walk, so a switch moves both."""
-    hoodie = call(ctx, "get_variants", product_id="wanas-hoodie")
-    _turn(ctx, "get_variants", {"product_id": "wanas-hoodie"}, hoodie, call_id="c1")
+    hoodie = call(ctx, "get_variants", product_id="rehla-hoodie")
+    _turn(ctx, "get_variants", {"product_id": "rehla-hoodie"}, hoodie, call_id="c1")
     found = call(ctx, "get_products", query="ringer")
     _turn(ctx, "get_products", {"query": "ringer"}, found, call_id="c2")
 
     chart = call(ctx, "get_size_chart")
     assert chart.get("error") != "no_product_in_context"
-    assert chart["title"] != "WANAS Hoodie"
+    assert chart["title"] != "REHLA Hoodie"
 
 
 # --- the cache must not swallow "send me the photos" ------------------------
@@ -1107,7 +1107,7 @@ def test_asking_for_photos_twice_still_sends_photos(ctx):
 def test_a_cached_size_chart_is_still_sent(ctx):
     """Same shape, different marker: `_size_chart_image` is also set by the
     handler and popped before storage, so a repeat ask must not go silent."""
-    product = "wanas-hoodie"
+    product = "rehla-hoodie"
     first = call(ctx, "get_size_chart", product_id=product)
     if "error" in first:
         pytest.skip("no size chart for the seeded product")

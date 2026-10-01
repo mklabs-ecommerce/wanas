@@ -151,7 +151,7 @@ def test_a_negative_instagram_comment_emails_the_owner(db, mailbox, monkeypatch)
     _drain(db)
 
     (subject, body), = mailbox
-    assert subject.startswith("[Wanas] Negative comment")
+    assert subject.startswith("[Rehla] Negative comment")
     assert "worst shop ever" in body
     assert "c1" in body
 
@@ -227,7 +227,7 @@ def test_an_item_swap_emails_the_owner(db, mailbox, monkeypatch):
     _drain(db)
 
     (subject, body), = mailbox
-    assert subject.startswith("[Wanas] Item swap")
+    assert subject.startswith("[Rehla] Item swap")
     assert "does not happen until" in body
 
 
@@ -478,7 +478,7 @@ def test_resend_posts_the_alert_as_plain_text(monkeypatch):
             real,
             alert_email_to="owner@example.com",
             resend_api_key="key",
-            resend_from="alerts@wanas.example",
+            resend_from="alerts@rehla.example",
         ),
     )
     seen: dict = {}
@@ -493,7 +493,7 @@ def test_resend_posts_the_alert_as_plain_text(monkeypatch):
     assert seen["url"] == resend.SEND_URL
     assert seen["headers"]["Authorization"] == "Bearer key"
     assert seen["json"] == {
-        "from": "alerts@wanas.example",
+        "from": "alerts@rehla.example",
         "to": ["owner@example.com"],
         "subject": "subject",
         "text": "body",
@@ -671,7 +671,7 @@ def test_a_verified_resend_sender_is_deliverable(monkeypatch):
         monkeypatch,
         alert_email_to="owner@example.com",
         resend_api_key="key",
-        resend_from="alerts@wanas.example",
+        resend_from="alerts@rehla.example",
     )
     check = client.check_transport()
     assert (check.transport, check.deliverable) == ("resend", True)
@@ -715,7 +715,7 @@ def test_a_refused_send_names_the_reason_the_subject_and_why(db, monkeypatch, ca
     monkeypatch.setattr(alert_email, "_describe", lambda: "the sender domain is not verified")
     alert_email.reset_rate_limit()
 
-    with caplog.at_level("ERROR", logger="wanas.alert_email"):
+    with caplog.at_level("ERROR", logger="rehla.alert_email"):
         item = queues.enqueue(
             db,
             kind=QueueKind.ITEM_SWAP.value,
@@ -746,7 +746,7 @@ def test_a_rate_limited_alert_says_so_rather_than_vanishing(db, mailbox, monkeyp
             channel="whatsapp",
             external_id="201234567890",
         )
-    with caplog.at_level("WARNING", logger="wanas.alert_email"):
+    with caplog.at_level("WARNING", logger="rehla.alert_email"):
         _drain(db)
 
     assert len(mailbox) == 1
@@ -757,7 +757,7 @@ def test_a_rate_limited_alert_says_so_rather_than_vanishing(db, mailbox, monkeyp
 
 def test_an_unregistered_mailer_is_logged_not_shrugged_off(db, monkeypatch, caplog):
     monkeypatch.setattr(alert_email, "_mailer", None)
-    with caplog.at_level("WARNING", logger="wanas.alert_email"):
+    with caplog.at_level("WARNING", logger="rehla.alert_email"):
         queues.enqueue(
             db,
             kind=QueueKind.ITEM_SWAP.value,
@@ -787,7 +787,7 @@ def test_resend_logs_the_message_id_it_was_given(monkeypatch, caplog):
             real,
             alert_email_to="owner@example.com",
             resend_api_key="key",
-            resend_from="alerts@wanas.example",
+            resend_from="alerts@rehla.example",
         ),
     )
     monkeypatch.setattr(
@@ -795,7 +795,7 @@ def test_resend_logs_the_message_id_it_was_given(monkeypatch, caplog):
         "post",
         lambda *a, **k: httpx.Response(200, json={"id": "msg-42"}),
     )
-    with caplog.at_level("INFO", logger="wanas.mail.resend"):
+    with caplog.at_level("INFO", logger="rehla.mail.resend"):
         assert resend.send_email("subject", "body") is True
     assert "msg-42" in "\n".join(r.getMessage() for r in caplog.records)
 
@@ -877,7 +877,7 @@ def test_a_reason_nobody_decided_about_is_mailed_and_logged_not_dropped(caplog):
     from domain.models import QueueKind
     from domain.services.alert_email import should_mail
 
-    with caplog.at_level("WARNING", logger="wanas.alert_email"):
+    with caplog.at_level("WARNING", logger="rehla.alert_email"):
         assert should_mail(QueueKind.ALERT.value, "a_reason_invented_by_this_test") is True
     assert "has no entry" in "\n".join(r.getMessage() for r in caplog.records)
 

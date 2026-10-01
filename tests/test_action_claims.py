@@ -14,7 +14,7 @@ from assistant.providers.fake import ScriptedProvider
 
 CHANNEL = "whatsapp"
 WHO = "201000000666"
-SOLD_OUT = "wanas-hoodie-m-grey"
+SOLD_OUT = "rehla-hoodie-m-grey"
 
 
 def check(text: str, results=(), *, cart=False, orders=False) -> str:

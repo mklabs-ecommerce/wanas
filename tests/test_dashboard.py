@@ -116,7 +116,7 @@ def test_an_unknown_username_is_refused(client, seeded):
 def test_a_correct_login_sets_a_cookie_and_reaches_me(client, staff):
     res = login(client)
     assert res.status_code == 200
-    assert "wanas_staff" in res.cookies
+    assert "rehla_staff" in res.cookies
     me = client.get("/dashboard/api/me")
     assert me.status_code == 200
     assert me.json()["username"] == "sara"
@@ -129,7 +129,7 @@ def test_no_cookie_is_unauthenticated(client, staff):
 
 def test_a_tampered_cookie_is_rejected(client, staff):
     login(client)
-    client.cookies.set("wanas_staff", "1.9999999999.deadbeef")
+    client.cookies.set("rehla_staff", "1.9999999999.deadbeef")
     assert client.get("/dashboard/api/me").status_code == 401
 
 
@@ -484,7 +484,7 @@ def test_reset_clears_history_pause_and_cart(logged_in, seeded):
     from domain.models import CartItem
 
     make_paused(seeded)
-    seeded.add(CartItem(channel=CHANNEL, external_id=CUSTOMER, variant_id="wanas-hoodie-s-olive", quantity=1))
+    seeded.add(CartItem(channel=CHANNEL, external_id=CUSTOMER, variant_id="rehla-hoodie-s-olive", quantity=1))
     seeded.commit()
 
     res = logged_in.post(f"/dashboard/api/conversations/{CHANNEL}/{CUSTOMER}/reset")
@@ -651,3 +651,38 @@ def test_a_reply_is_refused_when_the_24h_window_has_closed(logged_in, seeded, ou
     assert res.json()["error"] == "outside_window"
     assert outbox == [], "nothing may be sent, and nothing may be written down"
     assert identities.is_paused(seeded, CHANNEL, CUSTOMER) is True
+
+
+def test_a_session_cookie_issued_under_the_old_name_still_signs_in(configured, staff):
+    """The cookie was `wanas_staff` before the rename. Renaming it must not
+    sign every member of staff out once, so the old name is read for as long
+    as sessions issued under it are alive."""
+    app = FastAPI()
+    app.add_middleware(dashboard.LegacyCookieMiddleware)
+    app.include_router(dashboard.router)
+    client = TestClient(app)
+
+    assert login(client).status_code == 200
+    token = client.cookies.get(dashboard.COOKIE_NAME)
+    assert token
+    client.cookies.clear()
+    client.cookies.set(dashboard.LEGACY_COOKIE_NAME, token)
+
+    assert client.get("/dashboard/api/me").status_code == 200
+
+    client.cookies.clear()
+    assert client.get("/dashboard/api/me").status_code == 401
+
+
+def test_the_new_cookie_wins_when_both_are_present(configured, staff):
+    app = FastAPI()
+    app.add_middleware(dashboard.LegacyCookieMiddleware)
+    app.include_router(dashboard.router)
+    client = TestClient(app)
+
+    assert login(client).status_code == 200
+    token = client.cookies.get(dashboard.COOKIE_NAME)
+    client.cookies.set(dashboard.LEGACY_COOKIE_NAME, "not-a-session")
+
+    assert client.get("/dashboard/api/me").status_code == 200
+    assert token

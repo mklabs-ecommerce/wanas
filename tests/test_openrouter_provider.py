@@ -225,7 +225,7 @@ def test_tool_schemas_are_translated_to_openai_function_shapes(captured, provide
 def test_assistant_tool_calls_go_out_as_openai_calls_and_results_as_tool_messages(captured, provider):
     history = [
         msg.user("عايز الهودي"),
-        msg.assistant("", [msg.tool_call("call_7", "get_variants", {"product_id": "wanas-hoodie"}, SIG)], signature=SIG),
+        msg.assistant("", [msg.tool_call("call_7", "get_variants", {"product_id": "rehla-hoodie"}, SIG)], signature=SIG),
         msg.tool_results([msg.tool_result("call_7", "get_variants", {"variants": []})]),
     ]
     provider.generate("p", history, [])
@@ -239,7 +239,7 @@ def test_assistant_tool_calls_go_out_as_openai_calls_and_results_as_tool_message
             "id": "call_7",
             "type": "function",
             # Arguments travel out as a JSON string, per the wire format.
-            "function": {"name": "get_variants", "arguments": '{"product_id": "wanas-hoodie"}'},
+            "function": {"name": "get_variants", "arguments": '{"product_id": "rehla-hoodie"}'},
         }
     ]
     assert messages[3] == {"role": "tool", "tool_call_id": "call_7", "content": '{"variants": []}'}
@@ -616,16 +616,16 @@ def test_vision_runs_on_the_media_model_when_one_is_configured(captured, provide
     provider = OpenRouterProvider()
     assert provider.model == DEFAULT_MODEL
 
-    shortlist = [{"product_id": "wanas-hoodie", "name": "WANAS Hoodie", "category": "Hoodies", "colors": ["أسود"]}]
+    shortlist = [{"product_id": "rehla-hoodie", "name": "REHLA Hoodie", "category": "Hoodies", "colors": ["أسود"]}]
     captured["queue"].append(
         text_reply(
-            json.dumps({"product_id": "wanas-hoodie", "confidence": 0.9, "description": "هودي أسود", "is_garment": True})
+            json.dumps({"product_id": "rehla-hoodie", "confidence": 0.9, "description": "هودي أسود", "is_garment": True})
         )
     )
 
     reading = provider.inspect_image(b"jpeg-bytes", "image/jpeg", catalog=shortlist)
 
-    assert reading.product_id == "wanas-hoodie"
+    assert reading.product_id == "rehla-hoodie"
     assert reading.confidence == 0.9
     assert reading.is_garment is True
 
@@ -636,7 +636,7 @@ def test_vision_runs_on_the_media_model_when_one_is_configured(captured, provide
     assert provider.model == DEFAULT_MODEL
     content = sent["body"]["messages"][0]["content"]
     assert content[0]["type"] == "text"
-    assert "wanas-hoodie" in content[0]["text"]
+    assert "rehla-hoodie" in content[0]["text"]
     image_part = content[1]
     assert image_part["type"] == "image_url"
     assert image_part["image_url"]["url"].startswith("data:image/jpeg;base64,")
@@ -753,7 +753,7 @@ def test_inspect_image_discards_a_product_id_the_shop_does_not_have(captured, pr
             )
         )
     )
-    reading = provider.inspect_image(b"bytes", "image/jpeg", catalog=[{"product_id": "wanas-hoodie", "name": "x"}])
+    reading = provider.inspect_image(b"bytes", "image/jpeg", catalog=[{"product_id": "rehla-hoodie", "name": "x"}])
     assert reading.product_id is None
 
 
@@ -1140,7 +1140,7 @@ def test_reasoning_details_are_replayed_with_the_turn_that_produced_them(capture
         msg.user("عايز XL"),
         msg.assistant(
             "",
-            [msg.tool_call("call_1", "get_variants", {"product_id": "wanas-hoodie"})],
+            [msg.tool_call("call_1", "get_variants", {"product_id": "rehla-hoodie"})],
             signature=_reasoning_details(),
         ),
         msg.tool_results([msg.tool_result("call_1", "get_variants", {"variants": []})]),

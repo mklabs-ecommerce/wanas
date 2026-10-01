@@ -23,7 +23,7 @@ from domain.services.ids import ORDER_COUNTER
 
 CHANNEL = "whatsapp"
 WHO = "201555000222"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 @pytest.fixture()
@@ -73,10 +73,10 @@ def test_a_broken_notification_does_not_turn_a_placed_order_into_a_failure(
     result = place(priced)
 
     assert "error" not in result, result
-    assert result["order_id"] == "WNS-1001"
+    assert result["order_id"] == "RHL-1001"
     assert len(_live_orders(shopify)) == 1, "the Shopify order must not be cancelled"
     with SessionLocal() as fresh:
-        assert fresh.get(Order, "WNS-1001") is not None
+        assert fresh.get(Order, "RHL-1001") is not None
 
 
 def test_the_order_is_durable_the_moment_it_is_placed(priced, shopify):
@@ -205,7 +205,7 @@ def test_a_full_conversation_ends_with_a_live_shopify_order(priced, shopify):
     assert reply.silent and not reply.text, reply.text
     priced.commit()  # the turn's own session write, which the adapter commits
     with SessionLocal() as fresh:
-        order = fresh.get(Order, "WNS-1001")
+        order = fresh.get(Order, "RHL-1001")
         assert order.status == "Confirmed"
         assert order.total == 1360  # 2 x 650 + 60 shipping
         assert carts.is_empty(fresh, CHANNEL, WHO)

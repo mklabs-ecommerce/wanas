@@ -22,8 +22,8 @@ from domain.services import (
 from domain.services.notifications import item_add_requested, item_swap_requested
 
 SECRET = "test-dashboard-secret"
-VARIANT_A = "wanas-hoodie-s-olive"
-VARIANT_B = "wanas-hoodie-s-black"  # also in stock in the seeded catalog, unlike most other olive sizes
+VARIANT_A = "rehla-hoodie-s-olive"
+VARIANT_B = "rehla-hoodie-s-black"  # also in stock in the seeded catalog, unlike most other olive sizes
 
 
 @pytest.fixture()

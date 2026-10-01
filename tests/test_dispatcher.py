@@ -479,7 +479,7 @@ def test_offthread_work_runs_and_never_raises(caplog):
     offthread.run_later("a test", done.set)
     assert done.wait(5)
 
-    with caplog.at_level(_logging.WARNING, logger="wanas.offthread"):
+    with caplog.at_level(_logging.WARNING, logger="rehla.offthread"):
         failed = threading.Event()
 
         def boom():

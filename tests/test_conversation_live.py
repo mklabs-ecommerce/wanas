@@ -111,7 +111,7 @@ def test_a_fully_specified_request_is_not_re_interrogated(bot):
 
 
 def test_only_the_missing_field_is_asked_for(bot):
-    reply = bot("عايز الـ WANAS Hoodie الأسود")
+    reply = bot("عايز الـ REHLA Hoodie الأسود")
     # Colour was given; size was not.
     assert asks_something(reply.text)
     assert "أنهي لون" not in reply.text and "اللون إيه" not in reply.text
@@ -128,7 +128,7 @@ def test_the_second_option_is_resolved_from_the_previous_turn(bot):
 
 
 def test_a_colour_change_keeps_the_current_product(bot):
-    bot("عايز الـ WANAS Hoodie")
+    bot("عايز الـ REHLA Hoodie")
     reply = bot("طب الأسود")
     assert "hoodie" in reply.text.lower() or "get_variants" in reply.tool_calls
     # Adding to the cart here is fine and so is not adding; what must not
@@ -136,14 +136,14 @@ def test_a_colour_change_keeps_the_current_product(bot):
 
 
 def test_a_reversal_is_a_change_not_a_new_conversation(bot):
-    bot("عايز الـ WANAS Hoodie الزيتي")
+    bot("عايز الـ REHLA Hoodie الزيتي")
     reply = bot("لا خلاص الأسود أحسن")
     # Must not respond as though it has never heard of the hoodie.
     assert "أنهي منتج" not in reply.text and "عايز إيه" not in reply.text, reply.text
 
 
 def test_yes_is_read_against_the_question_that_was_just_asked(bot):
-    first = bot("عايز الـ WANAS Hoodie الأسود")
+    first = bot("عايز الـ REHLA Hoodie الأسود")
     assert asks_something(first.text)
     reply = bot("أيوه")
     assert reply.text, "a bare 'أيوه' produced nothing"
@@ -167,7 +167,7 @@ def test_explicit_purchase_intent_adds_to_the_cart(bot, seeded):
 
 
 def test_asking_to_see_a_product_produces_a_real_attachment(bot):
-    reply = bot("ممكن أشوف صور الـ WANAS Hoodie؟")
+    reply = bot("ممكن أشوف صور الـ REHLA Hoodie؟")
     assert reply.attachments, f"claimed to show a product but attached nothing: {reply.text}"
     assert all(p.startswith("data/") for p in reply.attachments)
     # And no path in the words.

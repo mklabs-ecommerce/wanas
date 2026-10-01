@@ -1,7 +1,7 @@
 """Selling: what reaches Shopify, and what happens when it cannot.
 
 The read migration left two holes that these close. The bot quoted Shopify's
-price and then billed wanas.db's. And it decremented only wanas.db, so the
+price and then billed rehla.db's. And it decremented only rehla.db, so the
 shelf the storefront sells from never moved and the same shirt could be sold
 twice.
 
@@ -21,8 +21,8 @@ from domain.services import (
     orders,
 )
 
-VARIANT = "wanas-hoodie-s-olive"
-OTHER = "wanas-hoodie-m-black"
+VARIANT = "rehla-hoodie-s-olive"
+OTHER = "rehla-hoodie-m-black"
 WHO = "201555000111"
 
 
@@ -127,7 +127,7 @@ def test_reducing_a_quantity_returns_the_difference(priced, shopify):
 
 def test_sold_out_on_shopify_is_refused_even_when_the_local_row_disagrees(priced, shopify):
     """The exact oversell this work exists to prevent: the storefront took the
-    last one, wanas.db has not heard about it."""
+    last one, rehla.db has not heard about it."""
     priced.get(Variant, VARIANT).stock_qty = 10
     priced.commit()
     shopify.set(VARIANT, qty=0)

@@ -29,7 +29,7 @@ from domain.services.reengagement import check_abandoned_carts, check_back_in_st
 
 IGSID = "98765432109876543"
 PHONE = "01000000123"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 #: The general schema migrator. There used to be a second, single-column,
 #: SQLite-only script beside it (`migrate_add_order_source_external_id.py`,
@@ -105,7 +105,7 @@ def test_an_order_with_no_recorded_identity_falls_back_to_the_phone(
         session.add(client)
         session.flush()
         order = Order(
-            order_id="WNS-9001",
+            order_id="RHL-9001",
             client_id=client.client_id,
             source_channel="whatsapp",
             shipping_address="somewhere",
@@ -241,11 +241,11 @@ def _create_legacy_db(path: Path) -> None:
     # does not matter here, only that the row survives untouched.
     info = list(con.execute("PRAGMA table_info(orders)"))
     required = {
-        row[1]: ("WNS-1001" if row[1] == "order_id" else 0 if "INT" in (row[2] or "").upper() else "x")
+        row[1]: ("RHL-1001" if row[1] == "order_id" else 0 if "INT" in (row[2] or "").upper() else "x")
         for row in info
         if row[3] and row[4] is None
     }
-    required["order_id"] = "WNS-1001"
+    required["order_id"] = "RHL-1001"
     required["source_channel"] = "whatsapp"
     columns = ", ".join(required)
     placeholders = ", ".join("?" for _ in required)
@@ -301,4 +301,4 @@ def test_the_migration_is_a_dry_run_by_default_and_idempotent(tmp_path):
     # placed it.
     with sqlite3.connect(db) as con:
         rows = con.execute("SELECT order_id, source_external_id FROM orders").fetchall()
-    assert rows == [("WNS-1001", None)]
+    assert rows == [("RHL-1001", None)]

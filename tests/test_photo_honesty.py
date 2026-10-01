@@ -73,7 +73,7 @@ def test_claiming_a_product_no_photo_was_attached_for_is_caught():
                     "content": {
                         "products": [
                             {"product_id": "lightweight-sweatpant", "name": "Lightweight Sweatpant"},
-                            {"product_id": "wanas-sweatpant", "name": "WANAS Sweatpant"},
+                            {"product_id": "rehla-sweatpant", "name": "REHLA Sweatpant"},
                         ]
                     },
                 }
@@ -81,12 +81,12 @@ def test_claiming_a_product_no_photo_was_attached_for_is_caught():
         }
     ]
     why = photo_claims.unbacked_claim(
-        "دي صورة Lightweight الأسود 👆 ودي اللي وصلت قبل كده كانت WANAS Sweatpant",
+        "دي صورة Lightweight الأسود 👆 ودي اللي وصلت قبل كده كانت REHLA Sweatpant",
         attachments=["a.jpg"],
         labels={"a.jpg": {"label": "Lightweight Sweatpant (Black)", "name": "Lightweight Sweatpant"}},
         history=history,
     )
-    assert "WANAS Sweatpant" in why
+    assert "REHLA Sweatpant" in why
 
 
 def test_one_photo_described_as_one_photo_is_fine():
@@ -140,7 +140,7 @@ def test_the_agent_sends_what_it_attached_rather_than_what_it_claimed(seeded):
     that really did go rather than throwing it away for a question."""
     provider = ScriptedProvider(
         [
-            reply_with(("get_variants", {"product_id": "wanas-hoodie"})),
+            reply_with(("get_variants", {"product_id": "rehla-hoodie"})),
             ModelReply(text="دي صورتهم الاتنين 👆"),
             ModelReply(text="دي الصور بتاعت الاتنين"),
             ModelReply(text="اتفضل، دي صورهم الاتنين"),
@@ -155,7 +155,7 @@ def test_the_agent_sends_what_it_attached_rather_than_what_it_claimed(seeded):
 # --- 2. a refused photo is not a photo the customer has seen ---------------
 
 
-def _reply_with_photo(session, path="data/images/wanas-black-hoodie/01.jpg"):
+def _reply_with_photo(session, path="data/images/rehla-black-hoodie/01.jpg"):
     session_store.save(
         session,
         CHANNEL,
@@ -171,13 +171,13 @@ def _reply_with_photo(session, path="data/images/wanas-black-hoodie/01.jpg"):
 def test_a_refused_photo_is_taken_back_out_of_already_sent(seeded):
     path = _reply_with_photo(seeded)
     session_store.record_undelivered_attachments(
-        seeded, CHANNEL, WHO, {path: "WANAS Hoodie (Black)"}
+        seeded, CHANNEL, WHO, {path: "REHLA Hoodie (Black)"}
     )
 
     stored = session_store.transcript(seeded, CHANNEL, WHO)[-1]
     assert stored["attachments"] == []
-    assert stored["undelivered_attachments"] == {path: "WANAS Hoodie (Black)"}
-    assert photo_claims.undelivered(stored and [stored]) == {path: "WANAS Hoodie (Black)"}
+    assert stored["undelivered_attachments"] == {path: "REHLA Hoodie (Black)"}
+    assert photo_claims.undelivered(stored and [stored]) == {path: "REHLA Hoodie (Black)"}
 
 
 def test_the_turn_is_told_about_it_and_may_send_it_again(seeded):
@@ -186,11 +186,11 @@ def test_the_turn_is_told_about_it_and_may_send_it_again(seeded):
     otherwise the one photo they are asking for is the one it will never
     send."""
     path = _reply_with_photo(seeded)
-    session_store.record_undelivered_attachments(seeded, CHANNEL, WHO, {path: "WANAS Hoodie (Black)"})
+    session_store.record_undelivered_attachments(seeded, CHANNEL, WHO, {path: "REHLA Hoodie (Black)"})
 
     provider = ScriptedProvider(
         [
-            reply_with(("get_variants", {"product_id": "wanas-hoodie", "color": "Black"})),
+            reply_with(("get_variants", {"product_id": "rehla-hoodie", "color": "Black"})),
             ModelReply(text="معلش، الصورة اتأخرت من عندنا. دي صورته تاني 👆"),
         ]
     )
@@ -198,7 +198,7 @@ def test_the_turn_is_told_about_it_and_may_send_it_again(seeded):
     assert path in reply.attachments, "the refused photo has to be sendable again"
     sent_prompt = provider.calls[0][0] if provider.calls else ""
     assert "المنصة رفضتها" in sent_prompt
-    assert "WANAS Hoodie (Black)" in sent_prompt
+    assert "REHLA Hoodie (Black)" in sent_prompt
 
 
 def test_the_adapter_pairs_a_failed_send_with_what_it_was_of():
@@ -254,10 +254,10 @@ def test_both_products_get_one_photo_each(seeded):
         external_id=WHO,
         history=[{"role": "user", "content": "الاتنين"}],
     )
-    call_tool(ctx, "get_variants", {"product_id": "wanas-hoodie"})
+    call_tool(ctx, "get_variants", {"product_id": "rehla-hoodie"})
     call_tool(ctx, "get_variants", {"product_id": "ringer-tee"})
     assert len(photos(ctx)) == 2
-    assert ctx.photos_of("wanas-hoodie") == 1
+    assert ctx.photos_of("rehla-hoodie") == 1
     assert ctx.photos_of("ringer-tee") == 1
 
 
@@ -296,6 +296,6 @@ def test_the_size_chart_does_not_eat_the_products_one_photo(seeded):
         external_id=WHO,
         history=[{"role": "user", "content": "المقاسات إيه؟"}],
     )
-    call_tool(ctx, "get_variants", {"product_id": "wanas-hoodie"})
+    call_tool(ctx, "get_variants", {"product_id": "rehla-hoodie"})
     assert len(photos(ctx)) == 1
     assert [p for p in ctx.attachments if p.startswith(CHART_DIR)]

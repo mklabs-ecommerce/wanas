@@ -767,7 +767,7 @@ def test_a_classifier_crash_is_silence_plus_an_alert(
 def test_the_seeded_session_carries_the_post_s_caption(
     client, comments_on, fake_graph, classifier
 ):
-    fake_graph.get_json_body = {"caption": "الهودي الزيتي الجديد وصل 🖤 #wanas"}
+    fake_graph.get_json_body = {"caption": "الهودي الزيتي الجديد وصل 🖤 #rehla"}
     assert post_comment(client, comment_body("بكام ده؟")).status_code == 200
 
     with session_scope() as session:
@@ -851,9 +851,9 @@ def test_there_is_no_like_comment_and_nothing_calls_the_likes_endpoint(
 
 
 FAQ_EXPECTED = {
-    "delivery_time": "التوصيل بياخد لغاية 4 أيام لكل محافظات مصر.",
-    "shipping_cost": "الشحن 110 جنيه لكل محافظات مصر.",
-    "payment": "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع.",
+    "delivery_time": "التوصيل من 3 لـ 5 أيام لكل محافظات مصر.",
+    "shipping_cost": "الشحن 70 جنيه للقاهرة والجيزة، و85 جنيه لباقي المحافظات.",
+    "payment": "الدفع كاش عند الاستلام.",
 }
 
 

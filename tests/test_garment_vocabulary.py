@@ -27,6 +27,9 @@ from assistant.tools.base import ToolContext, call_tool
 from domain.services import garments, search_terms
 from scripts import quality_gate
 
+USE_REAL_CATALOG = True
+
+
 CHANNEL = "whatsapp"
 WHO = "201000000001"
 
@@ -51,7 +54,7 @@ def test_a_shirt_is_recognised_as_something_we_do_not_sell(word):
 
 @pytest.mark.parametrize(
     "word",
-    ["تراكسوت", "تراك سوت", "شورت", "برمودا", "جينز", "جزمة", "شوز", "بدلة", "شنطة", "كاب"],
+    ["تراكسوت", "تراك سوت", "شورت", "برمودا", "جينز", "جزمة", "شوز", "بدلة", "شنطة"],
 )
 def test_the_rest_of_the_not_sold_vocabulary(word):
     assert garments.not_sold(word) is not None, word
@@ -67,21 +70,20 @@ def test_what_we_do_sell_is_never_refused(word):
 
 
 def test_our_own_category_names_are_not_read_as_shirts():
-    """`T-Shirts` and `Polo Shirts` both end in the word this rule matches on.
-    Reading either as "the customer asked for a button-up" would refuse two of
-    the six things the shop actually sells."""
-    for name in ("T-Shirts", "Polo Shirts", "polo shirt", "t shirt", "tee shirt"):
+    """`T-Shirts` ends in the word this rule matches on. Reading it as "the
+    customer asked for a button-up" would refuse something the shop sells."""
+    for name in ("T-Shirts", "t shirt", "tee shirt"):
         assert garments.not_sold(name) is None, name
 
 
 def test_a_set_is_not_its_two_halves():
-    """The shop sells sweatpants and it sells sweatshirts. It does not sell
-    them as a tracksuit, and «تراك» (a sweatpant, which we do sell) must not
-    swallow «تراك سوت» (a set, which we do not)."""
+    """The shop sells pants and it sells hoodies. It does not sell them as a
+    tracksuit, and «تراك» (which we do sell) must not swallow «تراك سوت» (a
+    set, which we do not)."""
     assert garments.not_sold("تراك") is None
     label, alternatives = garments.not_sold("عايز تراك سوت")
-    assert label == "تراكسوت كامل"
-    assert alternatives == ("Joggers & Sweatpants", "Hoodies & Sweatshirts")
+    assert label == "ترينج كامل"
+    assert alternatives == ("Hoodies & Jackets", "Pants")
 
 
 def test_shoes_get_no_alternative_at_all():
@@ -112,7 +114,7 @@ def test_asking_for_shirts_returns_a_refusal_not_a_list_of_tees(ctx):
     assert result["garment"] == "قميص"
     assert result["products"] == [], "nothing may be presented as the thing they asked for"
     assert result["alternatives"], "but something has to be offered"
-    assert {p["category"] for p in result["alternatives"]} <= {"T-Shirts", "Polo Shirts"}
+    assert {p["category"] for p in result["alternatives"]} <= {"T-Shirts", "Tops"}
 
 
 def test_the_refusal_sends_no_photo(ctx):
@@ -149,12 +151,10 @@ def test_an_ordinary_search_is_untouched(ctx):
         ("فانلة", "T-Shirts"),
         ("فانيلة", "T-Shirts"),
         ("تي شيرت", "T-Shirts"),
-        ("بلوفر", "Hoodies & Sweatshirts"),
-        ("سويتر", "Hoodies & Sweatshirts"),
-        ("كنزة", "Hoodies & Sweatshirts"),
-        ("بنطال", "Joggers & Sweatpants"),
-        ("بنطرون", "Joggers & Sweatpants"),
-        ("جاكيت", "Jackets"),
+        ("بلوفر", "Hoodies & Jackets"),
+        ("بنطال", "Pants"),
+        ("بنطرون", "Pants"),
+        ("جاكيت", "Hoodies & Jackets"),
     ],
 )
 def test_the_egyptian_name_finds_the_thing_on_the_shelf(ctx, word, expected_category):
@@ -172,7 +172,7 @@ def test_the_egyptian_name_finds_the_thing_on_the_shelf(ctx, word, expected_cate
 
 def test_the_gate_fails_the_reply_that_started_this():
     assert quality_gate.offered_a_garment_they_did_not_ask_for(
-        "فيه قمصان", "أيوه، عندنا تيشيرتات كتير: تيشيرت Ringer Tee و Envy T-shirt"
+        "فيه قمصان", "أيوه، عندنا تيشيرتات كتير: تيشيرت Rehla Black T-Shirt و Rehla White T-Shirt"
     )
 
 
@@ -180,7 +180,7 @@ def test_the_gate_fails_a_silent_substitution_too():
     """Not just the «أيوه». A reply that lists t-shirts without ever saying
     there are no shirts has renamed the garment just as squarely."""
     assert quality_gate.offered_a_garment_they_did_not_ask_for(
-        "فيه قمصان", "عندنا تيشيرت Ringer Tee بـ 500 جنيه، تحب تشوفه؟"
+        "فيه قمصان", "عندنا تيشيرت Rehla Black T-Shirt بـ 500 جنيه، تحب تشوفه؟"
     )
 
 

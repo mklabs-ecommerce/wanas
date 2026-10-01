@@ -1,6 +1,6 @@
 """A product added straight in Shopify Admin -- not through the dashboard's
-own create panel -- gets no wanas.db row, and `catalog.get_products` (the
-bot's search) only ever reads wanas.db. See
+own create panel -- gets no rehla.db row, and `catalog.get_products` (the
+bot's search) only ever reads rehla.db. See
 `integrations/shopify/product_import.py` for the full story.
 """
 
@@ -17,7 +17,7 @@ def _seed_manual_product(shopify, *, title="Loose Cargo Pants", category="Jogger
     """A product that exists on the (fake) store but was never pushed through
     `shopify_admin_products.create_product` -- exactly what staff adding a
     product straight in Shopify Admin would leave behind: a real product with
-    no wanas.db-recognised SKU on its variant."""
+    no rehla.db-recognised SKU on its variant."""
     gid = shopify.shopify_create_product(title=title, description="A pair of pants.", category=category)
     shopify.shopify_create_variants(
         gid,
@@ -34,7 +34,7 @@ def _seed_manual_product(shopify, *, title="Loose Cargo Pants", category="Jogger
 
 def test_nothing_already_known_gets_reimported(seeded, shopify):
     """Every product `seed_from` copied onto the fake shelf already has a
-    matching wanas.db SKU -- there is nothing here to do."""
+    matching rehla.db SKU -- there is nothing here to do."""
     report = import_missing_products(seeded, apply=True)
     assert report["imported"] == []
     assert report["problems"] == []
@@ -131,7 +131,7 @@ def test_a_half_made_product_is_not_imported(seeded, shopify):
     removed from production by hand."""
     shopify.shopify_create_product(
         title="Half Made Tee", description="", category="T-Shirts",
-        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Rehla",
     )
 
     report = import_missing_products(seeded, apply=True)
@@ -147,7 +147,7 @@ def test_it_is_imported_once_its_real_variants_land(seeded, shopify):
     member who finishes it in Shopify Admin gets it on the next run."""
     gid = shopify.shopify_create_product(
         title="Finished Tee", description="", category="T-Shirts",
-        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Rehla",
     )
     assert import_missing_products(seeded, apply=True)["imported"] == []
 
@@ -182,7 +182,7 @@ def _seed_orphaned_dashboard_product(
 ):
     """What a dashboard create leaves behind when it pushes to Shopify and
     then fails before mirroring: a real product wearing SKUs in exactly the
-    `_variant_id` shape, with no wanas.db rows at all."""
+    `_variant_id` shape, with no rehla.db rows at all."""
     gid = shopify.shopify_create_product(
         title=title,
         description="",
@@ -191,7 +191,7 @@ def _seed_orphaned_dashboard_product(
             {"name": "Size", "values": [{"name": size}]},
             {"name": "Color", "values": [{"name": c} for c in colours]},
         ],
-        vendor="Wanas Gallery",
+        vendor="Rehla",
     )
     shopify.shopify_create_variants(
         gid,
@@ -255,7 +255,7 @@ def test_a_sku_that_only_looks_like_ours_is_still_refused(seeded, shopify):
     convention. One that does not is somebody's own scheme."""
     gid = shopify.shopify_create_product(
         title="Cargo Pants", description="", category="Joggers & Sweatpants",
-        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Rehla",
     )
     shopify.shopify_create_variants(
         gid,
@@ -280,7 +280,7 @@ def test_an_adoptable_id_already_taken_is_reported_rather_than_collided(seeded, 
     and never reaches the adoption check at all."""
     _seed_orphaned_dashboard_product(
         shopify,
-        product_id="wanas-hoodie",
+        product_id="rehla-hoodie",
         title="Not The Hoodie",
         size="XXS",
         colours=("Chartreuse",),
@@ -290,7 +290,7 @@ def test_an_adoptable_id_already_taken_is_reported_rather_than_collided(seeded, 
 
     assert report["imported"] == []
     assert len(report["problems"]) == 1
-    assert seeded.get(Product, "wanas-hoodie").name != "Not The Hoodie"
+    assert seeded.get(Product, "rehla-hoodie").name != "Not The Hoodie"
 
 
 def test_adopting_is_idempotent(seeded, shopify):
@@ -338,7 +338,7 @@ def test_one_product_that_is_only_a_placeholder_is_skipped(seeded, shopify):
 
     gid = shopify.shopify_create_product(
         title="Half Made Tee", description="", category="T-Shirts",
-        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Rehla",
     )
     assert import_product(seeded, gid) is None
     assert seeded.get(Product, "half-made-tee") is None

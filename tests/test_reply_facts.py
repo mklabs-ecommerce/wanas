@@ -87,7 +87,7 @@ def test_the_customers_own_number_may_be_repeated():
 def test_the_shops_published_amounts_are_known(seeded, cairo_rate):
     constants = reply_facts.shop_constants(seeded)
     assert reply_facts.ungrounded("الشحن 60 جنيه", [], constants) == []
-    assert reply_facts.ungrounded("الاستبدال بزيادة 20 جنيه", [], constants) == []
+    assert reply_facts.ungrounded("الاستبدال خلال 14 يوم", [], constants) == []
     assert reply_facts.ungrounded("رفض الشحنة بيكلف 120 جنيه", [], constants) == []
 
 
@@ -137,7 +137,7 @@ def test_a_total_the_model_added_up_itself_is_sent_back(seeded, cairo_rate):
                     {
                         "id": "c1",
                         "name": "add_to_cart",
-                        "arguments": {"variant_id": "wanas-hoodie-s-black"},
+                        "arguments": {"variant_id": "rehla-hoodie-s-black"},
                     }
                 ]
             ),

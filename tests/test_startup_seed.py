@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from app import _ensure_catalog_seeded, _ensure_shipping_fees_set
 from domain.models import Product, ShippingRate, Variant
+from domain.services import shop_facts
 
 
 def test_an_empty_catalog_is_seeded_automatically(db):
@@ -50,8 +51,9 @@ def test_governorates_with_no_fee_get_the_default(seeded):
     _ensure_shipping_fees_set()
 
     seeded.expire_all()
-    fees = {r.fee for r in seeded.query(ShippingRate).all()}
-    assert fees == {Decimal("110")}
+    fees = {r.governorate: r.fee for r in seeded.query(ShippingRate).all()}
+    assert all(fee == shop_facts.fee_for(name) for name, fee in fees.items())
+    assert fees["Cairo"] == Decimal("70") and fees["Aswan"] == Decimal("85")
 
 
 def test_a_fee_staff_already_set_is_never_overwritten(seeded):
@@ -63,5 +65,5 @@ def test_a_fee_staff_already_set_is_never_overwritten(seeded):
 
     seeded.expire_all()
     assert seeded.get(ShippingRate, "Cairo").fee == Decimal("75")
-    others = [r.fee for r in seeded.query(ShippingRate).all() if r.governorate != "Cairo"]
-    assert all(fee == Decimal("110") for fee in others)
+    others = [(r.governorate, r.fee) for r in seeded.query(ShippingRate).all() if r.governorate != "Cairo"]
+    assert all(fee == shop_facts.fee_for(name) for name, fee in others)

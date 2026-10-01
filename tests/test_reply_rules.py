@@ -15,7 +15,7 @@ from assistant.providers.fake import ScriptedProvider
 CHANNEL = "whatsapp"
 WHO = "201000000777"
 
-VOCABULARY = ["Lightweight", "Sweatpant", "Ringer", "WANAS", "Hoodie", "Olive"]
+VOCABULARY = ["Lightweight", "Sweatpant", "Ringer", "REHLA", "Hoodie", "Olive"]
 
 
 def fixed(text: str, references=None, money=False) -> str:
@@ -33,16 +33,16 @@ def test_a_mangled_product_name_is_put_back():
 
 
 def test_an_internal_order_id_becomes_the_customers_reference():
-    assert fixed("أوردرك WNS-12 اتأكد", {"WNS-12": "#1040"}) == "أوردرك #1040 اتأكد"
+    assert fixed("أوردرك RHL-12 اتأكد", {"RHL-12": "#1040"}) == "أوردرك #1040 اتأكد"
 
 
 def test_the_shops_name_is_spelled_its_one_way():
-    assert fixed("أهلاً بيك في Wanass") == "أهلاً بيك في Wanas"
-    assert fixed("تيشيرت Boxy WNS Tee") == "تيشيرت Boxy WNS Tee", "a product name is not the brand"
+    assert fixed("أهلاً بيك في Rehlaa") == "أهلاً بيك في Rehla"
+    assert fixed("تيشيرت Boxy REHLA Tee") == "تيشيرت Boxy REHLA Tee", "a product name is not the brand"
 
 
 def test_an_identifier_is_never_rewritten():
-    assert fixed("[wanas-hoodie-s-black]") == "[wanas-hoodie-s-black]"
+    assert fixed("[rehla-hoodie-s-black]") == "[rehla-hoodie-s-black]"
 
 
 def test_one_emoji_at_most_and_none_beside_a_price_or_an_apology():
@@ -85,7 +85,7 @@ def test_a_sleeve_length_is_never_professed_unknown():
 
 
 def test_the_previous_reply_is_not_sent_again():
-    before = "عندنا Lightweight Sweatpant و WANAS Sweatpant، تحب تشوف صور ولا مقاسات؟"
+    before = "عندنا Lightweight Sweatpant و REHLA Sweatpant، تحب تشوف صور ولا مقاسات؟"
     assert rule(before, previous=before).startswith("repeat")
     assert rule("تحب أساعدك في إيه؟", previous="تحب أساعدك في إيه؟") == "", "too short to matter"
 
@@ -122,7 +122,7 @@ def test_the_turn_is_sent_back_for_a_payment_method_it_cannot_take(seeded):
 
 
 def test_the_turn_is_sent_back_for_saying_the_same_thing_again(seeded):
-    before = "عندنا Lightweight Sweatpant و WANAS Sweatpant، تحب تشوف صور ولا مقاسات؟"
+    before = "عندنا Lightweight Sweatpant و REHLA Sweatpant، تحب تشوف صور ولا مقاسات؟"
     session_store.save(
         seeded,
         CHANNEL,

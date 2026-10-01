@@ -29,6 +29,7 @@ from assistant.tools.base import (
     ToolContext,
     call_tool,
 )
+from domain.services import shop_facts
 
 CHANNEL = "whatsapp"
 WHO = "201000000001"
@@ -97,7 +98,7 @@ def test_product_photos_are_attached_not_just_described(ctx):
     were attached and product photos never were. The model was handed the
     paths as data, announced it had sent pictures, and the reply carried
     none."""
-    result = call(ctx, "get_variants", product_id="wanas-hoodie")
+    result = call(ctx, "get_variants", product_id="rehla-hoodie")
     assert result["images"], "fixture check: this product has photos"
     assert photos(ctx), "get_variants returned photos but attached nothing"
     assert all(p.startswith("data/images/") for p in photos(ctx))
@@ -106,23 +107,23 @@ def test_product_photos_are_attached_not_just_described(ctx):
 def test_a_plain_request_sends_exactly_one_photo(ctx):
     """Showing the product is not a gallery: the default is one photo, full
     stop -- credit waste is the whole point of this rule."""
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert len(photos(ctx)) == 1
 
 
 def test_more_images_prefers_colour_variety_and_is_capped(ctx):
     """An explicit "show me more" is the only way past the one-photo default,
     and it is still capped -- one photo per colourway, not the whole gallery."""
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     first = list(ctx.attachments)
-    payload = call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="rehla-hoodie", more_images=True)
     added = [p for p in ctx.attachments if p not in first]
     assert 0 < len(added) <= MAX_COLOR_IMAGES
 
     colours = {
         colour
         for colour, paths in ctx.session.get(
-            __import__("domain.models", fromlist=["Product"]).Product, "wanas-hoodie"
+            __import__("domain.models", fromlist=["Product"]).Product, "rehla-hoodie"
         ).color_images.items()
         for path in paths
         if path in ctx.attachments
@@ -138,7 +139,7 @@ def test_all_the_colours_means_a_photo_of_each_one(ctx):
     customer then asked again for the rest, which is the request that produced
     no photo at all.
     """
-    payload = call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="rehla-hoodie", more_images=True)
     colourways = payload["color_images"]
     assert 1 < len(colourways) <= MAX_COLOR_IMAGES, "fixture check: several colours, under the cap"
 
@@ -158,7 +159,7 @@ def test_the_ringer_tee_sends_all_four_of_its_colours(ctx):
 def test_a_colour_photo_each_beats_two_angles_of_one(ctx):
     """One per colourway, not several of the same colour: the customer asked
     which colours exist, and two photos of the black one does not answer it."""
-    payload = call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
+    payload = call(asked_for_colours(ctx), "get_variants", product_id="rehla-hoodie", more_images=True)
     for colour, paths in payload["color_images"].items():
         assert len([p for p in photos(ctx) if p in paths]) <= 1, colour
 
@@ -175,13 +176,13 @@ def test_a_product_with_no_colour_split_still_gets_only_two_extra(ctx):
 def test_asking_again_sends_the_colours_that_were_not_sent_yet(ctx):
     """The second half of the report: after one photo, "all the colours" has
     to send the *rest*, not repeat the one already seen."""
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Black")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie", color="Black")
     black = photos(ctx)
     assert len(black) == 1
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
 
-    call(asked_for_colours(ctx), "get_variants", product_id="wanas-hoodie", more_images=True)
+    call(asked_for_colours(ctx), "get_variants", product_id="rehla-hoodie", more_images=True)
     later = set(photos(ctx))
     assert later, "asked for every colour and got nothing"
     for colour, paths in payload["color_images"].items():
@@ -191,7 +192,7 @@ def test_asking_again_sends_the_colours_that_were_not_sent_yet(ctx):
 
 
 def test_product_photos_are_capped(ctx):
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert 0 < len(photos(ctx)) <= MAX_PRODUCT_IMAGES
 
 
@@ -209,12 +210,12 @@ def test_the_photo_sent_is_the_colour_that_was_asked_for(ctx):
     """The bug: `color_images` was walked in dict order, so every request got
     the first colourway's photo. Asking for the olive hoodie and being shown
     the black one is the shop answering a question nobody asked."""
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie", color="Olive")
     assert photos(ctx) == [payload["color_images"]["Olive"][0]]
 
 
 def test_the_colour_is_matched_however_the_model_typed_it(ctx):
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="olive")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie", color="olive")
     assert photos(ctx) == [payload["color_images"]["Olive"][0]]
 
 
@@ -222,27 +223,27 @@ def test_switching_colour_sends_the_new_colours_photo(ctx):
     """Showing black and then being asked for olive is a new question. The
     "already shown this product" guard used to swallow it, so the reply that
     should have carried the olive photo carried none at all."""
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie", color="Black")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie", color="Black")
     assert photos(ctx) == [payload["color_images"]["Black"][0]]
 
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
-    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    call(ctx, "get_variants", product_id="rehla-hoodie", color="Olive")
     assert photos(ctx) == [payload["color_images"]["Olive"][0]]
 
 
 def test_the_same_colour_asked_for_twice_is_not_sent_twice(ctx):
     """The colour scopes the guard; it does not remove it."""
-    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    call(ctx, "get_variants", product_id="rehla-hoodie", color="Olive")
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
-    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    call(ctx, "get_variants", product_id="rehla-hoodie", color="Olive")
     assert ctx.attachments == []
 
 
 def test_a_colour_the_product_does_not_come_in_falls_back_to_the_default(ctx):
     """A colour that matches nothing must not cost the customer their photo."""
-    call(ctx, "get_variants", product_id="wanas-hoodie", color="Turquoise")
+    call(ctx, "get_variants", product_id="rehla-hoodie", color="Turquoise")
     assert len(photos(ctx)) == 1
 
 
@@ -253,7 +254,7 @@ def test_the_size_chart_rides_along_with_the_sizes(ctx):
     nothing was missing except the call. The sizes come out of get_variants,
     so the chart comes with them and the model has nothing to remember."""
     asked_about_sizes(ctx)
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
     assert photos(ctx), "and the product photo is still there"
 
@@ -262,11 +263,11 @@ def test_the_chart_is_not_sent_again_later_in_the_conversation(ctx):
     """A chart is the same picture every time. It rides along once; after
     that the customer already has it."""
     asked_about_sizes(ctx)
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
 
-    call(ctx, "get_variants", product_id="wanas-hoodie", color="Olive")
+    call(ctx, "get_variants", product_id="rehla-hoodie", color="Olive")
     assert charts(ctx) == []
     assert photos(ctx), "the new colour's photo is a different question"
 
@@ -276,23 +277,23 @@ def test_asking_for_the_chart_outright_still_re_sends_it(ctx):
     asking to see it again, and the once-per-conversation rule above is about
     a chart nobody asked for."""
     asked_about_sizes(ctx)
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     ctx.sent_images.update(ctx.attachments)
     ctx.attachments.clear()
 
-    call(ctx, "get_size_chart", product_id="wanas-hoodie")
+    call(ctx, "get_size_chart", product_id="rehla-hoodie")
     assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
 
 
 def test_a_product_with_no_chart_rides_along_with_nothing(ctx):
     from domain.models import Product
 
-    product = ctx.session.get(Product, "wanas-hoodie")
+    product = ctx.session.get(Product, "rehla-hoodie")
     product.size_chart = None
     product.size_chart_image = None
     ctx.session.flush()
 
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie")
     assert payload["has_size_chart"] is False
     assert charts(ctx) == []
     assert "_size_chart_image" not in payload
@@ -301,7 +302,7 @@ def test_a_product_with_no_chart_rides_along_with_nothing(ctx):
 def test_the_chart_marker_never_reaches_the_model(ctx):
     """Internal, like `_image_color`: the runtime sends the picture, the
     model is not handed a path to read back."""
-    payload = call(ctx, "get_variants", product_id="wanas-hoodie")
+    payload = call(ctx, "get_variants", product_id="rehla-hoodie")
     assert not any(key.startswith("_") for key in payload)
 
 
@@ -314,13 +315,13 @@ def test_a_chart_picture_with_no_measurements_still_rides_along(ctx):
     # A Shopify Files URL, which is where the dashboard's upload actually
     # lands -- a local path is only ever attached when the file is there.
     uploaded = "https://cdn.shopify.com/s/files/1/uploaded-chart.png"
-    product = ctx.session.get(Product, "wanas-hoodie")
+    product = ctx.session.get(Product, "rehla-hoodie")
     product.size_chart = None
     product.size_chart_image = uploaded
     ctx.session.flush()
 
     asked_about_sizes(ctx)
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert uploaded in ctx.attachments
 
 
@@ -329,21 +330,21 @@ def test_the_prompt_forbids_describing_a_chart_that_was_never_fetched():
     no picture behind it."""
     section = SYSTEM_PROMPT.split("# المقاسات")[1]
     assert "get_variants" in section, "the chart rides along with the sizes"
-    assert "ممنوع تقول «الجدول ده»" in section
+    assert "ممنوع تقولي «الجدول ده»" in section
 
 
 def test_size_charts_are_still_attached_alongside_product_photos(ctx):
     """The chart is the answer to a sizing question, so it is never dropped in
     favour of a product photo."""
-    call(ctx, "get_variants", product_id="wanas-sweatpant")
-    call(ctx, "get_size_chart", product_id="wanas-sweatpant")
+    call(ctx, "get_variants", product_id="rehla-sweatpant")
+    call(ctx, "get_size_chart", product_id="rehla-sweatpant")
     assert "data/size-charts/wide-leg-sweatpants.png" in ctx.attachments
 
 
 def test_the_same_photo_is_never_attached_twice_in_a_turn(ctx):
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     first = list(ctx.attachments)
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert ctx.attachments == first
 
 
@@ -351,8 +352,8 @@ def test_attachments_reach_the_agent_reply(seeded):
     """End of the path the audit followed: tool -> context -> AgentReply."""
     provider = ScriptedProvider(
         [
-            ModelReply(tool_calls=[{"id": "c", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}]),
-            ModelReply(text="ده الـ WANAS Hoodie، بييجي بـ٣ ألوان."),
+            ModelReply(tool_calls=[{"id": "c", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
+            ModelReply(text="ده الـ REHLA Hoodie، بييجي بـ٣ ألوان."),
         ]
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "وريني الهودي", provider=provider)
@@ -366,12 +367,12 @@ def test_a_product_with_no_photos_attaches_nothing(ctx, monkeypatch):
     sent."""
     from domain.models import Product
 
-    product = ctx.session.get(Product, "wanas-hoodie")
+    product = ctx.session.get(Product, "rehla-hoodie")
     product.images = []
     product.color_images = {}
     ctx.session.flush()
 
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert photos(ctx) == []
 
 
@@ -410,7 +411,7 @@ def test_a_customers_request_for_photos_is_never_a_repeat_call_to_skip():
 @pytest.mark.parametrize(
     "text",
     [
-        "اتفضل الصورة data/images/wanas-black-hoodie/01.jpg",
+        "اتفضل الصورة data/images/rehla-black-hoodie/01.jpg",
         "شوف data\\size-charts\\zipup.png كده",
         "الصور هنا: data/images/x/01.jpg و data/images/x/02.jpg",
     ],
@@ -427,7 +428,7 @@ def test_ordinary_text_is_left_alone():
 
 
 def test_the_agent_strips_a_path_the_model_echoed(seeded, caplog):
-    provider = ScriptedProvider([ModelReply(text="اتفضل data/images/wanas-black-hoodie/01.jpg")])
+    provider = ScriptedProvider([ModelReply(text="اتفضل data/images/rehla-black-hoodie/01.jpg")])
     with caplog.at_level("WARNING"):
         reply = agent.run_turn(seeded, CHANNEL, WHO, "وريني", provider=provider)
     assert "data/" not in reply.text
@@ -635,7 +636,7 @@ def test_the_prompt_says_how_to_mix_the_two_scripts_on_one_line():
     """The other half of what `common/bidi.py` repairs. Both, not either:
     text that needs no repair is better than text that got repaired."""
     assert "ابدأه بكلمة عربية مش باسم إنجليزي" in SYSTEM_PROMPT
-    assert "«Olive و Black» مش «Olive، Black»" in SYSTEM_PROMPT
+    assert "«توب Rehla Tops متوفر» مش «Rehla Tops متوفر»" in SYSTEM_PROMPT
 
 
 def test_the_prompt_covers_every_reference_word_that_was_observed():
@@ -649,9 +650,8 @@ def test_the_prompt_still_carries_the_rules_that_are_not_negotiable():
         "متقولش سعر ولا مقاس ولا حاجة متوفرة من دماغك",
         "الـ variant_id بييجي من get_variants بس",
         "متقولش إن الأوردر اتعمل غير لما confirm_order يرجّع رقم أوردر",
-        "الدفع كاش عند الاستلام، أو أونلاين من الموقع",
-        "مقاسات الهدوم وهي مفرودة",
-        "الـ Tops مفيهاش XL",
+        "الدفع كاش عند الاستلام بس",
+        "متعرضيش دفع أونلاين ولا تحويل",
         "request_human",
     ):
         assert rule in SYSTEM_PROMPT
@@ -662,11 +662,10 @@ def test_the_prompt_carries_the_published_exchange_and_cancellation_terms():
     one rule a customer is told out loud. A model that has never been given
     them answers from somewhere, and where it answers from is invention."""
     section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
-    assert "24 ساعة" in section, "the exchange window"
-    assert "20 جنيه" in section, "the exchange surcharge"
-    assert "علبتها الأصلية" in section and "مش ملبوسة" in section
-    assert "الشحن على المحل" in section, "a defect is the shop's to pay for"
-    assert "رايح وجاي" in section, "refusing at the door costs both trips"
+    assert f"{shop_facts.EXCHANGE_DAYS} يوم" in section, "the exchange window"
+    assert f"{shop_facts.RETURN_DAYS} أيام" in section, "the return window"
+    assert "التيكت والباكدج" in section and "مش ملبوسة" in section
+    assert "رحلة بتتحمل الشحن كله" in section, "a defect is the shop's to pay for"
 
 
 def test_the_prompt_defers_the_terms_to_the_tool_rather_than_to_memory():
@@ -674,17 +673,7 @@ def test_the_prompt_defers_the_terms_to_the_tool_rather_than_to_memory():
     model. A recited fee is a fee that drifts."""
     section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
     assert "get_return_terms" in section
-    assert "متقولش رسوم ولا مدة ولا «ينفع» من دماغك" in section
-    assert "customer_pays" in section, "the model reads the amount back, it does not compute it"
-
-
-def test_the_prompt_forbids_calling_an_unknown_delivery_date_a_missed_window():
-    """The gap this covers is real: a parcel the courier never reported still
-    reads Shipped, so "the 24 hours passed" would be a refusal invented out
-    of a missing timestamp."""
-    section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
-    assert "exchange_window=unknown" in section
-    assert "متقولش إن الـ24 ساعة عدت" in section
+    assert "متقوليش رسوم ولا مدة ولا «ينفع» من دماغك" in section
 
 
 def test_the_prompt_forbids_leaking_internals():
@@ -874,9 +863,9 @@ def test_an_image_already_sent_this_conversation_is_not_sent_again(seeded):
     photo -- the customer already has it."""
     provider = ScriptedProvider(
         [
-            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}]),
-            ModelReply(text="ده الـ WANAS Hoodie."),
-            ModelReply(tool_calls=[{"id": "b", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}]),
+            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
+            ModelReply(text="ده الـ REHLA Hoodie."),
+            ModelReply(tool_calls=[{"id": "b", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
             ModelReply(text="زي ما قلتلك، ده هو."),
         ]
     )
@@ -890,7 +879,7 @@ def test_an_image_already_sent_this_conversation_is_not_sent_again(seeded):
 def test_sent_images_are_recorded_on_the_assistant_message(seeded):
     provider = ScriptedProvider(
         [
-            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}]),
+            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
             ModelReply(text="اتفضل."),
         ]
     )
@@ -915,7 +904,7 @@ def test_a_tool_call_written_as_text_is_stripped(seeded):
 
 
 def test_a_reply_that_is_only_a_leaked_tool_call_falls_back_gracefully(seeded):
-    provider = ScriptedProvider([ModelReply(text="get_variants(product_id='wanas-hoodie')")])
+    provider = ScriptedProvider([ModelReply(text="get_variants(product_id='rehla-hoodie')")])
     reply = agent.run_turn(seeded, CHANNEL, WHO, "وريني الهودي", provider=provider)
     assert reply.text == agent.GENERIC_FAILURE
 
@@ -931,9 +920,9 @@ def test_strip_tool_leaks_leaves_ordinary_text_alone():
 
 
 def test_bold_markdown_is_stripped_but_the_product_name_is_kept():
-    cleaned, changed = agent.strip_markdown("عندنا **Boxy WNS Tee** بألوان كتير")
+    cleaned, changed = agent.strip_markdown("عندنا **Boxy REHLA Tee** بألوان كتير")
     assert changed is True
-    assert cleaned == "عندنا Boxy WNS Tee بألوان كتير"
+    assert cleaned == "عندنا Boxy REHLA Tee بألوان كتير"
 
 
 def test_a_markdown_heading_is_stripped():
@@ -946,9 +935,9 @@ def test_a_markdown_list_marker_becomes_a_bullet_rather_than_being_dropped():
     """The prompt asks for lists now, and neither WhatsApp nor Instagram
     renders `-` or `*` into anything -- they arrive as the literal character.
     Normalising is the guarantee behind the prompt's preference."""
-    cleaned, changed = agent.strip_markdown("عندنا:\n- Boxy WNS Tee\n* Ringer Tee")
+    cleaned, changed = agent.strip_markdown("عندنا:\n- Boxy REHLA Tee\n* Ringer Tee")
     assert changed is True
-    assert cleaned == "عندنا:\n• Boxy WNS Tee\n• Ringer Tee"
+    assert cleaned == "عندنا:\n• Boxy REHLA Tee\n• Ringer Tee"
 
 
 def test_a_hyphen_inside_a_sentence_is_still_left_alone():
@@ -959,7 +948,7 @@ def test_a_hyphen_inside_a_sentence_is_still_left_alone():
 
 
 def test_a_bullet_the_model_already_wrote_is_untouched():
-    text = "• Boxy WNS Tee\n• Ringer Tee"
+    text = "• Boxy REHLA Tee\n• Ringer Tee"
     assert agent.strip_markdown(text) == (text, False)
 
 
@@ -1010,16 +999,16 @@ def test_a_repeated_get_variants_call_is_not_re_fetched(seeded, monkeypatch):
 
     provider = ScriptedProvider(
         [
-            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}]),
+            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
             ModelReply(text="الـ XL موجود بس في Black."),
-            ModelReply(tool_calls=[{"id": "b", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}]),
+            ModelReply(tool_calls=[{"id": "b", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
             ModelReply(text="والـ L موجود في Black و Olive."),
         ]
     )
     agent.run_turn(seeded, CHANNEL, WHO, "الهودي فيه XL؟", provider=provider)
     agent.run_turn(seeded, CHANNEL, WHO, "طب L؟", provider=provider)
 
-    assert calls == ["wanas-hoodie"]  # the real read happened once, not twice
+    assert calls == ["rehla-hoodie"]  # the real read happened once, not twice
 
 
 def test_a_call_for_a_different_product_is_not_served_from_cache(seeded, monkeypatch):
@@ -1036,15 +1025,15 @@ def test_a_call_for_a_different_product_is_not_served_from_cache(seeded, monkeyp
 
     provider = ScriptedProvider(
         [
-            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "wanas-hoodie"}}]),
+            ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
             ModelReply(text="أ"),
-            ModelReply(tool_calls=[{"id": "b", "name": "get_variants", "arguments": {"product_id": "wanas-polo"}}]),
+            ModelReply(tool_calls=[{"id": "b", "name": "get_variants", "arguments": {"product_id": "rehla-polo"}}]),
             ModelReply(text="ب"),
         ]
     )
     agent.run_turn(seeded, CHANNEL, WHO, "الهودي؟", provider=provider)
     agent.run_turn(seeded, CHANNEL, WHO, "طب البولو؟", provider=provider)
-    assert calls == ["wanas-hoodie", "wanas-polo"]
+    assert calls == ["rehla-hoodie", "rehla-polo"]
 
 
 def test_a_tool_with_side_effects_is_never_cached(seeded):
@@ -1129,12 +1118,12 @@ def test_a_search_never_invents_a_photo_for_a_product_without_one(ctx):
     """No photo is a correct outcome; a wrong one never is."""
     from domain.models import Product
 
-    product = ctx.session.get(Product, "wanas-hoodie")
+    product = ctx.session.get(Product, "rehla-hoodie")
     product.images = []
     product.color_images = {}
     ctx.session.flush()
 
-    call(ctx, "get_products", query="WANAS Hoodie")
+    call(ctx, "get_products", query="REHLA Hoodie")
     assert photos(ctx) == []
 
 
@@ -1143,20 +1132,20 @@ def test_a_price_question_gets_a_photo_and_no_size_chart(ctx):
     the garment, and should not be handed a measurements table they never
     asked for."""
     ctx.history.append({"role": "user", "content": "الهودي ده بكام؟"})
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert len(photos(ctx)) == 1
     assert charts(ctx) == []
 
 
 def test_a_colour_question_gets_no_size_chart(ctx):
     ctx.history.append({"role": "user", "content": "عندكم منه لون أسود؟"})
-    call(ctx, "get_variants", product_id="wanas-hoodie", color="Black")
+    call(ctx, "get_variants", product_id="rehla-hoodie", color="Black")
     assert charts(ctx) == []
 
 
 def test_a_shipping_question_gets_no_size_chart(ctx):
     ctx.history.append({"role": "user", "content": "الشحن كام وبيوصل امتى؟"})
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert charts(ctx) == []
 
 
@@ -1164,14 +1153,14 @@ def test_choosing_a_size_is_not_asking_about_sizing(ctx):
     """«عايز مقاس L» has already answered "which size am I?". Answering a
     decision with a measurements chart reads as not having listened."""
     ctx.history.append({"role": "user", "content": "عايز مقاس L من الهودي ده"})
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert charts(ctx) == []
     assert photos(ctx), "the product photo is a different question"
 
 
 def test_asking_about_fit_is_asking_about_sizing(ctx):
     ctx.history.append({"role": "user", "content": "هيضبط عليا؟"})
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
 
 
@@ -1179,7 +1168,7 @@ def test_asking_for_the_chart_by_name_beats_everything_else_in_the_message(ctx):
     """«ابعتلي جدول المقاسات لمقاس L» names a size *and* asks for the chart.
     The explicit ask wins -- it is not ambiguous, it is a request."""
     ctx.history.append({"role": "user", "content": "ابعتلي جدول المقاسات لمقاس L"})
-    call(ctx, "get_variants", product_id="wanas-hoodie")
+    call(ctx, "get_variants", product_id="rehla-hoodie")
     assert charts(ctx) == ["data/size-charts/oversized-hoodie.png"]
 
 
@@ -1187,12 +1176,12 @@ def test_a_sizing_question_answered_by_the_search_still_gets_the_chart(ctx):
     """The model reaches for `get_products` first, and often answers a sizing
     question in that one hop -- the size list is in the search result.
 
-    Caught live: "Boxy WNS Tee بيجي مقاسات إيه؟" was answered correctly and
+    Caught live: "Boxy REHLA Tee بيجي مقاسات إيه؟" was answered correctly and
     with no chart at all, because only `get_variants` had ever attached one.
     """
-    ctx.history.append({"role": "user", "content": "Boxy WNS Tee بيجي مقاسات إيه؟"})
-    call(ctx, "get_products", query="Boxy WNS Tee")
-    assert charts(ctx) == ["data/size-charts/wns-boxy-tee.png"]
+    ctx.history.append({"role": "user", "content": "Boxy REHLA Tee بيجي مقاسات إيه؟"})
+    call(ctx, "get_products", query="Boxy REHLA Tee")
+    assert charts(ctx) == ["data/size-charts/rehla-boxy-tee.png"]
     assert photos(ctx), "and the garment itself is still shown"
 
 
@@ -1201,16 +1190,16 @@ def test_the_search_chart_is_labelled_with_the_product_it_belongs_to(ctx):
     to go out unlabelled -- and a customer replying to it resolved to no
     product at all."""
     ctx.history.append({"role": "user", "content": "المقاسات إيه؟"})
-    call(ctx, "get_products", query="Boxy WNS Tee")
+    call(ctx, "get_products", query="Boxy REHLA Tee")
     chart = charts(ctx)[0]
     label = ctx.attachment_labels[chart]
-    assert label["product_id"] == "boxy-wns-tee"
+    assert label["product_id"] == "boxy-rehla-tee"
     assert label["label"].endswith("size chart")
 
 
 def test_the_search_does_not_carry_a_chart_when_nobody_asked(ctx):
-    ctx.history.append({"role": "user", "content": "Boxy WNS Tee بكام؟"})
-    call(ctx, "get_products", query="Boxy WNS Tee")
+    ctx.history.append({"role": "user", "content": "Boxy REHLA Tee بكام؟"})
+    call(ctx, "get_products", query="Boxy REHLA Tee")
     assert charts(ctx) == []
     assert len(photos(ctx)) == 1
 
@@ -1228,4 +1217,4 @@ def test_the_prompt_pins_the_order_sizes_are_recited_in():
     It cannot fix the order the model recites them in once it regroups them by
     colour, which the real model does -- and which produced "مقاس S ... مقاس M
     ... مقاس XL ... مقاس L" from a correctly ordered payload."""
-    assert "S قبل M قبل L قبل XL" in SYSTEM_PROMPT
+    assert "XS قبل S قبل M قبل L" in SYSTEM_PROMPT

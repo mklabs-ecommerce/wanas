@@ -36,7 +36,7 @@ APP_SECRET = "wa-test-app-secret"
 #: The two poisoned-history tests below write a malformed value straight into
 #: `sessions.history`, bypassing the JSON type the way an out-of-app write
 #: does. PostgreSQL's `json` column refuses that at the wire -- the row simply
-#: cannot exist there -- so under the `WANAS_TEST_DATABASE_URL` PostgreSQL job
+#: cannot exist there -- so under the `REHLA_TEST_DATABASE_URL` PostgreSQL job
 #: the test fails on its own fixture rather than on the behaviour it pins. The
 #: guard it defends is backend-independent and still runs on every SQLite run;
 #: only the way of producing the poison is SQLite-shaped, which is exactly the
@@ -133,7 +133,7 @@ def test_a_paused_conversation_logs_a_warning_and_still_stores_the_message(seede
     identities.pause(seeded, CHANNEL, WHO)
     seeded.commit()
 
-    with caplog.at_level("WARNING", logger="wanas.runtime"):
+    with caplog.at_level("WARNING", logger="rehla.runtime"):
         reply = handle_message(CHANNEL, WHO, "still there?", db=seeded, provider=RehearsalProvider())
 
     assert reply.paused is True
@@ -148,7 +148,7 @@ def test_the_pause_warning_says_how_long(seeded, caplog):
     raise_handoff(seeded, CHANNEL, WHO, "customer_asked", "wants a human")
     seeded.commit()
 
-    with caplog.at_level("WARNING", logger="wanas.runtime"):
+    with caplog.at_level("WARNING", logger="rehla.runtime"):
         handle_message(CHANNEL, WHO, "hello?", db=seeded, provider=RehearsalProvider())
 
     # The newest handoff item is what dates the pause -- reason included.
@@ -246,7 +246,7 @@ def test_malformed_history_does_not_raise_and_the_turn_still_replies(seeded, cap
     seeded.commit()
     seeded.expire_all()  # force the next attribute access to re-read the poison
 
-    with caplog.at_level("ERROR", logger="wanas.session"):
+    with caplog.at_level("ERROR", logger="rehla.session"):
         reply = handle_message(CHANNEL, WHO, "categories", db=seeded, provider=RehearsalProvider())
 
     assert reply.text  # the turn produced a reply anyway
@@ -272,7 +272,7 @@ def test_load_leaves_the_poisoned_value_in_place(seeded, caplog):
     seeded.commit()
     seeded.expire_all()
 
-    with caplog.at_level("ERROR", logger="wanas.session"):
+    with caplog.at_level("ERROR", logger="rehla.session"):
         assert session_store.load(seeded, CHANNEL, WHO) == []
 
     raw = seeded.execute(

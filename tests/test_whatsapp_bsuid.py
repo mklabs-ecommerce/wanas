@@ -244,7 +244,7 @@ def test_a_message_with_neither_identity_is_still_named(client, configured, sent
     body = username_body("hi", message_id="wamid.none")
     body["entry"][0]["changes"][0]["value"]["messages"][0].pop("from_user_id")
 
-    with caplog.at_level("WARNING", logger="wanas.channel.whatsapp"):
+    with caplog.at_level("WARNING", logger="rehla.channel.whatsapp"):
         assert post(client, body).status_code == 200
 
     assert "no sender id at all" in caplog.text

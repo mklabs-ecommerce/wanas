@@ -1,5 +1,5 @@
 """`integrations/shopify/admin_products.py`: create/edit a product from
-the dashboard, and the local wanas.db mirror that makes it sellable by the
+the dashboard, and the local rehla.db mirror that makes it sellable by the
 bot afterward.
 
 Exercises the real `create_product` / `update_product` orchestration against
@@ -17,7 +17,7 @@ from sqlalchemy import select
 from domain.models import CartItem, Client, Order, OrderItem, Product, StockWaitlistEntry, Variant
 from integrations.shopify import admin_products as sap
 
-VARIANT = "wanas-hoodie-s-olive"  # a seeded variant, for product_gid resolution
+VARIANT = "rehla-hoodie-s-olive"  # a seeded variant, for product_gid resolution
 
 
 def test_create_product_writes_shopify_and_local_rows(seeded):
@@ -119,30 +119,30 @@ def test_a_second_product_with_the_same_title_gets_a_distinct_id(seeded):
 def test_product_gid_for_variant_id_resolves_a_seeded_product(seeded, shopify):
     gid = sap.product_gid_for_variant_id(VARIANT)
     assert gid is not None
-    assert shopify.products[gid]["title"] == "WANAS Hoodie"
+    assert shopify.products[gid]["title"] == "REHLA Hoodie"
 
 
 def test_update_product_changes_local_fields(seeded):
-    result = sap.update_product(seeded, "wanas-hoodie", category="Hoodies & Sweatshirts", collection="WINTER COLLECTION")
+    result = sap.update_product(seeded, "rehla-hoodie", category="Hoodies & Sweatshirts", collection="WINTER COLLECTION")
     assert "error" not in result
 
-    product = seeded.get(Product, "wanas-hoodie")
+    product = seeded.get(Product, "rehla-hoodie")
     assert product.collection == "WINTER COLLECTION"
 
 
 def test_update_product_pushes_title_to_shopify(seeded, shopify):
-    sap.update_product(seeded, "wanas-hoodie", title="WANAS Hoodie (renamed)")
+    sap.update_product(seeded, "rehla-hoodie", title="REHLA Hoodie (renamed)")
     gid = shopify.variant_to_product[VARIANT]
-    assert shopify.products[gid]["title"] == "WANAS Hoodie (renamed)"
+    assert shopify.products[gid]["title"] == "REHLA Hoodie (renamed)"
 
-    product = seeded.get(Product, "wanas-hoodie")
-    assert product.name == "WANAS Hoodie (renamed)"
+    product = seeded.get(Product, "rehla-hoodie")
+    assert product.name == "REHLA Hoodie (renamed)"
 
 
 def test_update_product_edits_variant_price_and_stock(seeded, shopify):
     sap.update_product(
         seeded,
-        "wanas-hoodie",
+        "rehla-hoodie",
         variant_updates=[{"variant_id": VARIANT, "price": 999, "stock_qty": 42}],
     )
     assert shopify.shelf[VARIANT]["price"] == Decimal("999.00")
@@ -414,7 +414,7 @@ def test_the_options_are_declared_when_the_product_is_created(seeded, shopify):
 def _olive_variants(session):
     return sorted(
         v.variant_id
-        for v in session.get(Product, "wanas-hoodie").variants
+        for v in session.get(Product, "rehla-hoodie").variants
         if v.color == "Olive"
     )
 
@@ -428,7 +428,7 @@ def test_a_new_photo_covers_the_whole_colourway_not_just_the_row(seeded, shopify
 
     sap.update_product(
         seeded,
-        "wanas-hoodie",
+        "rehla-hoodie",
         variant_images=[{"variant_id": olive[0], "source": "https://x/new-olive.png"}],
     )
 
@@ -438,12 +438,12 @@ def test_a_new_photo_covers_the_whole_colourway_not_just_the_row(seeded, shopify
 def test_another_colour_is_left_alone(seeded, shopify):
     olive = _olive_variants(seeded)
     black = [
-        v.variant_id for v in seeded.get(Product, "wanas-hoodie").variants if v.color == "Black"
+        v.variant_id for v in seeded.get(Product, "rehla-hoodie").variants if v.color == "Black"
     ]
 
     sap.update_product(
         seeded,
-        "wanas-hoodie",
+        "rehla-hoodie",
         variant_images=[{"variant_id": olive[0], "source": "https://x/new-olive.png"}],
     )
 
@@ -454,17 +454,17 @@ def test_the_local_fallback_keeps_the_colours_nobody_changed(seeded, shopify):
     """`color_images` is what the bot sends when Shopify is unreachable, so a
     write here has to be additive -- replacing the map would blank every
     colour the staff member did not touch."""
-    product = seeded.get(Product, "wanas-hoodie")
+    product = seeded.get(Product, "rehla-hoodie")
     product.color_images = {"Black": ["data/images/black.png"]}
     seeded.flush()
 
     sap.update_product(
         seeded,
-        "wanas-hoodie",
+        "rehla-hoodie",
         variant_images=[{"variant_id": _olive_variants(seeded)[0], "source": "https://x/new-olive.png"}],
     )
 
-    product = seeded.get(Product, "wanas-hoodie")
+    product = seeded.get(Product, "rehla-hoodie")
     assert product.color_images["Black"] == ["data/images/black.png"]
     assert product.color_images["Olive"] == ["https://x/new-olive.png"]
     assert product.images[0] == "https://x/new-olive.png"
@@ -476,7 +476,7 @@ def test_changing_a_photo_touches_neither_price_nor_stock(seeded, shopify):
 
     sap.update_product(
         seeded,
-        "wanas-hoodie",
+        "rehla-hoodie",
         variant_images=[{"variant_id": variant.variant_id, "source": "https://x/new-olive.png"}],
     )
 
@@ -487,7 +487,7 @@ def test_changing_a_photo_touches_neither_price_nor_stock(seeded, shopify):
 def test_a_variant_id_that_is_not_this_products_is_ignored_not_guessed(seeded, shopify):
     sap.update_product(
         seeded,
-        "wanas-hoodie",
+        "rehla-hoodie",
         variant_images=[{"variant_id": "no-such-variant", "source": "https://x/nope.png"}],
     )
 
@@ -598,14 +598,14 @@ def _sold_product(session, shopify):
     session.add(client)
     session.flush()
     order = Order(
-        order_id="WNS-DEL-1", client_id=client.client_id, source_channel="whatsapp",
+        order_id="RHL-DEL-1", client_id=client.client_id, source_channel="whatsapp",
         shipping_address="somewhere", contact_phone="201000000001", governorate="Cairo",
         subtotal=Decimal("300"), shipping_fee=Decimal("60"), total=Decimal("360"),
         status="Confirmed",
     )
     session.add(order)
     session.add(OrderItem(
-        order_id="WNS-DEL-1", variant_id="sold-tee-s-olive", product_name="Sold Tee",
+        order_id="RHL-DEL-1", variant_id="sold-tee-s-olive", product_name="Sold Tee",
         size="S", color="Olive", quantity=1,
         unit_price=Decimal("300"), unit_original_price=Decimal("300"),
     ))
@@ -828,7 +828,7 @@ def test_nothing_local_survives_a_failed_create(seeded, shopify, monkeypatch):
 def test_a_product_still_wearing_the_placeholder_is_recognised(seeded, shopify):
     gid = sap.shopify_create_product(
         title="Half Made", description="", category="T-Shirts",
-        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Wanas Gallery",
+        options=[{"name": "Size", "values": [{"name": "S"}]}], vendor="Rehla",
     )
 
     assert sap.is_placeholder_only(sap.get_product(gid)) is True

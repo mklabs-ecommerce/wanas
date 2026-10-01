@@ -34,8 +34,8 @@ from domain.services.notifications import item_add_requested, item_swap_requeste
 from integrations.shopify import catalog as shopify_catalog, orders as shopify_orders
 
 SECRET = "test-dashboard-secret"
-VARIANT_A = "wanas-hoodie-s-olive"
-VARIANT_B = "wanas-hoodie-s-black"
+VARIANT_A = "rehla-hoodie-s-olive"
+VARIANT_B = "rehla-hoodie-s-black"
 CHANNEL = "whatsapp"
 WHO = "201555000444"
 
@@ -283,7 +283,7 @@ def test_the_message_rolls_back_with_the_resolution_it_describes(seeded, order):
     before = len(_texts(seeded))
 
     notifications.record_request_resolution(
-        seeded, item, "rejected", order=order, item_label="Wanas Hoodie Black S"
+        seeded, item, "rejected", order=order, item_label="Rehla Hoodie Black S"
     )
     seeded.rollback()
 

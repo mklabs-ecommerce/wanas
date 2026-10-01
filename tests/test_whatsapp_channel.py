@@ -223,7 +223,7 @@ def test_an_order_can_be_placed_over_the_webhook(client, configured, sent, seede
 
     for index, text in enumerate(
         [
-            "add wanas-hoodie-s-olive 1",
+            "add rehla-hoodie-s-olive 1",
             "order Omar | Cairo | 5 Test Street | 01000000123",
             "confirm",
         ]
@@ -231,7 +231,7 @@ def test_an_order_can_be_placed_over_the_webhook(client, configured, sent, seede
         assert post(client, webhook_body(text, message_id=f"wamid.{index}")).status_code == 200
 
     seeded.expire_all()
-    order = seeded.get(Order, "WNS-1001")
+    order = seeded.get(Order, "RHL-1001")
     assert order is not None
     assert order.source_channel == "whatsapp"
     assert float(order.total) == 710
@@ -239,13 +239,13 @@ def test_an_order_can_be_placed_over_the_webhook(client, configured, sent, seede
     # The turn itself sends nothing more -- a second, model-written "your
     # order is confirmed" for the same order is what this asserts against.
     bodies = [m.get("text", {}).get("body", "") for m in sent if m.get("type") == "text"]
-    confirmations = [b for b in bodies if "تم تأكيد طلبك" in b or "WNS-1001" in b]
+    confirmations = [b for b in bodies if "تم تأكيد طلبك" in b or "RHL-1001" in b]
     assert len(confirmations) == 1, bodies
     assert "تم تأكيد طلبك" in confirmations[0]
 
 
 def test_a_sizing_question_sends_the_chart_as_an_image_message(client, configured, sent):
-    post(client, webhook_body("size wanas-sweatpant"))
+    post(client, webhook_body("size rehla-sweatpant"))
     kinds = [m["type"] for m in sent]
     assert kinds == ["text", "image"]
     # A real image message, not a link.
@@ -454,9 +454,9 @@ def test_a_local_photo_still_goes_through_the_cached_upload(configured, monkeypa
     monkeypatch.setattr(adapter.WhatsAppClient, "_post", lambda self, payload: (True, None, "sent.1"))
     client = adapter.WhatsAppClient(phone_number_id="1", access_token="t")
 
-    client.send_image("201000000123", "data/images/wanas-hoodie/01.jpg")
+    client.send_image("201000000123", "data/images/rehla-hoodie/01.jpg")
 
-    assert uploads == ["data/images/wanas-hoodie/01.jpg"]
+    assert uploads == ["data/images/rehla-hoodie/01.jpg"]
 
 
 def test_the_notification_sender_is_only_registered_when_configured(monkeypatch):

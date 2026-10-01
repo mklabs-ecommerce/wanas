@@ -152,7 +152,7 @@ def test_the_prompt_lets_the_bot_answer_how_it_is():
 
 def test_the_prompt_names_the_dialect_and_forbids_a_persona():
     assert "«فين» مش «وين»" in SYSTEM_PROMPT
-    assert "مالكش اسم شخصي" in SYSTEM_PROMPT
+    assert "مالكيش اسم شخصي" in SYSTEM_PROMPT
 
 
 def test_the_prompt_no_longer_teaches_the_word_reference():

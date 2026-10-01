@@ -1,4 +1,4 @@
-"""`integrations/shopify/product_reconcile.py`: a wanas.db product whose
+"""`integrations/shopify/product_reconcile.py`: a rehla.db product whose
 Shopify product is gone.
 
 `product_import` only ever adds, so nothing used to remove the local half of
@@ -25,7 +25,7 @@ from integrations.shopify.product_reconcile import (
 
 
 def _local_only_product(session, shopify, title="Ghost Tee"):
-    """A product in wanas.db that Shopify has never heard of -- what a
+    """A product in rehla.db that Shopify has never heard of -- what a
     deleted-in-Admin product leaves behind."""
     result = sap.create_product(
         session,
@@ -44,7 +44,7 @@ def _local_only_product(session, shopify, title="Ghost Tee"):
     return result
 
 
-def _sell_one(session, variant_id, order_id="WNS-REC-1"):
+def _sell_one(session, variant_id, order_id="RHL-REC-1"):
     client = Client(full_name="Sara", phone="201000000001", address="somewhere")
     session.add(client)
     session.flush()
@@ -67,7 +67,7 @@ def test_a_product_shopify_still_knows_is_left_alone(seeded, shopify):
 
     assert report["deleted"] == []
     assert report["archived"] == []
-    assert seeded.get(Product, "wanas-hoodie") is not None
+    assert seeded.get(Product, "rehla-hoodie") is not None
 
 
 def test_a_product_gone_from_shopify_and_never_ordered_is_deleted(seeded, shopify):
@@ -178,36 +178,36 @@ def test_a_dry_run_reports_and_writes_nothing(seeded, shopify):
 
 def test_an_empty_live_read_is_refused_outright(seeded, shopify, monkeypatch):
     """No SKUs at all is an outage or the wrong store. Reading it as an empty
-    catalog would delete every product in wanas.db."""
+    catalog would delete every product in rehla.db."""
     monkeypatch.setattr(sap, "all_variant_skus", set)
 
     with pytest.raises(ReconcileRefused, match="outage or the wrong store"):
         reconcile_vanished_products(seeded, apply=True)
 
-    assert seeded.get(Product, "wanas-hoodie") is not None
+    assert seeded.get(Product, "rehla-hoodie") is not None
 
 
 def test_most_of_the_catalog_vanishing_is_refused(seeded, shopify, monkeypatch):
     """A shop does not lose most of its products between two runs. A query
     that silently filtered looks exactly like one that did."""
-    survivor = {"wanas-hoodie-s-olive"}
+    survivor = {"rehla-hoodie-s-olive"}
     monkeypatch.setattr(sap, "all_variant_skus", lambda: survivor)
 
     with pytest.raises(ReconcileRefused, match="more than 50%"):
         reconcile_vanished_products(seeded, apply=True)
 
-    assert seeded.get(Product, "wanas-crewneck") is not None
+    assert seeded.get(Product, "rehla-crewneck") is not None
 
 
 def test_force_is_what_says_you_meant_it(seeded, shopify, monkeypatch):
-    survivor = {"wanas-hoodie-s-olive"}
+    survivor = {"rehla-hoodie-s-olive"}
     monkeypatch.setattr(sap, "all_variant_skus", lambda: survivor)
 
     report = reconcile_vanished_products(seeded, apply=True, force=True)
     seeded.flush()
 
     assert len(report["deleted"]) > 1
-    assert seeded.get(Product, "wanas-hoodie") is not None
+    assert seeded.get(Product, "rehla-hoodie") is not None
 
 
 def test_force_does_not_lift_the_empty_read_refusal(seeded, shopify, monkeypatch):
@@ -229,7 +229,7 @@ def test_a_failed_page_is_raised_not_shortened(seeded, shopify, monkeypatch):
     with pytest.raises(RuntimeError, match="timed out"):
         reconcile_vanished_products(seeded, apply=True)
 
-    assert seeded.get(Product, "wanas-hoodie") is not None
+    assert seeded.get(Product, "rehla-hoodie") is not None
 
 
 def test_a_product_with_no_variants_is_reported_not_deleted(seeded, shopify):

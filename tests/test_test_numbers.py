@@ -74,7 +74,7 @@ def _order(*, total, customer_phone, cancelled=False):
         "customer_phone": customer_phone,
         "governorate": "Cairo",
         "total": str(total),
-        "line_items": [{"title": "WANAS Hoodie", "quantity": 1, "sku": "wanas-hoodie-s-olive"}],
+        "line_items": [{"title": "REHLA Hoodie", "quantity": 1, "sku": "rehla-hoodie-s-olive"}],
         "source": "chatbot",
     }
 

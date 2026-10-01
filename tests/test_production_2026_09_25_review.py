@@ -79,7 +79,7 @@ def _ctx(seeded, text: str, channel: str = "whatsapp") -> ToolContext:
 
 def _mirror_the_plain_tee(seeded, shopify, *, sleeve: str | None) -> Product:
     """The one product production has that the seed does not: made in the
-    dashboard on 2026-09-22 and mirrored into wanas.db -- no `size_chart` row,
+    dashboard on 2026-09-22 and mirrored into rehla.db -- no `size_chart` row,
     its chart only a picture (`size_chart_image`), photos on Shopify's CDN,
     three colourways in S only, two of each."""
     product = Product(
@@ -386,7 +386,7 @@ def test_a_delivery_minimum_nobody_published_is_sent_back(seeded):
     from domain.models import ShippingRate
 
     for rate in seeded.query(ShippingRate).all():
-        rate.fee = 110  # production's flat rate
+        rate.fee = 85  # the flat rate
     seeded.commit()
 
     reply = (
@@ -396,7 +396,7 @@ def test_a_delivery_minimum_nobody_published_is_sent_back(seeded):
     history = [msg.user("اه تمام بس عايز اعرف سعر الشحن ومدته قد ايه")]
     made_up = reply_facts.ungrounded(reply, history, reply_facts.shop_constants(seeded))
     assert made_up and any("2" in item for item in made_up)
-    published = "الشحن 110 جنيه لكل محافظات مصر، والتوصيل بياخد لغاية 4 أيام."
+    published = "الشحن 85 جنيه لكل محافظات مصر، والتوصيل بياخد من 3 لـ 5 أيام."
     assert reply_facts.ungrounded(published, history, reply_facts.shop_constants(seeded)) == []
 
 
@@ -544,15 +544,15 @@ def test_every_picture_sent_is_logged_as_chart_or_photo():
 
     outcomes = [
         SimpleNamespace(delivered=True, image_path=None),  # the text
-        SimpleNamespace(delivered=True, image_path="data/size-charts/wns-boxy-tee.png"),
+        SimpleNamespace(delivered=True, image_path="data/size-charts/rehla-boxy-tee.png"),
         SimpleNamespace(delivered=False, image_path=CDN + "DSC02008.jpg"),
     ]
     labels = {
-        "data/size-charts/wns-boxy-tee.png": {"label": "Boxy WNS Tee size chart"},
-        CDN + "DSC02008.jpg": {"label": "Boxy WNS Tee (Black)"},
+        "data/size-charts/rehla-boxy-tee.png": {"label": "Boxy REHLA Tee size chart"},
+        CDN + "DSC02008.jpg": {"label": "Boxy REHLA Tee (Black)"},
     }
     assert showcase.sent_pictures(outcomes, labels) == (
-        "chart[Boxy WNS Tee size chart]=ok, photo[Boxy WNS Tee (Black)]=REFUSED"
+        "chart[Boxy REHLA Tee size chart]=ok, photo[Boxy REHLA Tee (Black)]=REFUSED"
     )
 
 

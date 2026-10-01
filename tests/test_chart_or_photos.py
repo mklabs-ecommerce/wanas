@@ -27,7 +27,7 @@ from assistant.providers.fake import ScriptedProvider
 from assistant.tools.base import ToolContext
 
 CHANNEL = "whatsapp"
-PRODUCT = "boxy-wns-tee"
+PRODUCT = "boxy-rehla-tee"
 
 
 def _call(name: str, **arguments) -> ModelReply:
@@ -60,9 +60,9 @@ def _photos(reply) -> list[str]:
 @pytest.mark.parametrize(
     "question",
     [
-        "ابعتلي جدول المقاسات بتاع Boxy WNS Tee",
-        "مقاسات Boxy WNS Tee ايه؟",
-        "size chart for Boxy WNS Tee",
+        "ابعتلي جدول المقاسات بتاع Boxy REHLA Tee",
+        "مقاسات Boxy REHLA Tee ايه؟",
+        "size chart for Boxy REHLA Tee",
     ],
 )
 def test_a_chart_question_answered_through_get_variants_sends_the_chart_only(seeded, question):
@@ -71,7 +71,7 @@ def test_a_chart_question_answered_through_get_variants_sends_the_chart_only(see
         "201000000101",
         question,
         _call("get_variants", product_id=PRODUCT),
-        ModelReply(text="ده جدول مقاسات تيشيرت Boxy WNS Tee، والأرقام مقاسات القطعة وهي مفرودة."),
+        ModelReply(text="ده جدول مقاسات تيشيرت Boxy REHLA Tee، والأرقام مقاسات القطعة وهي مفرودة."),
     )
     assert _charts(reply), "the chart must still go"
     assert _photos(reply) == []
@@ -81,14 +81,14 @@ def test_a_chart_question_answered_by_both_tools_sends_the_chart_only(seeded):
     reply = _turn(
         seeded,
         "201000000102",
-        "عايز جدول المقاسات بتاع Boxy WNS Tee",
+        "عايز جدول المقاسات بتاع Boxy REHLA Tee",
         ModelReply(
             tool_calls=[
                 {"id": "a", "name": "get_size_chart", "arguments": {"product_id": PRODUCT}},
                 {"id": "b", "name": "get_variants", "arguments": {"product_id": PRODUCT}},
             ]
         ),
-        ModelReply(text="ده جدول مقاسات تيشيرت Boxy WNS Tee."),
+        ModelReply(text="ده جدول مقاسات تيشيرت Boxy REHLA Tee."),
     )
     assert len(_charts(reply)) == 1
     assert _photos(reply) == []
@@ -98,9 +98,9 @@ def test_a_chart_question_answered_by_a_search_sends_the_chart_only(seeded):
     reply = _turn(
         seeded,
         "201000000103",
-        "جدول مقاسات Boxy WNS Tee",
-        _call("get_products", query="Boxy WNS Tee"),
-        ModelReply(text="ده جدول مقاسات تيشيرت Boxy WNS Tee."),
+        "جدول مقاسات Boxy REHLA Tee",
+        _call("get_products", query="Boxy REHLA Tee"),
+        ModelReply(text="ده جدول مقاسات تيشيرت Boxy REHLA Tee."),
     )
     assert _charts(reply)
     assert _photos(reply) == []
@@ -112,9 +112,9 @@ def test_the_showcase_does_not_top_a_chart_up_with_photos(seeded):
     reply = _turn(
         seeded,
         "201000000104",
-        "المقاسات ايه في Boxy WNS Tee؟",
+        "المقاسات ايه في Boxy REHLA Tee؟",
         _call("get_variants", product_id=PRODUCT),
-        ModelReply(text="تيشيرت Boxy WNS Tee متوفر من S لـ XL، وده جدول المقاسات."),
+        ModelReply(text="تيشيرت Boxy REHLA Tee متوفر من S لـ XL، وده جدول المقاسات."),
     )
     assert _charts(reply)
     assert _photos(reply) == []
@@ -129,9 +129,9 @@ def test_a_chart_asked_for_through_get_size_chart_is_still_the_chart_only(seeded
     reply = _turn(
         seeded,
         "201000000105",
-        "جدول المقاسات بتاع Boxy WNS Tee",
+        "جدول المقاسات بتاع Boxy REHLA Tee",
         _call("get_size_chart", product_id=PRODUCT),
-        ModelReply(text="ده جدول مقاسات تيشيرت Boxy WNS Tee."),
+        ModelReply(text="ده جدول مقاسات تيشيرت Boxy REHLA Tee."),
     )
     assert len(_charts(reply)) == 1
     assert _photos(reply) == []
@@ -141,9 +141,9 @@ def test_a_product_question_sends_photos_and_no_chart(seeded):
     reply = _turn(
         seeded,
         "201000000106",
-        "عايز أشوف Boxy WNS Tee",
+        "عايز أشوف Boxy REHLA Tee",
         _call("get_variants", product_id=PRODUCT),
-        ModelReply(text="تيشيرت Boxy WNS Tee، السعر 590 جنيه."),
+        ModelReply(text="تيشيرت Boxy REHLA Tee، السعر 590 جنيه."),
     )
     assert _photos(reply)
     assert _charts(reply) == []
@@ -153,9 +153,9 @@ def test_a_customer_who_asks_for_both_gets_both(seeded):
     reply = _turn(
         seeded,
         "201000000107",
-        "ابعتلي صور Boxy WNS Tee وجدول المقاسات",
+        "ابعتلي صور Boxy REHLA Tee وجدول المقاسات",
         _call("get_variants", product_id=PRODUCT),
-        ModelReply(text="دي صورة تيشيرت Boxy WNS Tee، وده جدول المقاسات."),
+        ModelReply(text="دي صورة تيشيرت Boxy REHLA Tee، وده جدول المقاسات."),
     )
     assert _photos(reply)
     assert _charts(reply)
@@ -168,16 +168,16 @@ def test_the_chart_is_not_counted_as_already_sent_when_it_was_withheld(seeded):
     _turn(
         seeded,
         who,
-        "جدول مقاسات Boxy WNS Tee",
+        "جدول مقاسات Boxy REHLA Tee",
         _call("get_variants", product_id=PRODUCT),
-        ModelReply(text="ده جدول مقاسات تيشيرت Boxy WNS Tee."),
+        ModelReply(text="ده جدول مقاسات تيشيرت Boxy REHLA Tee."),
     )
     reply = _turn(
         seeded,
         who,
         "طب ابعتلي صورته",
         _call("get_variants", product_id=PRODUCT),
-        ModelReply(text="دي صورة تيشيرت Boxy WNS Tee."),
+        ModelReply(text="دي صورة تيشيرت Boxy REHLA Tee."),
     )
     assert _photos(reply)
     assert _charts(reply) == []
@@ -194,7 +194,7 @@ def _ctx(seeded, text: str) -> ToolContext:
 
 @pytest.mark.parametrize(
     "text",
-    ["ابعتلي صوره", "عايز أشوف Boxy WNS Tee", "وريني الأسود", "send me a photo", "ابعتلي كل الألوان"],
+    ["ابعتلي صوره", "عايز أشوف Boxy REHLA Tee", "وريني الأسود", "send me a photo", "ابعتلي كل الألوان"],
 )
 def test_a_request_to_see_the_garment(seeded, text):
     assert showcase.asked_for_photos(_ctx(seeded, text))

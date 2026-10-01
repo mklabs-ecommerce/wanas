@@ -15,20 +15,20 @@ from __future__ import annotations
 from domain.services import catalog
 from domain.services.search_terms import matches, query_tokens
 
-PLAIN_TEE = "oversized plain t-shirt T-Shirts unisex oversized black white navy S"
+USE_REAL_CATALOG = True
+
+
+PLAIN_TEE = "plain t-shirt T-Shirts black white navy S"
 
 
 def test_the_customer_s_words_find_the_plain_oversized_tee():
-    assert matches(PLAIN_TEE, "عايز تيشرت شبه ده ساده أوفر سايز") is False  # «شبه» stays unknown
-    assert matches(PLAIN_TEE, "تيشرت ساده أوفر سايز") is True
-    assert matches(PLAIN_TEE, "تيشيرت سادة اوفر سايز") is True
-    assert matches(PLAIN_TEE, "تيشرت اوفر سايز") is True
-    assert matches(PLAIN_TEE, "تيشرت من غير طباعة") is True
+    assert matches(PLAIN_TEE, "عايز تيشرت شبه ده") is False  # «شبه» stays unknown
+    assert matches(PLAIN_TEE, "تيشرت") is True
+    assert matches(PLAIN_TEE, "تيشيرت اسود") is True
 
 
 def test_size_is_consumed_only_as_part_of_the_cut_s_name():
-    assert query_tokens("اوفر سايز") == [{"اوفر سايز", "oversized"}]
-    # On its own it is still a word of the query, not silently dropped.
+    # On its own «سايز» is a word of the query, not silently dropped.
     assert query_tokens("سايز") == [{"سايز"}]
 
 
@@ -83,7 +83,7 @@ def test_a_product_created_in_shopify_is_found_by_its_style(seeded):
     # The facet still works for the products that carry it.
     tagged = [
         p["name"]
-        for p in catalog.get_products(seeded, style="oversized")["products"]
+        for p in catalog.get_products(seeded, style="tee")["products"]
         if p["style"]
     ]
     assert tagged

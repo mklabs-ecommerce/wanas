@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from integrations.shopify import webhook_registration as shopify_webhooks
 
-URL = "https://wanas-production.up.railway.app/webhooks/shopify"
+URL = "https://rehla-production.up.railway.app/webhooks/shopify"
 
 
 def test_all_four_topics_are_created_on_a_fresh_store(shopify):

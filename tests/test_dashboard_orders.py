@@ -25,7 +25,7 @@ from domain.services import (
 )
 
 SECRET = "test-dashboard-secret"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 @pytest.fixture()

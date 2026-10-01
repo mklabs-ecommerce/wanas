@@ -3,7 +3,7 @@
 Two numbers used to reach the pre-confirmation summary by routes the order
 itself never took:
 
-* the **cart** was priced from `variants.price`, a seeded wanas.db column,
+* the **cart** was priced from `variants.price`, a seeded rehla.db column,
   while `place_order` charged Shopify's live price -- so a price changed in
   Shopify Admin reached the order and not the summary the customer agreed to;
 * the **total** was the model's own arithmetic: the cart subtotal plus the
@@ -25,7 +25,7 @@ from tests.checkout_helpers import agree_to_the_summary
 CHANNEL = "whatsapp"
 WHO = "201000000555"
 
-VARIANT = "wanas-hoodie-s-black"  # 650 in wanas.db
+VARIANT = "rehla-hoodie-s-black"  # 650 in rehla.db
 
 
 def ctx(session) -> ToolContext:
@@ -38,7 +38,7 @@ def test_the_cart_is_priced_the_way_the_order_is_charged(seeded, shopify):
     cart = call_tool(ctx(seeded), "add_to_cart", {"variant_id": VARIANT, "quantity": 2})
 
     line = cart["lines"][0]
-    assert line["unit_price"] == 720, "the cart quoted wanas.db's price, not Shopify's"
+    assert line["unit_price"] == 720, "the cart quoted rehla.db's price, not Shopify's"
     assert line["unit_original_price"] == 900
     assert line["line_total"] == 1440
     assert cart["subtotal"] == 1440
@@ -65,7 +65,7 @@ def test_an_empty_cart_gets_only_the_fee(seeded, cairo_rate):
 
 
 def test_the_total_quoted_before_confirming_is_the_order_total(seeded, cairo_rate, shopify):
-    """End to end, with Shopify disagreeing with wanas.db: the number in the
+    """End to end, with Shopify disagreeing with rehla.db: the number in the
     summary and the number on the order are the same number."""
     shopify.set(VARIANT, price=720)
     tools = ctx(seeded)

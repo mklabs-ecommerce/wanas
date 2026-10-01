@@ -29,7 +29,7 @@ def _lines(caplog) -> list[dict]:
 
 
 def test_a_turn_emits_one_line_naming_every_stage(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn(
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn(
         "whatsapp", "201000000000"
     ):
         with telemetry.stage("history_load"):
@@ -44,7 +44,7 @@ def test_a_turn_emits_one_line_naming_every_stage(caplog):
 
 
 def test_the_customer_is_a_hash_and_never_the_number(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn(
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn(
         "whatsapp", "201234567890"
     ):
         pass
@@ -60,7 +60,7 @@ def test_the_customer_is_a_hash_and_never_the_number(caplog):
 
 
 def test_a_repeated_stage_is_summed_and_counted(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x"):
         telemetry.add("llm", 1.0)
         telemetry.add("llm", 0.5)
 
@@ -70,7 +70,7 @@ def test_a_repeated_stage_is_summed_and_counted(caplog):
 
 
 def test_model_hops_keep_their_order_and_their_provider_detail(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x"):
         with telemetry.llm_hop():
             telemetry.note_llm(upstream="novita", prompt_tokens=7000, reasoning_tokens=120)
         with telemetry.llm_hop():
@@ -86,7 +86,7 @@ def test_model_hops_keep_their_order_and_their_provider_detail(caplog):
 
 
 def test_tools_and_shopify_calls_are_named_individually(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x"):
         with telemetry.tool_call("get_products"):
             pass
         with telemetry.tool_call("get_variants"):
@@ -100,7 +100,7 @@ def test_tools_and_shopify_calls_are_named_individually(caplog):
 
 
 def test_notes_land_on_the_line(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x", batch=2):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x", batch=2):
         telemetry.note(tool_calls=["get_products"], turn_error=None)
 
     (line,) = _lines(caplog)
@@ -109,7 +109,7 @@ def test_notes_land_on_the_line(caplog):
 
 
 def test_a_crashing_turn_still_reports_and_still_raises(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"):
         try:
             with telemetry.turn("whatsapp", "x"):
                 raise ValueError("boom")
@@ -123,7 +123,7 @@ def test_a_crashing_turn_still_reports_and_still_raises(caplog):
 def test_everything_is_a_no_op_outside_a_turn(caplog):
     """A script, the dashboard, a test -- none of them open a turn, and none
     of them may be broken by code that assumes one."""
-    with caplog.at_level(logging.INFO, logger="wanas.latency"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"):
         with telemetry.stage("history_load"):
             pass
         with telemetry.llm_hop():
@@ -140,7 +140,7 @@ def test_everything_is_a_no_op_outside_a_turn(caplog):
 
 
 def test_an_unserialisable_field_costs_the_line_and_nothing_else(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x"):
         telemetry.note(oops=object())
 
     assert _lines(caplog) == []
@@ -148,7 +148,7 @@ def test_an_unserialisable_field_costs_the_line_and_nothing_else(caplog):
 
 def test_the_flag_switches_it_off(caplog, monkeypatch):
     monkeypatch.setattr(telemetry, "settings", dataclasses.replace(settings, latency_log=False))
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x") as record:
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x") as record:
         assert record is None
         with telemetry.stage("history_load"):
             pass
@@ -168,7 +168,7 @@ def test_the_flag_switches_it_off(caplog, monkeypatch):
 
 
 def test_the_total_includes_what_happened_before_the_turn_opened(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x"):
         telemetry.add_before("debounce_wait", 1.0)
         telemetry.add_before("record_inbound", 0.08)
         telemetry.add("llm", 5.0)
@@ -182,7 +182,7 @@ def test_the_total_includes_what_happened_before_the_turn_opened(caplog):
 
 
 def test_the_reply_half_is_reported_separately(caplog):
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x"):
         telemetry.add_before("debounce_wait", 1.0)
 
     (line,) = _lines(caplog)
@@ -201,7 +201,7 @@ def test_no_stage_can_sum_past_the_total(caplog):
     a turn actually accrues them -- a stage the scope did not really spend
     time in would fail this for a reason production never has.
     """
-    with caplog.at_level(logging.INFO, logger="wanas.latency"), telemetry.turn("whatsapp", "x"):
+    with caplog.at_level(logging.INFO, logger="rehla.latency"), telemetry.turn("whatsapp", "x"):
         telemetry.add_before("debounce_wait", 1.0)
         telemetry.add_before("record_inbound", 0.05)
         with telemetry.stage("history_load"):

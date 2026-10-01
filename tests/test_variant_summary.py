@@ -22,7 +22,7 @@ def variants(session, product_id: str) -> dict:
 
 
 def test_each_colourway_says_which_sizes_can_be_bought(seeded):
-    by_color = variants(seeded, "wanas-hoodie")["by_color"]
+    by_color = variants(seeded, "rehla-hoodie")["by_color"]
 
     assert set(by_color) == {"Black", "Grey", "Olive"}
     assert by_color["Grey"]["available"] == [], "grey is sold out in every size"
@@ -35,15 +35,15 @@ def test_each_colourway_says_which_sizes_can_be_bought(seeded):
 
 
 def test_a_colourway_says_what_it_costs_and_what_it_cost(seeded):
-    black = variants(seeded, "wanas-hoodie")["by_color"]["Black"]
+    black = variants(seeded, "rehla-hoodie")["by_color"]["Black"]
     assert black["price"] == 650
     assert black["original_price"] == 900
 
 
 def test_each_colourway_carries_its_own_price(seeded):
-    """The WANAS Hoodie is 650 in black and olive and 700 in grey -- a single
+    """The REHLA Hoodie is 650 in black and olive and 700 in grey -- a single
     number for the product is 50 pounds wrong for one of them."""
-    by_color = variants(seeded, "wanas-hoodie")["by_color"]
+    by_color = variants(seeded, "rehla-hoodie")["by_color"]
     assert by_color["Black"]["price"] == by_color["Olive"]["price"] == 650
     assert by_color["Grey"]["price"] == 700
 
@@ -61,8 +61,8 @@ def test_the_worker_jackets_length_is_its_own_axis(seeded):
     assert {key.split(" / ")[1] for key in by_color} == {"Long", "Short"}
 
 
-def test_it_follows_the_live_shelf_not_wanas_db(seeded, shopify):
-    shopify.set("wanas-hoodie-s-black", qty=0)
-    black = variants(seeded, "wanas-hoodie")["by_color"]["Black"]
+def test_it_follows_the_live_shelf_not_rehla_db(seeded, shopify):
+    shopify.set("rehla-hoodie-s-black", qty=0)
+    black = variants(seeded, "rehla-hoodie")["by_color"]["Black"]
     assert "S" not in black["available"]
     assert "S" in black["sold_out"]

@@ -19,6 +19,8 @@ from tests.test_instagram_comments import (  # noqa: F401  (fixtures)
     public_replies,
 )
 
+USE_REAL_CATALOG = True
+
 
 def _dm_text(fake_graph):
     sent = private_replies(fake_graph, COMMENT_ID)

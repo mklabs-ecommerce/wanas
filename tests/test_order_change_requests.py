@@ -5,7 +5,7 @@ One real conversation, in full:
     customer: «ينفع اضيفه علي نفس الاوردر اللي فات»
     bot:      «طلبك ده لسه محتاج مراجعة من الفريق عشان نضيف عليه قطعة جديدة،
                فبعتلهم الطلب وحد هيأكدلك قريب.»
-    queue:    swap_requested -- WNS-1015: swap Knitted Polo (Olive, XL)
+    queue:    swap_requested -- RHL-1015: swap Knitted Polo (Olive, XL)
                                 -> Heart Top (Black, S)
 
 Two failures stacked on one another. The **routing**: `item_swap` was the only
@@ -31,8 +31,8 @@ from domain.services import carts, orders, queues
 
 load_all()
 
-VARIANT_A = "wanas-hoodie-s-olive"
-VARIANT_B = "wanas-hoodie-s-black"
+VARIANT_A = "rehla-hoodie-s-olive"
+VARIANT_B = "rehla-hoodie-s-black"
 CUSTOMER = "201555000222"
 
 

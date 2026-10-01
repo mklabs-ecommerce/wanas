@@ -7,7 +7,7 @@ exported `DATABASE_URL` must never be able to aim that drop at anything else.
 
 The one deliberate way to run the suite against PostgreSQL instead -- which
 `tests/test_order_transaction.py` wants before a deploy -- is to set
-WANAS_TEST_DATABASE_URL to the target URL. An ambient `DATABASE_URL` is
+REHLA_TEST_DATABASE_URL to the target URL. An ambient `DATABASE_URL` is
 ignored either way; see `assert_safe_to_drop` for the second half of the
 seatbelt.
 """
@@ -28,14 +28,21 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # a shell export or the repo's own .env (python-dotenv skips names already
 # present) -- may decide what the suite runs on. Default is this suite's own
 # throwaway SQLite file. The one deliberate way to aim the suite at
-# PostgreSQL instead is WANAS_TEST_DATABASE_URL, read here and nowhere else;
+# PostgreSQL instead is REHLA_TEST_DATABASE_URL, read here and nowhere else;
 # a plain exported DATABASE_URL is ignored in both modes.
-SUITE_SQLITE_URL = f"sqlite:///{PROJECT_ROOT / 'test_wanas.db'}"
+SUITE_SQLITE_URL = f"sqlite:///{PROJECT_ROOT / 'test_rehla.db'}"
+
+# The variable was called WANAS_TEST_DATABASE_URL before the rename; a shell or
+# CI job still exporting it keeps working until it is changed.
+if not os.environ.get("REHLA_TEST_DATABASE_URL", "").strip() and os.environ.get(
+    "WANAS_TEST_DATABASE_URL", ""
+).strip():
+    os.environ["REHLA_TEST_DATABASE_URL"] = os.environ["WANAS_TEST_DATABASE_URL"]
 
 
 def resolve_test_database_url() -> str:
     """The DATABASE_URL the suite forces, per the contract above."""
-    opted_in = os.environ.get("WANAS_TEST_DATABASE_URL", "").strip()
+    opted_in = os.environ.get("REHLA_TEST_DATABASE_URL", "").strip()
     if opted_in:
         return opted_in
     return SUITE_SQLITE_URL
@@ -159,7 +166,7 @@ from domain.services import conversation_reset  # noqa: E402
 conversation_reset.register_history_clearer(assistant_session.clear)
 
 #: Database names that are never a scratch database, however deliberate the
-#: opt-in looked. The shop's own database name ("wanas") is fine to allow --
+#: opt-in looked. The shop's own database name ("rehla") is fine to allow --
 #: dropping it is exactly what the opt-in guard exists to make deliberate.
 _PRODUCTION_LIKE_DB_NAMES = {"prod", "production", "live"}
 
@@ -177,21 +184,21 @@ def assert_safe_to_drop(engine) -> None:
 
     The `db` fixture drops everything, so it may run only when the engine
     provably points at this suite's own throwaway SQLite file, or at the one
-    database named deliberately via WANAS_TEST_DATABASE_URL. Anything else --
+    database named deliberately via REHLA_TEST_DATABASE_URL. Anything else --
     including a PostgreSQL URL inherited from the environment, which the suite
     ignores wholesale -- raises rather than dropping. Even the opt-in target is
     refused when its database name looks like production.
     """
     url = engine.url
-    expected = os.path.abspath(str(PROJECT_ROOT / "test_wanas.db"))
+    expected = os.path.abspath(str(PROJECT_ROOT / "test_rehla.db"))
     actual = os.path.abspath(url.database) if url.drivername == "sqlite" and url.database else ""
     if actual == expected:
         return
-    opted_in = os.environ.get("WANAS_TEST_DATABASE_URL", "").strip()
+    opted_in = os.environ.get("REHLA_TEST_DATABASE_URL", "").strip()
     if opted_in and url == make_url(normalise_database_url(opted_in)):
         if _looks_like_production(url):
             raise RuntimeError(
-                "Refusing to drop the schema: WANAS_TEST_DATABASE_URL points at "
+                "Refusing to drop the schema: REHLA_TEST_DATABASE_URL points at "
                 f"a database named {url.database!r}, which looks like production "
                 "rather than a scratch database for the suite to drop. Point the "
                 "opt-in at a disposable database."
@@ -201,10 +208,10 @@ def assert_safe_to_drop(engine) -> None:
         "Refusing to drop the schema: the test engine points at "
         f"{url.render_as_string(hide_password=True)} instead of this suite's "
         f"own test database ({expected}) or the database named by the "
-        "WANAS_TEST_DATABASE_URL opt-in. Every pytest run drops and recreates "
+        "REHLA_TEST_DATABASE_URL opt-in. Every pytest run drops and recreates "
         "every table it touches; pointing it anywhere else destroys that "
         "database. To run the suite against PostgreSQL, set "
-        "WANAS_TEST_DATABASE_URL=<url> -- an ambient DATABASE_URL is ignored "
+        "REHLA_TEST_DATABASE_URL=<url> -- an ambient DATABASE_URL is ignored "
         "by design. Do not bypass this guard."
     )
 
@@ -222,6 +229,94 @@ def db():
     finally:
         session.rollback()
         session.close()
+
+
+#: The catalog most tests run against. It is test data -- eighteen products
+#: with every shape the code has to handle (a size chart, sleeves, a length
+#: axis, a sale price, a sold-out colour) -- not Rehla's own catalog. A
+#: module that is about the real catalog sets `USE_REAL_CATALOG = True`.
+FIXTURE_CATALOG = PROJECT_ROOT / "tests" / "fixtures" / "catalog"
+
+
+_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000d4944415478da63f8ffff3f0005fe02fea7d6050f0000000049454e44ae426082"
+)
+_JPEG = bytes.fromhex(
+    "ffd8ffe000104a46494600010100000100010000ffdb004300080606070605080707"
+    "07090908 0a0c140d0c0b0b0c1912130f141d1a1f1e1d1a1c1c20242e2720222c231c"
+    "1c2837292c30313434341f27393d38323c2e333432ffc0000b080001000101011100ff"
+    "c4001f0000010501010101010100000000000000000102030405060708090a0bffc400"
+    "b5100002010303020403050504040000017d01020300041105122131410613516107"
+    "227114328191a1082342b1c11552d1f02433627282090a161718191a25262728292a34"
+    "35363738393a434445464748494a535455565758595a636465666768696a7374757677"
+    "78797a838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7"
+    "b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4"
+    "f5f6f7f8f9faffda0008010100003f00fbfcffd9".replace(" ", "")
+)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def catalog_placeholder_files():
+    """The picture files the fixture catalog names, as one-pixel stand-ins.
+
+    The servable roots are `data/images` and `data/size-charts` under the
+    project, so the files have to sit there; they are created only where
+    nothing exists, and removed when the session ends.
+    """
+    import json
+
+    raw = json.loads((FIXTURE_CATALOG / "products_seed.json").read_text(encoding="utf-8"))
+    charts = json.loads((FIXTURE_CATALOG / "size_charts.json").read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for product in raw:
+        names.update(product.get("images") or [])
+        for value in (product.get("color_images") or {}).values():
+            names.update(value if isinstance(value, list) else [value])
+    names.update(c["image"] for c in charts.values() if c.get("image"))
+    created: list[Path] = []
+    made_dirs: list[Path] = []
+    for name in sorted(n for n in names if not n.startswith("http")):
+        target = PROJECT_ROOT / name
+        if target.exists():
+            continue
+        for parent in reversed(target.parents):
+            if parent == PROJECT_ROOT or parent.exists():
+                continue
+            parent.mkdir()
+            made_dirs.append(parent)
+        target.write_bytes(_JPEG if target.suffix.lower() in (".jpg", ".jpeg") else _PNG)
+        created.append(target)
+    yield
+    for target in created:
+        target.unlink(missing_ok=True)
+    for directory in reversed(made_dirs):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+
+
+@pytest.fixture(autouse=True)
+def catalog_files(request, monkeypatch):
+    if getattr(request.module, "USE_REAL_CATALOG", False):
+        return
+    import json
+
+    from domain.seed import products as seed_products
+    from domain.services import size_charts
+
+    seed_path = FIXTURE_CATALOG / "products_seed.json"
+    raw = json.loads(seed_path.read_text(encoding="utf-8"))
+    monkeypatch.setattr(seed_products, "SEED_PATH", seed_path)
+    monkeypatch.setattr(seed_products, "EXPECTED_PRODUCTS", len(raw))
+    monkeypatch.setattr(seed_products, "EXPECTED_VARIANTS", sum(len(p["variants"]) for p in raw))
+    monkeypatch.setattr(
+        seed_products,
+        "EXPECTED_IN_STOCK",
+        sum(1 for p in raw for v in p["variants"] if int(v["stock_qty"]) > 0),
+    )
+    monkeypatch.setattr(size_charts, "CHARTS_PATH", FIXTURE_CATALOG / "size_charts.json")
 
 
 @pytest.fixture(scope="function")

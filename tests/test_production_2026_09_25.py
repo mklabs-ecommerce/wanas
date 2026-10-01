@@ -5,12 +5,12 @@ commit 5f0a6a6 -- a staff member's own number, used for weeks of testing:
 
     16:04:11  POST .../whatsapp/201067177129/reset          (dashboard)
     16:04:23  customer: «السلام عليكم»
-              bot:      «وعليكم السلام 🙂 معاك Wanas Gallery، تحب أساعدك في إيه؟»
+              bot:      «وعليكم السلام 🙂 معاك Rehla، تحب أساعدك في إيه؟»
               -> no name asked
-    16:04:52  customer: «عايز اشوف السايز شارت بتاع boxy wns tee»
-              tool get_products({'query': 'Boxy WNS Tee'})
-              tool get_size_chart({'product_id': 'boxy-wns-tee'})
-              showcase attached 2 photo(s) for boxy-wns-tee
+    16:04:52  customer: «عايز اشوف السايز شارت بتاع boxy rehla tee»
+              tool get_products({'query': 'Boxy REHLA Tee'})
+              tool get_size_chart({'product_id': 'boxy-rehla-tee'})
+              showcase attached 2 photo(s) for boxy-rehla-tee
               -> product photos on a size-chart question
 
 1. **The name.** A reset is soft: it moves `context_start` and keeps the
@@ -38,8 +38,8 @@ pytestmark = pytest.mark.asks_name
 CHANNEL = "whatsapp"
 WHO = "201067177129"
 GREETING = "السلام عليكم"
-CHART_QUESTION = "عايz اشوف السايز شارت بتاع boxy wns tee".replace("z", "ز")
-PRODUCTION_GREETING_REPLY = "وعليكم السلام 🙂 معاك Wanas Gallery، تحب أساعدك في إيه؟"
+CHART_QUESTION = "عايz اشوف السايز شارت بتاع boxy rehla tee".replace("z", "ز")
+PRODUCTION_GREETING_REPLY = "وعليكم السلام 🙂 معاك Rehla، تحب أساعدك في إيه؟"
 
 
 def _history_before_the_reset(seeded):
@@ -50,7 +50,7 @@ def _history_before_the_reset(seeded):
         CHANNEL,
         WHO,
         [
-            msg.user("عايز Boxy WNS Tee مقاس L أسود"),
+            msg.user("عايز Boxy REHLA Tee مقاس L أسود"),
             msg.assistant("تمام، ضفتهولك. ممكن اسم حضرتك بالكامل عشان المندوب؟"),
             msg.user("حازم"),
             msg.assistant("تمام يا حازم."),
@@ -131,16 +131,16 @@ def test_the_chart_question_as_production_ran_it_sends_no_product_photo(seeded):
         [
             ModelReply(
                 tool_calls=[
-                    {"id": "p", "name": "get_products", "arguments": {"query": "Boxy WNS Tee"}}
+                    {"id": "p", "name": "get_products", "arguments": {"query": "Boxy REHLA Tee"}}
                 ]
             ),
             ModelReply(
                 tool_calls=[
-                    {"id": "c", "name": "get_size_chart", "arguments": {"product_id": "boxy-wns-tee"}}
+                    {"id": "c", "name": "get_size_chart", "arguments": {"product_id": "boxy-rehla-tee"}}
                 ]
             ),
             ModelReply(
-                text="ده جدول مقاسات تيشيرت Boxy WNS Tee، والأرقام مقاسات القطعة وهي مفرودة مش مقاسات الجسم."
+                text="ده جدول مقاسات تيشيرت Boxy REHLA Tee، والأرقام مقاسات القطعة وهي مفرودة مش مقاسات الجسم."
             ),
         ]
     )
@@ -154,10 +154,10 @@ def test_the_chart_question_answered_through_get_variants_sends_no_product_photo
         [
             ModelReply(
                 tool_calls=[
-                    {"id": "v", "name": "get_variants", "arguments": {"product_id": "boxy-wns-tee"}}
+                    {"id": "v", "name": "get_variants", "arguments": {"product_id": "boxy-rehla-tee"}}
                 ]
             ),
-            ModelReply(text="ده جدول مقاسات تيشيرت Boxy WNS Tee."),
+            ModelReply(text="ده جدول مقاسات تيشيرت Boxy REHLA Tee."),
         ]
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, CHART_QUESTION, provider=provider)
@@ -171,14 +171,14 @@ def test_a_sizing_question_never_carries_a_product_photo_even_without_a_chart(se
         [
             ModelReply(
                 tool_calls=[
-                    {"id": "p", "name": "get_products", "arguments": {"query": "Boxy WNS Tee"}}
+                    {"id": "p", "name": "get_products", "arguments": {"query": "Boxy REHLA Tee"}}
                 ]
             ),
-            ModelReply(text="تيشيرت Boxy WNS Tee متوفر من S لـ XL."),
+            ModelReply(text="تيشيرت Boxy REHLA Tee متوفر من S لـ XL."),
         ]
     )
     reply = agent.run_turn(
-        seeded, CHANNEL, WHO, "السايز شارت بتاع boxy wns tee ايه؟", provider=provider
+        seeded, CHANNEL, WHO, "السايز شارت بتاع boxy rehla tee ايه؟", provider=provider
     )
     assert _garment_photos(reply) == []
 
@@ -219,5 +219,5 @@ def test_the_other_ways_of_asking_for_the_chart(seeded):
 def test_asking_for_both_is_still_both(seeded):
     from assistant import showcase
 
-    for text in ("ابعتلي صور التيشيرت والجدول", "ابعتلي صور Boxy WNS Tee وجدول المقاسات"):
+    for text in ("ابعتلي صور التيشيرت والجدول", "ابعتلي صور Boxy REHLA Tee وجدول المقاسات"):
         assert showcase.asked_for_photos(_ctx(seeded, text)), text

@@ -21,7 +21,7 @@ from domain.models import Product
 from domain.services import auth
 
 SECRET = "test-dashboard-secret"
-VARIANT = "wanas-hoodie-s-olive"
+VARIANT = "rehla-hoodie-s-olive"
 
 
 @pytest.fixture()
@@ -68,7 +68,7 @@ def test_products_list_includes_the_seeded_catalog(logged_in, seeded, shopify):
     res = logged_in.get("/dashboard/api/shopify/products")
     assert res.status_code == 200
     titles = {p["title"] for p in res.json()["products"]}
-    assert "WANAS Hoodie" in titles
+    assert "REHLA Hoodie" in titles
 
 
 def test_products_list_reports_an_outage(logged_in, shopify):
@@ -81,7 +81,7 @@ def test_product_detail_includes_local_metadata_when_linked(logged_in, shopify):
     res = logged_in.get(f"/dashboard/api/shopify/products/{gid}")
     assert res.status_code == 200
     body = res.json()
-    assert body["local_product_id"] == "wanas-hoodie"
+    assert body["local_product_id"] == "rehla-hoodie"
     assert body["local"]["department"] == "unisex"
     assert any(v["sku"] == VARIANT for v in body["variants"])
 
@@ -141,19 +141,19 @@ def test_creating_a_product_with_no_variants_is_rejected(logged_in):
 
 
 def test_updating_a_product_requires_login(client):
-    res = client.post("/dashboard/api/shopify/products/wanas-hoodie/update", json={})
+    res = client.post("/dashboard/api/shopify/products/rehla-hoodie/update", json={})
     assert res.status_code == 401
 
 
 def test_updating_a_product_changes_local_and_shopify_fields(logged_in, shopify):
     res = logged_in.post(
-        "/dashboard/api/shopify/products/wanas-hoodie/update",
-        json={"collection": "WINTER COLLECTION", "title": "WANAS Hoodie 2.0"},
+        "/dashboard/api/shopify/products/rehla-hoodie/update",
+        json={"collection": "WINTER COLLECTION", "title": "REHLA Hoodie 2.0"},
     )
     assert res.status_code == 200, res.text
 
     gid = shopify.variant_to_product[VARIANT]
-    assert shopify.products[gid]["title"] == "WANAS Hoodie 2.0"
+    assert shopify.products[gid]["title"] == "REHLA Hoodie 2.0"
 
     detail = logged_in.get(f"/dashboard/api/shopify/products/{gid}")
     assert detail.json()["local"]["collection"] == "WINTER COLLECTION"
@@ -161,7 +161,7 @@ def test_updating_a_product_changes_local_and_shopify_fields(logged_in, shopify)
 
 def test_the_picker_is_the_only_thing_that_decides_collections(logged_in, shopify):
     """Ticked is joined, un-ticked is left -- in one save, and against what
-    Shopify actually holds rather than the one name wanas.db keeps."""
+    Shopify actually holds rather than the one name rehla.db keeps."""
     summer = shopify.seed_collection("Summer 2026")
     winter = shopify.seed_collection("Winter Collection")
     tees = shopify.seed_collection("T-Shirts")
@@ -169,7 +169,7 @@ def test_the_picker_is_the_only_thing_that_decides_collections(logged_in, shopif
     shopify.collections[winter]["product_ids"].append(product_gid)
 
     res = logged_in.post(
-        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        "/dashboard/api/shopify/products/rehla-hoodie/update",
         json={"collection": "Summer 2026", "collection_gids": [summer, tees]},
     )
     assert res.status_code == 200, res.text
@@ -186,7 +186,7 @@ def test_an_empty_tick_list_takes_the_product_out_of_everything(logged_in, shopi
     shopify.collections[gid]["product_ids"].append(product_gid)
 
     res = logged_in.post(
-        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        "/dashboard/api/shopify/products/rehla-hoodie/update",
         json={"collection": "", "collection_gids": []},
     )
     assert res.status_code == 200
@@ -201,8 +201,8 @@ def test_a_save_that_says_nothing_about_collections_leaves_them_alone(logged_in,
     shopify.collections[gid]["product_ids"].append(product_gid)
 
     res = logged_in.post(
-        "/dashboard/api/shopify/products/wanas-hoodie/update",
-        json={"title": "WANAS Hoodie 3.0"},
+        "/dashboard/api/shopify/products/rehla-hoodie/update",
+        json={"title": "REHLA Hoodie 3.0"},
     )
     assert res.status_code == 200
     assert shopify.collections[gid]["product_ids"] == [product_gid]
@@ -216,7 +216,7 @@ def test_a_smart_collection_is_left_to_its_rules(logged_in, shopify):
     shopify.collections[smart_gid]["product_ids"].append(product_gid)
 
     res = logged_in.post(
-        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        "/dashboard/api/shopify/products/rehla-hoodie/update",
         json={"collection": "", "collection_gids": []},
     )
     assert res.status_code == 200
@@ -224,7 +224,7 @@ def test_a_smart_collection_is_left_to_its_rules(logged_in, shopify):
 
 
 def test_the_drawer_is_told_which_collections_a_product_is_in(logged_in, shopify):
-    """What the picker pre-ticks. Shopify is the only record of it -- wanas.db
+    """What the picker pre-ticks. Shopify is the only record of it -- rehla.db
     keeps one label, and a product can be in several."""
     gid = shopify.seed_collection("Summer 2026")
     product_gid = shopify.variant_to_product[VARIANT]
@@ -241,7 +241,7 @@ def test_updating_an_unknown_product_404s(logged_in):
 
 def test_updating_variant_price_and_stock(logged_in, shopify):
     res = logged_in.post(
-        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        "/dashboard/api/shopify/products/rehla-hoodie/update",
         json={"variant_updates": [{"variant_id": VARIANT, "price": 777, "stock_qty": 3}]},
     )
     assert res.status_code == 200, res.text
@@ -399,7 +399,7 @@ def test_the_edit_route_carries_a_new_photo_through(logged_in, shopify):
     """The thin layer this file tests: that the field reaches the service.
     Which variants it lands on is `test_shopify_admin_products.py`'s subject."""
     res = logged_in.post(
-        "/dashboard/api/shopify/products/wanas-hoodie/update",
+        "/dashboard/api/shopify/products/rehla-hoodie/update",
         json={"variant_images": [{"variant_id": VARIANT, "source": "https://x/olive.png"}]},
     )
 
@@ -413,7 +413,7 @@ def test_the_edit_route_carries_a_new_photo_through(logged_in, shopify):
 
 
 def test_deleting_a_product_requires_login(client):
-    assert client.post("/dashboard/api/shopify/products/wanas-hoodie/delete").status_code == 401
+    assert client.post("/dashboard/api/shopify/products/rehla-hoodie/delete").status_code == 401
 
 
 def test_deleting_a_variant_requires_login(client):
@@ -421,7 +421,7 @@ def test_deleting_a_variant_requires_login(client):
 
 
 def test_archiving_a_product_requires_login(client):
-    assert client.post("/dashboard/api/shopify/products/wanas-hoodie/archive").status_code == 401
+    assert client.post("/dashboard/api/shopify/products/rehla-hoodie/archive").status_code == 401
 
 
 def test_deleting_a_product_that_is_not_there_is_a_404(logged_in, shopify):

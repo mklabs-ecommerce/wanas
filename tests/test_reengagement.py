@@ -29,8 +29,8 @@ from domain.services import (
     waitlist,
 )
 
-VARIANT = "wanas-hoodie-s-olive"
-SOLD_OUT = "wanas-hoodie-m-olive"
+VARIANT = "rehla-hoodie-s-olive"
+SOLD_OUT = "rehla-hoodie-m-olive"
 CHANNEL = "whatsapp"
 CUSTOMER = "201000000001"
 
@@ -194,7 +194,7 @@ def test_back_in_stock_notifies_and_closes_the_entry(seeded, shopify):
 
     assert notified == 1
     assert len(sender.sent) == 1
-    assert "WANAS Hoodie" in sender.sent[0].text
+    assert "REHLA Hoodie" in sender.sent[0].text
     with SessionLocal() as session:
         entries = session.query(StockWaitlistEntry).all()
         assert entries[0].notified_at is not None
@@ -370,7 +370,7 @@ def test_a_proactive_message_is_written_into_the_transcript(seeded, shopify):
     assert history[0]["role"] == "assistant"
     # Neither the model's words nor a staff member's.
     assert history[0]["by"] == "system"
-    assert "WANAS Hoodie" in history[0]["content"]
+    assert "REHLA Hoodie" in history[0]["content"]
 
 
 def test_an_abandoned_cart_nudge_reaches_the_transcript_too(seeded, shopify):
@@ -422,6 +422,6 @@ def test_a_message_that_did_not_land_is_written_down_as_undelivered(seeded, shop
     with SessionLocal() as session:
         history = session_store.transcript(session, CHANNEL, CUSTOMER)
     assert [m["content"] for m in history] == [
-        notifications.BACK_IN_STOCK_TEXT.format(product_name="WANAS Hoodie")
+        notifications.BACK_IN_STOCK_TEXT.format(product_name="REHLA Hoodie")
     ]
     assert history[0]["delivery"] == "failed"

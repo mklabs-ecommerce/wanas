@@ -172,14 +172,14 @@ def test_the_ways_a_reply_asks(reply):
 
 @pytest.mark.parametrize(
     "reply",
-    ["اسم المنتج WANAS Hoodie", "نسجل الأوردر باسم أحمد؟", "متوفر في M و L"],
+    ["اسم المنتج REHLA Hoodie", "نسجل الأوردر باسم أحمد؟", "متوفر في M و L"],
 )
 def test_what_is_not_asking(reply):
     assert not customer_name.asks_for_name(reply)
 
 
 def test_the_turn_carries_the_note_to_the_model(seeded):
-    provider = ScriptedProvider([ModelReply(text="أهلاً بحضرتك في Wanas Gallery. ممكن أعرف اسم حضرتك؟")])
+    provider = ScriptedProvider([ModelReply(text="أهلاً بحضرتك في Rehla. ممكن أعرف اسم حضرتك؟")])
     agent.run_turn(seeded, CHANNEL, WHO, "السلام عليكم", provider=provider)
     assert "لسه منعرفش اسم الزبون" in provider.calls[0][0]
 
