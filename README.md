@@ -1,7 +1,7 @@
-# Wanas Gallery — WhatsApp sales agent
+# Rehla — WhatsApp and Instagram sales agent
 
-An LLM agent that sells an Egyptian streetwear brand's catalog over WhatsApp
-and places real orders on Shopify. It talks in Egyptian Arabic, understands
+An LLM agent that sells Rehla's women's clothing catalog over WhatsApp
+and places real orders (on Shopify, or in the local database when no store is configured). It talks in Egyptian Arabic, understands
 voice notes and photos, and cannot state a price, a size or an availability
 that did not come from a tool.
 
@@ -53,7 +53,7 @@ make test
 ```
 
 With no LLM key the harness runs a rehearsal stand-in that maps typed commands
-(`products hoodie`, `variants wanas-hoodie`, `gov`, `add <variant_id>`) to tool
+(`products top`, `variants rehla-black-t-shirt`, `gov`, `add <variant_id>`) to tool
 calls. Set `OPENROUTER_API_KEY` (the default `LLM_PROVIDER` is `openrouter`) —
 or `LLM_PROVIDER=gemini` plus a Gemini key — to get the real agent.
 
@@ -94,7 +94,7 @@ Against PostgreSQL — worth doing before deploying, since the concurrency test
 is the one that depends most on the database:
 
 ```bash
-WANAS_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test
+REHLA_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/rehla make test
 ```
 
 Opt-in live-model tests (these cost real quota and are skipped by default):

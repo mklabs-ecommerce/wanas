@@ -12,33 +12,31 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   there is no "product + chosen options" path anywhere. The `sizes` /
   `colors` / `lengths` lists on a product are display summaries only; never
   make an availability decision from them.
-  - **Why:** per-axis availability lists would say the Cairokee T-shirt
-    comes in XL/Brown, because XL exists (in Black) and Brown exists (in
-    S/M/L). It doesn't. **Every axis combination has a row** — a row
+  - **Why:** per-axis availability lists would say a T-shirt
+    comes in L/Brown, because L exists (in Black) and Brown exists (in
+    S/M). It doesn't. **Every axis combination has a row** — a row
     existing never means it's for sale; the stock count alone decides
     buyability.
 - **`price` on a product is not a quotable number.** It's the *lowest*
   variant price, and `original_price` is the highest *pre-discount* price —
   the two are not a range of what anyone pays. Three products cost more in
-  one colour: the WANAS Hoodie is 650 in black and olive but **700 in
-  grey**. Only a *variant* price may ever be said to a customer; for a
+  one colour: a product can cost more in one colour (a top at 599 that is 650 in one
+  colour). Only a *variant* price may ever be said to a customer; for a
   product, quote `min` and `max` of the variants' current prices — which is
   what `get_products` returns as `price_from` / `price_to`.
-- **Colour is a variant axis, never a product.** One `WANAS Hoodie` in three
-  colours, not three hoodies. The merge from the original per-colour source
-  products is an explicit map in `data/merge_catalog.py` — don't regenerate
+- **Colour is a variant axis, never a product.** One `Rehla Long Sleeve Off Shoulder Top` in five
+  colours, not five tops. The merge from the original per-colour source
+  products is done in `scripts/rehla/build_seed.py` (`CURATED`) — don't regenerate
   it from names, and don't reintroduce colour into a product name.
-- **Taxonomy:** six `category` values (`T-Shirts`, `Hoodies & Sweatshirts`,
-  `Polo Shirts`, `Joggers & Sweatpants`, `Jackets`, `Tops`), plus `style` as
-  a filter axis and `department` (`unisex` / `women`). Crewnecks and
-  quarter-zips are **not** categories — they're `style` values under
-  Hoodies & Sweatshirts.
-- **Collections are optional and separate.** Only `WINTER COLLECTION` and
-  `CAIROKEE MERCH`; most products have `collection: null`, which is correct,
+- **Taxonomy:** five `category` values (`Tops`, `T-Shirts`,
+  `Hoodies & Jackets`, `Caps`, `Pants`), plus `style` as a filter axis and
+  `department` (every Rehla product is `women`).
+- **Collections are optional and separate.** Rehla has none today: every
+  product has `collection: null`, which is correct,
   not missing data. Nothing may require a collection to find a product.
-- **Length:** the Worker Jacket also carries a `length` (`Long` / `Short`) —
-  a third axis on that product only, so its variants are size × colour ×
-  length. Every other product's variants are size × colour.
+- **Length:** a product *may* carry a `length` axis (a third axis on that
+  product only, so its variants are size × colour × length). No Rehla product
+  uses one today; every variant is size × colour.
 - **Low stock threshold:** 2 units per variant by default.
 - **Sleeve length is recorded or it is unknown -- never inferred.** Every
   seeded product records one; a product made in the dashboard or Shopify
@@ -132,8 +130,9 @@ service file. For architecture and where things live, see `CLAUDE.md`.
   - Charts are assigned **per product**, never derived from `category`.
   - Numbers are **garment-flat, not body measurements** — say which, every
     time.
-  - The Worker Jacket has separate short- and long-sleeve chart rows (ask
-    which length first); some products have no XL row. Don't assume a fixed
+  - A chart may have separate rows per length (ask which
+    first); some products have no XL row. Rehla has published no charts yet,
+    so the bot hands off with `size_help`. Don't assume a fixed
     row set.
   - `size_chart` is nullable and the "no chart" path must still work — new
     products can arrive before their chart does.

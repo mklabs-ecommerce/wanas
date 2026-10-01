@@ -4,8 +4,9 @@ Instructions and context for Claude Code sessions working in this repository.
 
 ## Project Purpose
 
-A Shopify-connected e-commerce chatbot for **Wanas Gallery**, an Egyptian
-streetwear brand, on two first-class channels: **WhatsApp** (Meta Cloud API)
+An e-commerce chatbot for **Rehla** (رحلة), an Egyptian women's clothing
+brand (Shopify-connected, or database-backed when no store is configured --
+see `REHLA.md`), on two first-class channels: **WhatsApp** (Meta Cloud API)
 and **Instagram** (`"instagram_dm"`, DMs plus — shipped off by default —
 public comments). The product is the chatbot, its API/backend, and the
 Shopify integration — not a general-purpose website or admin platform.
@@ -185,7 +186,7 @@ integrations/            everything that talks to an external vendor over
     admin_customers.py, admin_orders.py, admin_products.py,
     admin_collections.py, admin_inventory.py                dashboard admin
     product_reconcile.py    the other direction, and the only one that
-                            deletes: wanas.db products whose SKUs Shopify no
+                            deletes: rehla.db products whose SKUs Shopify no
                             longer knows. Boot runs it in *report* mode only
                             (RECONCILE_REPORT_ON_BOOT) -- the deleting half is
                             scripts/shopify_reconcile_products.py, by hand,
@@ -193,8 +194,8 @@ integrations/            everything that talks to an external vendor over
                             mostly-empty live read, and archiving rather than
                             deleting anything ever ordered
     product_import.py       mirror a product created straight in Shopify
-                            Admin into wanas.db, since the bot's search reads
-                            wanas.db and never the live product list. Two
+                            Admin into rehla.db, since the bot's search reads
+                            rehla.db and never the live product list. Two
                             doors, one set of rules (`_import_one`): the
                             products/create + products/update webhooks as it
                             happens, and a catalogue-wide reconcile at boot
@@ -318,7 +319,7 @@ assistant/               the AI agent runtime, shared byte-for-byte by every
                              sits after an answer and never instead of one,
                              and `ensure_asked` adds the line if the finished
                              reply still does not ask. Each turn logs its
-                             decision (`wanas.customer_name`). `save_customer_name` stores only
+                             decision (`rehla.customer_name`). `save_customer_name` stores only
                              a name the customer typed, and
                              `dashboard/web.py::customer_labels` titles the
                              conversation with it
@@ -480,7 +481,7 @@ scripts/                 shopify_sync.py (ongoing catalog/stock reconciliation),
                           shopify_size_charts_import.py (the same metafields
                           back into the database, so a chart edited in Shopify
                           Admin reaches the bot),
-                          shopify_reconcile_products.py (delete the wanas.db
+                          shopify_reconcile_products.py (delete the rehla.db
                           products Shopify no longer has -- archiving any
                           that ever sold; refuses an empty or mostly-empty
                           live read),
@@ -503,7 +504,7 @@ tests/                   pytest suite (flat, one test_<module>.py per
 ## Database
 
 - PostgreSQL is the production database (`DATABASE_URL=postgresql+psycopg://...`).
-  SQLite (`sqlite:///./wanas.db`) is fine for local development only.
+  SQLite (`sqlite:///./rehla.db`) is fine for local development only.
 - Chat/session history is persisted (`sessions` table / `assistant/session.py`)
   — this is a required production feature. **Never** remove it or replace it
   with an in-memory store. It is also append-only: a conversation *ending*
@@ -723,7 +724,7 @@ tests/                   pytest suite (flat, one test_<module>.py per
   for that colour when staff have set one in Shopify Admin. Which regime
   `catalog._overlay_images` applies turns on *coverage*: once Shopify has a
   photo for **every** colourway, it is the photo set — the seeded paths for
-  those colours are dropped, and a product `wanas.db` never split by colour
+  those colours are dropped, and a product `rehla.db` never split by colour
   gets its split from Shopify. Short of full coverage it stays additive, a
   Shopify photo leading a gallery that already had that key, never inventing
   a partial split. Which colour's photo actually gets *sent* is the
@@ -854,7 +855,7 @@ reads a developer's `.env` by accident. Two markers opt out of the default:
 
 Run the suite against PostgreSQL before deploying — `tests/test_order_transaction.py`
 (the atomic-order concurrency test) is the one that depends on it most:
-`WANAS_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test`.
+`REHLA_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/rehla make test`.
 Without that opt-in variable set, an ambient `DATABASE_URL` is ignored and the
 suite always runs on its own throwaway SQLite file (`tests/conftest.py`).
 
@@ -964,7 +965,7 @@ is NULL -- every account that existed before permissions shipped -- reads as
 an **owner**, never as "scoped to nothing": the opposite locks everyone out of
 the one screen that hands permissions out. Shopify is still the source of truth
 for price/stock/orders; product create/edit pushes to Shopify first and
-mirrors the wanas.db-only fields (`category`/`department`/`style`/
+mirrors the rehla.db-only fields (`category`/`department`/`style`/
 `collection`/`size_chart`) after — and because `productCreate` runs before
 everything else, every later step is wrapped so a failure **deletes the
 half-made Shopify product** rather than leaving a shell for

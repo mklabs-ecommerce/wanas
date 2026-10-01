@@ -1,8 +1,9 @@
-# Rehla branch
+# Rehla
 
-This branch is the Wanas bot re-skinned for **Rehla** (رحلة), a women's
-clothing brand. It runs **without Shopify**. Branched from tag `wanas-v1`.
-The checkpoint and how to restore Wanas are in `S:\E-commerce\_checkpoint\RESTORE.md`.
+**Rehla** (رحلة) is a women's clothing brand. This repo is its chatbot. It runs
+against Shopify when `SHOPIFY_*` is set and **without it** otherwise (local shelf).
+The code began as a fork of an earlier streetwear bot, kept in the archive repo
+at tag `wanas-v1`; nothing here depends on it.
 
 ## Edit these first
 
