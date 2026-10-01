@@ -12,7 +12,6 @@ NAMES = {
     "WHATSAPP_TEMPLATE_FEEDBACK_REQUEST": ("whatsapp_template_feedback_request", "wanas_feedback_request"),
     "WHATSAPP_TEMPLATE_ORDER_CONFIRMATION": ("whatsapp_template_order_confirmation", "wanas_order_confirmation"),
     "WHATSAPP_TEMPLATE_BACK_IN_STOCK": ("whatsapp_template_back_in_stock", "wanas_back_in_stock"),
-    "WHATSAPP_TEMPLATE_ABANDONED_CART": ("whatsapp_template_abandoned_cart", "wanas_abandoned_cart"),
 }
 
 

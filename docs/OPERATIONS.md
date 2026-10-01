@@ -78,7 +78,8 @@ something looks wrong.
 - [ ] SKUs linked (`python scripts/shopify_set_skus.py --apply`), then
       `python scripts/shopify_check_live.py` reports no disagreement
 - [ ] Meta templates approved for the proactive messages (order confirmation,
-      status pushes, feedback request, back-in-stock, abandoned-cart nudge).
+      status pushes, feedback request, back-in-stock; the silence nudges are free-form only
+      and need none).
       **Approval happens in Meta Business Manager, by hand — there is nothing
       in this repository that can do it.** Submit one template per name below,
       in Arabic, with no body variables (the client sends templates with none,
@@ -91,7 +92,6 @@ something looks wrong.
       | `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST` | the rating ask after delivery |
       | `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION` | the confirmation, if the send is ever refused |
       | `WHATSAPP_TEMPLATE_BACK_IN_STOCK` | a waitlisted item is available again |
-      | `WHATSAPP_TEMPLATE_ABANDONED_CART` | unused since the silence nudges (free-form only) |
 
       Until a name is set, the corresponding message can only reach a customer
       **inside** Meta's 24-hour customer service window (measured from their

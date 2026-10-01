@@ -46,7 +46,7 @@ d. **DB names**: `sqlite:///./wanas.db` default in `config/settings.py:495`. Cha
    The Postgres DB *name* on Railway is Railway's and untouched.
 
 e. **WhatsApp template names** `wanas_order_update`, `wanas_feedback_request`,
-   `wanas_order_confirmation`, `wanas_back_in_stock`, `wanas_abandoned_cart`
+   `wanas_order_confirmation`, `wanas_back_in_stock` (`wanas_abandoned_cart` retired with the silence nudges)
    (docs only; the code reads `WHATSAPP_TEMPLATE_*` env vars). They are approved at Meta by
    name. **Do not rename in code.** Renaming = creating new templates at Meta + approval, then
    switching the env values on Railway. Out of scope (you said don't touch Meta); list as manual.

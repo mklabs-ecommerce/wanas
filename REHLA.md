@@ -64,22 +64,20 @@ the variable.
 | `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST` | `wanas_feedback_request` | `rehla_feedback_request` |
 | `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION` | `wanas_order_confirmation` | `rehla_order_confirmation` |
 | `WHATSAPP_TEMPLATE_BACK_IN_STOCK` | `wanas_back_in_stock` | `rehla_back_in_stock` |
-| `WHATSAPP_TEMPLATE_ABANDONED_CART` | `wanas_abandoned_cart` | no longer used (see below) |
 | `WHATSAPP_TEMPLATE_LANGUAGE` | `ar` | `ar` |
 
 Create each as **Custom**, language `ar`. Utility: order update, feedback,
-confirmation. Marketing: back in stock, abandoned cart. Texts (the replies
+confirmation. Marketing: back in stock. Texts (the replies
 the customer sends back open the 24-hour window):
 
 1. `rehla_order_update` (Utility): «في تحديث على طلبك من رحلة ✅» / «رد على الرسالة دي وهنقولك الطلب وصل لفين وكل التفاصيل على طول.» (optional quick reply: «طلبي وصل فين؟»)
 2. `rehla_feedback_request` (Utility): «طلبك من رحلة وصلك ✅» / «تقيّمي تجربتك معانا من 1 لـ 5؟ ولو عندك أي ملاحظة اكتبيها في ردك — بتفرق معانا فعلاً.»
 3. `rehla_order_confirmation` (Utility): «وصلنا طلبك واتأكد ✅» / «رد على الرسالة دي وهنبعتلك تفاصيل الطلب والإجمالي وموعد الوصول.»
 4. `rehla_back_in_stock` (Marketing): «خبر حلو 🖤» / «القطعة اللي كنتي مستنياها رجعت متوفرة تاني في رحلة.» / «ردي على الرسالة دي وهنظبطلك المقاس واللون قبل ما تخلص تاني.» (optional quick reply: «عايزة أطلبها»)
-5. `rehla_abandoned_cart` (Marketing): «لسه طلبك مستنيكي في السلة 🛒» / «ردي على الرسالة دي ونكمّل الأوردر في دقيقة، ولو محتاجة مساعدة في المقاس أو اللون احنا معاكي.» (optional quick reply: «كمّلي طلبي»)
 
-Template 5 is no longer sent: the idle-cart nudge became nudge #2 of the
-"customer went silent" follow-up below, which is free-form inside the 24-hour
-window only and never uses a template.
+There is no abandoned-cart template: the idle-cart nudge is nudge #2 of the
+"customer went silent" follow-up below, free-form inside the 24-hour window
+only.
 
 Then set the variables on Railway to the `rehla_*` names once each shows
 **Approved**. A name Meta has not approved is worse than an empty one.

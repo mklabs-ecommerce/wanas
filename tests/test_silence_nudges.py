@@ -222,6 +222,25 @@ def test_nothing_after_she_closed_the_conversation(seeded, sender, closing):
     assert wa.sent == []
 
 
+@pytest.mark.parametrize(
+    "text", ["السلام عليكم، عندكم توبات كم طويل؟", "وعليكم السلام، خلاص هاخده", "سلام عليكم"]
+)
+def test_a_greeting_or_a_yes_is_not_a_goodbye(text):
+    assert not silence_nudges.closes_conversation(text)
+
+
+def test_a_goodbye_still_is():
+    assert silence_nudges.closes_conversation("تمام، سلام")
+    assert silence_nudges.closes_conversation("السلام عليكم، شكرا جدا")
+
+
+def test_a_chat_opened_with_a_greeting_is_nudged(seeded, sender):
+    wa, _ = sender
+    conversation(minutes_ago=11, customer="السلام عليكم، عندكم توبات كم طويل؟")
+    assert silence_nudges.check_silences() == 1
+    assert len(wa.sent) == 1
+
+
 def test_nothing_after_a_handoff(seeded, sender):
     wa, _ = sender
     conversation(minutes_ago=11, cart=True)

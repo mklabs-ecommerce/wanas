@@ -32,7 +32,7 @@ of typing. `assistant/channels/whatsapp.py` already ingests a button press
 (`message_type == "button"`) as an ordinary inbound message, so a tap opens
 the window and starts a turn exactly as typing would.
 
-## The five templates
+## The four templates
 
 Names are lowercase with underscores, language `ar`. Submit each as **Custom**
 in the category given; Meta may recategorise, which changes what it costs, not
@@ -97,32 +97,15 @@ the product, so it leans on the fact that the customer asked to be told.
 
 Optional quick-reply button: `عايز أطلبها`
 
----
-
-### 5. `rehla_abandoned_cart` -> `WHATSAPP_TEMPLATE_ABANDONED_CART`
-
-**Category: Marketing.** This one is sent *by definition* to somebody who went
-quiet, so it is the template that matters most -- without it the nudge
-essentially never reaches anybody.
-
-```
-لسه طلبك مستنيك في السلة 🛒
-
-رد على الرسالة دي ونكمّل الأوردر في دقيقة، ولو محتاج مساعدة في المقاس أو اللون احنا معاك.
-```
-
-Optional quick-reply button: `كمّل طلبي`
-
 ## After approval
 
-Set the five approved names, then redeploy:
+Set the four approved names, then redeploy:
 
 ```
 WHATSAPP_TEMPLATE_ORDER_UPDATE=rehla_order_update
 WHATSAPP_TEMPLATE_FEEDBACK_REQUEST=rehla_feedback_request
 WHATSAPP_TEMPLATE_ORDER_CONFIRMATION=rehla_order_confirmation
 WHATSAPP_TEMPLATE_BACK_IN_STOCK=rehla_back_in_stock
-WHATSAPP_TEMPLATE_ABANDONED_CART=rehla_abandoned_cart
 WHATSAPP_TEMPLATE_LANGUAGE=ar
 ```
 

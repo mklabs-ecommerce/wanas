@@ -90,13 +90,19 @@ FIRST_PROMPT = """\
 - تسأل بلطف لو لسه معانا، وتشاور على اللي كان بيتكلم فيه لو واضح (اسم المنتج زي ما اتكتب).
 - من غير ضغط ولا استعجال، ومن غير أسعار ولا أرقام ولا عروض.
 - كلّمه بـ«حضرتك» وبصيغة محايدة، من غير ألقاب، وإيموجي واحد بالكتير.
+- إنت بتكلّم الزبون نفسه مباشرة: متتكلمش عنه بصيغة الغايب («اللي بيسأل عنها») ومتعيدش تفاصيل الطلب كلها.
 اكتب الرسالة نفسها بس، من غير أي شرح."""
 
 _CLOSING = re.compile(
-    r"(شكر|متشكر|ميرسي|تسلم|سلام|باي|مع السلامة|خلاص|مش عايز|مش محتاج|مش حاب|لا شكرا"
+    r"(شكر|متشكر|ميرسي|تسلم|\bسلام\b|\bباي\b|مع السلامة|مش عايز|مش محتاج|مش حاب|لا شكرا"
     r"|\bthanks?\b|\bthank you\b|\bthx\b|\bbye\b|\bmersi\b|\bmerci\b|\bno thanks\b)",
     re.IGNORECASE,
 )
+#: Greetings carry «سلام» too, and «السلام عليكم» opens a conversation rather
+#: than ending it -- found by the local end-to-end run, where the commonest
+#: first message there is meant a general chat was never nudged. («خلاص» is
+#: gone for the same reason: «خلاص هاخده» is a yes.)
+_GREETING = re.compile(r"(ال)?سلام عليكم|وعليكم السلام")
 _OPT_OUT = re.compile(
     r"(\bstop\b|\bunsubscribe\b|متبعتليش|ماتبعتليش|متبعتش|ماتبعتش|بطل[وي]? تبعت|بطّل تبعت"
     r"|مش عايز رسايل|مش عايزة رسايل|كفاية رسايل|الغي الاشتراك|إلغاء الاشتراك)",
@@ -154,7 +160,7 @@ def _last_customer_text(history: list[dict]) -> str:
 
 
 def closes_conversation(text: str) -> bool:
-    return bool(_CLOSING.search(text or ""))
+    return bool(_CLOSING.search(_GREETING.sub(" ", text or "")))
 
 
 def opts_out(text: str) -> bool:

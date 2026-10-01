@@ -344,13 +344,12 @@ class Settings:
     #: How often the nudge check runs. Much finer than the re-engagement
     #: interval: a 10-minute nudge polled every 30 minutes is a 40-minute one.
     nudge_poll_seconds: float
-    #: Meta template names for the two proactive message types Feature 3/4
+    #: Meta template name for the back-in-stock notice, which may
     #: need outside the 24-hour customer service window (`notifications.
     #: send_proactive`). Blank until a real one is submitted and approved --
     #: see docs/OPERATIONS.md, which is also where `order_confirmation` /
     #: `status_*` / `feedback_request` are tracked as not yet approved either.
     whatsapp_template_back_in_stock: str
-    whatsapp_template_abandoned_cart: str
     #: ...and the same for the messages that follow an order rather than a
     #: cart. These are the ones that most often fall outside the window: a
     #: customer orders, stops writing, and the fulfilment happens a day or
@@ -630,9 +629,6 @@ def load_settings() -> Settings:
         nudge_quiet_end_hour=_int("NUDGE_QUIET_END_HOUR", 9),
         nudge_poll_seconds=_float("NUDGE_POLL_SECONDS", 60.0),
         whatsapp_template_back_in_stock=_template("WHATSAPP_TEMPLATE_BACK_IN_STOCK", "wanas_back_in_stock"),
-        whatsapp_template_abandoned_cart=_template(
-            "WHATSAPP_TEMPLATE_ABANDONED_CART", "wanas_abandoned_cart"
-        ),
         whatsapp_template_order_update=_template("WHATSAPP_TEMPLATE_ORDER_UPDATE", "wanas_order_update"),
         whatsapp_template_feedback_request=_template(
             "WHATSAPP_TEMPLATE_FEEDBACK_REQUEST", "wanas_feedback_request"
