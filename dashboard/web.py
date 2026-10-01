@@ -79,9 +79,14 @@ LOGO_FILE = _DIR / "rehla.webp"
 #: Swappable skins (DASHBOARD_THEME). Each is a stylesheet scoped to
 #: `:root[data-skin="<name>"]` that re-points the design tokens both pages are
 #: written in, plus the fonts it needs. `legacy` is the absence of a skin:
-#: the pages exactly as they were.
+#: the pages exactly as they were. A skin may also ship `<name>.js` -- motion
+#: only, injected after the page's own script and never a change of behaviour.
 THEMES_DIR = _DIR / "themes"
 THEME_FONTS = {
+    "v3": (
+        "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700"
+        "&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+    ),
     "mklabs": (
         "https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800"
         "&family=Martian+Mono:wdth,wght@75..112.5,400..700"
@@ -366,7 +371,12 @@ def skinned(page: str, theme: str | None = None) -> str:
         head += f'<link href="{fonts}" rel="stylesheet">\n'
     head += f'<style id="skin">\n{css_file.read_text(encoding="utf-8")}\n</style>\n'
     page = page.replace("<html ", f'<html data-skin="{theme}" ', 1)
-    return page.replace("</head>", head + "</head>", 1)
+    page = page.replace("</head>", head + "</head>", 1)
+    js_file = THEMES_DIR / f"{theme}.js"
+    if js_file.is_file():
+        script = '<script id="skin-js">\n' + js_file.read_text(encoding="utf-8") + "\n</script>\n"
+        page = page.replace("</body>", script + "</body>", 1)
+    return page
 
 
 @router.get("/logo.webp")

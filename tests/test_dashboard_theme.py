@@ -13,16 +13,27 @@ from dashboard import web
 THEMES = Path(web.__file__).parent / "themes"
 
 
-def test_v2_is_the_default_skin():
+def test_v3_is_the_default_skin():
     app = FastAPI()
     app.include_router(web.router)
     client = TestClient(app)
     page = client.get("/dashboard").text
-    assert '<html data-skin="v2" ' in page
+    assert '<html data-skin="v3" ' in page
     assert '<style id="skin">' in page
-    assert "family=Geist" in page and "IBM+Plex+Sans+Arabic" in page
+    assert "family=Poppins" in page and "IBM+Plex+Sans+Arabic" in page
+    # Its motion layer rides after the page's own script.
+    assert page.index('<script id="skin-js">') > page.index("boot();")
     login = client.get("/dashboard/login").text
-    assert 'data-skin="v2"' in login
+    assert 'data-skin="v3"' in login
+
+
+def test_v2_is_still_one_variable_away():
+    raw = web.APP_PAGE.read_text(encoding="utf-8")
+    page = web.skinned(raw, "v2")
+    assert '<html data-skin="v2" ' in page
+    assert "family=Geist" in page
+    # A skin without a script gets none.
+    assert 'id="skin-js"' not in page and 'data-skin="v3"' not in page
 
 
 def test_mklabs_is_still_one_variable_away():
@@ -136,3 +147,99 @@ def test_the_tab_bar_is_hidden_unless_a_skin_shows_it():
     raw = web.APP_PAGE.read_text(encoding="utf-8")
     assert '<nav id="tabbar"' in raw
     assert "#tabbar { display: none; }" in raw
+
+
+# --------------------------------------------------------------------------
+# v3
+# --------------------------------------------------------------------------
+
+
+def _v3_tokens():
+    css = (THEMES / "v3.css").read_text(encoding="utf-8")
+    light_block, dark_block = css.split(':root[data-skin="v3"][data-theme="dark"] {', 1)
+    light = _tokens(light_block.split(':root[data-skin="v3"] {', 1)[1].split("}", 1)[0])
+    dark = {**light, **_tokens(dark_block.split("}", 1)[0])}
+    return css, light, dark
+
+
+def test_v3_wears_the_reference_palette():
+    """Lector's colours: magenta-pink first, then purple, sky and orange, each
+    a gradient on the KPI cards, on a pale pink-grey ground; Mediline's slate
+    for the dark mode."""
+    css, light, dark = _v3_tokens()
+    assert light["pink"] == "#E9407A"
+    for hue in ("pink", "purple", "sky", "orange"):
+        assert f"--{hue}-a" in css and f"--{hue}-b" in css
+    assert light["ground"] == "#F6EEF3"
+    assert dark["ground"] == "#263640" and dark["surface"] == "#31424C"
+
+
+def test_v3_text_pairings_meet_wcag_aa_in_both_themes():
+    _, light, dark = _v3_tokens()
+    for theme in (light, dark):
+        for ink in ("ink", "ink-2", "ink-3", "clay", "rose", "teal", "amber", "sky", "lilac"):
+            for ground in ("surface", "surface-2", "ground"):
+                assert _contrast(theme[ink], theme[ground]) >= 4.5, (ink, ground)
+        for hue in ("clay", "rose", "teal", "amber", "sky", "lilac"):
+            assert _contrast(theme[hue], theme[f"{hue}-tint"]) >= 4.5, hue
+        # The sidebar's labels on its own colour.
+        assert _contrast(theme["rail-ink"], theme["rail-bg"]) >= 4.5
+        assert _contrast(theme["rail-ink-3"], theme["rail-bg"]) >= 4.5
+    assert _contrast("#FFFFFF", light["primary"]) >= 4.5  # a primary button
+    assert _contrast("#1F2233", dark["clay"]) >= 4.5  # its dark-mode twin
+    # White KPI text on the deep end of each gradient.
+    for stop in ("pink-a", "purple-a", "purple-b", "sky-b", "orange-b"):
+        assert _contrast("#FFFFFF", light[stop]) >= 4.5, stop
+
+
+def test_v3_is_scoped_to_its_own_skin():
+    css = (THEMES / "v3.css").read_text(encoding="utf-8")
+    body = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    body = re.sub(r"@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}", "", body)
+    body = re.sub(r"@media[^{]*\{", "", body)
+    for selector_list in re.findall(r"([^{}]+)\{", body):
+        for selector in _top_level_commas(selector_list):
+            selector = selector.strip()
+            if not selector:
+                continue
+            assert selector.startswith(':root[data-skin="v3"]'), selector
+
+
+def _top_level_commas(selector_list: str) -> list[str]:
+    """Split a selector list on its own commas, not those inside :is()/:has()."""
+    parts, depth, current = [], 0, ""
+    for char in selector_list:
+        depth += char == "("
+        depth -= char == ")"
+        if char == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += char
+    return [*parts, current]
+
+
+def test_v3_motion_is_presentation_only():
+    """The motion layer may move and fade things; it may not fetch, store,
+    load a library from anywhere, or ignore reduced motion."""
+    js = (THEMES / "v3.js").read_text(encoding="utf-8")
+    # The SVG namespace is an identifier, not somewhere anything is loaded from.
+    js = js.replace('"http://www.w3.org/2000/svg"', "SVG_NS")
+    for forbidden in ("fetch(", "XMLHttpRequest", "localStorage", "sessionStorage",
+                      "http://", "https://", "import(", "<script src", "eval("):
+        assert forbidden not in js, forbidden
+    assert "prefers-reduced-motion: reduce" in js
+    # Only compositor-friendly properties (and an SVG stroke) are animated.
+    animated = set(re.findall(r"\{\s*(\w+):\s*[`\"']", js))
+    assert animated <= {"opacity", "transform", "strokeDasharray"}, animated
+    # The rail's own controls are moved, never re-created: their handlers live
+    # in dashboard.html.
+    for node in ("paletteBtn", "langBtn", "themeBtn", "meAvatar"):
+        assert f'getElementById("{node}")' in js
+
+
+def test_v3_motion_holds_back_on_refresh():
+    """An intro is for a page opening; a poll re-rendering it is not one."""
+    js = (THEMES / "v3.js").read_text(encoding="utf-8")
+    assert "introUntil" in js and "seen.has(key)" in js
+    assert "lastNumber" in js  # numbers tween from the old value

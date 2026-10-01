@@ -1,6 +1,6 @@
 # Dashboard v2 — "Ink rail"
 
-`DASHBOARD_THEME=v2` (the default). `mklabs` and `legacy` remain one variable
+`DASHBOARD_THEME=v2` (the default until v3, see DASHBOARD_V3.md). `mklabs` and `legacy` remain one variable
 away. v2 is a skin (`dashboard/themes/v2.css`): it changes how the dashboard
 looks and lays out, never what it does. Roles, routes, the moderator's money
 boundary (`dashboard/money.py`, server-side) and every API are unchanged.

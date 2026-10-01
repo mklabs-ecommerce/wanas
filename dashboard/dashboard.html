@@ -3727,6 +3727,11 @@ function renderThread(data) {
     ? TR`${icon("check", 13)} المحادثة معاك — البوت مش هيرد لحد ما تدوس «رجّع البوت».`
     : TR`${icon("bot", 13)} البوت ماسك المحادثة دلوقتي — استلمها الأول عشان ترد بنفسك.`;
 
+  // The list row this thread was opened from: its activity time, message
+  // count and linked customer feed the side panel. Its name no longer titles
+  // the thread (the server does that), which is when this lookup went missing
+  // and every thread threw before the panel could render.
+  const summary = state.inbox.items.find((c) => c.channel === data.channel && c.external_id === data.external_id);
   renderContext(data, summary);
 }
 
