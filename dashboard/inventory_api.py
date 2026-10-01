@@ -19,11 +19,15 @@ from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from integrations.shopify import admin_inventory, admin_products
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
 
-router = APIRouter(prefix="/dashboard/api/shopify/inventory", tags=["dashboard-inventory"])
+router = APIRouter(
+    prefix="/dashboard/api/shopify/inventory", tags=["dashboard-inventory"],
+    route_class=MoneyGuardedRoute,
+)
 
 #: Rows returned in one response. The full walk still happens server-side so
 #: the tiles and the low-stock filter are computed over everything, but the

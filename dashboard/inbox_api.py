@@ -37,6 +37,7 @@ from sqlalchemy import select
 from assistant.providers.base import COMMENT_SENTIMENTS
 from common.timeutil import as_aware
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from dashboard.web import (
     _conversation_summary,
     _open_handoffs,
@@ -48,7 +49,7 @@ from dashboard.web import (
 from domain.db import session_scope
 from domain.models import InstagramCommentReply, SessionRow
 
-router = APIRouter(prefix="/dashboard/api/inbox", tags=["dashboard-inbox"])
+router = APIRouter(prefix="/dashboard/api/inbox", tags=["dashboard-inbox"], route_class=MoneyGuardedRoute)
 
 #: Conversations returned in one response, after filtering. The same order of
 #: magnitude as `web.py`'s `MAX_CONVERSATIONS`, for the same reason: this shop

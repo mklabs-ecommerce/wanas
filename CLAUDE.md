@@ -417,6 +417,13 @@ dashboard/                 staff dashboard, its own top-level package:
                             section (domain/services/staff_admin.py). The
                             sidebar hides what an account cannot open; that is
                             a courtesy, the route refusal is the control.
+                            A `moderator` (page moderator) is the one role
+                            with a money boundary: no analytics, settings or
+                            team, and every other JSON answer reaches it with
+                            its money fields stripped by money.py's route
+                            class -- every router is built with it.
+                            DASHBOARD_THEME=mklabs|legacy picks the skin
+                            (themes/*.css, injected by web.skinned).
                             ranges.py parses the one date window both analytics
                             tabs use (presets, or an explicit start/end).
                             customer_filters.py holds the one filter vocabulary

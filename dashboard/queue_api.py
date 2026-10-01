@@ -23,11 +23,12 @@ from fastapi.responses import JSONResponse
 
 from common.events import after_commit
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from domain.models import Order, QueueKind, QueueStatus, StaffQueueItem, Variant
 from domain.services import notifications, orders as orders_service, queues
 
-router = APIRouter(prefix="/dashboard/api/queue", tags=["dashboard-queue"])
+router = APIRouter(prefix="/dashboard/api/queue", tags=["dashboard-queue"], route_class=MoneyGuardedRoute)
 
 _KINDS = (QueueKind.ITEM_SWAP.value, QueueKind.ITEM_ADD.value, QueueKind.ALERT.value)
 

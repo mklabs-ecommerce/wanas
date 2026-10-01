@@ -4,6 +4,7 @@ never imported by the rest of the app.
     python manage.py init-db
     python manage.py seed
     python manage.py create-staff <username> [--role owner|staff] [--can inbox,orders,...]
+    python manage.py create-user <username> --role owner|moderator [--password-stdin]
     python manage.py set-fee <governorate> <fee>
     python manage.py catalog-report
     python manage.py inspect-conversation <external_id> [--channel whatsapp]
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import secrets
 import sys
 
 from sqlalchemy import func, select
@@ -98,6 +100,29 @@ def cmd_create_staff(args) -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    return 0
+
+
+def cmd_create_user(args) -> int:
+    """An owner or a page moderator, non-interactively.
+
+    With no password supplied, a strong one is generated and printed exactly
+    once -- the only time it exists in clear anywhere; the database holds the
+    hash. `--password-stdin` reads one instead (piped, never an argument, so
+    it does not land in shell history or `ps`).
+    """
+    password = (
+        sys.stdin.readline().rstrip("\r\n") if args.password_stdin else secrets.token_urlsafe(18)
+    )
+    try:
+        with session_scope() as session:
+            staff = staff_admin.create(session, args.username, password, role=args.role)
+            print(f"created {staff.role} #{staff.staff_id} {staff.username}")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if not args.password_stdin:
+        print(f"password: {password}")
     return 0
 
 
@@ -231,6 +256,19 @@ def main(argv: list[str] | None = None) -> int:
         help=f"comma-separated permissions for --role staff: {', '.join(staff_admin.PERMISSION_KEYS)}",
     )
     p_staff.set_defaults(func=cmd_create_staff)
+
+    p_user = sub.add_parser(
+        "create-user", help="create an owner or a page moderator (moderators never see money)"
+    )
+    p_user.add_argument("username")
+    p_user.add_argument(
+        "--role", required=True, choices=[staff_admin.OWNER_ROLE, staff_admin.MODERATOR_ROLE],
+    )
+    p_user.add_argument(
+        "--password-stdin", action="store_true",
+        help="read the password from stdin instead of generating one",
+    )
+    p_user.set_defaults(func=cmd_create_user)
 
     p_fee = sub.add_parser("set-fee", help="set a governorate shipping fee")
     p_fee.add_argument("governorate")

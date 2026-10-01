@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from config.settings import settings
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from domain.models import Staff
 from domain.services import (
@@ -20,7 +21,10 @@ from domain.services import (
     test_numbers,
 )
 
-router = APIRouter(prefix="/dashboard/api/settings", tags=["dashboard-settings"])
+router = APIRouter(
+    prefix="/dashboard/api/settings", tags=["dashboard-settings"],
+    route_class=MoneyGuardedRoute,
+)
 
 
 def _flag_payload(session, flag, row) -> dict:

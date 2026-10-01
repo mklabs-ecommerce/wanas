@@ -17,11 +17,15 @@ from fastapi import APIRouter, Body, Cookie, Query
 from fastapi.responses import JSONResponse
 
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from integrations.shopify import admin_collections
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
 
-router = APIRouter(prefix="/dashboard/api/shopify/collections", tags=["dashboard-collections"])
+router = APIRouter(
+    prefix="/dashboard/api/shopify/collections", tags=["dashboard-collections"],
+    route_class=MoneyGuardedRoute,
+)
 
 
 def _outage(exc: Exception) -> JSONResponse:

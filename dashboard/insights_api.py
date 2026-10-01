@@ -29,6 +29,7 @@ from sqlalchemy import select
 from common.timeutil import as_aware
 from dashboard import ranges
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from dashboard.web import client_directory, customer_labels, handle_directory, name_directory
 from domain.db import session_scope
 from domain.models import (
@@ -40,7 +41,10 @@ from domain.models import (
     StaffQueueItem,
 )
 
-router = APIRouter(prefix="/dashboard/api/insights", tags=["dashboard-insights"])
+router = APIRouter(
+    prefix="/dashboard/api/insights", tags=["dashboard-insights"],
+    route_class=MoneyGuardedRoute,
+)
 
 #: The same window the Statistics tab uses, parsed by the same code
 #: (`dashboard/ranges.py`) -- two tabs of one page answering about different

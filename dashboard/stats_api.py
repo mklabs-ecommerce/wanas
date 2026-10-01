@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from dashboard import ranges
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from domain.models import Order
 from domain.services import (
@@ -22,7 +23,7 @@ from domain.services import (
 )
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
 
-router = APIRouter(prefix="/dashboard/api/stats", tags=["dashboard-stats"])
+router = APIRouter(prefix="/dashboard/api/stats", tags=["dashboard-stats"], route_class=MoneyGuardedRoute)
 
 #: Re-exported so existing callers and tests keep the name they had. The
 #: rule it stands for -- refuse an unlisted window rather than silently clamp

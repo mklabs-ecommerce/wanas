@@ -196,6 +196,10 @@ a:hover { text-decoration: underline; }
   }
 }
 
+/* A moderator's browser is never sent the numbers (dashboard/money.py);
+   this only takes the empty columns and tiles out of the way. */
+:root[data-money="hidden"] .money { display: none !important; }
+
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -1299,7 +1303,7 @@ const EN = {
   "اللون": "Colour",
   "اللي متعلّم هنا هو بالظبط اللي المنتج هيبقى فيه على الموقع، والمجموعة التلقائية واحدة بس في المرة.": "What is ticked here is exactly what the product will be in on the site, and only one automatic collection at a time.",
   "المالك": "Owner",
-  "المالك بيشوف كل حاجة، وعضو الفريق بيشوف اللي اتظبط له بس. الحساب اللي اتعمل قبل ما الصلاحيات\n        تنزل بيفضل مالك — عشان محدش يتقفل بره الشاشة اللي بتوزّع الصلاحيات.": "An owner sees everything; a staff member sees only what was ticked for them. An account created\n        before permissions shipped stays an owner — so nobody is locked out of the screen that hands them out.",
+  "المالك بيشوف كل حاجة، وعضو الفريق بيشوف اللي اتظبط له بس، ومشرف الصفحة بيشوف المحادثات والطلبات والمنتجات من غير أي أرقام فلوس. الحساب اللي اتعمل قبل ما الصلاحيات\n        تنزل بيفضل مالك — عشان محدش يتقفل بره الشاشة اللي بتوزّع الصلاحيات.": "An owner sees everything; a staff member sees only what was ticked for them; a page moderator sees conversations, orders and products with no money figures. An account created\n        before permissions shipped stays an owner — so nobody is locked out of the screen that hands them out.",
   "المبيعات": "Sales",
   "المبيعات قبل الخصم": "Gross sales",
   "المبيعات من شوبيفاي": "Sales from Shopify",
@@ -1527,6 +1531,8 @@ const EN = {
   "عدد طلباته": "Their order count",
   "عضو جديد": "New member",
   "عضو فريق": "Staff member",
+  "مشرف صفحة": "Page moderator",
+  "مشرف صفحة — المحادثات والطلبات من غير أي أرقام فلوس": "Page moderator — conversations and orders, no money figures",
   "عضو فريق جديد": "New staff member",
   "عضو فريق — بيشوف اللي تحت بس": "Staff member — sees only what is ticked below",
   "على شوبيفاي": "on Shopify",
@@ -1963,7 +1969,9 @@ const nf = new Intl.NumberFormat("en-US");
 const nf1 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 const num = (v) => nf.format(Math.round(Number(v) || 0));
-const money = (v) => nf.format(Math.round(Number(v) || 0)) + tr(" ج.م");
+/* False only for a moderator, whose answers carry no amounts at all. */
+const seesMoney = () => !(state.me && state.me.sees_money === false);
+const money = (v) => (seesMoney() ? nf.format(Math.round(Number(v) || 0)) + tr(" ج.م") : "—");
 const pct = (v) => nf1.format((Number(v) || 0) * 100) + "%";
 
 //: Month names follow the UI language; the digits are Latin in both, because
@@ -2831,7 +2839,7 @@ function card(title, sub, bodyHTML, headExtra = "", { flush = false } = {}) {
 
 function tableHTML(headers, rowsHTML, { minWidth } = {}) {
   return `<div class="tablewrap"><table class="tbl"${minWidth ? ` style="min-width:${minWidth}px"` : ""}>
-    <thead><tr>${headers.map((h) => `<th${h.num ? ' class="num"' : ""}>${esc(h.label ?? h)}</th>`).join("")}</tr></thead>
+    <thead><tr>${headers.map((h) => `<th${h.num || h.money ? ` class="${[h.num && "num", h.money && "money"].filter(Boolean).join(" ")}"` : ""}>${esc(h.label ?? h)}</th>`).join("")}</tr></thead>
     <tbody>${rowsHTML}</tbody></table></div>`;
 }
 
@@ -2853,6 +2861,10 @@ document.addEventListener("click", (event) => {
 /* CSV export: every table view offers one, because the thing staff ask for
    after "show me" is always "send it to me". */
 function exportCSV(filename, headers, rows) {
+  // Columns whose header is marked { money: true } leave a moderator's export.
+  const keep = headers.map((h) => !(h && h.money && !seesMoney()));
+  headers = headers.filter((_, i) => keep[i]).map((h) => h.label ?? h);
+  rows = rows.map((r) => r.filter((_, i) => keep[i]));
   const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const csv = "﻿" + [headers, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -3243,6 +3255,9 @@ VIEWS.overview = {
 
   revenueCard(stats) {
     const wrap = el("div");
+    // An account without analytics (a moderator above all) gets no sales card
+    // at all -- an empty one would still say "there is a number here".
+    if (!may("analytics")) { wrap.hidden = true; return wrap; }
     if (stats.__error) { wrap.innerHTML = card(tr("المبيعات"), "", errorBanner(stats.__error, tr("المبيعات"))); return wrap; }
     const points = stats.revenue_by_day.map((d) => ({
       label: shortDate(d.date), short: d.date.slice(8), value: Number(d.revenue),
@@ -3743,7 +3758,7 @@ function renderContext(data, summary) {
         <h3 style="margin-top:var(--s-4)">آخر الطلبات</h3>
         ${client.orders.length ? client.orders.slice(0, 5).map((o) => `
           <div class="kv"><span class="k num">${esc(o.reference)}</span>
-          <span class="v">${esc(money(o.total))} · ${esc(o.status)}</span></div>`).join("")
+          <span class="v">${seesMoney() ? `${esc(money(o.total))} · ` : ""}${esc(o.status)}</span></div>`).join("")
           : tr('<div class="kv"><span class="v" style="color:var(--ink-3)">مفيش طلبات</span></div>')}`;
     });
   }
@@ -3891,7 +3906,7 @@ VIEWS.orders = {
         <td>${paymentChip(o.payment_method)}</td>
         <td>${customerKindChip(o.customer_kind, o.customer_order_count)}</td>
         <td>${chipHTML(channelLabel(o.channel), o.channel === "web" ? "lilac" : "teal")}</td>
-        <td class="num">${esc(money(o.total))}</td>
+        <td class="num money">${esc(money(o.total))}</td>
       </tr>`).join("");
 
     const truncated = this.truncated
@@ -3905,14 +3920,14 @@ VIEWS.orders = {
            [tr("طلبات فعّالة"), num(totals.count), "teal", "bag"],
            [tr("مستنية شحن"), num(totals.pending), "amber", "truck"],
            [tr("من البوت"), num(totals.bot), "lilac", "bot"]]
-          .map(([l, v, t, ic]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
+          .map(([l, v, t, ic]) => `<div class="card kpi${ic === "money" ? " money" : ""}" style="--accent:${toneVar(t)}">
             <div class="kpi-label">${icon(ic, 14)}${esc(l)}</div>
             <div class="kpi-value">${esc(v)}</div></div>`).join("")}
       </div>` +
       (this.rows.length
         ? card(tr("قائمة الطلبات"), TR`${this.rows.length} طلب`, tableHTML(
             [tr("الطلب"), tr("العميل"), tr("المحافظة"), tr("الأصناف"), tr("الشحن"), tr("التوصيل"), tr("حالة الدفع"), tr("الدفع"), tr("العميل ده"), tr("المصدر"),
-             { label: tr("الإجمالي"), num: true }],
+             { label: tr("الإجمالي"), num: true, money: true }],
             rowsHTML, { minWidth: 1160 }), "", { flush: true })
         : `<div class="card"><div class="card-body"></div></div>`);
 
@@ -3930,7 +3945,7 @@ VIEWS.orders = {
     exportCSV("orders.csv",
       [tr("رقم الطلب"), tr("التاريخ"), tr("العميل"), tr("التليفون"), tr("المحافظة"), tr("الحالة"),
        tr("التوصيل"), tr("حالة الدفع"), tr("الدفع"),
-       tr("عميل قديم/جديد"), tr("عدد طلباته"), tr("القناة"), tr("المصدر"), tr("الإجمالي")],
+       tr("عميل قديم/جديد"), tr("عدد طلباته"), tr("القناة"), tr("المصدر"), { label: tr("الإجمالي"), money: true }],
       this.rows.map((o) => [o.name, o.created_at, o.customer_name, o.customer_phone,
         o.governorate, o.cancelled ? tr("ملغي") : (o.fulfillment_status || ""),
         (DELIVERY_STATUS[o.delivery_status] || {}).label || o.delivery_status || "",
@@ -3970,13 +3985,14 @@ async function openOrder(gid) {
         <div class="kv"><span class="k">التليفون</span><span class="v num" data-copy="${esc(order.customer_phone || "")}" data-copy-what="التليفون" style="cursor:pointer">${esc(order.customer_phone || "—")}</span></div>
         <div class="kv"><span class="k">المحافظة</span><span class="v">${esc(order.governorate || "—")}</span></div>
         <div class="kv"><span class="k">العنوان</span><span class="v">${esc(order.address || "—")}</span></div>`)}
-      ${card(tr("الحساب"), "", TR`
+      ${seesMoney() ? card(tr("الحساب"), "", TR`
         <div class="kv"><span class="k">المنتجات</span><span class="v num">${esc(money(order.subtotal))}</span></div>
         <div class="kv"><span class="k">الشحن</span><span class="v num">${esc(money(order.shipping_fee))}</span></div>
         <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:8px">
           <span class="k" style="font-weight:700">الإجمالي</span>
           <span class="v num" style="font-size:16px;font-weight:700">${esc(money(order.total))}</span></div>
-        ${order.note ? TR`<div class="kv"><span class="k">ملاحظة</span><span class="v">${esc(order.note)}</span></div>` : ""}`)}
+        ${order.note ? TR`<div class="kv"><span class="k">ملاحظة</span><span class="v">${esc(order.note)}</span></div>` : ""}`)
+        : (order.note ? card(tr("ملاحظة"), "", `<div class="kv"><span class="v">${esc(order.note)}</span></div>`) : "")}
     </div>
 
     ${card(tr("الأصناف"), "", tableHTML([tr("الصنف"), { label: tr("الكمية"), num: true }, ""], lines, { minWidth: 420 }), "", { flush: true })}
@@ -4976,7 +4992,7 @@ const inventoryView = VIEWS.inventory = {
            [tr("على وشك الخلاص"), num(totals.low_stock_count), "amber", "boxes"],
            [tr("إجمالي القطع"), num(totals.total_units), "teal", "boxes"],
            [tr("قيمة المخزون بالبيع"), money(totals.retail_value), "clay", "money"]]
-          .map(([l, v, t, ic]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
+          .map(([l, v, t, ic]) => `<div class="card kpi${ic === "money" ? " money" : ""}" style="--accent:${toneVar(t)}">
             <div class="kpi-label">${icon(ic, 14)}${esc(l)}</div><div class="kpi-value">${esc(v)}</div></div>`).join("")}
       </div>
       ${this.data.truncated ? TR`<div class="banner">${icon("alert", 15)}<div>المتجر أكبر من إننا نقراه كله في نداء واحد — الأرقام دي حد أدنى.</div></div>` : ""}
@@ -5396,9 +5412,9 @@ VIEWS.customers = {
             ${c.address ? `<div class="cellsub" title="${esc(c.address)}">${esc(clip(c.address, 46))}</div>` : ""}</td>
         <td>${channelChips(c.channels)}</td>
         <td class="num">${num(c.order_count)}</td>
-        <td class="num">${c.amount_spent === null ? "—" : esc(money(c.amount_spent))}</td>
+        <td class="num money">${c.amount_spent == null ? "—" : esc(money(c.amount_spent))}</td>
         <td class="num">${c.cancelled_count ? esc(num(c.cancelled_count)) : `<span class="cellsub">—</span>`}</td>
-        <td class="num">${c.cancelled_count ? esc(money(c.cancelled_amount)) : `<span class="cellsub">—</span>`}</td>
+        <td class="num money">${c.cancelled_count ? esc(money(c.cancelled_amount)) : `<span class="cellsub">—</span>`}</td>
       </tr>`).join("");
 
     const truncated = this.data.truncated
@@ -5411,8 +5427,8 @@ VIEWS.customers = {
       label, `${rows.length}`,
       rows.length ? tableHTML(
         [tr("العميل"), tr("العنوان"), tr("القنوات"), { label: tr("طلبات"), num: true },
-         { label: tr("أنفق"), num: true }, { label: tr("ملغي"), num: true },
-         { label: tr("قيمة الملغي"), num: true }],
+         { label: tr("أنفق"), num: true, money: true }, { label: tr("ملغي"), num: true },
+         { label: tr("قيمة الملغي"), num: true, money: true }],
         rowsHTML, { minWidth: 780 }) : "", "", { flush: true });
     this.wire();
     if (!rows.length) {
@@ -5441,7 +5457,7 @@ function customerDrawerHTML(customer, extraRows) {
       <td><div class="cellmain">${esc(o.governorate || "—")}</div>
           ${o.shipping_address ? `<div class="cellsub" title="${esc(o.shipping_address)}">${
             esc(clip(o.shipping_address, 40))}</div>` : ""}</td>
-      <td class="num">${esc(money(o.total))}</td>
+      <td class="num money">${esc(money(o.total))}</td>
     </tr>`).join("");
 
   return TR`
@@ -5450,7 +5466,7 @@ function customerDrawerHTML(customer, extraRows) {
          [tr("إجمالي الإنفاق"), money(customer.amount_spent || 0), "clay"],
          [tr("طلبات ملغية"), num(customer.cancelled_count || 0), "rose"],
          [tr("قيمة الملغي"), money(customer.cancelled_amount || 0), "amber"]]
-        .map(([l, v, t]) => `<div class="card kpi" style="--accent:${toneVar(t)}">
+        .map(([l, v, t], i) => `<div class="card kpi${i % 2 ? " money" : ""}" style="--accent:${toneVar(t)}">
           <div class="kpi-label">${esc(l)}</div><div class="kpi-value">${esc(v)}</div></div>`).join("")}
     </div>
     ${card(tr("بيانات التواصل"), channelChips(customer.channels), TR`
@@ -5467,7 +5483,7 @@ function customerDrawerHTML(customer, extraRows) {
     <div style="height:var(--s-4)"></div>
     ${card(tr("الطلبات"), `${(customer.orders || []).length}`,
       orders ? tableHTML([tr("الطلب"), tr("الشحن"), tr("الدفع"), tr("القناة"), tr("عنوان التوصيل"),
-                          { label: tr("الإجمالي"), num: true }], orders, { minWidth: 620 })
+                          { label: tr("الإجمالي"), num: true, money: true }], orders, { minWidth: 620 })
              : TR`<div class="empty"><div class="d">مفيش طلبات</div></div>`, "", { flush: true })}`;
 }
 
@@ -6296,7 +6312,7 @@ VIEWS.queue = {
    view: الفريق / staff — who can log in, and what each of them sees
    ========================================================================== */
 
-const ROLE_LABELS = { owner: tr("المالك"), staff: tr("عضو فريق") };
+const ROLE_LABELS = { owner: tr("المالك"), staff: tr("عضو فريق"), moderator: tr("مشرف صفحة") };
 
 VIEWS.staff = {
   data: null,
@@ -6343,7 +6359,7 @@ VIEWS.staff = {
 
     $("#staffBody").innerHTML = TR`
       <div class="banner" data-tone="info">${icon("alert", 15)}
-        <div>المالك بيشوف كل حاجة، وعضو الفريق بيشوف اللي اتظبط له بس. الحساب اللي اتعمل قبل ما الصلاحيات
+        <div>المالك بيشوف كل حاجة، وعضو الفريق بيشوف اللي اتظبط له بس، ومشرف الصفحة بيشوف المحادثات والطلبات والمنتجات من غير أي أرقام فلوس. الحساب اللي اتعمل قبل ما الصلاحيات
         تنزل بيفضل مالك — عشان محدش يتقفل بره الشاشة اللي بتوزّع الصلاحيات.</div></div>
       ${card(tr("الفريق"), `${staff.length}`, tableHTML(
         [tr("الحساب"), tr("الدور"), tr("الحالة"), tr("بيشوف إيه")], rows, { minWidth: 620 }), "", { flush: true })}`;
@@ -6391,6 +6407,7 @@ async function staffCreateForm() {
     <label class="lbl" for="stRole">الدور</label>
     <select class="inp" id="stRole">
       <option value="staff">عضو فريق — بيشوف اللي تحت بس</option>
+      <option value="moderator">مشرف صفحة — المحادثات والطلبات من غير أي أرقام فلوس</option>
       <option value="owner">مالك — بيشوف كل حاجة</option>
     </select>
     <div style="height:var(--s-4)"></div>
@@ -6398,7 +6415,7 @@ async function staffCreateForm() {
     <div style="height:var(--s-4)"></div>
     <div class="row"><button class="btn primary" type="button" id="stSave">${icon("check", 15)} إنشاء الحساب</button></div>`);
 
-  const syncRole = () => { $("#stPerms").hidden = $("#stRole").value === "owner"; };
+  const syncRole = () => { $("#stPerms").hidden = $("#stRole").value !== "staff"; };
   $("#stRole").addEventListener("change", syncRole);
   syncRole();
 
@@ -6410,7 +6427,7 @@ async function staffCreateForm() {
         username: $("#stUser").value.trim(),
         password: $("#stPass").value,
         role,
-        permissions: role === "owner" ? null : checkedPermissions(),
+        permissions: role === "staff" ? checkedPermissions() : null,
       },
     });
     if (result.__error) return toastError(result.__error, tr("مانفعش نعمل الحساب"));
@@ -6423,13 +6440,15 @@ async function staffCreateForm() {
 
 function staffEditForm(member, permissions, isMe) {
   const owner = member.role === "owner";
+  const role = member.role || "owner";
   overlay.drawer(member.username, TR`
     ${isMe ? TR`<div class="banner" data-tone="info">${icon("alert", 15)}
       <div>ده حسابك انت. الدور والصلاحيات بتاعتك مش بتتغير من هنا — عشان محدش يقفل على نفسه بالغلط.</div></div>
       <div style="height:var(--s-3)"></div>` : ""}
     <label class="lbl" for="stRole">الدور</label>
     <select class="inp" id="stRole" ${isMe ? "disabled" : ""}>
-      <option value="staff" ${owner ? "" : "selected"}>عضو فريق</option>
+      <option value="staff" ${role === "staff" ? "selected" : ""}>عضو فريق</option>
+      <option value="moderator" ${role === "moderator" ? "selected" : ""}>مشرف صفحة</option>
       <option value="owner" ${owner ? "selected" : ""}>مالك</option>
     </select>
     <div style="height:var(--s-4)"></div>
@@ -6444,7 +6463,7 @@ function staffEditForm(member, permissions, isMe) {
         ${member.is_active ? tr("إيقاف الحساب") : tr("تفعيل الحساب")}</button>`}
     </div>`);
 
-  const syncRole = () => { $("#stPerms").hidden = $("#stRole").value === "owner"; };
+  const syncRole = () => { $("#stPerms").hidden = $("#stRole").value !== "staff"; };
   $("#stRole").addEventListener("change", syncRole);
   syncRole();
 
@@ -6453,7 +6472,7 @@ function staffEditForm(member, permissions, isMe) {
     const body = { ...extra };
     if (!isMe) {
       body.role = role;
-      if (role !== "owner") body.permissions = checkedPermissions();
+      if (role === "staff") body.permissions = checkedPermissions();
     }
     const password = $("#stPass").value;
     if (password) body.password = password;
@@ -6605,6 +6624,7 @@ async function boot() {
   }
   if (!me) { location.reload(); return; }
   state.me = me;
+  document.documentElement.dataset.money = me.sees_money === false ? "hidden" : "shown";
   applyUserTheme();
   // Keeps an open dashboard signed in: `/api/me` renews a session past half
   // its lifetime (dashboard/web.py::me).

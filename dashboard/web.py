@@ -52,6 +52,7 @@ from common.identifiers import is_phone_number
 from common.timeutil import as_aware
 from config.settings import settings
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from domain.models import ChannelIdentity, Client, QueueKind, SessionRow
 from domain.services import (
@@ -65,7 +66,7 @@ from domain.services import (
 
 log = logging.getLogger("rehla.dashboard")
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"], route_class=MoneyGuardedRoute)
 
 _DIR = Path(__file__).parent
 LOGIN_PAGE = _DIR / "login.html"
@@ -458,6 +459,9 @@ def me(request: Request, rehla_staff: str | None = Cookie(default=None)) -> JSON
                 "username": staff.username,
                 "role": staff.role or staff_admin.OWNER_ROLE,
                 "permissions": list(staff_admin.permission_keys(staff)),
+                # Read by the UI to leave money columns out; the server has
+                # already taken the numbers out (`dashboard/money.py`).
+                "sees_money": staff_admin.sees_money(staff),
             }
         )
         left = auth.session_seconds_left(rehla_staff)

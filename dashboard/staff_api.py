@@ -19,11 +19,12 @@ from fastapi import APIRouter, Body, Cookie
 from fastapi.responses import JSONResponse
 
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from domain.models import Staff
 from domain.services import staff_admin
 
-router = APIRouter(prefix="/dashboard/api/staff", tags=["dashboard-staff"])
+router = APIRouter(prefix="/dashboard/api/staff", tags=["dashboard-staff"], route_class=MoneyGuardedRoute)
 
 PERMISSION = "manage_staff"
 

@@ -34,7 +34,13 @@ from domain.services.auth import hash_password
 #: The role that is never scoped. Anything else is.
 OWNER_ROLE = "owner"
 STAFF_ROLE = "staff"
-ROLES = (OWNER_ROLE, STAFF_ROLE)
+#: A page moderator: answers customers, works the queue, ships orders and
+#: keeps the catalogue tidy -- and never sees what the shop earns. Not a
+#: "staff account with fewer ticks": the money boundary is part of the role,
+#: so it holds whatever permissions are stored, and it is enforced on the
+#: server (`dashboard/money.py`), not by hiding columns.
+MODERATOR_ROLE = "moderator"
+ROLES = (OWNER_ROLE, STAFF_ROLE, MODERATOR_ROLE)
 
 
 @dataclass(frozen=True)
@@ -78,16 +84,39 @@ PERMISSIONS: tuple[Permission, ...] = (
 
 PERMISSION_KEYS = tuple(p.key for p in PERMISSIONS)
 
+#: The sections a moderator works in. Not analytics (sales, revenue, AOV and
+#: their charts), not settings, not the team. Orders and customers are in --
+#: with every amount taken out of what the server answers.
+MODERATOR_PERMISSIONS = (
+    "inbox", "orders", "products", "inventory", "collections", "customers", "queue",
+)
+
 
 def is_owner(staff: Staff) -> bool:
     return (staff.role or OWNER_ROLE) == OWNER_ROLE
 
 
+def is_moderator(staff: Staff) -> bool:
+    return (staff.role or OWNER_ROLE) == MODERATOR_ROLE
+
+
+def sees_money(staff: Staff) -> bool:
+    """Whether revenue, totals and amounts may reach this account at all."""
+    return not is_moderator(staff)
+
+
 def permission_keys(staff: Staff) -> tuple[str, ...]:
     """Everything this account may reach. An owner -- including a
-    pre-permissions account whose role is still NULL -- gets the whole list."""
+    pre-permissions account whose role is still NULL -- gets the whole list.
+    A moderator gets the moderator's list, never more, whatever is stored."""
     if is_owner(staff):
         return PERMISSION_KEYS
+    if is_moderator(staff):
+        granted = staff.permissions
+        allowed = MODERATOR_PERMISSIONS if granted is None else [
+            key for key in granted if key in MODERATOR_PERMISSIONS
+        ]
+        return tuple(key for key in PERMISSION_KEYS if key in allowed)
     granted = staff.permissions
     if granted is None:
         # Scoped to a role but never given a permission list: same
@@ -153,11 +182,19 @@ def create(
         role=role,
         # An owner is never scoped, so storing a list for one would be a
         # second source of truth that `permission_keys` ignores anyway.
-        permissions=None if role == OWNER_ROLE else (_normalise_permissions(permissions) or []),
+        permissions=_initial_permissions(role, permissions),
     )
     session.add(staff)
     session.flush()
     return staff
+
+
+def _initial_permissions(role: str, permissions) -> list[str] | None:
+    if role == OWNER_ROLE:
+        return None
+    if role == MODERATOR_ROLE and permissions is None:
+        return list(MODERATOR_PERMISSIONS)
+    return _normalise_permissions(permissions) or []
 
 
 def update(
@@ -173,6 +210,8 @@ def update(
         staff.role = _normalise_role(role)
         if staff.role == OWNER_ROLE:
             staff.permissions = None
+        elif staff.role == MODERATOR_ROLE and permissions is None:
+            staff.permissions = list(MODERATOR_PERMISSIONS)
     if permissions is not None and (staff.role or OWNER_ROLE) != OWNER_ROLE:
         staff.permissions = _normalise_permissions(permissions)
     if is_active is not None:
@@ -202,6 +241,7 @@ def summary(staff: Staff) -> dict:
         # column, which is NULL for every grandfathered account and would
         # render as "no access" in the UI while the routes let them through.
         "permissions": list(permission_keys(staff)),
+        "sees_money": sees_money(staff),
         "is_active": bool(staff.is_active),
         "created_at": staff.created_at.isoformat() if staff.created_at else None,
     }
@@ -210,11 +250,15 @@ def summary(staff: Staff) -> dict:
 __all__ = [
     "OWNER_ROLE",
     "STAFF_ROLE",
+    "MODERATOR_ROLE",
+    "MODERATOR_PERMISSIONS",
     "ROLES",
     "PERMISSIONS",
     "PERMISSION_KEYS",
     "Permission",
     "is_owner",
+    "is_moderator",
+    "sees_money",
     "permission_keys",
     "has_permission",
     "list_staff",

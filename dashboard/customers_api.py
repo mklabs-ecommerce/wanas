@@ -33,10 +33,14 @@ from sqlalchemy import func, or_, select
 from common.money import money
 from dashboard import customer_filters, customer_ledger
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from domain.models import Client, Order
 
-router = APIRouter(prefix="/dashboard/api/customers", tags=["dashboard-customers"])
+router = APIRouter(
+    prefix="/dashboard/api/customers", tags=["dashboard-customers"],
+    route_class=MoneyGuardedRoute,
+)
 
 MAX_CUSTOMERS = 300
 

@@ -26,6 +26,7 @@ from assistant.providers import get_provider
 from assistant.providers.base import ProviderError
 from dashboard import customer_filters, customer_ledger
 from dashboard.guard import require_permission
+from dashboard.money import MoneyGuardedRoute
 from domain.db import session_scope
 from domain.models import Client, Order, OrderStatus, Product, SizeChart, Variant
 from domain.services import orders as orders_service, size_charts as size_charts_service
@@ -40,7 +41,7 @@ from integrations.shopify import (
 from integrations.shopify.catalog import ShopifyConfigError, ShopifyUnavailable
 from integrations.shopify.client import get_admin_client
 
-router = APIRouter(prefix="/dashboard/api/shopify", tags=["dashboard-shopify"])
+router = APIRouter(prefix="/dashboard/api/shopify", tags=["dashboard-shopify"], route_class=MoneyGuardedRoute)
 
 
 def _outage(exc: Exception) -> JSONResponse:
