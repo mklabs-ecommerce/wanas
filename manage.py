@@ -5,6 +5,7 @@ never imported by the rest of the app.
     python manage.py seed
     python manage.py create-staff <username> [--role owner|staff] [--can inbox,orders,...]
     python manage.py create-user <username> --role owner|moderator [--password-stdin]
+    python manage.py reset-data --confirm [--backup-dir DIR]
     python manage.py set-fee <governorate> <fee>
     python manage.py catalog-report
     python manage.py inspect-conversation <external_id> [--channel whatsapp]
@@ -123,6 +124,28 @@ def cmd_create_user(args) -> int:
         return 1
     if not args.password_stdin:
         print(f"password: {password}")
+    return 0
+
+
+def cmd_reset_data(args) -> int:
+    """Wipe conversations, customers, bot orders and their stats -- never the
+    catalogue, fees, settings, staff or Shopify. See domain/services/data_reset.py."""
+    from pathlib import Path
+
+    from domain.services import data_reset
+
+    if not args.confirm:
+        print("refusing: this deletes every conversation, customer and bot order.", file=sys.stderr)
+        print("re-run with --confirm (and --backup-dir to keep a copy first).", file=sys.stderr)
+        return 2
+    with session_scope() as session:
+        if args.backup_dir:
+            path = data_reset.dump(session, Path(args.backup_dir))
+            print(f"backup: {path}")
+        before = data_reset.reset(session)
+    for table, rows in before.items():
+        print(f"  {table}: {rows} deleted")
+    print("done. next bot order: RHL-1001")
     return 0
 
 
@@ -269,6 +292,13 @@ def main(argv: list[str] | None = None) -> int:
         help="read the password from stdin instead of generating one",
     )
     p_user.set_defaults(func=cmd_create_user)
+
+    p_reset = sub.add_parser(
+        "reset-data", help="wipe conversations, customers and bot orders (keeps catalogue/fees/staff)"
+    )
+    p_reset.add_argument("--confirm", action="store_true", help="actually do it")
+    p_reset.add_argument("--backup-dir", default="", help="dump every table as JSON here first")
+    p_reset.set_defaults(func=cmd_reset_data)
 
     p_fee = sub.add_parser("set-fee", help="set a governorate shipping fee")
     p_fee.add_argument("governorate")

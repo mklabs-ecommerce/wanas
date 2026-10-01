@@ -788,3 +788,22 @@ price and stock, same call, no extra step and nothing to run). It only takes
 over from the local file for the colour it was set on — a product with no
 photo on Shopify yet keeps serving `data/images/` exactly as before. See
 `docs/ARCHITECTURE.md` ("Shopify owns price, stock and orders").
+
+## Dashboard accounts and starting over
+
+- `python manage.py create-user <name> --role owner|moderator` creates a
+  dashboard login. With no `--password-stdin` it generates a strong password
+  and prints it once; only the hash is stored. A **moderator** sees
+  conversations, customers, the queue, orders (status and fulfilment) and
+  products/stock, and is never sent revenue, totals, order amounts, AOV or
+  fees -- analytics/settings/team answer 403, every other answer has its
+  money fields stripped (`dashboard/money.py`).
+- `python manage.py reset-data --confirm --backup-dir <dir outside the repo>`
+  wipes the bot's conversations, messages, customers, bot orders, queue,
+  carts and counters (next order `RHL-1001`) after writing a JSON dump of
+  every table to `<dir>`. It never touches the catalogue, shipping fees,
+  settings, staff accounts, WhatsApp/Instagram configuration or Shopify --
+  and the dashboard's store-wide sales figures are read live from Shopify,
+  so those stay as Shopify has them.
+- `DASHBOARD_THEME=legacy` puts the dashboard back in its original design;
+  `mklabs` (the default) is the "Tag & Ledger" skin.
