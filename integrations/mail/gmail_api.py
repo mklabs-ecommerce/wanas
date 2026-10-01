@@ -39,7 +39,7 @@ import httpx
 
 from config.settings import settings
 
-log = logging.getLogger("wanas.mail.gmail")
+log = logging.getLogger("rehla.mail.gmail")
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"

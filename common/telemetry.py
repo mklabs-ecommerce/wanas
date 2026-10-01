@@ -43,13 +43,13 @@ from dataclasses import dataclass, field
 
 from config.settings import settings
 
-log = logging.getLogger("wanas.latency")
+log = logging.getLogger("rehla.latency")
 
 #: The prefix every turn line carries, so a log file can be filtered down to
 #: exactly these with a grep that cannot match anything else. `railway logs`
 #: interleaves uvicorn's access log with ours, and the report script needs a
 #: marker it can trust rather than "lines that happen to parse as JSON".
-MARKER = "wanas.turn "
+MARKER = "rehla.turn "
 
 
 def _ms(seconds: float) -> float:
@@ -143,7 +143,7 @@ class Turn:
 
 
 _current: contextvars.ContextVar[Turn | None] = contextvars.ContextVar(
-    "wanas_turn_telemetry", default=None
+    "rehla_turn_telemetry", default=None
 )
 
 

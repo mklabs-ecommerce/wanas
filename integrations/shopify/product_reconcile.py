@@ -42,7 +42,7 @@ from sqlalchemy.orm import Session
 from domain.models import Product
 from integrations.shopify import admin_products as admin
 
-log = logging.getLogger("wanas.shopify.product_reconcile")
+log = logging.getLogger("rehla.shopify.product_reconcile")
 
 #: Refuse a run that says more than this share of the catalog vanished. Not a
 #: business rule -- a smoke alarm for a read that went wrong (a token for the

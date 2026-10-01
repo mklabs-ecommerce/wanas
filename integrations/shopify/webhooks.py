@@ -65,7 +65,7 @@ from domain.models import Order, OrderStatus, WebhookEvent
 from domain.services import orders as order_service
 from integrations.shopify import product_import
 
-log = logging.getLogger("wanas.webhooks.shopify")
+log = logging.getLogger("rehla.webhooks.shopify")
 
 router = APIRouter(prefix="/webhooks/shopify", tags=["shopify"])
 

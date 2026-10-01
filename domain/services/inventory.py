@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from domain.models import Variant
 from integrations.shopify import catalog as shopify_catalog, inventory as shopify_inventory
 
-log = logging.getLogger("wanas.inventory")
+log = logging.getLogger("rehla.inventory")
 
 
 @dataclass(frozen=True)

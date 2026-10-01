@@ -35,7 +35,7 @@ from common.servable_paths import resolve_public_path
 from config.settings import DATA_DIR
 from domain.models import Product, SizeChart
 
-log = logging.getLogger("wanas.size_charts")
+log = logging.getLogger("rehla.size_charts")
 
 CHARTS_PATH = DATA_DIR / "size_charts.json"
 

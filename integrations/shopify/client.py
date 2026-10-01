@@ -36,7 +36,7 @@ try:
 except ImportError:  # pragma: no cover - certifi is an indirect dependency
     _SSL_CONTEXT = None
 
-log = logging.getLogger("wanas.shopify")
+log = logging.getLogger("rehla.shopify")
 
 #: Raised for every failure mode -- auth, network, throttle, malformed reply.
 #: The services above catch this one name and answer the customer honestly.

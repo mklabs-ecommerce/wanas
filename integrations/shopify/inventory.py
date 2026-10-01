@@ -34,7 +34,7 @@ from integrations.shopify.client import (
     get_client,
 )
 
-log = logging.getLogger("wanas.shopify.inventory")
+log = logging.getLogger("rehla.shopify.inventory")
 
 
 class StockMoved(RuntimeError):
@@ -228,7 +228,7 @@ def reserve(changes: list[dict], order_ref: str) -> None:
             for c in changes
         ],
         reason="reservation_created",
-        note=f"wanas-bot://order/{order_ref}",
+        note=f"rehla-bot://order/{order_ref}",
     )
 
 
@@ -251,7 +251,7 @@ def release(changes: list[dict], order_ref: str) -> None:
             for c in changes
         ],
         reason="reservation_deleted",
-        note=f"wanas-bot://release/{order_ref}",
+        note=f"rehla-bot://release/{order_ref}",
     )
 
 

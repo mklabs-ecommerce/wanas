@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 
 from config.settings import settings
 
-log = logging.getLogger("wanas.dispatcher")
+log = logging.getLogger("rehla.dispatcher")
 
 #: How many conversations the fragment memory holds before it starts pruning.
 #: Comfortably above this shop's whole customer list; the cap is there so the
@@ -266,7 +266,7 @@ class MessageDispatcher:
         self._idle.set()
         self._pool = ThreadPoolExecutor(
             max_workers=settings.message_workers if max_workers is None else max_workers,
-            thread_name_prefix="wanas-msg",
+            thread_name_prefix="rehla-msg",
         )
 
     # -- submission -------------------------------------------------------

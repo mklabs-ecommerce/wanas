@@ -45,7 +45,7 @@ from integrations.shopify import (
     orders as shopify_orders,
 )
 
-log = logging.getLogger("wanas.orders")
+log = logging.getLogger("rehla.orders")
 
 REQUIRED_FIELDS = ("customer_name", "governorate", "address", "contact_phone")
 

@@ -50,7 +50,7 @@ from email.message import EmailMessage
 from config.settings import settings
 from integrations.mail import gmail_api, resend
 
-log = logging.getLogger("wanas.mail")
+log = logging.getLogger("rehla.mail")
 
 #: Never leave a worker thread hanging on an unreachable mail host. An alert
 #: that arrives two minutes late is fine; a thread that never returns is not.

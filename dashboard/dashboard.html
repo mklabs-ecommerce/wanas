@@ -12,7 +12,7 @@
    right-to-left / left-to-right switch. */
 (function () {
   var lang = "ar";
-  try { lang = localStorage.getItem("wanas.lang") === "en" ? "en" : "ar"; } catch (e) { /* private window */ }
+  try { lang = (localStorage.getItem("rehla.lang") || localStorage.getItem("wanas.lang")) === "en" ? "en" : "ar"; } catch (e) { /* private window */ }
   var root = document.documentElement;
   root.lang = lang;
   root.dir = lang === "en" ? "ltr" : "rtl";
@@ -1071,7 +1071,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
    sent to a customer over WhatsApp. Those stay Arabic whatever language the
    staff member picked, and are excluded by name, not by being overlooked. */
 
-const LANG_KEY = "wanas.lang";
+const LANG_KEY = "rehla.lang";
 const LANG = document.documentElement.lang === "en" ? "en" : "ar";
 
 /* The one segmentation rule, shared byte for byte with the extractor in
@@ -2872,7 +2872,7 @@ const state = {
 
 /* --- theme ---------------------------------------------------------------- */
 
-const THEME_KEY = "wanas.theme";
+const THEME_KEY = "rehla.theme";
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -2881,7 +2881,7 @@ function applyTheme(theme) {
 
 (function initTheme() {
   let saved = null;
-  try { saved = localStorage.getItem(THEME_KEY); } catch { /* private window */ }
+  try { saved = localStorage.getItem(THEME_KEY) || localStorage.getItem("wanas.theme"); } catch { /* private window */ }
   const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   applyTheme(saved || (prefersDark ? "dark" : "light"));
 })();

@@ -48,7 +48,7 @@ import time
 from collections.abc import Callable
 from typing import TypeVar
 
-log = logging.getLogger("wanas.turn_retry")
+log = logging.getLogger("rehla.turn_retry")
 
 #: How long to wait before the one retry. Long enough that a rate limit or a
 #: dropped connection has had a real chance to clear; short enough that the

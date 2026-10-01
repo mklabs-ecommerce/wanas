@@ -43,7 +43,7 @@ from common import bidi
 from config.settings import PROJECT_ROOT, settings
 from domain.services.notifications import OutboundMessage
 
-log = logging.getLogger("wanas.instagram")
+log = logging.getLogger("rehla.instagram")
 
 GRAPH = "https://graph.instagram.com"
 

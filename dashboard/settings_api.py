@@ -44,9 +44,9 @@ def _flag_payload(session, flag, row) -> dict:
 
 
 @router.get("/flags")
-def list_flags(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def list_flags(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "settings")
+        _, refused = require_permission(db, rehla_staff, "settings")
         if refused is not None:
             return refused
         rows = runtime_flags.get_all(db)
@@ -56,10 +56,10 @@ def list_flags(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
 
 @router.post("/flags/{key}")
 def set_flag(
-    key: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    key: str, payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        staff, refused = require_permission(db, wanas_staff, "settings")
+        staff, refused = require_permission(db, rehla_staff, "settings")
         if refused is not None:
             return refused
 
@@ -86,11 +86,11 @@ def _number_payload(session, row) -> dict:
 
 
 @router.get("/test-numbers")
-def list_test_numbers(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def list_test_numbers(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Numbers marked as staff testing the bot -- excluded from the
     Statistics page's totals. See `domain/services/test_numbers.py`."""
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "settings")
+        _, refused = require_permission(db, rehla_staff, "settings")
         if refused is not None:
             return refused
         rows = test_numbers.list_numbers(db)
@@ -100,10 +100,10 @@ def list_test_numbers(wanas_staff: str | None = Cookie(default=None)) -> JSONRes
 
 @router.post("/test-numbers")
 def add_test_number(
-    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        staff, refused = require_permission(db, wanas_staff, "settings")
+        staff, refused = require_permission(db, rehla_staff, "settings")
         if refused is not None:
             return refused
         phone = (payload.get("phone") or "").strip()
@@ -116,9 +116,9 @@ def add_test_number(
 
 
 @router.delete("/test-numbers/{phone}")
-def remove_test_number(phone: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def remove_test_number(phone: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "settings")
+        _, refused = require_permission(db, rehla_staff, "settings")
         if refused is not None:
             return refused
         removed = test_numbers.remove(db, phone)
@@ -128,11 +128,11 @@ def remove_test_number(phone: str, wanas_staff: str | None = Cookie(default=None
 
 
 @router.get("/status")
-def system_status(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def system_status(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """The same booleans `/health` reports, behind the staff login rather than
     the open endpoint -- useful from inside the dashboard without a second tab."""
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "settings")
+        _, refused = require_permission(db, rehla_staff, "settings")
         if refused is not None:
             return refused
 

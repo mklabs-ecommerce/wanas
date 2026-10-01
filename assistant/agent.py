@@ -50,7 +50,7 @@ from common import telemetry
 from config.settings import settings
 from domain.services import carts, orders
 
-log = logging.getLogger("wanas.agent")
+log = logging.getLogger("rehla.agent")
 
 load_all()
 

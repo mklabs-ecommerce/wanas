@@ -69,7 +69,7 @@ def list_local_customers(
     orders_op: str = Query(default="eq", description="eq | gte -- how to read orders_count"),
     governorate: str | None = Query(default=None),
     sort: str = Query(default="recent", description="recent | orders_desc | orders_asc"),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     if orders_op not in customer_filters.ORDER_COUNT_OPS:
         return JSONResponse({"error": "bad_request", "detail": "orders_op must be 'eq' or 'gte'"},
@@ -82,7 +82,7 @@ def list_local_customers(
         )
 
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "customers")
+        _, refused = require_permission(db, rehla_staff, "customers")
         if refused is not None:
             return refused
 
@@ -181,9 +181,9 @@ def _order(order: Order) -> dict:
 
 
 @router.get("/{client_id}")
-def local_customer_detail(client_id: int, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def local_customer_detail(client_id: int, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "customers")
+        _, refused = require_permission(db, rehla_staff, "customers")
         if refused is not None:
             return refused
 

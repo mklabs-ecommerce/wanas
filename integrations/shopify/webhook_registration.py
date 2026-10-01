@@ -29,7 +29,7 @@ import logging
 
 from integrations.shopify.client import get_admin_client
 
-log = logging.getLogger("wanas.shopify.webhooks")
+log = logging.getLogger("rehla.shopify.webhooks")
 
 LIST_QUERY = """
 query($cursor: String) {

@@ -45,7 +45,7 @@ from integrations.shopify.client import (
 #: reachable by the same name as the two it joins.
 __all__ = ["ShopifyAccessDenied", "ShopifyConfigError", "ShopifyUnavailable"]
 
-log = logging.getLogger("wanas.shopify.catalog")
+log = logging.getLogger("rehla.shopify.catalog")
 
 #: Pulls every variant with its SKU, price and available quantity in one call.
 #: `inventoryQuantity` is the sum across locations, which is what the single
@@ -304,21 +304,21 @@ _UNSET = object()
 
 #: Where `prefetch` runs the read. Small: it is one short HTTP call per turn,
 #: and the dispatcher already caps how many turns run at once.
-_prefetch_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="wanas-shelf")
+_prefetch_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="rehla-shelf")
 
-_turn_cache: contextvars.ContextVar = contextvars.ContextVar("wanas_shopify_turn", default=_UNSET)
+_turn_cache: contextvars.ContextVar = contextvars.ContextVar("rehla_shopify_turn", default=_UNSET)
 #: Whether a turn is actually open. Without this, caching outside one would
 #: never expire -- there would be no `reset` to end it -- and the first read
 #: taken by the dashboard or an API call would be served to every later caller
 #: for the life of the process.
-_in_turn: contextvars.ContextVar = contextvars.ContextVar("wanas_shopify_in_turn", default=False)
+_in_turn: contextvars.ContextVar = contextvars.ContextVar("rehla_shopify_in_turn", default=False)
 
 
 #: The read started before anything asked for it, so the first model hop pays
 #: for it instead of the tool that needs it. Same ContextVar discipline as the
 #: cache above: a future belongs to one turn on one thread.
 _turn_future: contextvars.ContextVar = contextvars.ContextVar(
-    "wanas_shopify_turn_future", default=None
+    "rehla_shopify_turn_future", default=None
 )
 
 

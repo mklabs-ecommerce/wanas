@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from assistant.customer_words import own_words
 
-log = logging.getLogger("wanas.tools")
+log = logging.getLogger("rehla.tools")
 
 
 @dataclass

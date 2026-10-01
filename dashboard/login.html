@@ -7,7 +7,7 @@
 <script>
 (function () {
   var lang = "ar";
-  try { lang = localStorage.getItem("wanas.lang") === "en" ? "en" : "ar"; } catch (e) { /* private window */ }
+  try { lang = (localStorage.getItem("rehla.lang") || localStorage.getItem("wanas.lang")) === "en" ? "en" : "ar"; } catch (e) { /* private window */ }
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
 })();
@@ -155,7 +155,7 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
 <script>
 "use strict";
 
-/* The login page's own small dictionary. It reads the same `wanas.lang` key
+/* The login page's own small dictionary. It reads the same `rehla.lang` key
    the dashboard writes, so whichever language the staff member chose is the
    one that greets them next time. Fallback is the Arabic, as it is there. */
 const LANG = document.documentElement.lang === "en" ? "en" : "ar";
@@ -186,7 +186,7 @@ document.title = "Rehla — " + tr("دخول الفريق");
 const langBtn = document.getElementById("langBtn");
 langBtn.textContent = LANG === "en" ? "ع" : "EN";
 langBtn.addEventListener("click", () => {
-  try { localStorage.setItem("wanas.lang", LANG === "en" ? "ar" : "en"); } catch (e) { /* private window */ }
+  try { localStorage.setItem("rehla.lang", LANG === "en" ? "ar" : "en"); } catch (e) { /* private window */ }
   location.reload();
 });
 

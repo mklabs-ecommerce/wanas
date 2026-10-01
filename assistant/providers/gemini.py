@@ -51,7 +51,7 @@ from assistant.providers.base import (
 )
 from config.settings import settings
 
-log = logging.getLogger("wanas.provider.gemini")
+log = logging.getLogger("rehla.provider.gemini")
 
 BASE_URL = "https://generativelanguage.googleapis.com"
 

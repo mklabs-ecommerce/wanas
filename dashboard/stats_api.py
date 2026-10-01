@@ -56,7 +56,7 @@ def stats(
     end: str | None = Query(default=None, description="custom range end, YYYY-MM-DD (inclusive)"),
     payment: str = Query(default="all", description="all | cod | online | unknown"),
     channel: str = Query(default="all", description="all | web | whatsapp | instagram_dm"),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     try:
         window = ranges.parse(days=days, start=start, end=end)
@@ -70,7 +70,7 @@ def stats(
         return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
 
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "analytics")
+        _, refused = require_permission(db, rehla_staff, "analytics")
         if refused is not None:
             return refused
         exclude_phones = test_numbers.all_variants(db)

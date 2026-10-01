@@ -58,7 +58,7 @@ import logging
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
 from config.settings import settings
 
-log = logging.getLogger("wanas.context")
+log = logging.getLogger("rehla.context")
 
 
 def _compact(message: dict) -> dict | None:

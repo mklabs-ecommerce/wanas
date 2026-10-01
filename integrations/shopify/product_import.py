@@ -41,7 +41,7 @@ from domain.models import Product, Variant
 from integrations.shopify import admin_products as admin
 from integrations.shopify.admin_products import _mirror_local, _unique_product_id, _variant_id
 
-log = logging.getLogger("wanas.shopify.product_import")
+log = logging.getLogger("rehla.shopify.product_import")
 
 
 def _adoptable_product_id(detail: dict, prepared: list[dict]) -> str | None:

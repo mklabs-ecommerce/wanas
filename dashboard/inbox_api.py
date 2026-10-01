@@ -118,14 +118,14 @@ def inbox(
     q: str | None = Query(default=None),
     channel: str | None = Query(default=None),
     status: str = Query(default="all"),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     if status not in STATUSES:
         detail = f"status must be one of {STATUSES}"
         return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
 
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "inbox")
+        _, refused = require_permission(db, rehla_staff, "inbox")
         if refused is not None:
             return refused
 
@@ -259,7 +259,7 @@ def comments(
     days: int = Query(default=30, ge=1, le=365),
     sentiment: str | None = Query(default=None),
     q: str | None = Query(default=None),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     """The Instagram comment ledger: what was said, and what was said back.
 
@@ -270,7 +270,7 @@ def comments(
     """
     since = datetime.now(UTC) - timedelta(days=days)
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "inbox")
+        _, refused = require_permission(db, rehla_staff, "inbox")
         if refused is not None:
             return refused
 

@@ -46,7 +46,7 @@ from domain.services import size_charts as local_charts
 from integrations.shopify.client import get_admin_client
 from integrations.shopify.size_charts import DATA_KEY, IMAGE_KEY, NAMESPACE
 
-log = logging.getLogger("wanas.shopify.size_chart_import")
+log = logging.getLogger("rehla.shopify.size_chart_import")
 
 #: How a chart that came from Shopify Admin is named locally. Prefixed on
 #: purpose: it can never collide with a `data/size_charts.json` id, so

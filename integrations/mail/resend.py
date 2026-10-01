@@ -35,7 +35,7 @@ import httpx
 
 from config.settings import settings
 
-log = logging.getLogger("wanas.mail.resend")
+log = logging.getLogger("rehla.mail.resend")
 
 SEND_URL = "https://api.resend.com/emails"
 

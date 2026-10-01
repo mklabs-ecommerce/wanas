@@ -33,7 +33,7 @@ from domain.services import (
 )
 from integrations.shopify import catalog as shopify_catalog
 
-log = logging.getLogger("wanas.reengagement")
+log = logging.getLogger("rehla.reengagement")
 
 
 def check_back_in_stock() -> int:

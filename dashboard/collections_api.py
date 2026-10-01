@@ -36,20 +36,20 @@ def _rejected(exc: Exception) -> JSONResponse:
 PERMISSION = "collections"
 
 
-def _refused(wanas_staff: str | None) -> JSONResponse | None:
+def _refused(rehla_staff: str | None) -> JSONResponse | None:
     """None when this account may work collections, otherwise the 401/403 to
     return. Opens its own short session because every route below does its
     Shopify call outside one -- see `dashboard/guard.py`."""
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, PERMISSION)
+        _, refused = require_permission(db, rehla_staff, PERMISSION)
         return refused
 
 
 @router.get("")
 def list_collections(
-    q: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
+    q: str | None = Query(default=None), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    refused = _refused(wanas_staff)
+    refused = _refused(rehla_staff)
     if refused is not None:
         return refused
     try:
@@ -61,9 +61,9 @@ def list_collections(
 
 @router.post("")
 def create_collection(
-    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    refused = _refused(wanas_staff)
+    refused = _refused(rehla_staff)
     if refused is not None:
         return refused
 
@@ -83,9 +83,9 @@ def create_collection(
 
 @router.get("/{collection_gid:path}")
 def collection_detail(
-    collection_gid: str, wanas_staff: str | None = Cookie(default=None)
+    collection_gid: str, rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    refused = _refused(wanas_staff)
+    refused = _refused(rehla_staff)
     if refused is not None:
         return refused
     try:
@@ -99,9 +99,9 @@ def collection_detail(
 
 @router.post("/{collection_gid:path}/update")
 def update_collection(
-    collection_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    collection_gid: str, payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    refused = _refused(wanas_staff)
+    refused = _refused(rehla_staff)
     if refused is not None:
         return refused
     try:
@@ -145,9 +145,9 @@ def _membership(collection_gid: str, payload: dict, *, add: bool) -> JSONRespons
 
 @router.post("/{collection_gid:path}/products/add")
 def add_products(
-    collection_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    collection_gid: str, payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    refused = _refused(wanas_staff)
+    refused = _refused(rehla_staff)
     if refused is not None:
         return refused
     return _membership(collection_gid, payload, add=True)
@@ -155,9 +155,9 @@ def add_products(
 
 @router.post("/{collection_gid:path}/products/remove")
 def remove_products(
-    collection_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    collection_gid: str, payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    refused = _refused(wanas_staff)
+    refused = _refused(rehla_staff)
     if refused is not None:
         return refused
     return _membership(collection_gid, payload, add=False)

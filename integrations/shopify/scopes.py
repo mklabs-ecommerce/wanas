@@ -28,7 +28,7 @@ import httpx
 
 from config.settings import settings
 
-log = logging.getLogger("wanas.shopify.scopes")
+log = logging.getLogger("rehla.shopify.scopes")
 
 #: Never hold boot open on a slow vendor.
 TIMEOUT_SECONDS = 10

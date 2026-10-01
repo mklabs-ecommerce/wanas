@@ -667,7 +667,7 @@ deliberately — worth doing before deploying, since
 variable:
 
 ```bash
-WANAS_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/wanas make test
+REHLA_TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost/rehla make test
 ```
 
 An ambient `DATABASE_URL` is never picked up either way; the guard likewise

@@ -36,14 +36,14 @@ import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
-log = logging.getLogger("wanas.offthread")
+log = logging.getLogger("rehla.offthread")
 
 #: Small on purpose. Everything submitted here is a short HTTP call, and the
 #: point is to get them off one thread, not to run hundreds at once against an
 #: API with its own rate limits.
 _WORKERS = 4
 
-_pool = ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="wanas-bg")
+_pool = ThreadPoolExecutor(max_workers=_WORKERS, thread_name_prefix="rehla-bg")
 
 
 def run_later(what: str, fn: Callable, *args, **kwargs) -> None:

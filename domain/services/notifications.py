@@ -35,7 +35,7 @@ from domain.services import (
     queues,
 )
 
-log = logging.getLogger("wanas.notifications")
+log = logging.getLogger("rehla.notifications")
 
 #: Meta only allows free-form, business-initiated text inside this window of
 #: the customer's last message; outside it, only a pre-approved template may

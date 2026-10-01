@@ -33,7 +33,7 @@ import time
 
 import httpx
 
-log = logging.getLogger("wanas.shopify.files")
+log = logging.getLogger("rehla.shopify.files")
 
 
 class FileUploadError(RuntimeError):

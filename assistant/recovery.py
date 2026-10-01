@@ -46,7 +46,7 @@ from assistant.tools.support_tools import RESUMABLE_REASONS
 from common.timeutil import as_aware, utcnow
 from domain.models import QueueKind, QueueStatus, StaffQueueItem
 
-log = logging.getLogger("wanas.recovery")
+log = logging.getLogger("rehla.recovery")
 
 #: How long after the bot leaves a conversation its own next message may take
 #: it back. Roughly ten minutes: long enough that a customer who reads the

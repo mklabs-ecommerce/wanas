@@ -11,7 +11,7 @@ import logging
 from assistant.providers.base import LLMProvider, ModelReply, ProviderError
 from config.settings import settings
 
-log = logging.getLogger("wanas.provider")
+log = logging.getLogger("rehla.provider")
 
 _override: LLMProvider | None = None
 

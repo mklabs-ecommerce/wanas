@@ -18,7 +18,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-log = logging.getLogger("wanas.providers")
+log = logging.getLogger("rehla.providers")
 
 
 class ProviderError(Exception):

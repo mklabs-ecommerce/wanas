@@ -34,7 +34,7 @@ from domain.services import (
     notifications,
 )
 
-log = logging.getLogger("wanas.harness.web")
+log = logging.getLogger("rehla.harness.web")
 
 router = APIRouter(prefix="/harness", tags=["harness"])
 

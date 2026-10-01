@@ -63,7 +63,7 @@ from domain.services import (
     staff_admin,
 )
 
-log = logging.getLogger("wanas.dashboard")
+log = logging.getLogger("rehla.dashboard")
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -76,7 +76,37 @@ APP_PAGE = _DIR / "dashboard.html"
 #: anybody has a session, and a logo is not customer data.
 LOGO_FILE = _DIR / "rehla.webp"
 
-COOKIE_NAME = "wanas_staff"
+COOKIE_NAME = "rehla_staff"
+#: What the cookie was called before the rename. Read for as long as sessions
+#: issued under it are still alive (`LegacyCookieMiddleware`), never written.
+LEGACY_COOKIE_NAME = "wanas_staff"
+
+
+class LegacyCookieMiddleware:
+    """Let a session cookie issued under the old name keep working.
+
+    FastAPI's `Cookie()` is read by parameter name, so renaming the cookie
+    would sign every staff member out once. Where the old cookie arrives with
+    no new one beside it, the new name is added to the request's Cookie header
+    carrying the same signed token; the token is verified exactly as before.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            headers = list(scope["headers"])
+            jar = next((v.decode("latin-1") for k, v in headers if k == b"cookie"), "")
+            parts = [p.strip() for p in jar.split(";") if p.strip()]
+            names = {p.split("=", 1)[0] for p in parts}
+            if LEGACY_COOKIE_NAME in names and COOKIE_NAME not in names:
+                old = next(p for p in parts if p.split("=", 1)[0] == LEGACY_COOKIE_NAME)
+                parts.append(COOKIE_NAME + "=" + old.split("=", 1)[1])
+                headers = [(k, v) for k, v in headers if k != b"cookie"]
+                headers.append((b"cookie", "; ".join(parts).encode("latin-1")))
+                scope = dict(scope, headers=headers)
+        await self.app(scope, receive, send)
 
 #: Conversations are cheap at this store's size; a cap keeps one huge history
 #: table from making the list endpoint slow to page through by hand later.
@@ -368,13 +398,14 @@ def login(request: Request, payload: dict = Body(...)) -> JSONResponse:
 def logout() -> JSONResponse:
     response = JSONResponse({"ok": True})
     response.delete_cookie(COOKIE_NAME)
+    response.delete_cookie(LEGACY_COOKIE_NAME)
     return response
 
 
 @router.get("/api/me")
-def me(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def me(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        staff = _staff(db, wanas_staff)
+        staff = _staff(db, rehla_staff)
         if staff is None:
             return _unauthenticated()
         # `permissions` is what the sidebar hides nav items by. It is not what
@@ -395,9 +426,9 @@ def me(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
 
 
 @router.get("/api/conversations")
-def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def conversations(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = _inbox_guard(db, wanas_staff)
+        _, refused = _inbox_guard(db, rehla_staff)
         if refused is not None:
             return refused
 
@@ -449,10 +480,10 @@ def conversations(wanas_staff: str | None = Cookie(default=None)) -> JSONRespons
 
 @router.get("/api/conversations/{channel}/{external_id}")
 def conversation_detail(
-    channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)
+    channel: str, external_id: str, rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        _, refused = _inbox_guard(db, wanas_staff)
+        _, refused = _inbox_guard(db, rehla_staff)
         if refused is not None:
             return refused
 
@@ -493,14 +524,14 @@ def conversation_detail(
 
 
 @router.post("/api/conversations/{channel}/{external_id}/takeover")
-def takeover(channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def takeover(channel: str, external_id: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Staff pulls a conversation under manual control without waiting for
     the bot to escalate it itself -- to watch an order in progress, correct
     course before the bot says something wrong, or just answer in person.
     Idempotent: taking over an already-paused conversation is a no-op that
     still answers `ok`, so the frontend never has to check first."""
     with session_scope() as db:
-        _, refused = _inbox_guard(db, wanas_staff)
+        _, refused = _inbox_guard(db, rehla_staff)
         if refused is not None:
             return refused
         identities.pause(db, channel, external_id)
@@ -521,14 +552,14 @@ def reply(
     channel: str,
     external_id: str,
     payload: dict = Body(...),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     text = (payload.get("text") or "").strip()
     if not text:
         return JSONResponse({"error": "empty_text"}, status_code=400)
 
     with session_scope() as db:
-        staff, refused = _inbox_guard(db, wanas_staff)
+        staff, refused = _inbox_guard(db, rehla_staff)
         if refused is not None:
             return refused
 
@@ -606,7 +637,7 @@ def _staff_replied_since(db, channel: str, external_id: str, handoff) -> bool:
 
 
 @router.post("/api/conversations/{channel}/{external_id}/release")
-def release(channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def release(channel: str, external_id: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Hand control back to the bot -- whichever way staff took it: a
     handoff (resolves the queue item too, for the "false alarm, no reply
     needed" case) or a manual takeover (nothing else to clear).
@@ -620,7 +651,7 @@ def release(channel: str, external_id: str, wanas_staff: str | None = Cookie(def
     customer has heard from a person and a second line would be noise.
     """
     with session_scope() as db:
-        staff, refused = _inbox_guard(db, wanas_staff)
+        staff, refused = _inbox_guard(db, rehla_staff)
         if refused is not None:
             return refused
 
@@ -643,7 +674,7 @@ def release(channel: str, external_id: str, wanas_staff: str | None = Cookie(def
 
 @router.post("/api/conversations/{channel}/{external_id}/reset")
 def reset_conversation(
-    channel: str, external_id: str, wanas_staff: str | None = Cookie(default=None)
+    channel: str, external_id: str, rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Wipe this conversation back to how a brand-new customer looks --
     for staff testing the bot repeatedly from the same WhatsApp number. See
@@ -651,7 +682,7 @@ def reset_conversation(
     not, touched: a real `Client` record and its order history are never
     reachable from here."""
     with session_scope() as db:
-        staff, refused = _inbox_guard(db, wanas_staff)
+        staff, refused = _inbox_guard(db, rehla_staff)
         if refused is not None:
             return refused
         conversation_reset.reset(db, channel, external_id, staff_id=staff.staff_id)
@@ -659,14 +690,14 @@ def reset_conversation(
 
 
 @router.get("/media")
-def media(path: str = Query(...), wanas_staff: str | None = Cookie(default=None)):
+def media(path: str = Query(...), rehla_staff: str | None = Cookie(default=None)):
     """The dashboard's own copy of the harness's `/media`, because the harness
     is off in production (`HARNESS_ENABLED=0`) and the dashboard has to work
     without it. Only local catalog files ever come through here -- a Shopify
     photo is already an `http(s)` url the browser loads directly; see
     `_is_url` in `integrations/whatsapp/client.py`."""
     with session_scope() as db:
-        _, refused = _inbox_guard(db, wanas_staff)
+        _, refused = _inbox_guard(db, rehla_staff)
         if refused is not None:
             return refused
 

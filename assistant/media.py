@@ -34,7 +34,7 @@ from config.settings import settings
 from domain.models import Product
 from domain.services import runtime_flags
 
-log = logging.getLogger("wanas.media")
+log = logging.getLogger("rehla.media")
 
 #: Anything larger is not a WhatsApp voice note or a phone photo; it is a
 #: mistake, and uploading it would cost a slow call to find that out.

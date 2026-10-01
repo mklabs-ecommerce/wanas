@@ -42,7 +42,7 @@ from domain.models import Product, Variant
 from integrations.shopify import files as shopify_files
 from integrations.shopify.client import ShopifyUnavailable, get_admin_client
 
-log = logging.getLogger("wanas.shopify.size_charts")
+log = logging.getLogger("rehla.shopify.size_charts")
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 CHARTS_JSON = ROOT / "data" / "size_charts.json"

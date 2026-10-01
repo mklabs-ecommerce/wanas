@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from common.events import after_commit
 from domain.models import QueueKind
 
-log = logging.getLogger("wanas.alert_email")
+log = logging.getLogger("rehla.alert_email")
 
 #: The alert reasons that reach the owner's inbox. Every one of them is
 #: something a person has to *do* something about; nothing routine is here.

@@ -44,9 +44,9 @@ def _catalog() -> list[dict]:
 
 
 @router.get("")
-def list_team(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def list_team(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        staff, refused = require_permission(db, wanas_staff, PERMISSION)
+        staff, refused = require_permission(db, rehla_staff, PERMISSION)
         if refused is not None:
             return refused
         result = {
@@ -60,10 +60,10 @@ def list_team(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
 
 @router.post("")
 def create_member(
-    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, PERMISSION)
+        _, refused = require_permission(db, rehla_staff, PERMISSION)
         if refused is not None:
             return refused
         try:
@@ -82,10 +82,10 @@ def create_member(
 
 @router.post("/{staff_id}")
 def update_member(
-    staff_id: int, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    staff_id: int, payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        me, refused = require_permission(db, wanas_staff, PERMISSION)
+        me, refused = require_permission(db, rehla_staff, PERMISSION)
         if refused is not None:
             return refused
 

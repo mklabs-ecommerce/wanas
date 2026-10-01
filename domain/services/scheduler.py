@@ -26,7 +26,7 @@ from domain.db import session_scope
 from domain.services import reengagement
 from integrations.instagram import token as instagram_token
 
-log = logging.getLogger("wanas.scheduler")
+log = logging.getLogger("rehla.scheduler")
 
 
 class Scheduler:
@@ -44,7 +44,7 @@ class Scheduler:
         if self._thread is not None:
             return
         self._stop.clear()
-        self._thread = threading.Thread(target=self._run, name="wanas-scheduler", daemon=True)
+        self._thread = threading.Thread(target=self._run, name="rehla-scheduler", daemon=True)
         self._thread.start()
         log.info("re-engagement scheduler started (every %.0fs)", self._interval)
 

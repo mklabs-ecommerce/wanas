@@ -119,7 +119,7 @@ def insights(
     days: int | None = Query(default=None, description="one of the presets: 7, 30, 90"),
     start: str | None = Query(default=None, description="custom range start, YYYY-MM-DD (with end)"),
     end: str | None = Query(default=None, description="custom range end, YYYY-MM-DD (inclusive)"),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     try:
         window = ranges.parse(days=days, start=start, end=end)
@@ -133,7 +133,7 @@ def insights(
     since, until = window.bounds()
 
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "analytics")
+        _, refused = require_permission(db, rehla_staff, "analytics")
         if refused is not None:
             return refused
 

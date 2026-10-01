@@ -48,7 +48,7 @@ from assistant.tools.base import (
 )
 from domain.services import catalog, search_terms
 
-log = logging.getLogger("wanas.showcase")
+log = logging.getLogger("rehla.showcase")
 
 #: Photographs of one product on the first time a reply is about it alone:
 #: the colour being talked about, then the other colourways that can actually
@@ -525,7 +525,7 @@ def sent_pictures(outcomes: list, attachment_labels: dict | None = None) -> str:
 
     Production had no record of which pictures actually left: "the size
     chart came with product photos" could be read only off a customer's
-    screenshot. `wanas.showcase: sent ...` is that record, for every reply
+    screenshot. `rehla.showcase: sent ...` is that record, for every reply
     that carries a picture.
     """
     parts: list[str] = []

@@ -34,7 +34,7 @@ from domain.models import QueueKind, StaffQueueItem, WebhookEvent, utcnow
 from domain.services import identities
 from integrations.shopify import catalog as shopify_catalog
 
-log = logging.getLogger("wanas.runtime")
+log = logging.getLogger("rehla.runtime")
 
 #: What the customer is told when their photo goes to a person, because
 #: nothing could be read from it. The model never saw the image in this case,

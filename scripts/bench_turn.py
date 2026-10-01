@@ -275,8 +275,8 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("LATENCY_LOG", "1")
 
     collector = _Collector()
-    logging.getLogger("wanas.latency").addHandler(collector)
-    logging.getLogger("wanas.latency").setLevel(logging.INFO)
+    logging.getLogger("rehla.latency").addHandler(collector)
+    logging.getLogger("rehla.latency").setLevel(logging.INFO)
 
     provider: PlannedProvider | None = None
     if args.real:

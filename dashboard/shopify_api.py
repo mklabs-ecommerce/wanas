@@ -106,7 +106,7 @@ def list_orders(
     payment: str = Query(default="all", description="all | cod | online | unknown"),
     customer: str = Query(default="all", description="all | new | returning"),
     channel: str = Query(default="all", description="all | web | whatsapp | instagram_dm"),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     if payment not in PAYMENT_FILTERS:
         return _bad(f"payment must be one of {PAYMENT_FILTERS}")
@@ -125,7 +125,7 @@ def list_orders(
     filtering = payment != "all" or customer != "all" or channel != "all"
 
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "orders")
+        _, refused = require_permission(db, rehla_staff, "orders")
         if refused is not None:
             return refused
         try:
@@ -175,9 +175,9 @@ def list_orders(
 
 
 @router.get("/orders/{order_gid:path}")
-def order_detail(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def order_detail(order_gid: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "orders")
+        _, refused = require_permission(db, rehla_staff, "orders")
         if refused is not None:
             return refused
         try:
@@ -202,10 +202,10 @@ def order_detail(order_gid: str, wanas_staff: str | None = Cookie(default=None))
 
 @router.post("/orders/{order_gid:path}/fulfill")
 def fulfill_order(
-    order_gid: str, payload: dict = Body(default={}), wanas_staff: str | None = Cookie(default=None)
+    order_gid: str, payload: dict = Body(default={}), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "orders")
+        _, refused = require_permission(db, rehla_staff, "orders")
         if refused is not None:
             return refused
         try:
@@ -225,7 +225,7 @@ def fulfill_order(
 
 
 @router.post("/orders/{order_gid:path}/mark-delivered")
-def mark_order_delivered(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def mark_order_delivered(order_gid: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Record that the parcel arrived.
 
     Shopify first, as a fulfillment event -- the same thing a courier's own
@@ -245,7 +245,7 @@ def mark_order_delivered(order_gid: str, wanas_staff: str | None = Cookie(defaul
     told again and Shopify declines, which costs a log line and nothing else.
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "orders")
+        _, refused = require_permission(db, rehla_staff, "orders")
         if refused is not None:
             return refused
         try:
@@ -264,7 +264,7 @@ def mark_order_delivered(order_gid: str, wanas_staff: str | None = Cookie(defaul
 
 
 @router.post("/orders/{order_gid:path}/mark-paid")
-def mark_order_paid(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def mark_order_paid(order_gid: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Settle a cash-on-delivery order once the courier has handed the money
     over.
 
@@ -274,7 +274,7 @@ def mark_order_paid(order_gid: str, wanas_staff: str | None = Cookie(default=Non
     believe. There is no inverse; Shopify has no "mark as unpaid".
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "orders")
+        _, refused = require_permission(db, rehla_staff, "orders")
         if refused is not None:
             return refused
         try:
@@ -291,9 +291,9 @@ def mark_order_paid(order_gid: str, wanas_staff: str | None = Cookie(default=Non
 
 
 @router.post("/orders/{order_gid:path}/cancel")
-def cancel_order(order_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def cancel_order(order_gid: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        staff, refused = require_permission(db, wanas_staff, "orders")
+        staff, refused = require_permission(db, rehla_staff, "orders")
         if refused is not None:
             return refused
 
@@ -330,10 +330,10 @@ def _local_product_id_for_skus(db, skus: list[str]) -> str | None:
 
 @router.get("/products")
 def list_products(
-    q: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
+    q: str | None = Query(default=None), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
         try:
@@ -344,9 +344,9 @@ def list_products(
 
 
 @router.get("/products/{product_gid:path}")
-def product_detail(product_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def product_detail(product_gid: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
         try:
@@ -380,7 +380,7 @@ def product_detail(product_gid: str, wanas_staff: str | None = Cookie(default=No
 
 
 @router.get("/size-charts")
-def list_size_charts(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def list_size_charts(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """The measured charts a product can be pointed at.
 
     Read from `data/size_charts.json`, which is where the bot reads them too
@@ -388,7 +388,7 @@ def list_size_charts(wanas_staff: str | None = Cookie(default=None)) -> JSONResp
     that does not exist, which the bot then answers with "no chart".
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
     charts = size_charts_service.all_charts()
@@ -401,7 +401,7 @@ def list_size_charts(wanas_staff: str | None = Cookie(default=None)) -> JSONResp
 
 
 @router.get("/product-types")
-def list_product_types(wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def list_product_types(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """The `productType` values the shop already uses.
 
     Offered as a list rather than a free-text box because a type is a
@@ -412,7 +412,7 @@ def list_product_types(wanas_staff: str | None = Cookie(default=None)) -> JSONRe
     can still be typed.
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
     try:
@@ -424,7 +424,7 @@ def list_product_types(wanas_staff: str | None = Cookie(default=None)) -> JSONRe
 
 @router.post("/products/{local_product_id}/delete")
 def delete_product(
-    local_product_id: str, wanas_staff: str | None = Cookie(default=None)
+    local_product_id: str, rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Remove a product entirely -- Shopify and rehla.db.
 
@@ -433,7 +433,7 @@ def delete_product(
     money changed hands. The dashboard offers `archive` in its place.
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
         try:
@@ -451,11 +451,11 @@ def delete_product(
 
 @router.post("/products/{local_product_id}/archive")
 def archive_product(
-    local_product_id: str, wanas_staff: str | None = Cookie(default=None)
+    local_product_id: str, rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Stop selling it without destroying what it sold."""
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
         try:
@@ -470,10 +470,10 @@ def archive_product(
 
 
 @router.post("/variants/{variant_id}/delete")
-def delete_variant(variant_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def delete_variant(variant_id: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """Remove one size/colourway. Refused for a sold one, and for the last."""
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
         try:
@@ -522,7 +522,7 @@ def _safe_filename(name: str, mime: str) -> str:
 
 
 @router.post("/uploads")
-def upload_image(payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def upload_image(payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """One picture, base64 in a JSON body, on its way to Shopify.
 
     Base64 rather than multipart on purpose: `python-multipart` is not in the
@@ -536,7 +536,7 @@ def upload_image(payload: dict = Body(...), wanas_staff: str | None = Cookie(def
     because a `file_reference` metafield stores a file gid and nothing else.
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
 
@@ -583,9 +583,9 @@ _REQUIRED_PRODUCT_FIELDS = ("title", "category", "department", "variants")
 
 
 @router.post("/products")
-def create_product(payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def create_product(payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
 
@@ -621,10 +621,10 @@ def create_product(payload: dict = Body(...), wanas_staff: str | None = Cookie(d
 
 @router.post("/products/{local_product_id}/update")
 def update_product(
-    local_product_id: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    local_product_id: str, payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
         try:
@@ -657,10 +657,10 @@ def update_product(
 
 @router.post("/orders/{order_gid:path}/quantity")
 def edit_quantity(
-    order_gid: str, payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    order_gid: str, payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "orders")
+        _, refused = require_permission(db, rehla_staff, "orders")
         if refused is not None:
             return refused
 
@@ -768,7 +768,7 @@ def list_customers(
     orders_op: str = Query(default="eq", description="eq | gte -- how to read orders_count"),
     governorate: str | None = Query(default=None),
     sort: str = Query(default="recent", description="recent | orders_desc | orders_asc"),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     if segment not in customer_ledger.SEGMENTS:
         return _bad(f"segment must be one of {customer_ledger.SEGMENTS}")
@@ -778,7 +778,7 @@ def list_customers(
         return _bad(f"sort must be one of {customer_filters.CUSTOMER_SORTS}")
 
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "customers")
+        _, refused = require_permission(db, rehla_staff, "customers")
         if refused is not None:
             return refused
         options = customer_filters.governorate_options(db)
@@ -881,9 +881,9 @@ def list_customers(
 
 
 @router.get("/customers/{customer_gid:path}")
-def customer_detail(customer_gid: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def customer_detail(customer_gid: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "customers")
+        _, refused = require_permission(db, rehla_staff, "customers")
         if refused is not None:
             return refused
         try:
@@ -948,7 +948,7 @@ def _chart_id_for(title: str, product_id: str | None) -> str:
 
 @router.post("/size-charts/read")
 def read_size_chart(
-    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Read the measurements off a size-chart picture.
 
@@ -961,7 +961,7 @@ def read_size_chart(
     is not in that list is dropped rather than offered.
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
 
@@ -1014,7 +1014,7 @@ def read_size_chart(
 
 @router.post("/size-charts")
 def save_size_chart(
-    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Save a chart a staff member confirmed, and put it on the storefront.
 
@@ -1028,7 +1028,7 @@ def save_size_chart(
     storefront table with nothing behind it for the bot is not.
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "products")
+        _, refused = require_permission(db, rehla_staff, "products")
         if refused is not None:
             return refused
 

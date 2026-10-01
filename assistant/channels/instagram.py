@@ -72,7 +72,7 @@ from domain.services import (
 )
 from integrations.instagram.client import InstagramClient
 
-log = logging.getLogger("wanas.channel.instagram")
+log = logging.getLogger("rehla.channel.instagram")
 
 router = APIRouter(prefix="/webhooks/instagram", tags=["instagram"])
 

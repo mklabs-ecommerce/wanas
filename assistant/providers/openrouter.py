@@ -85,7 +85,7 @@ from assistant.providers.gemini import mask_key
 from common import telemetry
 from config.settings import settings
 
-log = logging.getLogger("wanas.provider.openrouter")
+log = logging.getLogger("rehla.provider.openrouter")
 
 BASE_URL = "https://openrouter.ai/api/v1"
 

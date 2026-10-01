@@ -32,7 +32,7 @@ from common.timeutil import as_aware
 from config.settings import settings
 from domain.models import UNREADABLE_HISTORY, SessionRow, utcnow
 
-log = logging.getLogger("wanas.session")
+log = logging.getLogger("rehla.session")
 
 
 def trim(history: list[dict], cap: int | None = None) -> list[dict]:

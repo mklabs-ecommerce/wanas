@@ -30,7 +30,7 @@ from domain.db import session_scope
 from domain.models import WhatsAppMedia
 from domain.services.notifications import OutboundMessage
 
-log = logging.getLogger("wanas.whatsapp")
+log = logging.getLogger("rehla.whatsapp")
 
 GRAPH = "https://graph.facebook.com"
 

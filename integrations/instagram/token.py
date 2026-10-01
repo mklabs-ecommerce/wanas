@@ -27,7 +27,7 @@ from config.settings import settings
 from domain.db import session_scope
 from domain.models import IntegrationToken, QueueKind, utcnow
 
-log = logging.getLogger("wanas.instagram_token")
+log = logging.getLogger("rehla.instagram_token")
 
 PROVIDER = "instagram"
 REFRESH_URL = "https://graph.instagram.com/refresh_access_token"

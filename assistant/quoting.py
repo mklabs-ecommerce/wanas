@@ -48,7 +48,7 @@ import logging
 
 from assistant.messages import ASSISTANT, USER
 
-log = logging.getLogger("wanas.quoting")
+log = logging.getLogger("rehla.quoting")
 
 #: How much of the quoted message is repeated back. Long enough that a size
 #: list or a three-product offer survives whole; short enough that quoting a

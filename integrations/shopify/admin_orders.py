@@ -40,7 +40,7 @@ from integrations.shopify.client import (
 # reach into a module named for the dashboard.
 from integrations.shopify.orders import OrderRejected, mark_as_paid, normalise_phone
 
-log = logging.getLogger("wanas.shopify.admin_orders")
+log = logging.getLogger("rehla.shopify.admin_orders")
 
 #: One page comfortably covers a slow month for a shop this size; a longer
 #: range pages through this a few times rather than one huge call. Kept as a

@@ -50,14 +50,14 @@ def list_inventory(
     q: str | None = Query(default=None),
     status: str = Query(default="all"),
     low_stock_at: int = Query(default=admin_inventory.DEFAULT_LOW_STOCK, ge=0, le=999),
-    wanas_staff: str | None = Cookie(default=None),
+    rehla_staff: str | None = Cookie(default=None),
 ) -> JSONResponse:
     if status not in _FILTERS:
         detail = f"status must be one of {_FILTERS}"
         return JSONResponse({"error": "bad_arguments", "detail": detail}, status_code=400)
 
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "inventory")
+        _, refused = require_permission(db, rehla_staff, "inventory")
         if refused is not None:
             return refused
 
@@ -98,7 +98,7 @@ def list_inventory(
 
 @router.post("/set")
 def set_quantities(
-    payload: dict = Body(...), wanas_staff: str | None = Cookie(default=None)
+    payload: dict = Body(...), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Set the on-hand quantity for one or more variants outright.
 
@@ -106,7 +106,7 @@ def set_quantities(
     and a delta would compound every double-tap into another phantom unit.
     """
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "inventory")
+        _, refused = require_permission(db, rehla_staff, "inventory")
         if refused is not None:
             return refused
 

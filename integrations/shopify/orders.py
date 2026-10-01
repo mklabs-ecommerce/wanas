@@ -34,7 +34,7 @@ from integrations.shopify.client import (  # noqa: F401  (re-exported)
     get_client,
 )
 
-log = logging.getLogger("wanas.shopify.orders")
+log = logging.getLogger("rehla.shopify.orders")
 
 #: Every order this service creates carries these. `chatbot` is the one that
 #: matters operationally -- it is what lets staff filter the admin down to
@@ -64,7 +64,7 @@ def channel_tag(channel: str | None) -> str:
     return CHANNEL_TAGS.get(channel or "", DEFAULT_CHANNEL_TAG)
 
 #: Shown in the admin next to the order instead of "Online Store".
-SOURCE_NAME = "wanas-chatbot"
+SOURCE_NAME = "rehla-chatbot"
 
 
 class OrderRejected(RuntimeError):

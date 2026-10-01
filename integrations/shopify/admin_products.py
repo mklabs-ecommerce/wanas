@@ -59,7 +59,7 @@ from integrations.shopify.client import (
     get_admin_client,
 )
 
-log = logging.getLogger("wanas.shopify.admin_products")
+log = logging.getLogger("rehla.shopify.admin_products")
 
 PAGE_SIZE = 25
 

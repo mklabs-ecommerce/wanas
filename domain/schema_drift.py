@@ -26,7 +26,7 @@ from sqlalchemy.schema import CreateColumn
 
 from domain.models import Base
 
-log = logging.getLogger("wanas.schema")
+log = logging.getLogger("rehla.schema")
 
 
 @dataclass

@@ -52,7 +52,7 @@ from assistant.customer_words import own_words
 from assistant.messages import ASSISTANT
 from domain.services import identities
 
-log = logging.getLogger("wanas.customer_name")
+log = logging.getLogger("rehla.customer_name")
 
 #: What `ensure_asked` adds when the model answered without asking.
 ASK_LINE = "ممكن أعرف اسم حضرتك؟"

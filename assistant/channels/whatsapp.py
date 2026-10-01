@@ -44,7 +44,7 @@ from domain.services import (
 )
 from integrations.whatsapp.client import WhatsAppClient
 
-log = logging.getLogger("wanas.channel.whatsapp")
+log = logging.getLogger("rehla.channel.whatsapp")
 
 router = APIRouter(prefix="/webhooks/whatsapp", tags=["whatsapp"])
 

@@ -41,6 +41,7 @@ from dashboard.settings_api import router as dashboard_settings_router
 from dashboard.shopify_api import router as dashboard_shopify_router
 from dashboard.staff_api import router as dashboard_staff_router
 from dashboard.stats_api import router as dashboard_stats_router
+from dashboard.web import LegacyCookieMiddleware
 from dashboard.web import router as dashboard_router
 from domain.db import engine, session_scope
 from domain.models import Base, Product, ShippingRate, Variant
@@ -61,7 +62,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-log = logging.getLogger("wanas")
+log = logging.getLogger("rehla")
 
 
 def _ensure_schema_columns() -> None:
@@ -567,6 +568,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Rehla", version="0.1.0", lifespan=lifespan)
+app.add_middleware(LegacyCookieMiddleware)
 
 
 @app.get("/health")

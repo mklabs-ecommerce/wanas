@@ -258,7 +258,7 @@ class Settings:
     #: old shape until the first write that needs the new column fails.
     auto_migrate_schema: bool
 
-    #: Report, at boot, which wanas.db products Shopify no longer has -- a log
+    #: Report, at boot, which rehla.db products Shopify no longer has -- a log
     #: line, never a write. The deleting half stays
     #: `scripts/shopify_reconcile_products.py`, run by hand: this runs
     #: unattended on every deploy, and a reconcile that deletes unattended is
@@ -405,7 +405,7 @@ class Settings:
 
     @property
     def shopify_configured(self) -> bool:
-        """Without credentials the catalog serves wanas.db's own prices and
+        """Without credentials the catalog serves rehla.db's own prices and
         stock, exactly as it did before the move -- degraded, but not broken,
         and logged when it happens."""
         return bool(self.shopify_store_domain and self.shopify_admin_token)
@@ -492,7 +492,7 @@ class Settings:
 
 def load_settings() -> Settings:
     return Settings(
-        database_url=os.getenv("DATABASE_URL", "sqlite:///./wanas.db"),
+        database_url=os.getenv("DATABASE_URL", "sqlite:///./rehla.db"),
         # Default is openrouter; the test suite pins LLM_PROVIDER=fake in
         # tests/conftest.py before this module is imported anywhere, so the
         # suite never depends on the production default.

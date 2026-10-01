@@ -16,7 +16,7 @@ import logging
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-log = logging.getLogger("wanas.events")
+log = logging.getLogger("rehla.events")
 
 _KEY = "after_commit_hooks"
 _CLOSE_KEY = "after_close_hooks"

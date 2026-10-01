@@ -50,10 +50,10 @@ def _item_payload(item: StaffQueueItem) -> dict:
 
 @router.get("")
 def list_queue(
-    kind: str | None = Query(default=None), wanas_staff: str | None = Cookie(default=None)
+    kind: str | None = Query(default=None), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     with session_scope() as db:
-        _, refused = require_permission(db, wanas_staff, "queue")
+        _, refused = require_permission(db, rehla_staff, "queue")
         if refused is not None:
             return refused
 
@@ -108,7 +108,7 @@ def _tell_the_customer(db, item: StaffQueueItem, outcome: str, **kwargs) -> None
 
 
 @router.post("/{queue_id}/resolve")
-def resolve_queue_item(queue_id: str, wanas_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def resolve_queue_item(queue_id: str, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
     """The generic close: an alert acknowledged, or a post-order request
     declined.
 
@@ -118,7 +118,7 @@ def resolve_queue_item(queue_id: str, wanas_staff: str | None = Cookie(default=N
     nothing ever again. An alert has no customer behind it and stays silent.
     """
     with session_scope() as db:
-        staff, refused = require_permission(db, wanas_staff, "queue")
+        staff, refused = require_permission(db, rehla_staff, "queue")
         if refused is not None:
             return refused
         pending = db.get(StaffQueueItem, queue_id)
@@ -132,14 +132,14 @@ def resolve_queue_item(queue_id: str, wanas_staff: str | None = Cookie(default=N
 
 @router.post("/{queue_id}/approve-add")
 def approve_add(
-    queue_id: str, payload: dict = Body(default={}), wanas_staff: str | None = Cookie(default=None)
+    queue_id: str, payload: dict = Body(default={}), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Approve an `item_add` request: put the line on the order, take nothing
     off. Refuses a queue item of any other kind rather than coercing it --
     `apply_add` and `apply_swap` do different things to a customer's order,
     and the kind is the only thing that says which was asked for."""
     with session_scope() as db:
-        staff, refused = require_permission(db, wanas_staff, "queue")
+        staff, refused = require_permission(db, rehla_staff, "queue")
         if refused is not None:
             return refused
 
@@ -176,13 +176,13 @@ def approve_add(
 
 @router.post("/{queue_id}/approve-swap")
 def approve_swap(
-    queue_id: str, payload: dict = Body(default={}), wanas_staff: str | None = Cookie(default=None)
+    queue_id: str, payload: dict = Body(default={}), rehla_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
     """Approve an `item_swap` request: apply it (same `orders.apply_swap` a
     stock/availability check already guards) and resolve the queue item only
     if it lands -- a rejected swap must not disappear from the queue."""
     with session_scope() as db:
-        staff, refused = require_permission(db, wanas_staff, "queue")
+        staff, refused = require_permission(db, rehla_staff, "queue")
         if refused is not None:
             return refused
 

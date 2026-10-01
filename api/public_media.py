@@ -45,7 +45,7 @@ from fastapi.responses import FileResponse
 from common.servable_paths import resolve_public_path
 from config.settings import settings
 
-log = logging.getLogger("wanas.public_media")
+log = logging.getLogger("rehla.public_media")
 
 router = APIRouter(prefix="/public", tags=["public-media"])
 
