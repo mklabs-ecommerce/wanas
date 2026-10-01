@@ -17,8 +17,10 @@ Two references, kept in `docs/design/refs/`:
 - `dashboard/themes/v3.js` — motion and the top-bar furniture. Presentation
   only: it moves the rail's existing controls (search, language, theme, the
   avatar) into the top bar as the same nodes with the same handlers, adds a
-  bell that is the review queue's badge, and animates. No fetches, no storage,
-  no library. `web.skinned` injects `<name>.js` for any skin that ships one.
+  bell that is the review queue's badge, runs the collapsible rail, and
+  animates. No fetches, no library; the only thing stored is the per-user
+  sidebar pin (localStorage).
+  `web.skinned` injects `<name>.js` for any skin that ships one.
 
 ## Sidebar
 
