@@ -144,7 +144,11 @@ def test_all_tool_calls_in_one_turn_run_together(seeded):
     assert len(provider.calls) == 2  # one round trip, not two
 
 
-def test_the_loop_is_capped(seeded):
+def test_the_loop_is_capped(seeded, monkeypatch):
+    # Identical calls are cut short by their own guard first
+    # (tests/test_size_chart_loop.py); lifted here so the cap itself is what stops.
+    monkeypatch.setattr(agent, "_MAX_IDENTICAL_CALLS", 10**6)
+    monkeypatch.setattr(agent, "_MAX_REFUSED_REPEATS", 10**6)
     provider = ScriptedProvider([reply_with("view_cart") for _ in range(settings.tool_loop_cap + 5)])
     reply = agent.run_turn(seeded, CHANNEL, WHO, "…", provider=provider)
     assert reply.error == "loop_cap"

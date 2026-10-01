@@ -181,7 +181,7 @@ def _chart_available(ctx: ToolContext) -> dict | None:
     chart, or no product at all, still hands off.
     """
     from domain.models import Product
-    from domain.services.size_charts import get_chart
+    from domain.services.size_charts import chart_picture, chart_table, get_chart
 
     current = last_product(ctx.history)
     if not current:
@@ -189,13 +189,33 @@ def _chart_available(ctx: ToolContext) -> dict | None:
     product = ctx.session.get(Product, current["product_id"])
     if product is None:
         return None
-    if get_chart(product.size_chart, ctx.session) is None and not product.size_chart_image:
+    chart = get_chart(product.size_chart, ctx.session)
+    if chart is None and not product.size_chart_image:
         return None
+    table = (
+        chart_table(product.name, chart["measurements"], chart["sizes"], chart.get("unit", "cm"))
+        if chart
+        else None
+    )
+    picture = chart_picture(product, chart)
+    if picture:
+        ctx.attach(picture, force=True, chart=True, label={
+            "label": f"{product.name} size chart", "product_id": product.product_id,
+            "name": product.name, "color": None,
+        })
+    # The answer itself, not a pointer to it. "Call get_size_chart" sent a
+    # model that already had the chart back to call it again, then back here,
+    # three times in one turn -- and the customer never saw a number.
     return {
         "error": "size_chart_available",
         "product_id": product.product_id,
-        "detail": "This product has a size chart. Call get_size_chart, quote the measurements and "
-        "help the customer choose; hand off only if they ask for a person.",
+        "name": product.name,
+        **({"chart_table": table} if table else {}),
+        "detail": "No handoff: this product HAS a size chart. Do not call request_human or "
+        "get_size_chart again. Reply to the customer now: "
+        + ("put `chart_table` in your reply as it is, " if table else "")
+        + ("the chart picture is attached to your reply, " if picture else "")
+        + "then offer to suggest a size from their weight or the size they usually wear.",
     }
 
 

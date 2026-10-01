@@ -125,3 +125,41 @@ def chart_picture(product: Product, chart: dict | None) -> str | None:
             named,
         )
     return picture or sendable_image(product.size_chart_image)
+
+
+def _figure(value) -> str:
+    if isinstance(value, dict):
+        return " / ".join(f"{k} {_figure(v)}" for k, v in value.items() if v not in (None, ""))
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return str(value)
+
+
+def chart_table(name: str, measurements: list[dict], sizes: dict, unit: str = "cm") -> str | None:
+    """The chart as the customer reads it: one Arabic line per size.
+
+    Rendered here, from the stored numbers, so the reply that answers «فين جدول
+    المقاسات» can carry the chart whatever the model wrote around it. A chart
+    with no picture used to reach the customer only if the model copied the
+    numbers out, and a model that did not left the customer told "the chart
+    arrived" with nothing in front of them. None when there is nothing to
+    write -- an image-only chart is answered by its picture.
+    """
+    if not sizes:
+        return None
+    unit_ar = "سم" if unit == "cm" else unit
+    labels = {
+        m.get("key"): m.get("label_ar") or m.get("label_en") or m.get("key") for m in measurements or []
+    }
+    lines = []
+    for size, values in sizes.items():
+        parts = [
+            f"{labels.get(key, key)} {_figure(value)}"
+            for key, value in (values or {}).items()
+            if value not in (None, "")
+        ]
+        if parts:
+            lines.append(f"• {size}: " + "، ".join(parts) + f" {unit_ar}")
+    if not lines:
+        return None
+    return f"جدول مقاسات {name}:\n" + "\n".join(lines)

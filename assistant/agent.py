@@ -359,6 +359,73 @@ IMAGE_PROMISE_FALLBACK = (
     "معلش، قولي اسم المنتج واللون اللي عايز تشوفه وأبعتلك صورته على طول."
 )
 
+#: The same, once the conversation has settled on a product: asking a
+#: customer who has been talking about the black tee for three messages which
+#: product they mean is the question they already answered.
+IMAGE_PROMISE_FALLBACK_WITH_PRODUCT = (
+    "معلش، الصورة مااتبعتتش المرة دي. تحب أقولك مقاسات وسعر {product}؟"
+)
+
+
+def image_promise_fallback(history: list[dict]) -> str:
+    recent = last_product(history)
+    if recent is None or not recent.get("name"):
+        return IMAGE_PROMISE_FALLBACK
+    return IMAGE_PROMISE_FALLBACK_WITH_PRODUCT.format(product=recent["name"])
+
+
+#: How many times one turn may make the very same call (name and arguments).
+#: A read answered once is answered; a call that was *refused* gets the same
+#: refusal however often it is made -- the model asking again is a loop, and
+#: in production it was get_size_chart -> request_human -> refused, three
+#: times over, with the customer receiving nothing at the end of it.
+_MAX_IDENTICAL_CALLS = 2
+#: Refused repeats in one turn before the loop stops asking the model.
+_MAX_REFUSED_REPEATS = 2
+
+
+def _call_key(name: str, arguments) -> str:
+    import json
+
+    return f"{name}:{json.dumps(arguments or {}, sort_keys=True, ensure_ascii=False, default=str)}"
+
+
+def _repeat_refusal(name: str) -> dict:
+    return {
+        "error": "repeated_call",
+        "tool": name,
+        "detail": f"You already called {name} with these exact arguments in this reply and its "
+        "result is above. Calling it again returns the same thing. Do not call it again: answer "
+        "the customer now from the results you already have.",
+    }
+
+
+def chart_answer(turn_results: list[tuple[str, dict]]) -> str | None:
+    """The size chart this turn looked up, written out for the customer."""
+    for _name, content in reversed(turn_results):
+        table = content.get("chart_table") if isinstance(content, dict) else None
+        if isinstance(table, str) and table.strip():
+            return table
+    return None
+
+
+def with_chart(text: str, turn_results: list[tuple[str, dict]]) -> str:
+    """Make sure a turn that looked a chart up actually hands it over.
+
+    The model has the numbers in a tool result; the customer has only what is
+    sent. A reply that says "the chart arrived, these are garment
+    measurements" without one number in it is the failure this closes: the
+    chart is put first -- it is what was asked -- and the model's own words
+    follow it. A reply that already quotes the chart is left alone.
+    """
+    table = chart_answer(turn_results)
+    if not table:
+        return text
+    figures = set(re.findall(r"\d+(?:\.\d+)?", table.split("\n", 1)[-1]))
+    if figures & set(re.findall(r"\d+(?:\.\d+)?", text or "")):
+        return text
+    return f"{table}\n\n{text}" if text else table
+
 #: The same last resort for a reply that *did* attach something, just not
 #: everything it claimed. Discarding a real photograph to ask "which product?"
 #: would be answering a question the customer has already answered.
@@ -779,6 +846,11 @@ def run_turn(
     turn_results: list[tuple[str, dict]] = []
     promise_retries = 0
     truncation_retries = 0
+    #: Identical calls this turn, and the ones that came back refused -- see
+    #: `_MAX_IDENTICAL_CALLS`.
+    call_counts: dict[str, int] = {}
+    refused_calls: set[str] = set()
+    refused_repeats = 0
     # The customer sent a picture of their own this turn, so every mention of
     # a photo in the reply is about *theirs* -- "وصلتني الصورة، دي أقرب حاجة
     # عندنا" is an answer, not an undelivered promise. Without this the
@@ -1259,8 +1331,12 @@ def run_turn(
                     # something the customer has already said; this says what
                     # is true of the reply that is actually leaving.
                     text_out = PARTIAL_IMAGE_FALLBACK
+                elif chart_answer(turn_results):
+                    # The picture claimed was a size chart we hold as numbers:
+                    # the numbers are the answer, not "which product?".
+                    text_out = with_chart("", turn_results)
                 else:
-                    text_out = IMAGE_PROMISE_FALLBACK
+                    text_out = image_promise_fallback(history)
                 history.append(msg.assistant(text_out, attachments=ctx.attachments))
                 session_store.save(db, channel, external_id, history, merge_since=base)
                 return AgentReply(
@@ -1292,6 +1368,9 @@ def run_turn(
             # Last, after every check above: a turn that had to ask the
             # customer's name asks it, whether or not the model remembered to.
             text_out = customer_name.ensure_asked(text_out, name_decision)
+            # A chart looked up this turn reaches the customer, whatever the
+            # model wrote around it.
+            text_out = with_chart(text_out, turn_results)
             history.append(msg.assistant(text_out, signature=reply.signature, attachments=ctx.attachments))
             session_store.save(db, channel, external_id, history, merge_since=base)
             return AgentReply(
@@ -1337,8 +1416,18 @@ def run_turn(
         for call in reply.tool_calls:
             name = call.get("name", "")
             called.append(name)
-            with telemetry.tool_call(name):
-                content = call_tool(ctx, name, call.get("arguments"))
+            key = _call_key(name, call.get("arguments"))
+            limit = 1 if key in refused_calls else _MAX_IDENTICAL_CALLS
+            call_counts[key] = call_counts.get(key, 0) + 1
+            if call_counts[key] > limit:
+                log.warning("refused a repeated %s call for %s/%s", name, channel, external_id)
+                refused_repeats += 1
+                content = _repeat_refusal(name)
+            else:
+                with telemetry.tool_call(name):
+                    content = call_tool(ctx, name, call.get("arguments"))
+                if isinstance(content, dict) and "error" in content:
+                    refused_calls.add(key)
             # What this turn actually wrote to the staff queue, in the tool's
             # own words. Read back below against what the reply says it wrote.
             turn_results.append((name, content if isinstance(content, dict) else {}))
@@ -1347,6 +1436,29 @@ def run_turn(
             log.info("tool %s(%s) -> %s", name, call.get("arguments"), list(content)[:4])
             results.append(msg.tool_result(call.get("id", name), name, content))
         history.append(msg.tool_results(results))
+
+        if refused_repeats >= _MAX_REFUSED_REPEATS and not ctx.end_turn:
+            # Told twice that it already has the answer and still asking: the
+            # model is not going to stop on its own. Answer from what the turn
+            # did find rather than spending the rest of the loop cap.
+            log.error(
+                "tool loop for %s/%s kept repeating calls (%s); answering without it",
+                channel,
+                external_id,
+                called,
+            )
+            text_out = with_chart("", turn_results) or promise_fallback(history)
+            history.append(msg.assistant(text_out, attachments=ctx.attachments))
+            session_store.save(db, channel, external_id, history, merge_since=base)
+            return AgentReply(
+                text=text_out,
+                attachments=ctx.attachments,
+                attachment_labels=ctx.attachment_labels,
+                interactive=ctx.interactive,
+                tool_calls=called,
+                filed=list(filed_kinds),
+                error="repeated_calls",
+            )
 
         if ctx.end_turn:
             # A tool has already sent the customer the message this turn is

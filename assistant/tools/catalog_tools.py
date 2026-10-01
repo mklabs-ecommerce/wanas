@@ -18,7 +18,13 @@ from domain.services import (
     shipping,
     sleeves,
 )
-from domain.services.size_charts import MEASUREMENT_NOTE, chart_picture, get_chart, sendable_image
+from domain.services.size_charts import (
+    MEASUREMENT_NOTE,
+    chart_picture,
+    chart_table,
+    get_chart,
+    sendable_image,
+)
 
 
 @tool(
@@ -405,7 +411,9 @@ def get_variants(
     "get_size_chart",
     "The published measurements for one product (garment laid flat, in cm), plus the chart image "
     "when there is one, which the runtime attaches automatically. Every sizing question starts here. "
-    "With has_chart true, quote the measurements and help the customer choose: if they give their "
+    "With has_chart true, `chart_table` is the chart already written out for the customer: put it in "
+    "your reply as it is -- the customer has nothing else in front of them, so saying the chart "
+    "'arrived' without it answers nothing -- then help them choose: if they give their "
     "weight, match it to `recommended_weight_kg` when present; if they name the size they usually "
     "wear or a garment's measurements, compare with `sizes`; then suggest one size and say why. Only "
     "if it returns has_chart false (no chart for that product, e.g. a cap) call request_human with "
@@ -496,6 +504,12 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
         # is not there still answers with its numbers; it does not promise the
         # customer a picture that can only fail on the way out.
         "image": chart_picture(product, chart),
+        # The same numbers as the customer reads them. The runtime puts this in
+        # the reply itself when the model's words leave the numbers out, so a
+        # chart with no picture is still a chart the customer receives.
+        "chart_table": chart_table(
+            product.name, chart["measurements"], chart["sizes"], chart.get("unit", "cm")
+        ),
     }
 
 
