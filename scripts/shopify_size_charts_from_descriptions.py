@@ -93,7 +93,10 @@ def parse(description: str) -> dict | None:
             if name is None or len(row) != len(columns) + 1:
                 return None
             try:
-                sizes[name] = {c[0]: float(v) if "." in v else int(v) for c, v in zip(columns, row[1:], strict=True)}
+                sizes[name] = {
+                    c[0]: float(v) if "." in v else int(v)
+                    for c, v in zip(columns, row[1:], strict=True)
+                }
             except ValueError:
                 return None
         if not sizes:
