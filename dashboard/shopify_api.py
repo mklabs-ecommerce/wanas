@@ -134,7 +134,7 @@ def list_orders(
                 orders, truncated = shopify_admin_orders.list_all_orders(query=q)
                 end_cursor = None
             else:
-                page = shopify_admin_orders.list_orders(query=q)
+                page = shopify_admin_orders.dashboard_page(query=q)
                 orders, truncated = page["orders"], page["has_next_page"]
                 end_cursor = page["end_cursor"]
         except (ShopifyUnavailable, ShopifyConfigError) as exc:
@@ -897,7 +897,11 @@ def customer_detail(customer_gid: str, rehla_staff: str | None = Cookie(default=
         # The orders come back in the Orders screen's own shape
         # (`admin_orders.order_summary`), so the drawer draws the table the
         # Orders tab draws and a row opens the same order.
-        orders = customer["orders"]
+        # Before the dashboard's day zero an order is the store's, not the
+        # dashboard's: not drawn, not summed into what this person spent.
+        orders = customer["orders"] = [
+            o for o in customer["orders"] if shopify_admin_orders.counts_toward_dashboard(o)
+        ]
         local_by_id = _local_orders_for(db, [o["id"] for o in orders])
         for order in orders:
             local = local_by_id.get(order["id"])

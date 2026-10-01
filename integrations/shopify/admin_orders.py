@@ -26,8 +26,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import UTC, datetime
 from decimal import Decimal
 
+from config import settings as _settings_module
 from integrations.shopify.client import (
     ShopifyConfigError,
     ShopifyUnavailable,
@@ -405,6 +407,45 @@ def order_summary(node: dict) -> dict:
     return _order_summary(node)
 
 
+# --------------------------------------------------------------------------
+# the dashboard's day zero (DASHBOARD_DATA_SINCE)
+# --------------------------------------------------------------------------
+
+
+def data_since() -> datetime | None:
+    """Read per call, so a test or a redeploy with a new value takes effect."""
+    return _settings_module.settings.dashboard_data_since
+
+
+def scoped_query(query: str | None) -> str | None:
+    """`query` narrowed to orders created on or after the dashboard's day
+    zero -- Shopify does the filtering, so the pages walked are the right ones."""
+    since = data_since()
+    if since is None:
+        return query
+    floor = f"created_at:>={since.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}"
+    return f"({query}) AND {floor}" if query else floor
+
+
+def counts_toward_dashboard(order: dict) -> bool:
+    """False for an order created before the dashboard's day zero. Applied
+    to what comes back as well as to the query, so a figure never depends on
+    a search filter having been honoured."""
+    since = data_since()
+    if since is None:
+        return True
+    created = order.get("created_at")
+    if not created:
+        return True
+    try:
+        when = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return when >= since
+
+
 def list_orders(*, query: str | None = None, cursor: str | None = None) -> dict:
     """One page of orders, newest first.
 
@@ -427,6 +468,15 @@ def list_orders(*, query: str | None = None, cursor: str | None = None) -> dict:
     }
 
 
+def dashboard_page(*, query: str | None = None, cursor: str | None = None) -> dict:
+    """`list_orders` as the dashboard reads it: only orders on or after its
+    day zero. Every dashboard order list and every sales figure goes through
+    here, so the cut is made once."""
+    page = list_orders(query=scoped_query(query), cursor=cursor)
+    page["orders"] = [o for o in page["orders"] if counts_toward_dashboard(o)]
+    return page
+
+
 #: Hard ceiling on pages walked for one filtered order list, mirroring
 #: `domain/services/dashboard_stats.MAX_PAGES` and
 #: `admin_customers.MAX_PAGES`. At 50 orders a page this is 1,000 orders.
@@ -447,7 +497,7 @@ def list_all_orders(*, query: str | None = None, max_pages: int = MAX_PAGES) -> 
     orders: list[dict] = []
     cursor = None
     for _ in range(max_pages):
-        page = list_orders(query=query, cursor=cursor)
+        page = dashboard_page(query=query, cursor=cursor)
         orders.extend(page["orders"])
         if not page["has_next_page"]:
             return orders, False
@@ -819,6 +869,9 @@ __all__ = [
     "order_summary",
     "list_orders",
     "list_all_orders",
+    "dashboard_page",
+    "scoped_query",
+    "counts_toward_dashboard",
     "identity_key",
     "first_order_ids",
     "cached_first_order_ids",

@@ -86,7 +86,7 @@ def fetch_orders_in_range(date_range: DateRange, *, max_pages: int = MAX_PAGES) 
     orders: list[dict] = []
     cursor = None
     for _ in range(max_pages):
-        page = shopify_admin_orders.list_orders(query=query, cursor=cursor)
+        page = shopify_admin_orders.dashboard_page(query=query, cursor=cursor)
         orders.extend(page["orders"])
         if not page["has_next_page"]:
             return _with_customer_kind(orders), False

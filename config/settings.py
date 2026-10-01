@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,6 +19,22 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 load_dotenv(PROJECT_ROOT / ".env")
+
+
+def _datetime(name: str) -> datetime | None:
+    """An ISO-8601 moment, read as UTC when it names no zone. Blank or
+    unreadable is None -- logged loudly, never a crash at boot."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        import logging
+
+        logging.getLogger("rehla.settings").error("%s=%r is not an ISO datetime; ignored", name, raw)
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _int(name: str, default: int) -> int:
@@ -284,6 +301,10 @@ class Settings:
     #: or `legacy` (the original pastel design). A config switch so a redesign
     #: can be reverted without a deploy of different code; see dashboard/themes/.
     dashboard_theme: str
+    #: The dashboard's day zero. Shopify orders created before it are left
+    #: out of every sales, order and revenue figure and chart -- the store
+    #: keeps them, the dashboard just starts counting here. None counts all.
+    dashboard_data_since: datetime | None
 
     #: With no Shopify credentials, serve price/stock from the local database
     #: and record orders locally (integrations/shopify/local_shelf.py). On by
@@ -584,6 +605,7 @@ def load_settings() -> Settings:
         dashboard_session_secret=os.getenv("DASHBOARD_SESSION_SECRET", "").strip(),
         dashboard_session_hours=_int("DASHBOARD_SESSION_HOURS", 12),
         dashboard_theme=os.getenv("DASHBOARD_THEME", "mklabs").strip().lower() or "mklabs",
+        dashboard_data_since=_datetime("DASHBOARD_DATA_SINCE"),
         local_store=_bool("LOCAL_STORE", True),
         shopify_store_domain=os.getenv("SHOPIFY_STORE_DOMAIN", "").strip(),
         shopify_admin_token=os.getenv("SHOPIFY_ADMIN_TOKEN", "").strip(),
