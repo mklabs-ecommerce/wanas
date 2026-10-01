@@ -266,7 +266,7 @@ def _stamp_ids(channel: str, external_id: str, text: str, message: OutboundMessa
 def _item_lines(order: Order) -> str:
     """One line per item, always carrying its variant.
 
-    "1x WANAS Hoodie" is not a confirmable order line; "1x WANAS Hoodie —
+    "1x REHLA Hoodie" is not a confirmable order line; "1x REHLA Hoodie —
     Olive, M" is. Pre-rendered into a single string because WhatsApp templates
     have hard limits on the number of variables.
     """

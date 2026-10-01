@@ -1,8 +1,8 @@
 {
   "facts": {
     "product_id": "boxy-wns-tee",
-    "product_name": "Boxy WNS Tee",
-    "variant_id": "boxy-wns-tee-l-grey",
+    "product_name": "Boxy REHLA Tee",
+    "variant_id": "boxy-rehla-tee-l-grey",
     "color": "Grey",
     "size": "L",
     "price": "590",
@@ -23,7 +23,7 @@
     {
       "scenario": "product_question",
       "step": 0,
-      "text": "تيشيرت Boxy WNS Tee متاح عندنا بسعر 590 جنيه. تحب تشوف المقاسات؟",
+      "text": "تيشيرت Boxy REHLA Tee متاح عندنا بسعر 590 جنيه. تحب تشوف المقاسات؟",
       "tool_calls": [
         "get_products"
       ],

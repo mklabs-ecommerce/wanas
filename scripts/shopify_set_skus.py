@@ -7,7 +7,7 @@ does, and which breaks the moment someone fixes a typo in a product name from
 the admin. A migration script can survive that because a human reads its diff.
 A bot serving customers cannot.
 
-Afterwards, `boxy-wns-tee-xl-black` is the SKU of that variant on Shopify, and
+Afterwards, `boxy-rehla-tee-xl-black` is the SKU of that variant on Shopify, and
 the titles can be edited freely.
 
     python scripts/shopify_set_skus.py            # dry run, writes nothing

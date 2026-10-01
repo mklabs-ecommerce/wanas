@@ -38,10 +38,10 @@ paid for at least once:
    customer who may act on it. This rule exists because a candidate model
    measured for a possible swap offered exactly that on its first run through
    these scenarios, and every other check passed it.
-7. **The shop's name is spelled the one way.** `Wanas Gallery`, short form
-   `Wanas`. The model meets the brand in four surface forms and Arabic writes
+7. **The shop's name is spelled the one way.** `Rehla`, short form
+   `Rehla`. The model meets the brand in four surface forms and Arabic writes
    no short vowels, so «ونس» is literally w-n-s -- which is how a reply ends up
-   saying `Wnas` or offering `WNS` as the shop's name. A customer told the shop
+   saying `Wnas` or offering `REHLA` as the shop's name. A customer told the shop
    is called something it is not has been given wrong information about who
    they are buying from.
 8. **And no product name it made up.** The brand rule above is one word; this
@@ -525,7 +525,7 @@ def check(golden: dict, fresh: dict, *, allow_tool_drift: bool) -> list[str]:
             if misspelled:
                 failures.append(
                     f"{where}: the reply spelled the shop's name "
-                    f"{sorted(set(misspelled))} -- it is Wanas Gallery"
+                    f"{sorted(set(misspelled))} -- it is Rehla"
                 )
             renamed = offered_a_garment_they_did_not_ask_for(
                 reply.get("customer_text") or "", text

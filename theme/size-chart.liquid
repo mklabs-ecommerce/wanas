@@ -10,7 +10,7 @@
     custom.size_chart_data  the measurements (JSON)
 
   Still a native <details>, so it works with no JavaScript, and still using
-  the theme's own `.wns-sizechart` classes.
+  the theme's own `.rehla-sizechart` classes.
 
   Both languages show at once rather than switching. The shop's customers
   read Arabic and English interchangeably, often in the same sentence, and a
@@ -116,18 +116,18 @@
   </details>
 
   {%- comment -%}
-    Only what `.wns-sizechart` in base.css does not already cover: the second
+    Only what `.rehla-sizechart` in base.css does not already cover: the second
     language under each heading, and centred number columns so a size reads
     across cleanly.
   {%- endcomment -%}
   <style>
-    .wns-sizechart__scroll { overflow-x: auto; }
-    .wns-sizechart__body th span { display: block; }
-    .wns-sizechart__body thead th,
-    .wns-sizechart__body tbody td { text-align: center; }
-    .wns-sizechart__body tbody th { text-align: left; font-weight: var(--fw-medium, 500); }
-    .wns-sizechart__en { font-size: 0.82em; color: var(--text-muted); text-transform: none; }
-    .wns-sizechart__diagram {
+    .rehla-sizechart__scroll { overflow-x: auto; }
+    .rehla-sizechart__body th span { display: block; }
+    .rehla-sizechart__body thead th,
+    .rehla-sizechart__body tbody td { text-align: center; }
+    .rehla-sizechart__body tbody th { text-align: left; font-weight: var(--fw-medium, 500); }
+    .rehla-sizechart__en { font-size: 0.82em; color: var(--text-muted); text-transform: none; }
+    .rehla-sizechart__diagram {
       display: block; width: 100%; height: auto;
       margin-top: var(--sp-5); border-radius: var(--r-sm, 4px);
     }

@@ -338,7 +338,7 @@ def _compose(snapshot: _Snapshot) -> tuple[str, str]:
     else:
         prefix = _SUBJECT_PREFIX.get(snapshot.reason, "Alert")
     where = f" ({snapshot.channel})" if snapshot.channel else ""
-    subject = f"[Wanas] {prefix}{where}: {snapshot.summary[:80]}"
+    subject = f"[Rehla] {prefix}{where}: {snapshot.summary[:80]}"
 
     lines = [
         snapshot.summary,

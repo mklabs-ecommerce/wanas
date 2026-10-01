@@ -1,4 +1,4 @@
-# Wanas Gallery Chatbot — What It Does, What's Next
+# Rehla Chatbot — What It Does, What's Next
 
 **Status as of 2026-08-19** — 587 automated tests passing, running locally at
 `http://127.0.0.1:8000`, connected to the live Shopify store `p0hd05-m5`.

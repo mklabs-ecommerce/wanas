@@ -1,7 +1,7 @@
 """Laying out a message that is Arabic with English inside it.
 
 Almost every reply this shop sends is bidirectional. The prompt keeps product
-names, sizes and colours in Latin on purpose -- `WANAS Hoodie`, `XL`, `Olive`
+names, sizes and colours in Latin on purpose -- `REHLA Hoodie`, `XL`, `Olive`
 are what is printed on the label and what the customer searches for -- so an
 Arabic sentence with Latin islands in it is the *normal* case here, not an
 edge one.
@@ -11,7 +11,7 @@ ways a customer can see:
 
 * **A line that starts with a Latin word takes left-to-right paragraph
   direction.** The renderer picks the direction from the first strong
-  character (UAX #9, rule P2), so `• Boxy WNS Tee — 450 جنيه` is laid out
+  character (UAX #9, rule P2), so `• Boxy REHLA Tee — 450 جنيه` is laid out
   left-aligned in the middle of a right-aligned message. Every bullet line
   that opens with a product name comes out mirrored from its neighbours,
   which is what a jagged, half-flipped list actually is.
@@ -46,7 +46,7 @@ right-to-left with the rest of the message, and a number inside one has no
 preceding Arabic letter to take its type from. Each non-empty line then gets
 a RIGHT-TO-LEFT MARK, which states
 the direction outright for the lines that have no Arabic left in them at all
-(`• WANAS Hoodie — XL`) and would otherwise flip on their own.
+(`• REHLA Hoodie — XL`) and would otherwise flip on their own.
 
 **Where it does and does not apply.** Only to text that actually contains
 Arabic: an all-English message is already laid out correctly, and invisible
@@ -77,7 +77,7 @@ _ARABIC = re.compile(r"[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]")
 
 #: A Latin run: a word, plus the words joined to it by a single space or one
 #: of the connectors a product name uses. Greedy across spaces on purpose --
-#: `WANAS Hoodie` is one object to lay out, not two, and isolating each word
+#: `REHLA Hoodie` is one object to lay out, not two, and isolating each word
 #: separately would leave the space between them free to be reordered.
 _LATIN_RUN = r"[A-Za-z][A-Za-z0-9]*(?:[ /&'’.+\-][A-Za-z0-9]+)*"
 

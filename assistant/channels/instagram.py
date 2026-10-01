@@ -1250,7 +1250,7 @@ def _dm_handoff(
                 image = (row.images or [None])[0] if row is not None else None
             if image:
                 sent = client.send_image(igsid, image)
-                log.info("comment %s: product photo %s", comment_id, "sent" if sent.delivered else f"not sent ({sent.error})")
+                log.info("comment %s: product photo %s", comment_id, "sent" if sent.delivered else f"not sent ({sent.error})")  # noqa: E501
         except Exception:
             log.exception("comment %s: product photo failed", comment_id)
 

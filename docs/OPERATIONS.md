@@ -62,7 +62,7 @@ something looks wrong.
       sells through the bot, and the create panel says in as many words that
       it is not on the website yet -- somebody then has to publish it by hand
       in Admin. With them, `shopify_publish_to_online_store` does it
-- [ ] `SHOPIFY_VENDOR` set to the brand name (default `Wanas Gallery`).
+- [ ] `SHOPIFY_VENDOR` set to the brand name (default `Rehla`).
       Shopify stamps a new product's vendor with the *store's* name unless
       told otherwise, which is not what the products already on the shelf say
 - [ ] `SHOPIFY_WEBHOOK_SECRET` set — without it orders stay `Confirmed`
@@ -397,13 +397,13 @@ rather than to a blank, and `pytest tests/test_dashboard_i18n.py` fails if any
 phrase on the page has no English entry — so adding a screen means adding its
 translations in the same commit.
 
-Two things never translate, on purpose: the shop's name ("Wanas Gallery" in
+Two things never translate, on purpose: the shop's name ("Rehla" in
 both languages) and the canned quick replies in the conversation composer,
 which are sent to customers.
 
 ### The logo
 
-`dashboard/wanas.webp`, served at `/dashboard/logo.webp`. Replace the file and
+`dashboard/rehla.webp`, served at `/dashboard/logo.webp`. Replace the file and
 redeploy; nothing in the HTML names it twice.
 
 `DASHBOARD_ENABLED=0` removes the router entirely; leaving it on with no
@@ -485,7 +485,7 @@ Two variables, one of them optional:
 The fallback sender needs no DNS work but delivers **only to the Resend
 account owner's own address**, which is who these alerts go to anyway -- so it
 works unconfigured. Verifying a domain and setting `RESEND_FROM` to something
-like `alerts@wanasgallery.com` is what stops the owner's inbox filing the
+like `alerts@example.com` is what stops the owner's inbox filing the
 shop's alerts as a stranger's. A send refused for an unverified sender is
 logged as `resend refused the alert email ... domain is not verified` and
 returns False; the alert is still in the staff queue.
@@ -563,10 +563,10 @@ customer.
 
 ## Reading the logs
 
-The logger names say where you are: `wanas.runtime`, `wanas.agent`,
-`wanas.tools`, `wanas.dispatcher`, `wanas.media`, `wanas.channel.whatsapp`,
-`wanas.webhooks.shopify`, `wanas.shopify`, `wanas.provider.openrouter`,
-`wanas.provider.gemini`, `wanas.dashboard`.
+The logger names say where you are: `rehla.runtime`, `rehla.agent`,
+`rehla.tools`, `rehla.dispatcher`, `rehla.media`, `rehla.channel.whatsapp`,
+`rehla.webhooks.shopify`, `rehla.shopify`, `rehla.provider.openrouter`,
+`rehla.provider.gemini`, `rehla.dashboard`.
 
 Lines worth alerting on:
 
@@ -621,7 +621,7 @@ That adds missing *tables*, never missing *columns* on an existing one — which
 is why startup then reconciles the columns too (`_ensure_schema_columns` in
 `app.py`, over `domain/schema_drift.py`): additive, idempotent, and logged as
 
-    WARNING wanas.schema: SCHEMA: added missing column orders.source_external_id
+    WARNING rehla.schema: SCHEMA: added missing column orders.source_external_id
 
 Anything it cannot add safely — a `NOT NULL` column with no server default, on
 a table that already has rows — is logged as `SCHEMA DRIFT: …` for a person to

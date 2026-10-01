@@ -50,9 +50,9 @@ def scenarios() -> list[tuple[str, bool, list[str]]]:
 
     # --- short, plainly in scope -------------------------------------------
     out.append(("short_price", False, ["بكام الهودي؟"]))
-    out.append(("short_colors", False, ["عايز أعرف الألوان المتاحة في Boxy WNS Tee"]))
+    out.append(("short_colors", False, ["عايز أعرف الألوان المتاحة في Boxy REHLA Tee"]))
     out.append(("short_terse", False, ["هودي"]))
-    out.append(("short_yes_only", False, ["عايز WANAS Hoodie أسود", "أيوه"]))
+    out.append(("short_yes_only", False, ["عايز REHLA Hoodie أسود", "أيوه"]))
     out.append(("short_franco", False, ["3ayz hoodie eswed L", "b kam?"]))
     out.append(("short_franco_terse", False, ["fe eh 3andko?"]))
 
@@ -63,7 +63,7 @@ def scenarios() -> list[tuple[str, bool, list[str]]]:
         "offtopic_midflow",
         False,
         [
-            "عايز WANAS Hoodie أسود مقاس L",
+            "عايز REHLA Hoodie أسود مقاس L",
             "أيوه حطه",
             "بالمناسبة انت بتشتغل بالذكاء الاصطناعي؟",
             "اسمي أحمد، القاهرة، شارع النصر عمارة 4، 01011122233",
@@ -95,7 +95,7 @@ def scenarios() -> list[tuple[str, bool, list[str]]]:
             "في خصم؟",
             "الشحن بكام للقاهرة؟",
             "بيوصل في كام يوم؟",
-            "طب Boxy WNS Tee بكام؟",
+            "طب Boxy REHLA Tee بكام؟",
             "الألوان بتاعته؟",
             "خلاص رجعنا للهودي، حطلي الأسود L",
             "أيوه أكد",
@@ -146,7 +146,7 @@ def scenarios() -> list[tuple[str, bool, list[str]]]:
     ))
 
     # --- size help ---------------------------------------------------------
-    out.append(("size_help", False, ["عايز WANAS Hoodie", "مش عارف مقاسي", "طولي 178 ووزني 75"]))
+    out.append(("size_help", False, ["عايز REHLA Hoodie", "مش عارف مقاسي", "طولي 178 ووزني 75"]))
 
     # --- the two that SHOULD hand off --------------------------------------
     out.append(("explicit_human", True, ["عايز أكلم حد من الفريق"]))

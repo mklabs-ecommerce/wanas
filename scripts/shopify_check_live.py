@@ -13,7 +13,7 @@ Runs the real read path against the real store and reports three things:
 Writes nothing, anywhere.
 
     python scripts/shopify_check_live.py
-    python scripts/shopify_check_live.py --product wanas-hoodie   # one product
+    python scripts/shopify_check_live.py --product rehla-hoodie   # one product
 """
 
 from __future__ import annotations
@@ -289,7 +289,7 @@ def check_order(variant_id: str) -> bool:
                     "unit_price": live.price,
                 }
             ],
-            customer_name="Wanas Test",
+            customer_name="Rehla Test",
             # Deliberately the local form a customer would type. Shopify
             # rejects it outright unless create_order translates it, and
             # a check that sends a pre-translated number proves nothing.

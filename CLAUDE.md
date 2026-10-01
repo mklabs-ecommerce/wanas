@@ -553,7 +553,7 @@ tests/                   pytest suite (flat, one test_<module>.py per
   never attached (`size_charts.chart_picture`) -- `wns-boxy-tee.png` was named
   and never committed.
 - **A seed correction does not reach an existing database.** The seed runs
-  against an empty catalog only, which is how the Boxy WNS Tee kept the Ringer
+  against an empty catalog only, which is how the Boxy REHLA Tee kept the Ringer
   tee's size chart after the seed file was fixed. A seed change to a product's
   `size_chart` needs a line in `domain/seed/products.py::RETIRED_SIZE_CHARTS`,
   which boot applies exactly (only the retired value is rewritten, never a

@@ -362,7 +362,7 @@ def create_order(
         "note": note
         or (
             f"{CHANNEL_NOTES.get(channel or '', 'Chatbot')} order {reference} "
-            f"(Wanas chatbot). Cash on delivery. Phone: {phone}"
+            f"(Rehla chatbot). Cash on delivery. Phone: {phone}"
         ),
     }
 
@@ -670,7 +670,7 @@ def set_line_quantity(
             "id": calculated_id,
             # The bot tells the customer itself, in the language they wrote in.
             "notify": False,
-            "note": note or "Changed from the Wanas chatbot",
+            "note": note or "Changed from the Rehla chatbot",
         },
     ).get("orderEditCommit")
     _errors_of(committed, "orderEditCommit")

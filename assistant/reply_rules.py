@@ -82,17 +82,15 @@ def offers_another_payment_method(text: str) -> str:
     return ""
 
 
-#: The shop is called Wanas Gallery and the short form is Wanas. Both are
-#: correct and nothing else is.
+#: The shop is called Rehla. That is the only correct spelling.
 SHOP_NAME = frozenset({"Rehla", "REHLA"})
 
-#: The one product name that legitimately contains the brand abbreviated.
-#: Masked out before the scan, so a bare `WNS` elsewhere is still caught --
-#: `WNS` used as a name for the shop *is* the misspelling this rule is for.
-_BOXY_WNS_TEE = re.compile(r"(?!x)x")  # Wanas-only product name; nothing to mask for Rehla
+#: No Rehla product name contains an abbreviated brand, so nothing is masked
+#: before the scan (the pattern below never matches).
+_BOXY_WNS_TEE = re.compile(r"(?!x)x")
 
 #: A Latin word built on the brand's consonant skeleton -- w, then n, then s,
-#: with only vowels between. Catches Wnas, Wans, WNS, Wanass and the lowercase
+#: with only vowels between. Catches Rehlaa, Rhla, Rehlah and the lowercase
 #: slug forms, and matches almost nothing else a reply from a clothes shop
 #: contains.
 _BRAND_SHAPED = re.compile(r"\b[Rr][AaEeIi][Hh]?[Ll][AaEe]{1,2}[Hh]?\b")
@@ -110,9 +108,9 @@ def misspelled_shop_name(text: str) -> list[str]:
     reconstructing: a customer who is told the shop is called something it is
     not has been given wrong information about the thing they are buying from.
     It is also the word most exposed to reconstruction, because the model sees
-    it in four surface forms -- `Wanas Gallery`, `WANAS Hoodie`, `Boxy WNS Tee`
-    and the Arabic «ونس» -- and Arabic writes no short vowels, so the Arabic
-    form is literally w-n-s.
+    it in several surface forms -- `Rehla`, `REHLA`, `rehla-...` slugs and the
+    Arabic «رحلة» -- and a reconstruction from the consonants (r, h, l) is
+    exactly the misspelling this finds.
 
     Latin only, deliberately. The Arabic «وناس» is an ordinary word ("and
     people") and a rule that flagged it would fail correct replies; the
@@ -432,9 +430,8 @@ def _catalog_word(word: str, vocabulary) -> str | None:
     return near[0] if len(near) == 1 else None
 
 
-#: The brand misspelt as a word the model built from its vowels. `WNS` is
-#: deliberately not rewritten: it is also the start of an internal order id
-#: and part of the Boxy WNS Tee's name, and a "fix" there would be the damage.
+#: The brand misspelt as a word the model built from its vowels. Only a
+#: standalone word is rewritten, never part of an identifier or a link.
 _BRAND_FIX = "Rehla"
 
 _ORDER_ID = re.compile(r"\b(?:RHL|WNS)-\d+\b")
@@ -597,7 +594,7 @@ def correct(
     def _word(match: re.Match) -> str:
         word = match.group(0)
         if word.count("-") >= 2:
-            return word  # an identifier (`wanas-hoodie-s-black`), not a name
+            return word  # an identifier (`rehla-black-t-shirt-s-black`), not a name
         right = _catalog_word(word, vocabulary)
         if right is None:
             return word
@@ -610,7 +607,7 @@ def correct(
         if wrong.upper() == "WNS" or wrong.lower().startswith("wns"):
             continue
         # A standalone word only -- never inside an identifier or a link
-        # (`wanas-hoodie`, `wanas.eg`), where "fixing" it breaks the thing.
+        # (`rehla-black-t-shirt`, `rehla.eg`), where "fixing" it breaks the thing.
         standalone = rf"(?<![\w\-/.]){re.escape(wrong)}(?![\w\-/.])"
         text, count = re.subn(standalone, _BRAND_FIX, text)
         if count:

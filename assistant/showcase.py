@@ -121,10 +121,10 @@ def known_products(history: list[dict]) -> dict[str, str]:
     return found
 
 
-#: The shop's own name. Half the catalog is "WANAS <garment>", so the word
-#: names the brand, not a product: «منتجات WANAS كلها قطن» is not a request to
-#: see the one WANAS product this conversation happened to look up.
-_BRAND_WORDS = frozenset({"rehla", "rehlaa", "wanas", "wns", "gallery"})
+#: The shop's own name. Half the catalog is "REHLA <garment>", so the word
+#: names the brand, not a product: «منتجات REHLA كلها قطن» is not a request to
+#: see the one REHLA product this conversation happened to look up.
+_BRAND_WORDS = frozenset({"rehla", "rehlaa"})
 
 
 def _distinctive(name: str) -> str:
@@ -288,7 +288,7 @@ def show(ctx: ToolContext, text: str, history: list[dict], called: list[str]) ->
 
     Called once, on the reply that is about to leave, before
     `photo_claims.unbacked_claim` reads it -- so a reply that says «دي صورة
-    WANAS Hoodie» carries one even when the model skipped the tool call, and
+    REHLA Hoodie» carries one even when the model skipped the tool call, and
     the claim check sees the attachments as they will actually go.
     """
     if not text or any(name in _NOT_MERCHANDISE for name in called):
@@ -376,7 +376,7 @@ def show(ctx: ToolContext, text: str, history: list[dict], called: list[str]) ->
 #:
 #: A *verb* of seeing («اشوف», «وريني») says only "show me", and the object
 #: decides what. In a message about sizing it is the chart they want to see:
-#: production's «عايز اشوف السايز شارت بتاع boxy wns tee» was read as a
+#: production's «عايز اشوف السايز شارت بتاع boxy rehla tee» was read as a
 #: request for photos, and the first version of this rule knew «جدول / مقاس /
 #: قياس» but not the loanwords «السايز شارت», so the garment went out beside
 #: the chart. A verb therefore counts only when the message is not about

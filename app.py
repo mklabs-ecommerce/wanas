@@ -41,8 +41,7 @@ from dashboard.settings_api import router as dashboard_settings_router
 from dashboard.shopify_api import router as dashboard_shopify_router
 from dashboard.staff_api import router as dashboard_staff_router
 from dashboard.stats_api import router as dashboard_stats_router
-from dashboard.web import LegacyCookieMiddleware
-from dashboard.web import router as dashboard_router
+from dashboard.web import LegacyCookieMiddleware, router as dashboard_router
 from domain.db import engine, session_scope
 from domain.models import Base, Product, ShippingRate, Variant
 from domain.services import alert_email, conversation_reset, notifications, shop_facts
@@ -186,7 +185,7 @@ def _correct_retired_size_charts() -> None:
     Same reason `_backfill_product_sleeves` above exists: the seed runs against
     an empty catalog only, so a correction to `data/products_seed.json`
     reaches no database that already has rows -- which is every real one. The
-    Boxy WNS Tee went on answering sizing questions with the Ringer tee's chart
+    Boxy REHLA Tee went on answering sizing questions with the Ringer tee's chart
     for exactly that reason. Only a value the seed itself retired is rewritten
     (`domain/seed/products.py::RETIRED_SIZE_CHARTS`); a chart staff chose is
     never touched.
@@ -230,7 +229,7 @@ def _ensure_shipping_fees_set() -> None:
         count = len(rows)
 
     log.warning(
-        "set the published shipping fee (shop_facts.SHIPPING_FEES, else %s EGP) for %d governorate(s) that had none",
+        "set the published shipping fee (shop_facts.SHIPPING_FEES, else %s EGP) for %d governorate(s) that had none",  # noqa: E501
         _DEFAULT_SHIPPING_FEE,
         count,
     )

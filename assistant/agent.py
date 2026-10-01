@@ -924,7 +924,7 @@ def run_turn(
                 text_out,
                 vocabulary=reply_rules.catalog_vocabulary(db),
                 references=(
-                    _order_references(db, channel, external_id) if "RHL-" in text_out or "WNS-" in text_out else {}
+                    _order_references(db, channel, external_id) if "RHL-" in text_out or "WNS-" in text_out else {}  # noqa: E501
                 ),
                 states_money=bool(reply_facts.stated(text_out)[0]),
             )

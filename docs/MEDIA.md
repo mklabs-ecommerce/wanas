@@ -69,7 +69,7 @@ Two guarantees sit on top of it:
 
 | Reading | The note says | What the bot does |
 | --- | --- | --- |
-| Match above `IMAGE_MATCH_CONFIDENCE` | "the closest product we have is *WANAS Hoodie*; verify with the tools" | Confirms it is what they meant, then looks up price and sizes properly |
+| Match above `IMAGE_MATCH_CONFIDENCE` | "the closest product we have is *REHLA Hoodie*; verify with the tools" | Confirms it is what they meant, then looks up price and sizes properly |
 | Match below the threshold, or none | the short description, and *do not claim we have one* | Asks a short clarifying question, or offers the nearest real thing and says so |
 | `is_garment: false` | "this is not a garment" | Does not try to sell; a complaint goes to a person |
 

@@ -54,7 +54,7 @@ def get_categories(ctx: ToolContext) -> dict:
     "قميص (a button-up shirt, which is NOT a تيشيرت), a طرحة, a فستان, a جينز, a جزمة. Say "
     "plainly that we do not have it, using `garment` -- the customer's own word -- and then offer "
     "`alternatives` **as a different thing**: 'مفيش طرح عندنا، بس عندنا توبات كم طويل تنفع "
-    "للمحجبات لو تحبي تشوفيهم'. Never present an alternative as the thing they asked for, never rename it, and "
+    "للمحجبات لو تحبي تشوفيهم'. Never present an alternative as the thing they asked for, never rename it, and "  # noqa: E501
     "never say 'أيوه عندنا' to a garment_not_sold. `products` is empty on purpose: there is "
     "nothing here that answers their question. An empty `alternatives` means there is nothing "
     "close either -- say so and stop. "
@@ -69,7 +69,7 @@ def get_categories(ctx: ToolContext) -> dict:
     "two or three that fit and let them narrow it down.",
     properties={
         "category": {"type": "string", "description": "One of the categories from get_categories."},
-        "style": {"type": "string", "description": "A style facet, e.g. off-shoulder, backless, hijabi, wide-leg."},
+        "style": {"type": "string", "description": "A style facet, e.g. off-shoulder, backless, hijabi, wide-leg."},  # noqa: E501
         "department": {"type": "string", "description": "women (every Rehla product)."},
         "collection": {"type": "string", "description": "Optional; most products have none."},
         "sleeve": {
@@ -406,7 +406,7 @@ def get_variants(
     "The published measurements for one product, plus the chart image, which the runtime attaches "
     "to your reply automatically. If it returns has_chart false there is no chart for that product "
     "yet: call request_human with reason size_help in the same turn (the shop then tells the customer "
-    "the chart is coming and a person will help with the size). If it returns image_only the picture is the whole chart -- send it and let the customer "
+    "the chart is coming and a person will help with the size). If it returns image_only the picture is the whole chart -- send it and let the customer "  # noqa: E501
     "read it; there are no measurements to quote. Never estimate a measurement and never quote "
     "another product's chart. This is the tool for a customer who does not know their size: call it "
     "instead of asking them to work it out or promising to come back to them. `product_id` may be "

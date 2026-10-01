@@ -572,7 +572,7 @@ promise, and the reason that approach was rejected.
 Two categories are deliberately not translated. `QUICK_REPLIES` is typed into
 the composer and sent to a customer over WhatsApp; the UI language is the
 staff member's preference, and the customer reads Arabic either way. And the
-shop's name is a name, not a label: "Wanas Gallery" in both.
+shop's name is a name, not a label: "Rehla" in both.
 
 Strings that live on the server — the feature flags, the permission catalog —
 carry both languages in their payloads (`label_ar`/`label_en`), because the

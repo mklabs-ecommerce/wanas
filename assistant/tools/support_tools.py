@@ -74,7 +74,7 @@ _SCOPE_REFUSAL = {
     ),
     "do_instead": (
         "Answer it yourself, in one friendly Arabic line that says you are "
-        "only here for Wanas, and go straight back to what the customer was "
+        "only here for Rehla, and go straight back to what the customer was "
         "shopping for. Do not call this tool again for this."
     ),
 }
@@ -188,7 +188,7 @@ def raise_handoff(
                 "unclear = you have already asked one clarifying question and still cannot tell "
                 "what they mean. complaint = something is wrong with what arrived. "
                 "customer_asked = they asked for a person. size_help = they need a size chart or "
-                "help choosing a size and get_size_chart returned has_chart=false. A question that is simply not about "
+                "help choosing a size and get_size_chart returned has_chart=false. A question that is simply not about "  # noqa: E501
                 "the shop is NOT one of these -- answer it in one line yourself."
             ),
         },

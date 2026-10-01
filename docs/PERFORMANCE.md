@@ -558,7 +558,7 @@ conversation.
 
 ### The deploy, and the numbers real customers produced
 
-The branch is deployed to Railway (`wanas`, production) and every flag reads as
+The branch is deployed to Railway (`rehla`, production) and every flag reads as
 intended in the live process: `reasoning {'effort': 'low'}`, debounce
 1.0 / 6.0 / 15.0, adaptive on, prefetch on, latency log on. A turn line was
 confirmed reaching stdout under the app's own logging config, in the shape
@@ -634,7 +634,7 @@ Every change is visible in it and doing what it was built to do:
 The replies were read as well as timed. A greeting got a single line back
 ("صباح النور 🙂 تحب أساعدك في إيه؟" — the one-line rule the prompt asks for), a
 question about the current offers got a five-item bulleted list with correct
-sale pricing straight from the catalogue ("WANAS Hoodie — من 650 بدل 900"), and
+sale pricing straight from the catalogue ("REHLA Hoodie — من 650 بدل 900"), and
 "what shop is this" got an accurate description of what the shop sells. None
 of the three asked to *see* a product, so none attached a photograph, which is
 correct rather than a regression — `get_variants` was never called. Run

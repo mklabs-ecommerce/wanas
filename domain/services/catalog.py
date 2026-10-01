@@ -207,7 +207,7 @@ def _product_summary(product: Product, live_map=None) -> dict:
         "sizes": in_order(product.sizes or []),
         "lengths": list(product.lengths or []),
         # min and max of the variants' *current* prices, computed here rather
-        # than read from the product row. The WANAS Hoodie is 650 in black and
+        # than read from the product row. The REHLA Hoodie is 650 in black and
         # olive but 700 in grey; a single product-level number would have the
         # model quote 650 for a hoodie the customer is charged 700 for, at the
         # door, in cash.
