@@ -11,12 +11,10 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
-from config.settings import settings
 from domain.db import session_scope
 from domain.models import Channel, Client, Order
 from domain.services import (
@@ -25,7 +23,7 @@ from domain.services import (
     notifications,
     orders,
 )
-from domain.services.reengagement import check_abandoned_carts, check_back_in_stock
+from domain.services.reengagement import check_back_in_stock
 
 IGSID = "98765432109876543"
 PHONE = "01000000123"
@@ -38,10 +36,6 @@ VARIANT = "rehla-hoodie-s-olive"
 #: pinned -- dry run by default, idempotent, additive-only -- is pinned here,
 #: at the entry point that survived.
 MIGRATION = Path(__file__).resolve().parent.parent / "scripts" / "migrate_schema.py"
-
-def settings_idle_hours() -> float:
-    return settings.abandoned_cart_hours
-
 
 @pytest.fixture()
 def senders():
@@ -140,26 +134,6 @@ def test_status_and_feedback_pushes_follow_the_order_channel_too(seeded, cairo_r
 
 
 # --- re-engagement ----------------------------------------------------------
-
-
-def test_an_abandoned_instagram_cart_is_nudged(seeded, cairo_rate, senders):
-    from domain.models import CartItem, utcnow
-
-    ig, wa = senders
-    with session_scope() as session:
-        identities.get_or_create(session, Channel.INSTAGRAM_DM.value, IGSID)
-        session.add(
-            CartItem(
-                channel=Channel.INSTAGRAM_DM.value,
-                external_id=IGSID,
-                variant_id=VARIANT,
-                quantity=1,
-                added_at=utcnow() - timedelta(hours=settings_idle_hours() + 1),
-            )
-        )
-
-    assert check_abandoned_carts() >= 1
-    assert any(m.to == IGSID for m in ig.sent)
 
 
 def test_check_back_in_stock_reads_the_channel_off_the_waitlist_row(seeded, senders):

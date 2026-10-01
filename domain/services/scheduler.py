@@ -1,8 +1,12 @@
 """The one place anything in this app runs on a clock rather than a request.
 
-Both re-engagement checks (`domain/services/reengagement.py`) are polls: a
-variant coming back in stock and a cart going idle are both things nothing
-tells this app about, so something has to periodically ask. The catalogue
+The back-in-stock check (`domain/services/reengagement.py`) and the
+"customer went silent" nudges (`assistant/silence_nudges.py`, registered with
+`register_nudge_job` since domain/ never imports assistant/) are polls: a
+variant coming back in stock and a customer going quiet are both things
+nothing tells this app about, so something has to periodically ask. The
+nudges run on their own, finer clock (`NUDGE_POLL_SECONDS`) -- a 10-minute
+nudge polled every 30 minutes would be a 40-minute one. The catalogue
 check is a poll for a different reason -- Shopify *does* tell us, on
 `products/create`, but that delivery is refused unless
 `SHOPIFY_WEBHOOK_SECRET` is set, and a product staff added being invisible to
@@ -11,8 +15,8 @@ variable. The webhook is the fast path; this is the floor under it. In-process a
 single-instance, the same scope note as `assistant/dispatcher.py`: this fits
 one Railway instance. Two instances would each run their own copy of this
 loop -- both jobs are idempotent against a duplicate pass (the waitlist
-entry's `notified_at`, the nudge row's `sent_at`), so that degrades to "maybe
-checked twice in the same minute," never a double message or a missed one.
+entry's `notified_at`; the nudge row's conditional-UPDATE claim), so that
+degrades to "maybe checked twice in the same minute," never a double message.
 Moving this to a real cron means replacing this file, not its callers.
 """
 
@@ -20,6 +24,8 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
+from collections.abc import Callable
 
 from config.settings import settings
 from domain.db import session_scope
@@ -27,6 +33,14 @@ from domain.services import reengagement
 from integrations.instagram import token as instagram_token
 
 log = logging.getLogger("rehla.scheduler")
+
+_nudge_job: Callable[[], int] | None = None
+
+
+def register_nudge_job(job: Callable[[], int]) -> None:
+    """Called once at startup with `assistant.silence_nudges.check_silences`."""
+    global _nudge_job
+    _nudge_job = job
 
 
 class Scheduler:
@@ -52,8 +66,25 @@ class Scheduler:
         # Wait first: a fresh boot has nothing new to find, and running the
         # checks before the rest of startup (Shopify import, webhook
         # registration) has settled just adds noise to the same log burst.
-        while not self._stop.wait(self._interval):
-            self._tick()
+        poll = settings.nudge_poll_seconds
+        step = min(self._interval, poll) if poll > 0 else self._interval
+        next_slow = time.monotonic() + self._interval
+        while not self._stop.wait(step):
+            if poll > 0:
+                self._nudge_tick()
+            if time.monotonic() >= next_slow:
+                next_slow = time.monotonic() + self._interval
+                self._tick()
+
+    def _nudge_tick(self) -> None:
+        if _nudge_job is None:
+            return
+        try:
+            sent = _nudge_job()
+            if sent:
+                log.info("silence nudges: sent %d", sent)
+        except Exception:
+            log.exception("silence nudge check failed")
 
     def _tick(self) -> None:
         try:
@@ -62,12 +93,6 @@ class Scheduler:
                 log.info("back-in-stock: notified %d waitlist entrie(s)", notified)
         except Exception:
             log.exception("back-in-stock check failed")
-        try:
-            nudged = reengagement.check_abandoned_carts()
-            if nudged:
-                log.info("abandoned-cart: nudged %d conversation(s)", nudged)
-        except Exception:
-            log.exception("abandoned-cart check failed")
         try:
             # Rate-limited internally to one attempt per day; cheap no-op on
             # every other tick. This is what stops the Instagram channel from

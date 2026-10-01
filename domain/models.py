@@ -736,6 +736,36 @@ class AbandonedCartNudge(Base):
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class SilenceNudge(Base):
+    """Where one identity's "customer went silent" follow-ups stand.
+
+    Replaces `AbandonedCartNudge` (kept only so an existing table still maps).
+    One row per identity, rewritten -- never added to -- each time the customer
+    writes again: `anchor_at` is the customer's last message
+    (`ChannelIdentity.last_seen_at`) this row's two steps belong to, so a new
+    message is a new anchor and both steps re-arm. That is the "counter resets"
+    rule, and keeping it in the database rather than in a timer is what lets a
+    redeploy pick up exactly where the last process stopped.
+
+    Each step is `None` (not yet decided), `"sent"` or a skip reason. A step is
+    *claimed* by a conditional UPDATE (`... WHERE first_state IS NULL`) that
+    commits before the send, so two workers or two instances racing the same
+    tick produce one message at most -- see `assistant/silence_nudges.py`.
+    `opted_out_at` outlives anchors on purpose: "stop" means stop.
+    """
+
+    __tablename__ = "silence_nudges"
+
+    channel: Mapped[str] = mapped_column(String(20), primary_key=True)
+    external_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    anchor_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    first_state: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    first_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    second_state: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    second_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    opted_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class WhatsAppMedia(Base):
     """Cache of Meta media IDs for the local pictures -- the size charts, and
     any product photo Shopify has no picture for yet.

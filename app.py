@@ -425,6 +425,13 @@ async def lifespan(_app: FastAPI):
     # status pushes, back-in-stock, cart nudges -- reaches the customer and
     # never the dashboard.
     notifications.register_transcript_recorder(assistant_runtime.record_outbound)
+    # ...and the one place the scheduler learns how to nudge a customer who
+    # went quiet (it needs the provider and the transcript, so it lives in
+    # assistant/ -- see assistant/silence_nudges.py).
+    from assistant import silence_nudges
+    from domain.services.scheduler import register_nudge_job
+
+    register_nudge_job(silence_nudges.check_silences)
     # ...and the one place the staff queue learns how to email the owner.
     # Registered unconditionally: the client itself is a no-op without SMTP
     # credentials, so "not configured" stays one answer in one place.

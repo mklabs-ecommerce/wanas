@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — "Customer went silent" nudges replace the abandoned-cart nudge
+
+The only follow-up was one message two hours after a cart line was added,
+carts only. Now (`assistant/silence_nudges.py`, see REHLA.md):
+
+- **Nudge #1**, 10 minutes after the customer's last message on any
+  conversation the bot answered: one short, model-written line in the brand
+  voice that names what she was looking at, with a fixed fallback.
+- **Nudge #2**, 2 hours after it, only with an open cart (the old cart text,
+  now naming the items). Then nothing until she writes again.
+- Skipped after an order, a closing «شكراً/سلام/مش عايزة», an opt-out (kept),
+  a handoff or staff reply, outside the 24-hour window (no templates), and in
+  Cairo quiet hours 00:00-09:00 (#1 dropped, #2 deferred to 09:00).
+- Durable and single-shot: state in the new `silence_nudges` table, each step
+  claimed by a conditional UPDATE before the send. Polled every
+  `NUDGE_POLL_SECONDS` (60) on its own clock inside the scheduler.
+- New env: `NUDGE_FIRST_MINUTES`, `NUDGE_SECOND_HOURS`,
+  `NUDGE_QUIET_START_HOUR`, `NUDGE_QUIET_END_HOUR`, `NUDGE_POLL_SECONDS`.
+  Removed: `ABANDONED_CART_HOURS`, `ABANDONED_CART_MAX_AGE_HOURS`,
+  `reengagement.check_abandoned_carts`. `tzdata` pinned for the Cairo clock.
+
 ## Unreleased — A product named in full is the product searched for
 
 Found by the live model suite, which failed the same way on `main` and on this

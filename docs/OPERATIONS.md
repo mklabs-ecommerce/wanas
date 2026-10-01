@@ -91,7 +91,7 @@ something looks wrong.
       | `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST` | the rating ask after delivery |
       | `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION` | the confirmation, if the send is ever refused |
       | `WHATSAPP_TEMPLATE_BACK_IN_STOCK` | a waitlisted item is available again |
-      | `WHATSAPP_TEMPLATE_ABANDONED_CART` | the idle-cart nudge |
+      | `WHATSAPP_TEMPLATE_ABANDONED_CART` | unused since the silence nudges (free-form only) |
 
       Until a name is set, the corresponding message can only reach a customer
       **inside** Meta's 24-hour customer service window (measured from their

@@ -331,12 +331,19 @@ class Settings:
     #: idle carts (`domain/services/scheduler.py`). <= 0 disables the loop
     #: entirely -- for tests, which call the checks directly instead.
     reengagement_interval_seconds: float
-    #: How long a cart sits untouched before `check_abandoned_carts` sends the
-    #: "still interested?" nudge.
-    abandoned_cart_hours: float
-    #: Past this age a cart is treated as dead rather than abandoned -- an
-    #: ancient test cart must not get nudged on every restart forever.
-    abandoned_cart_max_age_hours: float
+    #: "Customer went silent" follow-ups (`assistant/silence_nudges.py`).
+    #: Nudge #1 goes this many minutes after the customer's last message, on
+    #: any open conversation the bot answered...
+    nudge_first_minutes: float
+    #: ...and nudge #2 this many hours after it, only with a cart still open.
+    nudge_second_hours: float
+    #: Cairo-time hours [start, end) in which no nudge is sent: #1 is skipped,
+    #: #2 is deferred to `end` if the 24-hour window is still open then.
+    nudge_quiet_start_hour: int
+    nudge_quiet_end_hour: int
+    #: How often the nudge check runs. Much finer than the re-engagement
+    #: interval: a 10-minute nudge polled every 30 minutes is a 40-minute one.
+    nudge_poll_seconds: float
     #: Meta template names for the two proactive message types Feature 3/4
     #: need outside the 24-hour customer service window (`notifications.
     #: send_proactive`). Blank until a real one is submitted and approved --
@@ -617,8 +624,11 @@ def load_settings() -> Settings:
         ),
         public_base_url=_public_base_url(),
         reengagement_interval_seconds=_float("REENGAGEMENT_INTERVAL_SECONDS", 1800.0),
-        abandoned_cart_hours=_float("ABANDONED_CART_HOURS", 2.0),
-        abandoned_cart_max_age_hours=_float("ABANDONED_CART_MAX_AGE_HOURS", 48.0),
+        nudge_first_minutes=_float("NUDGE_FIRST_MINUTES", 10.0),
+        nudge_second_hours=_float("NUDGE_SECOND_HOURS", 2.0),
+        nudge_quiet_start_hour=_int("NUDGE_QUIET_START_HOUR", 0),
+        nudge_quiet_end_hour=_int("NUDGE_QUIET_END_HOUR", 9),
+        nudge_poll_seconds=_float("NUDGE_POLL_SECONDS", 60.0),
         whatsapp_template_back_in_stock=_template("WHATSAPP_TEMPLATE_BACK_IN_STOCK", "wanas_back_in_stock"),
         whatsapp_template_abandoned_cart=_template(
             "WHATSAPP_TEMPLATE_ABANDONED_CART", "wanas_abandoned_cart"

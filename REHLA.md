@@ -64,7 +64,7 @@ the variable.
 | `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST` | `wanas_feedback_request` | `rehla_feedback_request` |
 | `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION` | `wanas_order_confirmation` | `rehla_order_confirmation` |
 | `WHATSAPP_TEMPLATE_BACK_IN_STOCK` | `wanas_back_in_stock` | `rehla_back_in_stock` |
-| `WHATSAPP_TEMPLATE_ABANDONED_CART` | `wanas_abandoned_cart` | `rehla_abandoned_cart` |
+| `WHATSAPP_TEMPLATE_ABANDONED_CART` | `wanas_abandoned_cart` | no longer used (see below) |
 | `WHATSAPP_TEMPLATE_LANGUAGE` | `ar` | `ar` |
 
 Create each as **Custom**, language `ar`. Utility: order update, feedback,
@@ -77,8 +77,39 @@ the customer sends back open the 24-hour window):
 4. `rehla_back_in_stock` (Marketing): «خبر حلو 🖤» / «القطعة اللي كنتي مستنياها رجعت متوفرة تاني في رحلة.» / «ردي على الرسالة دي وهنظبطلك المقاس واللون قبل ما تخلص تاني.» (optional quick reply: «عايزة أطلبها»)
 5. `rehla_abandoned_cart` (Marketing): «لسه طلبك مستنيكي في السلة 🛒» / «ردي على الرسالة دي ونكمّل الأوردر في دقيقة، ولو محتاجة مساعدة في المقاس أو اللون احنا معاكي.» (optional quick reply: «كمّلي طلبي»)
 
-Then set the five variables on Railway to the `rehla_*` names once each shows
+Template 5 is no longer sent: the idle-cart nudge became nudge #2 of the
+"customer went silent" follow-up below, which is free-form inside the 24-hour
+window only and never uses a template.
+
+Then set the variables on Railway to the `rehla_*` names once each shows
 **Approved**. A name Meta has not approved is worse than an empty one.
+
+## Customer went silent: follow-up nudges
+
+`assistant/silence_nudges.py`, polled by the scheduler every
+`NUDGE_POLL_SECONDS` (60). At most **two** per silence; her next message
+resets the counter.
+
+1. **Nudge #1** -- `NUDGE_FIRST_MINUTES` (10) after her last message, on any
+   conversation the bot answered. One short line written by the chat model
+   from the conversation («لسه معانا؟ ...» naming what she was looking at);
+   a fixed line if the model is down or writes a number, a long paragraph or
+   a non-Egyptian word.
+2. **Nudge #2** -- `NUDGE_SECOND_HOURS` (2) after the same message, **only**
+   with a cart still open (the old abandoned-cart wording, naming what is in
+   it). A general chat gets none.
+
+Never sent: outside the 24-hour window (free-form only, no template), while a
+conversation is handed off or was last answered by staff, once an order was
+placed, after she closed the chat («شكراً», «سلام», «مش عايزة»), or after she
+asked to stop («stop», «متبعتليش») -- remembered past this silence. Cairo quiet
+hours `NUDGE_QUIET_START_HOUR`-`NUDGE_QUIET_END_HOUR` (0-9): #1 is dropped, #2
+waits for 09:00 if the window is still open then.
+
+Wording is gender-neutral («حضرتك»), matching the bot's own rule never to
+assume who is buying. State is the `silence_nudges` table (created at boot),
+so a redeploy resumes where it left off; each step is claimed by a conditional
+UPDATE committed before the send, so several workers send it once at most.
 
 ## Shopify
 

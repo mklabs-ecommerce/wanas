@@ -713,7 +713,32 @@ def order_delivered(session: Session, order: Order) -> None:
 
 
 BACK_IN_STOCK_TEXT = "خبر حلو! {product_name} رجع متوفر تاني ✅ حابب تطلبه دلوقتي؟"
-ABANDONED_CART_TEXT = "لسه طلبك في السلة 🛒 حابب تكمله؟ لو محتاج مساعدة قولّلي."
+
+
+def has_sender(channel: str) -> bool:
+    """Whether anything is wired to send on this channel (see `send_proactive`)."""
+    return channel in _senders
+
+
+def send_nudge(session: Session, channel: str, external_id: str, text: str) -> bool:
+    """A "still with us?" follow-up (`assistant/silence_nudges.py`). Free-form only.
+
+    Unlike `send_proactive` there is no template and no staff alert: outside
+    the 24-hour window a nudge is simply not sent, and one Meta refuses is
+    recorded undelivered and left at that -- a missed nudge needs nobody.
+    Written `by="system"` like every other push, so the `unanswered` filter
+    skips it and the next nudge check can tell it from a bot reply.
+    """
+    if channel not in _senders or not window_open(session, channel, external_id):
+        return False
+    message = get_sender(channel).send_text(external_id, text)
+    if not message.delivered:
+        _record(channel, external_id, text, db=session, delivered=False)
+        return False
+    _record(channel, external_id, text, db=session)
+    if message.message_ids:
+        _record(channel, external_id, text, db=session, message_ids=list(message.message_ids))
+    return True
 
 
 def send_proactive(

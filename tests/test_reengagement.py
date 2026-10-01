@@ -1,4 +1,4 @@
-"""Back-in-stock waitlisting and abandoned-cart follow-up.
+"""Back-in-stock waitlisting (the idle-cart nudge moved to test_silence_nudges.py).
 
 Feature 1 (status pushes) and Feature 2 (feedback request) already have
 coverage in test_backend_services.py::test_status_pushes_and_feedback_request
@@ -14,14 +14,11 @@ from datetime import timedelta
 from assistant import runtime as assistant_runtime, session as session_store
 from domain.db import SessionLocal, session_scope
 from domain.models import (
-    AbandonedCartNudge,
-    CartItem,
     QueueKind,
     StockWaitlistEntry,
     utcnow,
 )
 from domain.services import (
-    carts,
     identities,
     notifications,
     queues,
@@ -220,77 +217,6 @@ def test_still_out_of_stock_leaves_the_entry_open(seeded, shopify):
         assert len(waitlist.open_entries(session)) == 1
 
 
-# --- reengagement.check_abandoned_carts -------------------------------------
-
-
-def _add_line(session, *, hours_ago: float) -> None:
-    session.add(
-        CartItem(
-            channel=CHANNEL,
-            external_id=CUSTOMER,
-            variant_id=VARIANT,
-            quantity=1,
-            added_at=utcnow() - timedelta(hours=hours_ago),
-        )
-    )
-    session.commit()
-
-
-def test_idle_cart_gets_nudged_once(seeded):
-    _seen(seeded, hours_ago=7)
-    _add_line(seeded, hours_ago=7)
-
-    sender = notifications.LogSender()
-    notifications.register_sender(sender)
-    try:
-        nudged = reengagement.check_abandoned_carts()
-        assert nudged == 1
-        assert len(sender.sent) == 1
-
-        # Running it again immediately must not nudge a second time.
-        sender.clear()
-        nudged_again = reengagement.check_abandoned_carts()
-    finally:
-        notifications.register_sender(notifications.LogSender())
-
-    assert nudged_again == 0
-    assert sender.sent == []
-    with SessionLocal() as session:
-        assert session.get(AbandonedCartNudge, (CHANNEL, CUSTOMER)) is not None
-
-
-def test_fresh_cart_is_not_nudged(seeded):
-    _seen(seeded, hours_ago=1)
-    _add_line(seeded, hours_ago=1)
-
-    sender = notifications.LogSender()
-    notifications.register_sender(sender)
-    try:
-        nudged = reengagement.check_abandoned_carts()
-    finally:
-        notifications.register_sender(notifications.LogSender())
-
-    assert nudged == 0
-    assert sender.sent == []
-
-
-def test_ancient_cart_is_not_nudged(seeded):
-    """Past ABANDONED_CART_MAX_AGE_HOURS the cart is dead, not abandoned --
-    an old test cart must not get nudged on every restart forever."""
-    _seen(seeded, hours_ago=50)
-    _add_line(seeded, hours_ago=50)
-
-    sender = notifications.LogSender()
-    notifications.register_sender(sender)
-    try:
-        nudged = reengagement.check_abandoned_carts()
-    finally:
-        notifications.register_sender(notifications.LogSender())
-
-    assert nudged == 0
-    assert sender.sent == []
-
-
 # --- "back in stock" must describe an actual change -------------------------
 
 
@@ -371,26 +297,6 @@ def test_a_proactive_message_is_written_into_the_transcript(seeded, shopify):
     # Neither the model's words nor a staff member's.
     assert history[0]["by"] == "system"
     assert "REHLA Hoodie" in history[0]["content"]
-
-
-def test_an_abandoned_cart_nudge_reaches_the_transcript_too(seeded, shopify):
-    _seen(seeded, hours_ago=1)
-    carts.add(seeded, CHANNEL, CUSTOMER, VARIANT, 1)
-    line = seeded.query(CartItem).one()
-    line.added_at = utcnow() - timedelta(hours=4)
-    seeded.commit()
-
-    notifications.register_sender(notifications.LogSender())
-    notifications.register_transcript_recorder(assistant_runtime.record_outbound)
-    try:
-        assert reengagement.check_abandoned_carts() == 1
-    finally:
-        notifications.register_transcript_recorder(None)
-        notifications.register_sender(notifications.LogSender())
-
-    with SessionLocal() as session:
-        history = session_store.transcript(session, CHANNEL, CUSTOMER)
-    assert [m["content"] for m in history] == [notifications.ABANDONED_CART_TEXT]
 
 
 def test_a_message_that_did_not_land_is_written_down_as_undelivered(seeded, shopify):

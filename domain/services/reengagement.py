@@ -1,10 +1,12 @@
-"""Two time-based follow-ups, neither triggered by an event.
+"""The back-in-stock follow-up, which no event triggers.
 
-Nothing tells this app "that variant is back in stock" or "six hours passed"
--- Shopify pushes order-status webhooks, not inventory ones, and an idle cart
-is defined by the *absence* of a message. Both checks are therefore polls,
-run periodically by `domain/services/scheduler.py`, and both are written to
-be safe to run twice: a re-run before the last one's commit lands just finds
+(The idle-cart nudge that used to live here is now nudge #2 of the general
+"customer went silent" follow-up, `assistant/silence_nudges.py`.)
+
+Nothing tells this app "that variant is back in stock" -- Shopify pushes
+order-status webhooks, not inventory ones. The check is therefore a poll,
+run periodically by `domain/services/scheduler.py`, and written to be safe
+to run twice: a re-run before the last one's commit lands just finds
 the same open row again and no second message goes out, because the row that
 marks "handled" is written in the same pass that sends.
 """
@@ -12,17 +14,10 @@ marks "handled" is written in the same pass that sends.
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 
-from sqlalchemy import func, select
-
-from common.timeutil import as_aware
 from config.settings import settings
 from domain.db import session_scope
 from domain.models import (
-    AbandonedCartNudge,
-    CartItem,
-    Channel,
     StockWaitlistEntry,
     Variant,
     utcnow,
@@ -119,67 +114,3 @@ def check_back_in_stock() -> int:
 
     return notified
 
-
-def check_abandoned_carts() -> int:
-    """Nudge every cart on a channel that can be messaged that has sat
-    untouched past the threshold.
-
-    `MAX(added_at)` per identity stands in for "last touched": a quantity
-    bump on an existing line does not move it (`carts.add` never rewrites
-    `added_at`), so a customer quietly upping a quantity mid-window is a rare
-    case this slightly under-counts as idle, never one it wrongly interrupts.
-    """
-    now = utcnow()
-    min_idle = timedelta(hours=settings.abandoned_cart_hours)
-    max_idle = timedelta(hours=settings.abandoned_cart_max_age_hours)
-
-    # The comparison happens in Python, not the WHERE clause -- the same
-    # choice `assistant/session.py`'s expiry check makes, because nothing else
-    # in this codebase relies on a database comparing a tz-aware Python value
-    # against a stored `DateTime(timezone=True)` column, and this is not the
-    # place to find out whether SQLite's string-typed storage agrees with
-    # PostgreSQL's on ordering across that boundary. The candidate set here
-    # is every open cart on a live channel, never large enough for this to
-    # cost anything.
-    with session_scope() as session:
-        rows = session.execute(
-            select(
-                CartItem.channel,
-                CartItem.external_id,
-                func.max(CartItem.added_at).label("last_activity"),
-            )
-            .where(CartItem.channel.in_(("whatsapp", Channel.INSTAGRAM_DM.value)))
-            .group_by(CartItem.channel, CartItem.external_id)
-        ).all()
-
-    due = [
-        (channel, external_id, last_activity)
-        for channel, external_id, last_activity in rows
-        if min_idle <= now - as_aware(last_activity) < max_idle
-    ]
-
-    nudged = 0
-    for channel, external_id, last_activity in due:
-        with session_scope() as session:
-            nudge = session.get(AbandonedCartNudge, (channel, external_id))
-            if nudge is not None and as_aware(nudge.sent_at) >= as_aware(last_activity):
-                # Already nudged for this exact idle spell; a new line after
-                # the nudge would have moved `last_activity` past it.
-                continue
-
-            notifications.send_proactive(
-                session,
-                channel,
-                external_id,
-                notifications.ABANDONED_CART_TEXT,
-                template=settings.whatsapp_template_abandoned_cart or None,
-                alert_reason="proactive_outreach_failed",
-                alert_summary=f"Abandoned-cart nudge to {external_id} needs a person",
-            )
-            if nudge is None:
-                session.add(AbandonedCartNudge(channel=channel, external_id=external_id, sent_at=now))
-            else:
-                nudge.sent_at = now
-            nudged += 1
-
-    return nudged
