@@ -94,9 +94,15 @@ def main() -> None:
             copy = {
                 f: getattr(old, f)
                 for f, empty in DEFAULTS.items()
-                if getattr(new, f) in empty and getattr(old, f) not in empty
+                if getattr(old, f) not in empty
+                # The bot's category taxonomy is the curated one (`Pants`, not
+                # the store's product type `Trousers`); the rest only fill a default.
+                and (getattr(new, f) in empty or (f == "category" and getattr(new, f) != getattr(old, f)))
             }
-            print(f"  {old.product_id} ({old.name}) -> {new.product_id}: copy {sorted(copy)}; archive the old row")
+            print(
+                f"  {old.product_id} ({old.name}) -> {new.product_id}: "
+                f"copy {sorted(copy)}; archive the old row"
+            )
             if args.apply:
                 for field, value in copy.items():
                     setattr(new, field, value)
