@@ -57,6 +57,8 @@ ignore = [
 "assistant/recovery.py" = ["E501"]
 # And for the paragraph about the customer's name each turn carries.
 "assistant/customer_name.py" = ["E501"]
+# And for the reply-language note each turn carries.
+"assistant/reply_language.py" = ["E501"]
 # The seed data merge is a data file with a program attached.
 "data/merge_catalog.py" = ["E501"]
 

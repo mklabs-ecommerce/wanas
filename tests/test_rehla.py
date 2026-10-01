@@ -143,3 +143,83 @@ def test_order_without_shopify_is_recorded_locally(seeded, monkeypatch):
     seeded.expire_all()
     assert seeded.get(Variant, variant.variant_id).stock_qty == before - 1
 
+
+# --------------------------------------------------------------------------
+# Reply language: Arabic or Franco in -> Egyptian Arabic out; English -> English
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["عايزة التوب الأسود مقاس M", "بكام الهودي؟", "السلام عليكم", "عايز Rehla Backless Top لون Black"],
+)
+def test_arabic_is_answered_in_arabic(text):
+    from assistant import reply_language
+
+    assert reply_language.decide(text) == reply_language.ARABIC
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["3ayza el top da b kam", "ezayak, 3andko hoodie?", "el top da mawgood m?", "salam, bkam el shipping",
+     "momken a3raf el sizes"],
+)
+def test_franco_is_answered_in_arabic(text):
+    from assistant import reply_language
+
+    assert reply_language.decide(text) == reply_language.ARABIC
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Hi, how much is the black hoodie?", "Do you ship to Alexandria?", "I want the Rehla Tops in size M please",
+     "hello"],
+)
+def test_english_is_answered_in_english(text):
+    from assistant import reply_language
+
+    assert reply_language.decide(text) == reply_language.ENGLISH
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Hi, عايزة أعرف سعر التوب ده ومقاساته", "ar"),  # mostly Arabic
+        ("Hello, I would like to order the hoodie, شكرا", "en"),  # mostly English
+        ("hi 3ayza a3raf el price bta3 el top", "ar"),  # Franco counts as Arabic
+        ("ok", "ar"),  # catalog/neutral words alone: nothing to go on -> Arabic
+    ],
+)
+def test_mixed_follows_the_dominant_language(text, expected):
+    from assistant import reply_language
+
+    assert reply_language.decide(text) == expected
+
+
+def test_a_wordless_message_keeps_the_conversation_language():
+    from assistant import reply_language
+
+    history = [{"role": "user", "content": "Hi, do you have hoodies?"}, {"role": "assistant", "content": "Yes"}]
+    assert reply_language.decide("👍", history) == reply_language.ENGLISH
+    assert reply_language.decide("", []) == reply_language.ARABIC
+
+
+def test_the_turn_tells_the_model_which_language(seeded):
+    from assistant import agent, reply_language
+    from assistant.providers.base import ModelReply
+    from assistant.providers.fake import ScriptedProvider
+
+    provider = ScriptedProvider([ModelReply(text="Shipping is cash on delivery."), ModelReply(text="تمام")])
+    agent.run_turn(seeded, "whatsapp", "201000000777", "Hi, how much is shipping?", provider=provider)
+    assert reply_language.turn_note(reply_language.ENGLISH).strip() in provider.calls[0][0]
+    agent.run_turn(seeded, "whatsapp", "201000000778", "3ayza a3raf el shipping bkam", provider=provider)
+    assert reply_language.turn_note(reply_language.ARABIC).strip() in provider.calls[-1][0]
+
+
+def test_an_english_reply_is_not_laid_out_right_to_left():
+    from common import bidi
+
+    english = "Delivery to Cairo (القاهرة) is 110 EGP, cash on delivery."
+    assert bidi.shape(english) == english
+    arabic = "• توب Rehla Square Neck Long Sleeve Top — السعر 450 جنيه"
+    assert bidi.shape(arabic) != arabic

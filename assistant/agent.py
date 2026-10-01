@@ -32,6 +32,7 @@ from assistant import (
     photo_claims,
     quoting,
     reply_facts,
+    reply_language,
     reply_rules,
     session as session_store,
     showcase,
@@ -784,6 +785,12 @@ def run_turn(
     system_prompt = (
         f"{system_prompt}{customer_name.turn_note(db, channel, external_id, history, text)}"
     )
+    # Which language the reply is written in -- Arabic or Franco in, Egyptian
+    # Arabic out; English in, English out. Decided here, not left to the
+    # model. See `assistant/reply_language.py`.
+    language = reply_language.decide(text, history)
+    log.info("reply language for %s/%s: %s", channel, external_id, language)
+    system_prompt = f"{system_prompt}{reply_language.turn_note(language)}"
 
     undelivered = photo_claims.undelivered(history)
     sent_images = _sent_images(history) - set(undelivered)
@@ -1367,7 +1374,9 @@ def run_turn(
             )
             # Last, after every check above: a turn that had to ask the
             # customer's name asks it, whether or not the model remembered to.
-            text_out = customer_name.ensure_asked(text_out, name_decision)
+            # (Its line is Arabic, so an English reply is left to the model.)
+            if language != reply_language.ENGLISH:
+                text_out = customer_name.ensure_asked(text_out, name_decision)
             # A chart looked up this turn reaches the customer, whatever the
             # model wrote around it.
             text_out = with_chart(text_out, turn_results)

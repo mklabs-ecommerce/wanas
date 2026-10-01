@@ -74,6 +74,9 @@ RLM = "‏"
 #: string can arrive in. Enough to answer "is this line Arabic", which is all
 #: it is used for.
 _ARABIC = re.compile(r"[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]")
+#: Words, for telling an English reply from an Arabic one (see `shape`).
+_LATIN_WORD = re.compile(r"[A-Za-z]+")
+_ARABIC_WORD = re.compile(r"[؀-ۿ]+")
 
 #: A Latin run: a word, plus the words joined to it by a single space or one
 #: of the connectors a product name uses. Greedy across spaces on purpose --
@@ -117,6 +120,12 @@ def shape(text: str) -> str:
     # mark, so checking for the isolate alone left exactly those lines
     # re-shapable, and a second pass prepended a second mark.
     if not text or FSI in text or RLM in text or not _ARABIC.search(text):
+        return text
+    # An English reply (`assistant/reply_language.py`) is a left-to-right
+    # text that may carry one Arabic word -- a governorate, «جنيه». Marking
+    # its lines RTL would throw its full stops to the wrong end.
+    # Words, not letters: an Arabic product line is mostly Latin letters.
+    if len(_ARABIC_WORD.findall(text)) * 4 < len(_LATIN_WORD.findall(text)):
         return text
 
     lines = []
