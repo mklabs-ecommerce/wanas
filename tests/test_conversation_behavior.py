@@ -676,6 +676,14 @@ def test_the_prompt_defers_the_terms_to_the_tool_rather_than_to_memory():
     assert "متقوليش رسوم ولا مدة ولا «ينفع» من دماغك" in section
 
 
+def test_the_prompt_forbids_calling_an_unknown_delivery_date_a_missed_window():
+    """A parcel the courier never reported still reads Shipped, so "the window
+    passed" would be a refusal invented out of a missing timestamp."""
+    section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
+    assert "exchange_window=unknown" in section
+    assert "متقوليش إن المدة عدّت" in section
+
+
 def test_the_prompt_forbids_leaking_internals():
     assert "متذكرش أسماء الأدوات ولا الـ IDs" in SYSTEM_PROMPT
     assert "متكتبش أي مسار ملف ولا لينك أبداً" in SYSTEM_PROMPT

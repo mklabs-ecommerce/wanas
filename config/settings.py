@@ -59,6 +59,14 @@ def _csv(name: str, default: str = "") -> tuple[str, ...]:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
+def _template(name: str, default: str) -> str:
+    """A WhatsApp template name: the variable when set, else the name already
+    approved at Meta. Set it to an empty value to turn the template off, and
+    to `rehla_...` once the Rehla-branded one is approved -- no code change."""
+    value = os.getenv(name)
+    return default if value is None else value.strip()
+
+
 def _bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name, "").strip().lower()
     if not raw:
@@ -583,13 +591,17 @@ def load_settings() -> Settings:
         reengagement_interval_seconds=_float("REENGAGEMENT_INTERVAL_SECONDS", 1800.0),
         abandoned_cart_hours=_float("ABANDONED_CART_HOURS", 2.0),
         abandoned_cart_max_age_hours=_float("ABANDONED_CART_MAX_AGE_HOURS", 48.0),
-        whatsapp_template_back_in_stock=os.getenv("WHATSAPP_TEMPLATE_BACK_IN_STOCK", "").strip(),
-        whatsapp_template_abandoned_cart=os.getenv("WHATSAPP_TEMPLATE_ABANDONED_CART", "").strip(),
-        whatsapp_template_order_update=os.getenv("WHATSAPP_TEMPLATE_ORDER_UPDATE", "").strip(),
-        whatsapp_template_feedback_request=os.getenv("WHATSAPP_TEMPLATE_FEEDBACK_REQUEST", "").strip(),
-        whatsapp_template_order_confirmation=os.getenv(
-            "WHATSAPP_TEMPLATE_ORDER_CONFIRMATION", ""
-        ).strip(),
+        whatsapp_template_back_in_stock=_template("WHATSAPP_TEMPLATE_BACK_IN_STOCK", "wanas_back_in_stock"),
+        whatsapp_template_abandoned_cart=_template(
+            "WHATSAPP_TEMPLATE_ABANDONED_CART", "wanas_abandoned_cart"
+        ),
+        whatsapp_template_order_update=_template("WHATSAPP_TEMPLATE_ORDER_UPDATE", "wanas_order_update"),
+        whatsapp_template_feedback_request=_template(
+            "WHATSAPP_TEMPLATE_FEEDBACK_REQUEST", "wanas_feedback_request"
+        ),
+        whatsapp_template_order_confirmation=_template(
+            "WHATSAPP_TEMPLATE_ORDER_CONFIRMATION", "wanas_order_confirmation"
+        ),
         whatsapp_template_language=os.getenv("WHATSAPP_TEMPLATE_LANGUAGE", "ar").strip() or "ar",
         # Each of these accepts a plain SMTP_* / STORE_OWNER_EMAIL alias
         # alongside the ALERT_-prefixed name. The prefixed name is the

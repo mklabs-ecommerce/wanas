@@ -49,3 +49,40 @@ not `0`), `integrations/shopify/local_shelf.py` makes the database the shelf:
 python scripts/rehla/demo_conversations.py --fresh   # 5 scripted conversations, real LLM from .env
 pytest tests/test_rehla.py
 ```
+
+## WhatsApp templates (outside the 24-hour window)
+
+Meta only allows an approved template to a customer who has not written in the
+last 24 hours. The code reads the names from these variables and defaults to
+the Wanas-era names that are approved today; set a variable to switch, set it
+to an empty value to turn that template off. No code change, no redeploy beyond
+the variable.
+
+| Variable | Default (today) | Rehla template to create |
+|---|---|---|
+| `WHATSAPP_TEMPLATE_ORDER_UPDATE` | `wanas_order_update` | `rehla_order_update` |
+| `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST` | `wanas_feedback_request` | `rehla_feedback_request` |
+| `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION` | `wanas_order_confirmation` | `rehla_order_confirmation` |
+| `WHATSAPP_TEMPLATE_BACK_IN_STOCK` | `wanas_back_in_stock` | `rehla_back_in_stock` |
+| `WHATSAPP_TEMPLATE_ABANDONED_CART` | `wanas_abandoned_cart` | `rehla_abandoned_cart` |
+| `WHATSAPP_TEMPLATE_LANGUAGE` | `ar` | `ar` |
+
+Create each as **Custom**, language `ar`. Utility: order update, feedback,
+confirmation. Marketing: back in stock, abandoned cart. Texts (the replies
+the customer sends back open the 24-hour window):
+
+1. `rehla_order_update` (Utility): «في تحديث على طلبك من رحلة ✅» / «رد على الرسالة دي وهنقولك الطلب وصل لفين وكل التفاصيل على طول.» (optional quick reply: «طلبي وصل فين؟»)
+2. `rehla_feedback_request` (Utility): «طلبك من رحلة وصلك ✅» / «تقيّمي تجربتك معانا من 1 لـ 5؟ ولو عندك أي ملاحظة اكتبيها في ردك — بتفرق معانا فعلاً.»
+3. `rehla_order_confirmation` (Utility): «وصلنا طلبك واتأكد ✅» / «رد على الرسالة دي وهنبعتلك تفاصيل الطلب والإجمالي وموعد الوصول.»
+4. `rehla_back_in_stock` (Marketing): «خبر حلو 🖤» / «القطعة اللي كنتي مستنياها رجعت متوفرة تاني في رحلة.» / «ردي على الرسالة دي وهنظبطلك المقاس واللون قبل ما تخلص تاني.» (optional quick reply: «عايزة أطلبها»)
+5. `rehla_abandoned_cart` (Marketing): «لسه طلبك مستنيكي في السلة 🛒» / «ردي على الرسالة دي ونكمّل الأوردر في دقيقة، ولو محتاجة مساعدة في المقاس أو اللون احنا معاكي.» (optional quick reply: «كمّلي طلبي»)
+
+Then set the five variables on Railway to the `rehla_*` names once each shows
+**Approved**. A name Meta has not approved is worse than an empty one.
+
+## Shopify
+
+The store is the source of truth for price, stock, orders and size charts.
+`scripts/shopify_relink_skus.py` (dry-run by default) makes the database's
+variant ids equal the store's SKUs. `docs/shopify_cutover.md` records what
+was found and done when the bot was connected to the store.
