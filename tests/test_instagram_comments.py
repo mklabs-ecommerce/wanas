@@ -280,7 +280,7 @@ def test_a_valid_comment_gets_one_public_and_one_private_reply_and_a_seeded_sess
         assert history[0]["role"] == "user"
         assert MEDIA_ID in history[0]["content"]
         assert history[1]["role"] == "assistant"
-        assert history[1]["content"].startswith("شفت كومنتك")
+        assert history[1]["content"].startswith("شفنا كومنت حضرتك")
 
 
 def test_the_same_comment_delivered_twice_still_gets_one_of_each(

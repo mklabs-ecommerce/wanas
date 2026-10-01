@@ -330,7 +330,7 @@ def test_the_prompt_forbids_describing_a_chart_that_was_never_fetched():
     no picture behind it."""
     section = SYSTEM_PROMPT.split("# المقاسات")[1]
     assert "get_variants" in section, "the chart rides along with the sizes"
-    assert "ممنوع تقولي «الجدول ده»" in section
+    assert "ممنوع تقول «الجدول ده»" in section
 
 
 def test_size_charts_are_still_attached_alongside_product_photos(ctx):
@@ -651,7 +651,7 @@ def test_the_prompt_still_carries_the_rules_that_are_not_negotiable():
         "الـ variant_id بييجي من get_variants بس",
         "متقولش إن الأوردر اتعمل غير لما confirm_order يرجّع رقم أوردر",
         "الدفع كاش عند الاستلام بس",
-        "متعرضيش دفع أونلاين ولا تحويل",
+        "متعرضش دفع أونلاين ولا تحويل",
         "request_human",
     ):
         assert rule in SYSTEM_PROMPT
@@ -673,7 +673,7 @@ def test_the_prompt_defers_the_terms_to_the_tool_rather_than_to_memory():
     model. A recited fee is a fee that drifts."""
     section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
     assert "get_return_terms" in section
-    assert "متقوليش رسوم ولا مدة ولا «ينفع» من دماغك" in section
+    assert "متقولش رسوم ولا مدة ولا «ينفع» من دماغك" in section
 
 
 def test_the_prompt_forbids_calling_an_unknown_delivery_date_a_missed_window():
@@ -681,7 +681,7 @@ def test_the_prompt_forbids_calling_an_unknown_delivery_date_a_missed_window():
     passed" would be a refusal invented out of a missing timestamp."""
     section = SYSTEM_PROMPT.split("# الاستبدال والإلغاء والمرتجع")[1]
     assert "exchange_window=unknown" in section
-    assert "متقوليش إن المدة عدّت" in section
+    assert "متقولش إن المدة عدّت" in section
 
 
 def test_the_prompt_forbids_leaking_internals():

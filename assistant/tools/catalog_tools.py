@@ -60,7 +60,7 @@ def get_categories(ctx: ToolContext) -> dict:
     "قميص (a button-up shirt, which is NOT a تيشيرت), a طرحة, a فستان, a جينز, a جزمة. Say "
     "plainly that we do not have it, using `garment` -- the customer's own word -- and then offer "
     "`alternatives` **as a different thing**: 'مفيش طرح عندنا، بس عندنا توبات كم طويل تنفع "
-    "للمحجبات لو تحبي تشوفيهم'. Never present an alternative as the thing they asked for, never rename it, and "  # noqa: E501
+    "للمحجبات، نوريهم لحضرتك؟'. Never present an alternative as the thing they asked for, never rename it, and "  # noqa: E501
     "never say 'أيوه عندنا' to a garment_not_sold. `products` is empty on purpose: there is "
     "nothing here that answers their question. An empty `alternatives` means there is nothing "
     "close either -- say so and stop. "

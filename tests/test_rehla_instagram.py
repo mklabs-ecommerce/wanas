@@ -63,7 +63,7 @@ def test_a_short_comment_gets_a_warm_line_and_a_greeting(client, comments_on, fa
 
     public = public_replies(fake_graph)
     assert len(public) == 1 and "🤍" in public[0]["json"]["message"]
-    assert _dm_text(fake_graph) == "أهلًا بيكي في رحلة 🤍 تحبي أساعدك في إيه؟"
+    assert _dm_text(fake_graph) == "أهلاً بحضرتك في رحلة 🤍 نقدر نساعد في إيه؟"
     assert classifier.calls == []                      # no model call on "Hm"
 
 
@@ -71,7 +71,7 @@ def test_a_short_comment_on_a_known_post_shows_the_product(client, comments_on, 
     fake_graph.get_json_body = {"caption": "Rehla Yoga Pants"}
     assert post_comment(client, comment_body("🔥")).status_code == 200
     text = _dm_text(fake_graph)
-    assert text.startswith("أهلًا بيكي في رحلة 🤍") and "Rehla Yoga Pants" in text and "650" in text
+    assert text.startswith("أهلاً بحضرتك في رحلة 🤍") and "Rehla Yoga Pants" in text and "650" in text
 
 
 def test_short_comments_still_one_reply_and_never_our_own(client, comments_on, fake_graph, classifier):

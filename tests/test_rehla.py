@@ -3,6 +3,7 @@ with no Shopify at all (integrations/shopify/local_shelf.py)."""
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 import pytest
@@ -69,11 +70,36 @@ def test_sold_out_is_said_in_egyptian():
         assert "SOLD OUT -> خلصانة" in fixes
 
 
-def test_the_prompt_speaks_to_her():
+def test_the_prompt_assumes_no_gender():
     from assistant.prompt import SYSTEM_PROMPT
 
-    assert "بصيغة المؤنث دايمًا" in SYSTEM_PROMPT
+    assert "بصيغة المؤنث" not in SYSTEM_PROMPT
+    assert "متفترضش أبداً الزبون ولد ولا بنت" in SYSTEM_PROMPT
+    assert "حضرتك" in SYSTEM_PROMPT
     assert "SOLD OUT" in SYSTEM_PROMPT  # named only to forbid it
+
+
+#: Feminine second-person forms and pet names. The customer may be anyone --
+#: a man buying a gift reads «تحبي» as the shop not listening.
+_GENDERED = re.compile(r"بيكي|عليكي|معاكي|ليكي|تحبي|عايزة|قوليلي|ابعتيلي|اسألي|يا قمر|حبيبتي|يا جميلة")
+
+
+def test_no_canned_line_assumes_the_customer_is_a_woman():
+    from assistant import comment_replies
+    from assistant.tools.support_tools import HANDOFF_CLOSINGS
+
+    lines = [comment_replies.SHORT_DM, *HANDOFF_CLOSINGS.values()]
+    for bank in (*comment_replies._BANKS.values(), *comment_replies._DM_OPENERS.values()):
+        lines.extend(bank)
+    lines.extend(comment_replies._SHORT_PUBLIC)
+    product = {
+        "name": "Rehla Tops", "category": "Tops", "any_in_stock": True, "price_from": 450,
+        "price_to": 450, "in_stock_sizes": ["S"], "in_stock_colors": ["Black"],
+    }
+    lines.append(comment_replies.product_dm(product, greeting=True))
+    lines.append(comment_replies.product_dm({**product, "any_in_stock": False}, greeting=True))
+    offenders = [line for line in lines if _GENDERED.search(line)]
+    assert not offenders, offenders
 
 
 def test_what_rehla_does_not_sell():
@@ -116,3 +142,4 @@ def test_order_without_shopify_is_recorded_locally(seeded, monkeypatch):
     assert order.shipping_fee == Decimal("70")
     seeded.expire_all()
     assert seeded.get(Variant, variant.variant_id).stock_qty == before - 1
+
