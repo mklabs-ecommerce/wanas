@@ -20,6 +20,17 @@ Two references, kept in `docs/design/refs/`:
   bell that is the review queue's badge, and animates. No fetches, no storage,
   no library. `web.skinned` injects `<name>.js` for any skin that ships one.
 
+## Sidebar
+
+On a desktop the rail is shut to its icon strip: logo mark, icons, counts as
+small badges, item names as tooltips. Hover (after a short intent delay) or
+keyboard focus opens the labelled menu over the page -- the page never
+reflows -- and leaving closes it. The pin keeps it open and widens the page's
+column; it is remembered per signed-in user. The current item is a tab of
+page ground cut out of the rail with curved corners, reaching the page's
+edge open or shut; the menu scrolls without drawing a scrollbar. Phones keep
+the bottom tab bar.
+
 ## Motion
 
 - A page *opening* is drawn: cards rise in with a stagger, line charts stroke

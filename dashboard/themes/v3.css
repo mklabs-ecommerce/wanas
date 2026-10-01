@@ -42,8 +42,8 @@
   --surface:       #FFFFFF;
   --surface-2:     #FBF7FA;
   --surface-3:     #F3EAF0;
-  --line:          #EEE3EA;
-  --line-strong:   #DCCBD6;
+  --line:          #F2E9EF;
+  --line-strong:   #E5D7E0;
 
   --ink:           #1F2233;
   --ink-2:         #444A5E;
@@ -84,9 +84,10 @@
   --shadow-3: 0 24px 60px -20px rgba(60,20,60,.38), 0 2px 8px rgba(60,20,60,.08);
   --ring: 0 0 0 3px rgba(214,51,108,.28);
 
-  --r-xs: 6px; --r-sm: 9px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px;
+  --r-xs: 8px; --r-sm: 10px; --r-md: 12px; --r-lg: 20px; --r-xl: 24px;
 
-  --strip: 64px;
+  --strip: 72px;
+  --rail-full: 272px;
   --rail: 272px;
   --header-h: 68px;
   --tabbar-h: 62px;
@@ -104,51 +105,65 @@
 :root[data-skin="v3"][data-theme="dark"] {
   color-scheme: dark;
 
-  --ground:        #263640;
-  --ground-2:      #21303A;
-  --surface:       #31424C;
-  --surface-2:     #374852;
-  --surface-3:     #3F515B;
-  --line:          #415360;
-  --line-strong:   #52656F;
+  /* Deep aubergine-slate, in clear steps: ground < surface < surface-2 <
+     surface-3, each a little lighter and a little less blue. */
+  --ground:        #1B1828;
+  --ground-2:      #17151F;
+  --surface:       #242034;
+  --surface-2:     #2B273D;
+  --surface-3:     #343047;
+  --line:          #322D45;
+  --line-strong:   #443E5A;
 
-  --ink:           #F2F5F7;
-  --ink-2:         #D5DDE2;
-  --ink-3:         #BFCAD1;
-  --ink-inv:       #1F2233;
+  --ink:           #F4F1FA;
+  --ink-2:         #D9D4E6;
+  --ink-3:         #ADA7C2;
+  --ink-inv:       #1F1B2E;
 
-  --clay:          #FF9CC0;
-  --clay-soft:     #6A3A55;
-  --clay-tint:     #4A2F42;
-  --sky:           #8CCBFF;
-  --sky-soft:      #2D4D69;
-  --sky-tint:      #22394D;
-  --teal:          #6EE0B0;
-  --teal-soft:     #23584A;
-  --teal-tint:     #1C3F38;
-  --rose:          #FF9A9A;
-  --rose-soft:     #6A3036;
-  --rose-tint:     #4A2A30;
-  --amber:         #FFC56B;
-  --amber-soft:    #5E4826;
-  --amber-tint:    #45391F;
-  --lilac:         #C3B0FF;
-  --lilac-soft:    #4A3F6E;
-  --lilac-tint:    #383255;
+  /* The same four hues, lifted and softened so they glow on the dark
+     without burning. */
+  --clay:          #FF8FB8;
+  --clay-soft:     #6A3557;
+  --clay-tint:     #3F2438;
+  --sky:           #8EC9FF;
+  --sky-soft:      #2E4A6E;
+  --sky-tint:      #1F2D44;
+  --teal:          #74E0B4;
+  --teal-soft:     #255847;
+  --teal-tint:     #1A3631;
+  --rose:          #FF9E9E;
+  --rose-soft:     #6C3039;
+  --rose-tint:     #42242C;
+  --amber:         #FFC27A;
+  --amber-soft:    #5F4527;
+  --amber-tint:    #3B2F22;
+  --lilac:         #BFA8FF;
+  --lilac-soft:    #4A3F75;
+  --lilac-tint:    #302A4D;
 
-  --rail-bg:       #2B3C46;
-  --rail-bg-2:     #2B3C46;
-  --rail-strip:    rgba(0,0,0,.14);
-  --rail-ink:      #F2F5F7;
-  --rail-ink-3:    #B9C5CC;
+  --pink-a:        #C2386F;
+  --pink-b:        #7F3290;
+  --purple-a:      #6E52C6;
+  --purple-b:      #47399E;
+  --sky-a:         #2C74BE;
+  --sky-b:         #2F4C9C;
+  --orange-a:      #C4582A;
+  --orange-b:      #9C3C1E;
+  --primary:       #FF8FB8;
+
+  --rail-bg:       #221E33;
+  --rail-bg-2:     #1E1A2D;
+  --rail-strip:    rgba(0,0,0,.22);
+  --rail-ink:      #F4F1FA;
+  --rail-ink-3:    #B5AECB;
   --rail-hover:    rgba(255,255,255,.06);
-  --rail-line:     rgba(255,255,255,.08);
-  --chat:          #21303A;
+  --rail-line:     rgba(255,255,255,.07);
+  --chat:          #1F1C2D;
 
-  --shadow-1: 0 1px 2px rgba(0,0,0,.18);
-  --shadow-2: 0 2px 4px rgba(0,0,0,.2), 0 14px 30px -14px rgba(0,0,0,.5);
+  --shadow-1: 0 1px 2px rgba(0,0,0,.18), 0 8px 24px -14px rgba(0,0,0,.45);
+  --shadow-2: 0 2px 6px rgba(0,0,0,.2), 0 16px 34px -16px rgba(0,0,0,.55);
   --shadow-3: 0 24px 60px -18px rgba(0,0,0,.7), 0 2px 10px rgba(0,0,0,.3);
-  --ring: 0 0 0 3px rgba(255,156,192,.35);
+  --ring: 0 0 0 3px rgba(255,143,184,.32);
 }
 
 /* --- base ---------------------------------------------------------------- */
@@ -230,6 +245,9 @@
   color: var(--rail-ink);
   font-size: 13.5px; font-weight: 500;
   min-height: 42px;
+  /* Not 100%: with the current tab's margin that ran past the rail's edge,
+     where the menu's overflow cut the tab's corners off. */
+  width: auto;
   padding-block: 9px;
   padding-inline: calc(var(--strip) + 16px) 34px;
   margin-inline-start: 0;
@@ -327,6 +345,83 @@
 :root[data-skin="v3"] .rail-foot .dot[data-tone="bad"] { background: #FFB3B3; }
 :root[data-skin="v3"] .rail-foot .dot[data-tone="warn"] { background: #FFD27A; }
 
+/* No scrollbar between the current tab and the page: the menu still
+   scrolls (wheel, touch, keyboard), it just never draws a gutter. */
+:root[data-skin="v3"] nav#nav { scrollbar-width: none; }
+:root[data-skin="v3"] nav#nav::-webkit-scrollbar { display: none; }
+:root[data-skin="v3"] #rail { padding-inline-end: 0; }
+
+/* --- the rail collapses to its icon strip (desktop) -------------------------
+   The page's first column is only the strip wide; the rail itself is fixed
+   and full width, clipped down to the strip. Hover or keyboard focus opens it
+   over the content (v3.js sets .v3-open after a short intent delay), so the
+   page never reflows; the pin (.v3-pinned on <html>) widens the column and
+   keeps it open. clip-path also clips hit-testing, so the hidden part of a
+   collapsed rail never swallows a click meant for the page under it. */
+@media (min-width: 901px) {
+  :root[data-skin="v3"] { --rail: var(--strip); }
+  :root[data-skin="v3"].v3-pinned { --rail: var(--rail-full); }
+  :root[data-skin="v3"] #main { grid-column: 2; }
+  :root[data-skin="v3"] #rail {
+    position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 60;
+    width: var(--rail-full);
+    clip-path: inset(0 calc(100% - var(--strip)) 0 0);
+    transition: clip-path .34s var(--ease-out), box-shadow .34s var(--ease-out);
+  }
+  :root[data-skin="v3"][dir="rtl"] #rail { clip-path: inset(0 0 0 calc(100% - var(--strip))); }
+  :root[data-skin="v3"] #rail.v3-open,
+  :root[data-skin="v3"].v3-pinned #rail { clip-path: inset(0 -90px 0 0); }
+  :root[data-skin="v3"][dir="rtl"] #rail.v3-open,
+  :root[data-skin="v3"][dir="rtl"].v3-pinned #rail { clip-path: inset(0 0 0 -90px); }
+  :root[data-skin="v3"]:not(.v3-pinned) #rail.v3-open { box-shadow: 24px 0 60px -24px rgba(40,16,40,.45); }
+  :root[data-skin="v3"][dir="rtl"]:not(.v3-pinned) #rail.v3-open { box-shadow: -24px 0 60px -24px rgba(40,16,40,.45); }
+
+  /* Shut: the current item is a tab inside the strip, reaching the strip's
+     edge -- which is the page's edge -- with its cut-out corners there. */
+  :root[data-skin="v3"] #rail.v3-shut .nav-item[aria-current="page"] {
+    margin-inline-start: 10px; padding-inline-start: calc(var(--strip) - 10px + 16px);
+  }
+  :root[data-skin="v3"] #rail.v3-shut .nav-item[aria-current="page"] .ic {
+    inset-inline-start: calc((var(--strip) - 38px) / 2 - 10px);
+    background-color: transparent; color: var(--clay);
+  }
+  :root[data-skin="v3"] #rail.v3-shut .nav-item[aria-current="page"]::before,
+  :root[data-skin="v3"] #rail.v3-shut .nav-item[aria-current="page"]::after {
+    inset-inline-end: auto; inset-inline-start: calc(var(--strip) - 10px - 22px);
+  }
+  /* A count becomes a small badge on its icon. */
+  :root[data-skin="v3"] #rail.v3-shut .nav-item .count {
+    position: absolute; top: 3px; inset-inline-start: calc(var(--strip) / 2 + 4px);
+    min-width: 18px; height: 18px; padding: 0 5px; line-height: 18px; font-size: 10px;
+    box-shadow: 0 0 0 2px var(--rail-bg);
+  }
+  :root[data-skin="v3"] #rail.v3-shut .nav-item[aria-current="page"] .count { inset-inline-start: calc(var(--strip) / 2 - 6px); }
+  :root[data-skin="v3"] #rail.v3-shut .rail-foot { padding-inline-start: calc((var(--strip) - 32px) / 2); }
+  :root[data-skin="v3"] #rail.v3-shut .nav-group { color: transparent; }
+  /* Only the logo mark in the strip: the name beside it waits for the rail
+     to open rather than peeking out of the strip's edge. */
+  :root[data-skin="v3"] #rail .brand > div,
+  :root[data-skin="v3"] #rail .v3-pin { transition: opacity .2s ease-out; }
+  :root[data-skin="v3"] #rail.v3-shut .brand > div,
+  :root[data-skin="v3"] #rail.v3-shut .v3-pin { opacity: 0; }
+}
+
+/* The pin, beside the brand; only reachable with the rail open. */
+:root[data-skin="v3"] .v3-pin {
+  margin-inline-start: auto; flex: 0 0 auto;
+  width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: rgba(255,255,255,.14); color: var(--rail-ink);
+  transition: background-color .2s, transform .2s var(--ease-out);
+}
+:root[data-skin="v3"] .v3-pin:hover { background: rgba(255,255,255,.24); }
+:root[data-skin="v3"] .v3-pin[aria-pressed="true"] { background: #FFFFFF; color: #B0174F; }
+:root[data-skin="v3"][data-theme="dark"] .v3-pin[aria-pressed="true"] { background: var(--clay); color: #1F1B2E; }
+:root[data-skin="v3"] .v3-pin svg { transition: transform .25s var(--ease-out); }
+:root[data-skin="v3"] .v3-pin[aria-pressed="true"] svg { transform: rotate(45deg); }
+@media (max-width: 900px) {
+  :root[data-skin="v3"] .v3-pin { display: none; }
+}
+
 /* --- top bar ---------------------------------------------------------------
    Title, then Mediline's furniture: search, language, theme, notifications,
    and the person signed in. v3.js moves the existing controls up here, so
@@ -413,7 +508,7 @@
 }
 :root[data-skin="v3"] .btn.primary:hover { filter: none; background: linear-gradient(135deg, #C42D63, #9A3590); border-color: transparent; box-shadow: 0 12px 22px -10px rgba(214,51,108,.9); }
 :root[data-skin="v3"][data-theme="dark"] .btn.primary { background: var(--clay); color: #1F2233; box-shadow: none; }
-:root[data-skin="v3"][data-theme="dark"] .btn.primary:hover { background: #FFB8D1; }
+:root[data-skin="v3"][data-theme="dark"] .btn.primary:hover { background: #FFB3CF; }
 :root[data-skin="v3"] .btn.ghost { color: var(--ink-2); background: transparent; border-color: transparent; }
 :root[data-skin="v3"] .btn.ghost:hover { background: var(--surface-3); border-color: transparent; color: var(--ink); }
 :root[data-skin="v3"] .btn.danger { background: transparent; border-color: var(--rose-soft); color: var(--rose); }
@@ -476,7 +571,7 @@
   box-shadow: var(--shadow-1);
   background: var(--surface);
 }
-:root[data-skin="v3"][data-theme="dark"] .card { box-shadow: none; }
+:root[data-skin="v3"][data-theme="dark"] .card { box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255,255,255,.03); }
 :root[data-skin="v3"] .card-head { padding: 18px var(--s-5) 8px; border-bottom: 0; min-height: 52px; }
 :root[data-skin="v3"] .card-head h2 { font-size: 15.5px; font-weight: 600; }
 :root[data-skin="v3"] .card-head .sub { font-size: 12px; margin-inline-start: 4px; }
@@ -490,6 +585,7 @@
 :root[data-skin="v3"] .kpi {
   --g1: var(--pink-a); --g2: var(--pink-b);
   display: flex; flex-direction: column;
+  container-type: inline-size;
   padding: 20px 22px 18px;
   min-height: 132px;
   background: linear-gradient(135deg, var(--g1), var(--g2));
@@ -502,7 +598,7 @@
 :root[data-skin="v3"] .g-kpi > .kpi:nth-child(4n+2) { --g1: var(--purple-a); --g2: var(--purple-b); }
 :root[data-skin="v3"] .g-kpi > .kpi:nth-child(4n+3) { --g1: var(--sky-a); --g2: var(--sky-b); }
 :root[data-skin="v3"] .g-kpi > .kpi:nth-child(4n+4) { --g1: var(--orange-a); --g2: var(--orange-b); }
-:root[data-skin="v3"][data-theme="dark"] .kpi { box-shadow: none; }
+:root[data-skin="v3"][data-theme="dark"] .kpi { box-shadow: 0 18px 36px -22px var(--g1), inset 0 1px 0 rgba(255,255,255,.08); }
 /* A soft wave across the bottom of each card, as on the reference. */
 :root[data-skin="v3"] .kpi::before {
   display: block; content: ""; position: absolute; inset: auto 0 0 0; height: 58%;
@@ -511,6 +607,7 @@
   pointer-events: none;
 }
 :root[data-skin="v3"] .kpi > * { position: relative; }
+:root[data-skin="v3"] .kpi > .kpi-label { position: static; }
 /* Room for the round icon beside the number and label only; the line under
    them runs the card's full width. */
 :root[data-skin="v3"] .kpi .kpi-value,
@@ -519,6 +616,17 @@
   order: 1; color: #FFFFFF;
   font-size: 28px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; margin-top: 0;
   font-family: var(--font-num);
+  /* One line, sized to the card: a long amount shrinks rather than wrapping
+     under the icon or being cut. */
+  white-space: nowrap;
+  font-size: clamp(17px, 12.5cqi, 28px);
+  /* The base page sets every figure `direction: ltr`, which in Arabic left-
+     aligned the number, put the icon's reserved space on the wrong side and
+     read "13,300 ج.م" currency-first. A KPI value is its own paragraph and
+     takes its direction from its own text: an amount in Arabic reads number
+     then «ج.م», a bare figure follows the page, and the digit run itself
+     stays left-to-right either way. */
+  direction: inherit; unicode-bidi: plaintext; text-align: start;
 }
 :root[data-skin="v3"] .kpi .kpi-label {
   order: 2; position: static;
@@ -828,13 +936,16 @@
   :root[data-skin="v3"] #rail .rail-search { display: flex; }
   :root[data-skin="v3"] .g-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
   :root[data-skin="v3"] .kpi { padding: 14px 14px 12px; min-height: 112px; }
-  :root[data-skin="v3"] .kpi .kpi-value { font-size: 20px; }
+  :root[data-skin="v3"] .kpi .kpi-value { font-size: clamp(14px, 13cqi, 21px); }
   :root[data-skin="v3"] .kpi .kpi-label { font-size: 12px; }
   :root[data-skin="v3"] .kpi .kpi-foot { font-size: 11px; padding-top: 8px; }
   :root[data-skin="v3"] .kpi .kpi-label svg,
   :root[data-skin="v3"] .kpi .kpi-label .ic { width: 34px; height: 34px; padding: 9px; top: 12px; inset-inline-end: 12px; }
+  /* On a phone the icon sits above the number, which then has the card's
+     whole width. */
+  :root[data-skin="v3"] .g-kpi > .kpi:has(.kpi-label svg) { padding-top: 54px; }
   :root[data-skin="v3"] .kpi .kpi-value,
-  :root[data-skin="v3"] .kpi .kpi-label { padding-inline-end: 38px; }
+  :root[data-skin="v3"] .kpi .kpi-label { padding-inline-end: 0; }
   :root[data-skin="v3"] .g-2,
   :root[data-skin="v3"] .g-3,
   :root[data-skin="v3"] .lane { grid-template-columns: minmax(0, 1fr); }
@@ -842,6 +953,10 @@
   :root[data-skin="v3"] .card-body { padding: var(--s-3) var(--s-4) var(--s-4); }
 
   :root[data-skin="v3"] .pagehead > .row { width: 100%; }
+  /* A row of filter chips beside a search field gets a line of its own
+     (it scrolls sideways), instead of being squeezed to a sliver. */
+  :root[data-skin="v3"] .row > .inbox-filters { flex: 1 1 100%; min-width: 0; }
+  :root[data-skin="v3"] .row > .field { flex: 1 1 100%; min-width: 0 !important; }
   :root[data-skin="v3"] .pagehead .field { min-width: 0 !important; flex: 1 1 100%; }
   :root[data-skin="v3"] .pagehead .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
   :root[data-skin="v3"] .pagehead .seg button { white-space: nowrap; }

@@ -171,7 +171,10 @@ def test_v3_wears_the_reference_palette():
     for hue in ("pink", "purple", "sky", "orange"):
         assert f"--{hue}-a" in css and f"--{hue}-b" in css
     assert light["ground"] == "#F6EEF3"
-    assert dark["ground"] == "#263640" and dark["surface"] == "#31424C"
+    # Deep aubergine-slate, each elevation step lighter than the last.
+    steps = [dark[k] for k in ("ground", "surface", "surface-2", "surface-3")]
+    assert [_luminance(c) for c in steps] == sorted(_luminance(c) for c in steps)
+    assert dark["ground"] == "#1B1828"
 
 
 def test_v3_text_pairings_meet_wcag_aa_in_both_themes():
@@ -225,7 +228,11 @@ def test_v3_motion_is_presentation_only():
     js = (THEMES / "v3.js").read_text(encoding="utf-8")
     # The SVG namespace is an identifier, not somewhere anything is loaded from.
     js = js.replace('"http://www.w3.org/2000/svg"', "SVG_NS")
-    for forbidden in ("fetch(", "XMLHttpRequest", "localStorage", "sessionStorage",
+    # One display preference is stored -- the sidebar pin, per user -- and
+    # nothing else.
+    assert set(re.findall(r"localStorage\.(\w+)", js)) <= {"getItem", "setItem"}
+    assert js.count("localStorage.") == 2 and "rehla.v3.pin." in js
+    for forbidden in ("fetch(", "XMLHttpRequest", "sessionStorage",
                       "http://", "https://", "import(", "<script src", "eval("):
         assert forbidden not in js, forbidden
     assert "prefers-reduced-motion: reduce" in js
@@ -243,3 +250,27 @@ def test_v3_motion_holds_back_on_refresh():
     js = (THEMES / "v3.js").read_text(encoding="utf-8")
     assert "introUntil" in js and "seen.has(key)" in js
     assert "lastNumber" in js  # numbers tween from the old value
+
+
+def test_v3_rail_collapses_without_moving_the_page():
+    """The rail shuts to its icon strip and opens over the content: the page's
+    column is the strip either way, unless the user pins it open."""
+    css = (THEMES / "v3.css").read_text(encoding="utf-8")
+    js = (THEMES / "v3.js").read_text(encoding="utf-8")
+    assert ':root[data-skin="v3"] { --rail: var(--strip); }' in css
+    assert ':root[data-skin="v3"].v3-pinned { --rail: var(--rail-full); }' in css
+    assert "clip-path: inset(0 calc(100% - var(--strip)) 0 0)" in css
+    assert "clip-path: inset(0 0 0 calc(100% - var(--strip)))" in css  # RTL
+    assert "scrollbar-width: none" in css
+    for hook in ("mouseenter", "mouseleave", "focusin", "focusout"):
+        assert f'"{hook}"' in js
+
+
+def test_v3_kpi_numbers_follow_their_own_text_direction():
+    """The base page forces figures LTR; in a KPI that misaligned Arabic and
+    read amounts currency-first."""
+    css = (THEMES / "v3.css").read_text(encoding="utf-8")
+    assert "direction: inherit; unicode-bidi: plaintext; text-align: start;" in css
+    assert ':root[data-skin="v3"] .kpi > .kpi-label { position: static; }' in css
+    js = (THEMES / "v3.js").read_text(encoding="utf-8")
+    assert "minInlineSize" in js  # the final number's width is reserved

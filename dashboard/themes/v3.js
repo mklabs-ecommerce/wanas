@@ -121,6 +121,99 @@
     if (nav) new MutationObserver(sync).observe(nav, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"], characterData: true });
   }
 
+  /* ---- the rail: an icon strip that opens on intent ----------------------------
+     Shut by default on a desktop; hover (after a short intent delay) or
+     keyboard focus opens it over the page, leaving closes it. The pin keeps
+     it open and is remembered per signed-in user -- a display preference,
+     the only thing this file stores. The shut geometry (.v3-shut) is applied
+     only once the closing clip has finished, so nothing jumps while visible. */
+
+  function railController() {
+    const rail = document.getElementById("rail");
+    const root = document.documentElement;
+    if (!rail) return;
+    const desktop = window.matchMedia("(min-width: 901px)");
+    const userKey = () => {
+      const name = document.getElementById("meName");
+      return `rehla.v3.pin.${name ? name.textContent.trim() : ""}`;
+    };
+    const readPin = () => { try { return localStorage.getItem(userKey()) === "1"; } catch { return false; } };
+    const writePin = (on) => { try { localStorage.setItem(userKey(), on ? "1" : "0"); } catch { /* private mode */ } };
+
+    const pin = document.createElement("button");
+    pin.type = "button";
+    pin.className = "v3-pin";
+    pin.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8V5h6v5.8l2.5 3.2H6.5Z"/><path d="M8 5h8"/></svg>';
+    const pinLabel = () => (document.documentElement.lang === "en" ? "Keep the menu open" : "تثبيت القائمة مفتوحة");
+    const brand = rail.querySelector(".brand");
+    if (brand) brand.append(pin);
+
+    let openTimer = 0;
+    let closeTimer = 0;
+    const pinned = () => root.classList.contains("v3-pinned");
+    const open = () => {
+      clearTimeout(closeTimer);
+      if (!desktop.matches) return;
+      rail.classList.remove("v3-shut");
+      rail.classList.add("v3-open");
+    };
+    const shutNow = () => {
+      if (!rail.classList.contains("v3-open") && !pinned()) rail.classList.add("v3-shut");
+    };
+    const close = () => {
+      clearTimeout(openTimer);
+      if (pinned() || !desktop.matches) return;
+      rail.classList.remove("v3-open");
+      // After the clip has closed (or at once, with no motion).
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(shutNow, still() ? 0 : 360);
+    };
+    const setPinned = (on, remember) => {
+      root.classList.toggle("v3-pinned", on);
+      pin.setAttribute("aria-pressed", String(on));
+      pin.title = pinLabel();
+      pin.setAttribute("aria-label", pinLabel());
+      if (remember) writePin(on);
+      if (on) { rail.classList.remove("v3-shut"); rail.classList.add("v3-open"); }
+      else if (!rail.matches(":hover, :focus-within")) close();
+    };
+
+    rail.addEventListener("mouseenter", () => {
+      clearTimeout(closeTimer);
+      clearTimeout(openTimer);
+      openTimer = setTimeout(open, still() ? 0 : 90);
+    });
+    rail.addEventListener("mouseleave", () => {
+      clearTimeout(openTimer);
+      closeTimer = setTimeout(close, 160);
+    });
+    rail.addEventListener("focusin", open);
+    rail.addEventListener("focusout", (e) => { if (!rail.contains(e.relatedTarget)) close(); });
+    // Choosing a section closes an unpinned overlay: the choice is made.
+    rail.addEventListener("click", (e) => { if (e.target.closest(".nav-item") && !pinned()) { rail.classList.remove("v3-open"); closeTimer = setTimeout(shutNow, still() ? 0 : 360); } });
+    pin.addEventListener("click", () => setPinned(!pinned(), true));
+
+    // Names as tooltips, for the strip.
+    const label = () => rail.querySelectorAll(".nav-item").forEach((item) => {
+      const text = item.querySelector(".label");
+      if (text && item.title !== text.textContent) item.title = text.textContent;
+    });
+    const nav = document.getElementById("nav");
+    if (nav) new MutationObserver(label).observe(nav, { childList: true });
+    label();
+
+    const apply = () => {
+      if (!desktop.matches) { rail.classList.remove("v3-open", "v3-shut"); root.classList.remove("v3-pinned"); return; }
+      setPinned(readPin(), false);
+      if (!pinned()) { rail.classList.remove("v3-open"); rail.classList.add("v3-shut"); }
+    };
+    apply();
+    desktop.addEventListener("change", apply);
+    // The signed-in name arrives after boot; the pin is theirs, so re-read it.
+    const me = document.getElementById("meName");
+    if (me) new MutationObserver(apply).observe(me, { childList: true, characterData: true, subtree: true });
+  }
+
   /* ---- theme switch: a crossfade ---------------------------------------------- */
 
   let replaying = false;
@@ -339,6 +432,14 @@
       node.textContent = current;
       if (t < 1) requestAnimationFrame(tick);
     };
+    // Reserve the final number's width before counting, so a value growing
+    // from "0" never pushes into the icon or the label beside it.
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const width = Math.ceil(range.getBoundingClientRect().width);
+      if (width) node.style.minInlineSize = `${width}px`;
+    } catch { /* measuring is a nicety */ }
     let current = before + fmt.format(from) + after;
     node.textContent = current;
     requestAnimationFrame(tick);
@@ -458,6 +559,7 @@
 
   function boot() {
     furnishTopbar();
+    railController();
     if (viewport) observeContent(viewport);
     if (!app.hidden) startVisit();
     else {
