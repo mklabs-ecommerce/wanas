@@ -10,6 +10,12 @@
   try { lang = (localStorage.getItem("rehla.lang") || localStorage.getItem("wanas.lang")) === "en" ? "en" : "ar"; } catch (e) { /* private window */ }
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
+  var theme = null;
+  try { theme = localStorage.getItem("rehla.theme") || localStorage.getItem("wanas.theme"); } catch (e) { /* private window */ }
+  if (theme !== "dark" && theme !== "light") {
+    theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  document.documentElement.dataset.theme = theme;
 })();
 </script>
 <title>Rehla — دخول الفريق</title>
@@ -127,7 +133,7 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2s; } * { transition: none !important; } }
 </style>
 </head>
-<body>
+<body class="login">
 <main>
   <img class="mark" src="/dashboard/logo.webp" alt="Rehla" width="52" height="52">
   <h1 dir="ltr">Rehla</h1>

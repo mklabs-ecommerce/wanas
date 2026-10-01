@@ -75,6 +75,18 @@ APP_PAGE = _DIR / "dashboard.html"
 #: that use it, and like them it is public -- the login page shows it before
 #: anybody has a session, and a logo is not customer data.
 LOGO_FILE = _DIR / "rehla.webp"
+#: Swappable skins (DASHBOARD_THEME). Each is a stylesheet scoped to
+#: `:root[data-skin="<name>"]` that re-points the design tokens both pages are
+#: written in, plus the fonts it needs. `legacy` is the absence of a skin:
+#: the pages exactly as they were.
+THEMES_DIR = _DIR / "themes"
+THEME_FONTS = {
+    "mklabs": (
+        "https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800"
+        "&family=Martian+Mono:wdth,wght@75..112.5,400..700"
+        "&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+    ),
+}
 
 COOKIE_NAME = "rehla_staff"
 #: What the cookie was called before the rename. Read for as long as sessions
@@ -332,7 +344,23 @@ def _conversation_summary(
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page() -> HTMLResponse:
-    return HTMLResponse(LOGIN_PAGE.read_text(encoding="utf-8"))
+    return HTMLResponse(skinned(LOGIN_PAGE.read_text(encoding="utf-8")))
+
+
+def skinned(page: str, theme: str | None = None) -> str:
+    """The page wearing the configured skin -- or untouched for `legacy`, or
+    for a name with no stylesheet (a typo must not blank the dashboard)."""
+    theme = (theme or settings.dashboard_theme or "").strip().lower()
+    css_file = THEMES_DIR / f"{theme}.css"
+    if theme == "legacy" or not theme.isidentifier() or not css_file.is_file():
+        return page
+    head = ""
+    if theme in THEME_FONTS:
+        fonts = THEME_FONTS[theme].replace("&", "&amp;")
+        head += f'<link href="{fonts}" rel="stylesheet">\n'
+    head += f'<style id="skin">\n{css_file.read_text(encoding="utf-8")}\n</style>\n'
+    page = page.replace("<html ", f'<html data-skin="{theme}" ', 1)
+    return page.replace("</head>", head + "</head>", 1)
 
 
 @router.get("/logo.webp")
@@ -355,7 +383,7 @@ def app_page() -> HTMLResponse:
     # customer data, only the JS shell. `/api/me` is what actually gates
     # anything, on first fetch, and sends an unauthenticated visitor to
     # `/dashboard/login`.
-    return HTMLResponse(APP_PAGE.read_text(encoding="utf-8"))
+    return HTMLResponse(skinned(APP_PAGE.read_text(encoding="utf-8")))
 
 
 # --------------------------------------------------------------------------

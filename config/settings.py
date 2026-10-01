@@ -280,6 +280,10 @@ class Settings:
     dashboard_enabled: bool
     dashboard_session_secret: str
     dashboard_session_hours: int
+    #: Which skin the dashboard wears: `mklabs` ("Tag & Ledger", the default)
+    #: or `legacy` (the original pastel design). A config switch so a redesign
+    #: can be reverted without a deploy of different code; see dashboard/themes/.
+    dashboard_theme: str
 
     #: With no Shopify credentials, serve price/stock from the local database
     #: and record orders locally (integrations/shopify/local_shelf.py). On by
@@ -579,6 +583,7 @@ def load_settings() -> Settings:
         dashboard_enabled=_bool("DASHBOARD_ENABLED", True),
         dashboard_session_secret=os.getenv("DASHBOARD_SESSION_SECRET", "").strip(),
         dashboard_session_hours=_int("DASHBOARD_SESSION_HOURS", 12),
+        dashboard_theme=os.getenv("DASHBOARD_THEME", "mklabs").strip().lower() or "mklabs",
         local_store=_bool("LOCAL_STORE", True),
         shopify_store_domain=os.getenv("SHOPIFY_STORE_DOMAIN", "").strip(),
         shopify_admin_token=os.getenv("SHOPIFY_ADMIN_TOKEN", "").strip(),

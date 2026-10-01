@@ -1,0 +1,306 @@
+/* ==========================================================================
+   MK Labs — "D5 · Tag & Ledger"
+
+   A skin, not a rewrite: dashboard.html is written entirely in tokens, so
+   this file re-points the tokens and dresses a handful of components as
+   retail objects -- cards are price tags, statuses are rubber stamps, tables
+   are receipts. Everything is scoped to `:root[data-skin="mklabs"]`, which
+   `dashboard/web.py` sets when DASHBOARD_THEME=mklabs (the default) and
+   leaves off for DASHBOARD_THEME=legacy -- so the old design comes back with
+   one variable and no code change.
+
+   Inks: kraft ground, label-paper panels, print-black text, and only two
+   colours on top -- cobalt for anything you can press or that is "on", and
+   stamp red for what needs a person. Flat fills, no gradients, no glossy
+   shadows. Every text pairing below meets WCAG AA in both themes.
+   ========================================================================== */
+
+:root[data-skin="mklabs"] {
+  color-scheme: light;
+
+  --kraft:         #D8C3A0;
+  --kraft-2:       #C7AE85;
+  --label:         #FAFAF7;
+  --print:         #151515;
+  --cobalt:        #1E3FD0;
+  --stamp-red:     #D93A28;
+
+  --ground:        var(--kraft);
+  --ground-2:      #D1BA93;
+  --surface:       var(--label);
+  --surface-2:     #F4F2EB;
+  --surface-3:     #EDE8DC;
+  --line:          #E2D6BF;
+  --line-strong:   var(--kraft-2);
+
+  --ink:           var(--print);
+  --ink-2:         #2C2924;
+  --ink-3:         #4A443A;   /* 5.5:1 on kraft, 9:1 on label */
+  --ink-inv:       var(--label);
+
+  /* The legacy palette's six hues collapse onto the two inks. `clay` was the
+     brand accent (primary buttons, links, the active nav item) -> cobalt.
+     `teal` (healthy) and `sky` (info) are cobalt too: one "on" colour.
+     `rose` is the red -- tuned a step darker than the stamp so red *text*
+     on paper still reads at AA; the stamp hex itself is kept for marks.
+     `lilac` and `amber` become print and a dark kraft: not new inks. */
+  --clay:          var(--cobalt);
+  --clay-soft:     #C9D1F5;
+  --clay-tint:     #E7EBFB;
+  --teal:          var(--cobalt);
+  --teal-soft:     #C9D1F5;
+  --teal-tint:     #E7EBFB;
+  --sky:           var(--cobalt);
+  --sky-soft:      #C9D1F5;
+  --sky-tint:      #E7EBFB;
+  --rose:          #C4321F;
+  --rose-soft:     #F2C9C2;
+  --rose-tint:     #FBEAE7;
+  --lilac:         var(--print);
+  --lilac-soft:    #DDD3C0;
+  --lilac-tint:    #EFE9DD;
+  --amber:         #5C4519;
+  --amber-soft:    #E3D2B0;
+  --amber-tint:    #F2EADA;
+
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: 0 0 0 1px var(--print), 6px 6px 0 rgba(21,21,21,.16);
+  --ring: 0 0 0 3px rgba(30,63,208,.35);
+
+  --r-xs: 2px; --r-sm: 3px; --r-md: 4px; --r-lg: 6px; --r-xl: 8px;
+
+  --font-ar: "Schibsted Grotesk", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+  --font-head: "Schibsted Grotesk", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-num: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --perf: var(--kraft-2);        /* the dashed tear line on a tag */
+  --dots: rgba(21,21,21,.075);   /* the kraft's fibre */
+}
+
+/* Dark: the same objects at night. Print-black ground, panels a step
+   lighter, label-white text, a lightened cobalt so it still reads (and so
+   print-black text on a cobalt button stays AA), and the red kept. */
+:root[data-skin="mklabs"][data-theme="dark"] {
+  color-scheme: dark;
+
+  --ground:        #151515;
+  --ground-2:      #1A1A19;
+  --surface:       #1F1E1C;
+  --surface-2:     #262522;
+  --surface-3:     #2E2C28;
+  --line:          #34322D;
+  --line-strong:   #4A463E;
+
+  --ink:           #FAFAF7;
+  --ink-2:         #E2DED4;
+  --ink-3:         #B4AE9F;   /* 7.6:1 on the panel */
+  --ink-inv:       #151515;
+
+  --clay:          #8EA2FF;   /* cobalt, lifted: 7:1 on the panel */
+  --clay-soft:     #2D3766;
+  --clay-tint:     #1F2440;
+  --teal:          #8EA2FF;
+  --teal-soft:     #2D3766;
+  --teal-tint:     #1F2440;
+  --sky:           #8EA2FF;
+  --sky-soft:      #2D3766;
+  --sky-tint:      #1F2440;
+  --rose:          #FF7F6E;   /* the stamp red, lifted for dark paper */
+  --rose-soft:     #5A2620;
+  --rose-tint:     #33201C;
+  --lilac:         #FAFAF7;
+  --lilac-soft:    #3A3833;
+  --lilac-tint:    #2A2925;
+  --amber:         #E0C48E;
+  --amber-soft:    #4A3E26;
+  --amber-tint:    #2E2A20;
+
+  --shadow-3: 0 0 0 1px #4A463E, 6px 6px 0 rgba(0,0,0,.45);
+  --ring: 0 0 0 3px rgba(142,162,255,.4);
+
+  --perf: #4A463E;
+  --dots: rgba(250,250,247,.035);
+}
+
+/* --- ground -------------------------------------------------------------- */
+
+:root[data-skin="mklabs"] body::before {
+  background: none;
+  background-image: radial-gradient(var(--dots) 1px, transparent 1.3px);
+  background-size: 7px 7px;
+  opacity: 1;
+}
+
+:root[data-skin="mklabs"] h1,
+:root[data-skin="mklabs"] h2,
+:root[data-skin="mklabs"] h3,
+:root[data-skin="mklabs"] h4 {
+  font-family: var(--font-head);
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+:root[data-skin="mklabs"][dir="rtl"] h1,
+:root[data-skin="mklabs"][dir="rtl"] h2,
+:root[data-skin="mklabs"][dir="rtl"] h3,
+:root[data-skin="mklabs"][dir="rtl"] h4 { letter-spacing: 0; font-weight: 700; }
+
+/* Martian Mono is wide; its width axis narrows it to sit in a table cell. */
+:root[data-skin="mklabs"] .num,
+:root[data-skin="mklabs"] .kpi-value,
+:root[data-skin="mklabs"] .metric,
+:root[data-skin="mklabs"] .delta,
+:root[data-skin="mklabs"] kbd,
+:root[data-skin="mklabs"] .conv .tm,
+:root[data-skin="mklabs"] .bubble .meta {
+  font-family: var(--font-num);
+  font-stretch: 87.5%;
+  letter-spacing: -.02em;
+}
+:root[data-skin="mklabs"] .kpi .kpi-value { font-size: 26px; font-weight: 600; }
+
+/* --- frame --------------------------------------------------------------- */
+
+:root[data-skin="mklabs"] #rail {
+  background: var(--surface);
+  backdrop-filter: none;
+  border-inline-start: 1px dashed var(--perf);
+}
+:root[data-skin="mklabs"] #topbar {
+  background: var(--ground);
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--line-strong);
+}
+:root[data-skin="mklabs"] .brand .mark { box-shadow: none; border: 1px solid var(--line-strong); }
+:root[data-skin="mklabs"] .brand .name { font-family: var(--font-head); font-weight: 800; }
+:root[data-skin="mklabs"] .nav-group { font-family: var(--font-num); font-stretch: 87.5%; letter-spacing: .08em; }
+:root[data-skin="mklabs"] .nav-item[aria-current="page"] { background: var(--clay); color: var(--ink-inv); }
+:root[data-skin="mklabs"][data-theme="light"] .nav-item[aria-current="page"],
+:root[data-skin="mklabs"]:not([data-theme="dark"]) .nav-item[aria-current="page"] { color: #FFFFFF; }
+:root[data-skin="mklabs"] .nav-item[aria-current="page"]::before { display: none; }
+:root[data-skin="mklabs"] .nav-item[aria-current="page"] .count { background: var(--surface); color: var(--ink); }
+:root[data-skin="mklabs"] .nav-item .count { border-radius: var(--r-xs); }
+:root[data-skin="mklabs"] .nav-item .count[data-tone="urgent"] { background: var(--rose); color: #FFFFFF; }
+:root[data-skin="mklabs"][data-theme="dark"] .nav-item .count[data-tone="urgent"] { color: #151515; }
+:root[data-skin="mklabs"] .rail-foot { border-top: 1px dashed var(--perf); }
+
+/* --- buttons ------------------------------------------------------------- */
+
+:root[data-skin="mklabs"] .btn { font-weight: 700; }
+:root[data-skin="mklabs"] .btn.primary { background: var(--clay); border-color: var(--clay); color: #FFFFFF; }
+:root[data-skin="mklabs"][data-theme="dark"] .btn.primary { color: #151515; }
+:root[data-skin="mklabs"] .btn.primary:hover { filter: none; background: var(--print); border-color: var(--print); }
+:root[data-skin="mklabs"][data-theme="dark"] .btn.primary:hover { background: var(--label); border-color: var(--label); }
+
+/* --- cards are tags ------------------------------------------------------- */
+/* A clipped corner (the notch a tag is punched with) and a dashed tear line
+   under the head. Not rotated, not skewed: a tag you can still read. */
+
+:root[data-skin="mklabs"] .card {
+  border-color: var(--line-strong);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+:root[data-skin="mklabs"][dir="rtl"] .card {
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
+}
+:root[data-skin="mklabs"] .card-head { border-bottom: 1px dashed var(--perf); }
+:root[data-skin="mklabs"] .card-head h2 { font-size: 15px; }
+
+:root[data-skin="mklabs"] .kpi::before {
+  background: none;
+  height: 0;
+  border-top: 3px solid var(--accent, var(--clay));
+}
+
+/* --- stamps -------------------------------------------------------------- */
+/* Small, square-cornered, upper-case where the script has case, inked in
+   cobalt or red with a ruled border -- a rubber stamp, not a pill. */
+
+:root[data-skin="mklabs"] .chip,
+:root[data-skin="mklabs"] .fchip {
+  border-radius: var(--r-xs);
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+:root[data-skin="mklabs"] .chip { border: 1.5px solid currentColor; background: transparent; }
+:root[data-skin="mklabs"][dir="ltr"] .chip { text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
+:root[data-skin="mklabs"] .chip[data-tone="teal"],
+:root[data-skin="mklabs"] .chip[data-tone="clay"],
+:root[data-skin="mklabs"] .chip[data-tone="sky"] { color: var(--clay); background: transparent; border-color: currentColor; }
+:root[data-skin="mklabs"] .chip[data-tone="rose"] { color: var(--rose); background: transparent; border-color: currentColor; }
+:root[data-skin="mklabs"] .chip[data-tone="amber"],
+:root[data-skin="mklabs"] .chip[data-tone="lilac"] { color: var(--ink-2); background: transparent; border-color: currentColor; }
+:root[data-skin="mklabs"] .fchip[aria-pressed="true"] { background: var(--clay); border-color: var(--clay); color: #FFFFFF; }
+:root[data-skin="mklabs"][data-theme="dark"] .fchip[aria-pressed="true"] { color: #151515; }
+
+:root[data-skin="mklabs"] .seg { border-radius: var(--r-sm); }
+:root[data-skin="mklabs"] .seg button { border-radius: var(--r-xs); }
+:root[data-skin="mklabs"] .seg button[aria-pressed="true"] { background: var(--print); color: var(--label); box-shadow: none; }
+:root[data-skin="mklabs"][data-theme="dark"] .seg button[aria-pressed="true"] { background: var(--label); color: var(--print); }
+
+/* --- receipts ------------------------------------------------------------ */
+
+:root[data-skin="mklabs"] table.tbl th {
+  background: var(--surface);
+  font-family: var(--font-num);
+  font-stretch: 87.5%;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 1.5px solid var(--ink);
+}
+:root[data-skin="mklabs"] table.tbl td { border-bottom: 1px dashed var(--line-strong); }
+:root[data-skin="mklabs"] table.tbl tbody tr:hover { background: var(--surface-3); }
+:root[data-skin="mklabs"] table.tbl td.num { font-weight: 500; }
+
+/* --- conversation -------------------------------------------------------- */
+
+:root[data-skin="mklabs"] .conv[aria-selected="true"] { background: var(--clay-tint); }
+:root[data-skin="mklabs"] .conv[aria-selected="true"]::before { background: var(--clay); }
+:root[data-skin="mklabs"] .bubble { border-radius: var(--r-md); box-shadow: none; }
+:root[data-skin="mklabs"] .bubble.user { background: var(--surface); border: 1px solid var(--line-strong); }
+
+/* --- fields, overlays ---------------------------------------------------- */
+
+:root[data-skin="mklabs"] .field,
+:root[data-skin="mklabs"] input.inp,
+:root[data-skin="mklabs"] select.inp,
+:root[data-skin="mklabs"] textarea.inp { box-shadow: none; }
+:root[data-skin="mklabs"] .modal,
+:root[data-skin="mklabs"] .drawer { box-shadow: var(--shadow-3); }
+:root[data-skin="mklabs"] .banner { border-radius: var(--r-sm); }
+:root[data-skin="mklabs"] .banner[data-tone="bad"] { border-inline-start: 4px solid var(--stamp-red); }
+
+/* --- login page ---------------------------------------------------------- */
+
+:root[data-skin="mklabs"] body.login::before {
+  background: none;
+  background-image: radial-gradient(var(--dots) 1px, transparent 1.3px);
+  background-size: 7px 7px;
+}
+:root[data-skin="mklabs"] body.login h1 { font-family: var(--font-head); font-weight: 800; }
+:root[data-skin="mklabs"] body.login .mark { box-shadow: none; border: 1px solid var(--line-strong); border-radius: var(--r-md); }
+:root[data-skin="mklabs"] body.login form {
+  border: 1px solid var(--line-strong);
+  border-top: 2px dashed var(--perf);
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+}
+:root[data-skin="mklabs"][dir="rtl"] body.login form {
+  clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%, 0 16px);
+}
+:root[data-skin="mklabs"] body.login input { background: var(--surface-2); border-color: var(--line-strong); }
+:root[data-skin="mklabs"] body.login button:not(.langbtn) { background: var(--clay); color: #FFFFFF; }
+:root[data-skin="mklabs"][data-theme="dark"] body.login button:not(.langbtn) { color: #151515; }
+:root[data-skin="mklabs"] body.login button:not(.langbtn):hover { filter: none; background: var(--print); }
+:root[data-skin="mklabs"][data-theme="dark"] body.login button:not(.langbtn):hover { background: var(--label); }
+:root[data-skin="mklabs"] body.login .langbtn { background: none; color: var(--ink-3); }
+
+/* --- Arabic in a mono slot ---------------------------------------------- */
+/* Martian Mono has no Arabic, so an Arabic label set in it falls back to
+   Plex -- but the tracking meant for Latin capitals would pull the joined
+   letters apart. Arabic is never tracked. */
+:root[data-skin="mklabs"][dir="rtl"] .nav-group,
+:root[data-skin="mklabs"][dir="rtl"] table.tbl th,
+:root[data-skin="mklabs"][dir="rtl"] .chip { letter-spacing: 0; }
+:root[data-skin="mklabs"] input::placeholder { font-family: var(--font-ar); letter-spacing: 0; }

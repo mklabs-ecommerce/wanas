@@ -16,6 +16,15 @@
   var root = document.documentElement;
   root.lang = lang;
   root.dir = lang === "en" ? "ltr" : "rtl";
+  /* The theme too, before first paint: the reader's own choice if they made
+     one, the system's preference otherwise. Remembered per user once signed
+     in (see applyTheme); this is the last choice made on this browser. */
+  var theme = null;
+  try { theme = localStorage.getItem("rehla.theme") || localStorage.getItem("wanas.theme"); } catch (e) { /* private window */ }
+  if (theme !== "dark" && theme !== "light") {
+    theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  root.dataset.theme = theme;
 })();
 </script>
 <title>Rehla — نظام إدارة المتجر</title>
@@ -761,7 +770,7 @@ table.tbl td.num { font-size: 13px; font-weight: 600; }
   background: var(--line-strong); transition: background var(--t-mid);
 }
 .switch .knob {
-  position: absolute; top: 3px; inset-inline-end: 3px; width: 21px; height: 21px;
+  position: absolute; top: 3px; inset-inline-start: 3px; width: 21px; height: 21px;
   border-radius: 50%; background: #fff; box-shadow: var(--shadow-1);
   transition: transform var(--t-mid);
 }
@@ -2874,9 +2883,25 @@ const state = {
 
 const THEME_KEY = "rehla.theme";
 
+/* Remembered per user: two people sharing the shop's laptop each get their
+   own. The unkeyed copy is what the pre-paint script and the login page read,
+   so the last choice made on this browser is what the next page opens in. */
+function userThemeKey() {
+  return state.me && state.me.username ? `${THEME_KEY}.user.${state.me.username}` : null;
+}
+
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  try { localStorage.setItem(THEME_KEY, theme); } catch { /* private window */ }
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+    if (userThemeKey()) localStorage.setItem(userThemeKey(), theme);
+  } catch { /* private window */ }
+}
+
+function applyUserTheme() {
+  let saved = null;
+  try { saved = userThemeKey() && localStorage.getItem(userThemeKey()); } catch { /* private window */ }
+  if (saved === "dark" || saved === "light") applyTheme(saved);
 }
 
 (function initTheme() {
@@ -6580,6 +6605,7 @@ async function boot() {
   }
   if (!me) { location.reload(); return; }
   state.me = me;
+  applyUserTheme();
   // Keeps an open dashboard signed in: `/api/me` renews a session past half
   // its lifetime (dashboard/web.py::me).
   setInterval(() => { api("/dashboard/api/me", { quiet: true }).catch(() => {}); }, 10 * 60 * 1000);
