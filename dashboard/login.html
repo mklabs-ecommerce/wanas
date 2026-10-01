@@ -200,6 +200,12 @@ function showError(message, tone) {
   if (tone) errorBox.dataset.tone = tone; else errorBox.removeAttribute("data-tone");
 }
 
+// Already signed in (a valid session cookie, e.g. after the dashboard briefly
+// could not reach the server during a deploy): go straight back.
+fetch("/dashboard/api/me", { credentials: "same-origin" })
+  .then((response) => { if (response.ok) window.location.href = "/dashboard"; })
+  .catch(() => {});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorBox.removeAttribute("data-shown");

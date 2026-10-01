@@ -686,3 +686,37 @@ def test_the_new_cookie_wins_when_both_are_present(configured, staff):
 
     assert client.get("/dashboard/api/me").status_code == 200
     assert token
+
+
+def test_a_session_past_half_its_life_is_renewed_by_me(client, staff, monkeypatch):
+    """A fixed twelve-hour session signed people out mid-shift with the tab
+    open. `/api/me` hands a fresh token to a session past half its lifetime."""
+    import time as clock
+
+    real = clock.time
+    monkeypatch.setattr(auth.time, "time", lambda: real() - 8 * 3600)
+    old = auth.issue_session_token(staff)
+    monkeypatch.setattr(auth.time, "time", real)
+    client.cookies.set(dashboard.COOKIE_NAME, old)
+
+    res = client.get("/dashboard/api/me")
+    assert res.status_code == 200
+    fresh = res.cookies.get(dashboard.COOKIE_NAME)
+    assert fresh and fresh != old
+    assert auth.session_seconds_left(fresh) > auth.session_seconds_left(old)
+
+
+def test_a_fresh_session_is_not_reissued_on_every_call(logged_in):
+    res = logged_in.get("/dashboard/api/me")
+    assert res.status_code == 200
+    assert dashboard.COOKIE_NAME not in res.cookies
+
+
+def test_the_cookie_is_secure_behind_the_https_proxy(client, staff):
+    res = client.post(
+        "/dashboard/api/login",
+        json={"username": "sara", "password": "correct horse battery"},
+        headers={"x-forwarded-proto": "https"},
+    )
+    assert res.status_code == 200
+    assert "secure" in res.headers["set-cookie"].lower()

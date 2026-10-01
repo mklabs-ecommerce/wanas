@@ -180,13 +180,16 @@ def chart_from_payload(payload: dict) -> dict | None:
             sizes[str(name)] = kept
     if not measurements or not sizes:
         return None
-    return {
+    chart = {
         "chart_id": payload.get("chart_id") or None,
         "title": payload.get("title") or "",
         "unit": payload.get("unit") or "cm",
         "measurements": measurements,
         "sizes": sizes,
     }
+    if isinstance(payload.get("fit"), dict) and payload["fit"]:
+        chart["fit"] = payload["fit"]
+    return chart
 
 
 def _same_chart(incoming: dict, existing: dict | None) -> bool:
@@ -203,6 +206,7 @@ def _same_chart(incoming: dict, existing: dict | None) -> bool:
         and [m.get("key") for m in incoming["measurements"]]
         == [m.get("key") for m in existing.get("measurements") or []]
         and incoming["sizes"] == (existing.get("sizes") or {})
+        and (incoming.get("fit") or {}) == (existing.get("fit") or {})
     )
 
 
@@ -294,6 +298,7 @@ def apply_plan(session: Session, plan: dict) -> dict:
             row.unit = entry["chart"]["unit"]
             row.measurements = entry["chart"]["measurements"]
             row.sizes = entry["chart"]["sizes"]
+            row.fit = entry["chart"].get("fit") or None
             row.source = SOURCE
             if entry["image_url"]:
                 row.image_url = entry["image_url"]

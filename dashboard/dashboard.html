@@ -6563,9 +6563,26 @@ VIEWS.settings = {
    ========================================================================== */
 
 async function boot() {
-  const me = await api("/dashboard/api/me", { quiet: true });
-  if (me.__error) { location.href = "/dashboard/login"; return; }
+  // Only a 401 means "signed out", and `api()` already sends that to the
+  // login page. Anything else -- a 502 while a deploy swaps containers, a
+  // dropped connection -- is the server being away for a moment, and sending
+  // a signed-in person to the login form for it is what read as "it logged
+  // me out after the deploy". Wait and ask again.
+  let me = null;
+  for (let attempt = 0; attempt < 60 && !me; attempt += 1) {
+    try {
+      const answer = await api("/dashboard/api/me", { quiet: true });
+      if (!answer.__error) me = answer;
+    } catch (err) {
+      if (err.status === 401) return;
+    }
+    if (!me) await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  if (!me) { location.reload(); return; }
   state.me = me;
+  // Keeps an open dashboard signed in: `/api/me` renews a session past half
+  // its lifetime (dashboard/web.py::me).
+  setInterval(() => { api("/dashboard/api/me", { quiet: true }).catch(() => {}); }, 10 * 60 * 1000);
 
   $("#meName").textContent = me.username;
   $("#meAvatar").textContent = (me.username || tr("؟")).slice(0, 1).toUpperCase();

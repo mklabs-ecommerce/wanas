@@ -633,6 +633,11 @@ class SizeChart(Base):
     #: checked this" and "a model read this" are different claims, and the one
     #: that goes wrong goes wrong as a returned parcel.
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
+    #: What the shop publishes beside the measurements about who each size is
+    #: *for* -- `{"recommended_weight_kg": {"S": [45, 55], ...}}` -- read from
+    #: the same Shopify description the measurements came from. Advice about
+    #: the wearer, kept apart from `sizes` (which are the garment laid flat).
+    fit: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

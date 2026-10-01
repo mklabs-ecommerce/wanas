@@ -67,6 +67,7 @@ def as_chart(row: SizeChart) -> dict:
         "measurements": list(row.measurements or []),
         "sizes": dict(row.sizes or {}),
         "source": row.source or "manual",
+        "fit": dict(row.fit or {}),
     }
 
 

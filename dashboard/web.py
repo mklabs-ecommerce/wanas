@@ -380,18 +380,23 @@ def login(request: Request, payload: dict = Body(...)) -> JSONResponse:
         username_out = staff.username
 
     response = JSONResponse({"ok": True, "username": username_out})
+    _set_session_cookie(response, request, token)
+    return response
+
+
+def _set_session_cookie(response: JSONResponse, request: Request, token: str) -> None:
     response.set_cookie(
         COOKIE_NAME,
         token,
         httponly=True,
         samesite="lax",
-        # HTTPS in production (Railway), plain HTTP in local dev -- read off
-        # the request that just arrived rather than a setting nobody would
-        # remember to flip before the first deploy.
-        secure=request.url.scheme == "https",
+        # HTTPS in production, plain HTTP in local dev. Railway terminates TLS
+        # at its edge and talks plain HTTP to the container, so the scheme the
+        # browser used is the forwarded one, not `request.url.scheme`.
+        secure=(request.headers.get("x-forwarded-proto") or request.url.scheme) == "https",
         max_age=settings.dashboard_session_hours * 3600,
+        path="/",
     )
-    return response
 
 
 @router.post("/api/logout")
@@ -403,7 +408,16 @@ def logout() -> JSONResponse:
 
 
 @router.get("/api/me")
-def me(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
+def me(request: Request, rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
+    """Who is signed in -- and the one place a session is renewed.
+
+    Sessions are stateless and signed, so a deploy never ends one (only a
+    changed `DASHBOARD_SESSION_SECRET` does). What used to end them was the
+    fixed lifetime: twelve hours after login, mid-shift, with the tab open.
+    The dashboard calls this on load and every few minutes, and a session past
+    half its lifetime is handed a fresh one, so an open dashboard stays signed
+    in and a forgotten one still expires.
+    """
     with session_scope() as db:
         staff = _staff(db, rehla_staff)
         if staff is None:
@@ -411,13 +425,17 @@ def me(rehla_staff: str | None = Cookie(default=None)) -> JSONResponse:
         # `permissions` is what the sidebar hides nav items by. It is not what
         # protects anything -- every route it points at checks for itself
         # (`dashboard/guard.py::require_permission`).
-        return JSONResponse(
+        response = JSONResponse(
             {
                 "username": staff.username,
                 "role": staff.role or staff_admin.OWNER_ROLE,
                 "permissions": list(staff_admin.permission_keys(staff)),
             }
         )
+        left = auth.session_seconds_left(rehla_staff)
+        if left is not None and left < settings.dashboard_session_hours * 3600 / 2:
+            _set_session_cookie(response, request, auth.issue_session_token(staff))
+        return response
 
 
 # --------------------------------------------------------------------------

@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 
 from assistant.messages import TOOL_RESULTS, USER
-from assistant.tools.base import ToolContext, tool
+from assistant.tools.base import ToolContext, last_product, tool
 from domain.models import HANDOFF_REASONS, Client, QueueKind
 from domain.services import (
     identities,
@@ -52,7 +52,7 @@ HANDOFF_CLOSINGS = {
     "complaint": "آسفين جدًا على اللي حصل. حوّلت كلامك لحد من الفريق، وهيرد عليكي هنا في أقرب وقت.",
     "customer_asked": "تمام، حوّلت كلامك لحد من الفريق، وهيرد عليكي هنا في أقرب وقت.",
     "unclear": "معلش مش قادرة أفهم طلبك كويس، فحوّلته لحد من الفريق وهيرد عليكي هنا في أقرب وقت.",
-    "size_help": "هنبعتلك جدول المقاسات، وحد من الفريق هيساعدك تختاري المقاس المناسب هنا في أقرب وقت.",
+    "size_help": "حوّلت سؤالك لحد من الفريق، وهيساعدك تختاري المقاس المناسب هنا في أقرب وقت.",
 }
 
 #: What a refused scope handoff hands back. The prompt has said since the
@@ -171,6 +171,34 @@ def raise_handoff(
     return item
 
 
+def _chart_available(ctx: ToolContext) -> dict | None:
+    """Refuse a sizing handoff for a product that has a chart to answer from.
+
+    The demo-era rule was "no charts yet, hand off", and a model that learned
+    it keeps reaching for `size_help` after the charts arrived -- pausing a
+    customer who could have had the numbers in the same reply. The product is
+    the one the conversation is about (`last_product`); a product with no
+    chart, or no product at all, still hands off.
+    """
+    from domain.models import Product
+    from domain.services.size_charts import get_chart
+
+    current = last_product(ctx.history)
+    if not current:
+        return None
+    product = ctx.session.get(Product, current["product_id"])
+    if product is None:
+        return None
+    if get_chart(product.size_chart, ctx.session) is None and not product.size_chart_image:
+        return None
+    return {
+        "error": "size_chart_available",
+        "product_id": product.product_id,
+        "detail": "This product has a size chart. Call get_size_chart, quote the measurements and "
+        "help the customer choose; hand off only if they ask for a person.",
+    }
+
+
 @tool(
     "request_human",
     "Hand this conversation to a person. This is the only way a conversation leaves you, and it is "
@@ -187,8 +215,8 @@ def raise_handoff(
             "description": (
                 "unclear = you have already asked one clarifying question and still cannot tell "
                 "what they mean. complaint = something is wrong with what arrived. "
-                "customer_asked = they asked for a person. size_help = they need a size chart or "
-                "help choosing a size and get_size_chart returned has_chart=false. A question that is simply not about "  # noqa: E501
+                "customer_asked = they asked for a person. size_help = they need help choosing a "
+                "size and get_size_chart returned has_chart=false (never when it returned a chart). A question that is simply not about "  # noqa: E501
                 "the shop is NOT one of these -- answer it in one line yourself."
             ),
         },
@@ -212,6 +240,11 @@ def request_human(ctx: ToolContext, reason: str, summary: str) -> dict:
 
     if reason == "unclear" and not _clarifying_attempt_already_refused(ctx.history):
         return dict(_CLARIFY_REFUSAL)
+
+    if reason == "size_help":
+        refused = _chart_available(ctx)
+        if refused is not None:
+            return refused
 
     # The pause flag lives on the channel identity. While it is set the runtime
     # stops calling the model for this conversation entirely; incoming messages

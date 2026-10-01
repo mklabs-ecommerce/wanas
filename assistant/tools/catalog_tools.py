@@ -403,11 +403,14 @@ def get_variants(
 
 @tool(
     "get_size_chart",
-    "The published measurements for one product, plus the chart image, which the runtime attaches "
-    "to your reply automatically. If it returns has_chart false there is no chart for that product "
-    "yet: call request_human with reason size_help in the same turn (the shop then tells the customer "
-    "the chart is coming and a person will help with the size). If it returns image_only the picture is the whole chart -- send it and let the customer "  # noqa: E501
-    "read it; there are no measurements to quote. Never estimate a measurement and never quote "
+    "The published measurements for one product (garment laid flat, in cm), plus the chart image "
+    "when there is one, which the runtime attaches automatically. Every sizing question starts here. "
+    "With has_chart true, quote the measurements and help the customer choose: if they give their "
+    "weight, match it to `recommended_weight_kg` when present; if they name the size they usually "
+    "wear or a garment's measurements, compare with `sizes`; then suggest one size and say why. Only "
+    "if it returns has_chart false (no chart for that product, e.g. a cap) call request_human with "
+    "reason size_help. If it returns image_only the picture is the whole chart -- send it and let the "
+    "customer read it; there are no measurements to quote. Never estimate a measurement and never quote "
     "another product's chart. This is the tool for a customer who does not know their size: call it "
     "instead of asking them to work it out or promising to come back to them. `product_id` may be "
     "omitted when they mean the product already being discussed -- it then resolves to the last one "
@@ -466,6 +469,7 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
         # confident, precise, wrong numbers, and sizing wrong causes a return.
         return {"has_chart": False, "product_id": product_id}
 
+    weights = (chart.get("fit") or {}).get("recommended_weight_kg")
     return {
         "has_chart": True,
         # Which *product* this answers for, beside the chart's own `title`.
@@ -484,6 +488,10 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
         "length_specific": bool(chart.get("length_specific", False)),
         "measurements": chart["measurements"],
         "sizes": chart["sizes"],
+        # The shop's own advice about who each size is for (weight range in
+        # kg), when it publishes one -- so "أنا 60 كيلو" is answerable from a
+        # published number rather than a guess.
+        **({"recommended_weight_kg": weights} if weights else {}),
         # Only a picture that can actually be sent. A chart naming a file that
         # is not there still answers with its numbers; it does not promise the
         # customer a picture that can only fail on the way out.

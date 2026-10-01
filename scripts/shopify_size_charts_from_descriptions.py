@@ -7,17 +7,19 @@ Rehla's descriptions carry a table like
     <h3>Top Size Chart</h3><table><tr><th>Size</th><th>Width (cm)</th>
     <th>Length (cm)</th></tr><tr><td>Large</td><td>36</td><td>54</td></tr>...
 
-Only that table is read -- a garment's flat measurements in centimetres. The
-"Recommended Weight" table beside it is advice about the *wearer*, not a
-measurement of the garment, and the bot says garment-flat figures and nothing
-else (AGENTS.md), so it is not turned into a column. A table whose cells are
-not plain numbers is skipped and reported, never guessed at.
+The measurement table becomes the chart's columns (the garment laid flat, in
+centimetres). The "Recommended Weight" table beside it is advice about the
+*wearer*, so it is kept apart, as `fit.recommended_weight_kg` -- `{"S": [45,
+55], ...}` -- which the bot matches a customer's weight against. A table whose
+cells are not plain numbers is skipped, never guessed at.
 
 Dry run by default. Writes only the data metafield (no picture), through the
-same `set_product_chart` the dashboard uses.
+same `set_product_chart` the dashboard uses. A product that already has the
+metafield is left alone unless `--update`, which rewrites it when what the
+description says differs.
 
     python scripts/shopify_size_charts_from_descriptions.py
-    python scripts/shopify_size_charts_from_descriptions.py --apply
+    python scripts/shopify_size_charts_from_descriptions.py --apply [--update]
 
 Afterwards `scripts/shopify_size_charts_import.py --apply` (run against the
 database the bot reads) brings the charts into `size_charts`.
@@ -27,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -71,6 +74,28 @@ def _text(cell: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", cell)).strip()
 
 
+WEIGHT = re.compile(r"(\d+)\s*[–-]\s*(\d+)\s*kg", re.I)
+
+
+def parse_weights(description: str) -> dict[str, list[int]] | None:
+    """`{"S": [45, 55], ...}` from a "Recommended Weight" table, or None."""
+    for heading, body in TABLE.findall(description or ""):
+        if "weight" not in heading.lower():
+            continue
+        out: dict[str, list[int]] = {}
+        for row in ROW.findall(body):
+            cells = [_text(c) for c in CELL.findall(row)]
+            if len(cells) != 2 or cells[0].lower() == "size":
+                continue
+            name = SIZE_NAMES.get(cells[0].strip().lower())
+            found = WEIGHT.search(cells[1])
+            if name is None or found is None:
+                return None
+            out[name] = [int(found.group(1)), int(found.group(2))]
+        return {k: out[k] for k in ORDER if k in out} or None
+    return None
+
+
 def parse(description: str) -> dict | None:
     """The first table that is plain garment measurements, as a chart dict."""
     for heading, body in TABLE.findall(description or ""):
@@ -102,7 +127,9 @@ def parse(description: str) -> dict | None:
         if not sizes:
             return None
         ordered = {k: sizes[k] for k in ORDER if k in sizes}
+        weights = parse_weights(description)
         return {
+            **({"fit": {"recommended_weight_kg": weights}} if weights else {}),
             "chart_id": None,
             "title": heading.strip(),
             "unit": "cm",
@@ -128,6 +155,7 @@ def products() -> list[dict]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--update", action="store_true", help="rewrite an existing metafield that differs")
     args = ap.parse_args()
 
     todo = []
@@ -135,17 +163,22 @@ def main() -> None:
         chart = parse(p["descriptionHtml"])
         if chart is None:
             continue
-        if (p.get("chart") or {}).get("value"):
-            print(f"  skip {p['handle']}: already has a size_chart_data metafield")
-            continue
         chart["chart_id"] = f"shopify-{p['id'].rsplit('/', 1)[-1]}"
+        existing = (p.get("chart") or {}).get("value")
+        if existing:
+            same = json.loads(existing) == size_charts.storefront_payload(chart)
+            if same or not args.update:
+                state = "matches" if same else "set (use --update)"
+                print(f"  skip {p['handle']}: metafield already {state}")
+                continue
         todo.append((p, chart))
 
     print(f"products with a measurement table in the description: {len(todo)}")
     for p, chart in todo:
         print(f"  {p['handle']}: {chart['title']!r}")
         for size, values in chart["sizes"].items():
-            print(f"      {size}: {values}")
+            weight = (chart.get("fit") or {}).get("recommended_weight_kg", {}).get(size)
+            print(f"      {size}: {values}" + (f"  weight {weight[0]}-{weight[1]} kg" if weight else ""))
     if not args.apply:
         print("\ndry run: nothing written. Re-run with --apply.")
         return

@@ -160,13 +160,16 @@ def storefront_payload(chart: dict) -> dict:
         {"name": name, "values": {m["key"]: values.get(m["key"]) for m in measurements}}
         for name, values in (chart.get("sizes") or {}).items()
     ]
-    return {
+    payload = {
         "chart_id": chart.get("chart_id"),
         "title": chart.get("title"),
         "unit": chart.get("unit") or "cm",
         "measurements": measurements,
         "sizes": sizes,
     }
+    if chart.get("fit"):
+        payload["fit"] = chart["fit"]
+    return payload
 
 
 def products_by_chart(session: Session) -> dict[str, list[dict]]:

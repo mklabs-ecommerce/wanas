@@ -88,6 +88,19 @@ def issue_session_token(staff: Staff) -> str:
     return f"{payload}.{signature}"
 
 
+def session_seconds_left(token: str | None) -> int | None:
+    """Seconds until a session token expires, or None if it is not one.
+
+    Read without checking the signature: the caller has already verified the
+    token (`staff_from_session_token`), and only needs to know whether to hand
+    out a fresh one.
+    """
+    try:
+        return int(str(token).split(".")[1]) - int(time.time())
+    except (IndexError, ValueError):
+        return None
+
+
 def staff_from_session_token(session: Session, token: str | None) -> Staff | None:
     """None on anything wrong with the token -- expired, tampered with, or the
     account deactivated since it was issued. Never raises: a malformed cookie
