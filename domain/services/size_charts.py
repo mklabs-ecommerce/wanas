@@ -11,7 +11,7 @@ written on Railway does not survive the next deploy, and a chart nobody can
 add without a pull request is a chart nobody adds. Those live in the
 `size_charts` table (`domain.models.SizeChart`).
 
-So the two overlay, the same way Shopify's live price overlays `wanas.db`'s
+So the two overlay, the same way Shopify's live price overlays `rehla.db`'s
 in `catalog._overlay`: **the file is the default, a row wins on the same
 `chart_id`.** Everything -- the bot's `get_size_chart` tool, the dashboard,
 and the Shopify metafield publisher -- reads through here, so none of them

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from common.events import run_after_close
 from config.settings import settings
 
-log = logging.getLogger("wanas.db")
+log = logging.getLogger("rehla.db")
 
 #: Environment variables that exist only in a real deployment. Railway injects
 #: all three into every service it runs (RAILWAY_PUBLIC_DOMAIN once a domain is
@@ -82,7 +82,7 @@ _resolved_database_url = resolve_database_url(settings.database_url)
 _connect_args = {}
 if _resolved_database_url.startswith("sqlite"):
     # Once per process, here at engine creation -- the warning that was missing
-    # while deploys quietly ran on ./wanas.db. The scheme is what gets named,
+    # while deploys quietly ran on ./rehla.db. The scheme is what gets named,
     # never the URL itself: it can carry credentials.
     log.warning(
         "Database is SQLite: data written here is NOT durable across redeploys "

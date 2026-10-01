@@ -18,12 +18,12 @@ So the shop's own actions become the trigger:
     orders/updated              -> the total synced, when staff edited the
                                    order straight in Shopify Admin
 
-And the second gap, the same shape: the bot's search reads wanas.db, never
+And the second gap, the same shape: the bot's search reads rehla.db, never
 the live Shopify product list, so a product staff add in Shopify Admin exists
 for them and does not exist for customers. `product_import` has always closed
 that -- but only at boot, and a shop that does not redeploy never boots.
 
-    products/create             -> mirrored into wanas.db, as it happens
+    products/create             -> mirrored into rehla.db, as it happens
     products/update             -> the same, for the sizes and colours that
                                    arrive after Save
 
@@ -86,7 +86,7 @@ FULFILMENT_TOPICS = {"fulfillments/create", "fulfillments/update"}
 UPDATED_TOPIC = "orders/updated"
 
 #: A product created or changed in Shopify Admin. The bot's search reads
-#: wanas.db and never the live Shopify product list, so until one of these is
+#: rehla.db and never the live Shopify product list, so until one of these is
 #: mirrored the product exists for staff and does not exist for customers.
 #: `product_import` has always closed that gap, but only at boot, and a boot
 #: is the wrong granularity for "staff added a product this afternoon".
@@ -339,7 +339,7 @@ def _handle_updated(session: Session, payload: dict) -> None:
 
 
 def _handle_product(session: Session, payload: dict) -> None:
-    """Mirror a product created or changed in Shopify Admin into wanas.db.
+    """Mirror a product created or changed in Shopify Admin into rehla.db.
 
     Delegates every rule to `product_import.import_product` -- what counts as
     a placeholder, as already known, as ours-but-lost, and as somebody else's
@@ -369,7 +369,7 @@ def _handle_product(session: Session, payload: dict) -> None:
     entry = product_import.import_product(session, gid)
     if entry is not None:
         log.info(
-            "mirrored Shopify product %r into wanas.db as %s (%d variant(s))",
+            "mirrored Shopify product %r into rehla.db as %s (%d variant(s))",
             entry["title"],
             entry["product_id"],
             entry["variants"],

@@ -369,7 +369,7 @@ def product_detail(product_gid: str, wanas_staff: str | None = Cookie(default=No
                 "size_chart": local.size_chart,
             }
         else:
-            # A Shopify product with no matching wanas.db row -- created
+            # A Shopify product with no matching rehla.db row -- created
             # outside this dashboard, or never run through
             # scripts/shopify_sync.py. Editable on Shopify's own fields
             # still, but there is nowhere local to write
@@ -426,7 +426,7 @@ def list_product_types(wanas_staff: str | None = Cookie(default=None)) -> JSONRe
 def delete_product(
     local_product_id: str, wanas_staff: str | None = Cookie(default=None)
 ) -> JSONResponse:
-    """Remove a product entirely -- Shopify and wanas.db.
+    """Remove a product entirely -- Shopify and rehla.db.
 
     Refused with `product_in_use` when an order references any of its sizes:
     `order_items.variant_id` is a foreign key, and an order is the record that

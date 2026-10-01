@@ -1,4 +1,4 @@
-"""Delete the wanas.db products whose Shopify products are gone.
+"""Delete the rehla.db products whose Shopify products are gone.
 
 The counterpart to the reconcile-on-boot in
 `integrations/shopify/product_import.py`, which only ever *adds*. A local

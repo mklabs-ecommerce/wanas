@@ -36,7 +36,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 #    can run alongside this one without the two fighting over one SQLite file.
 SCRATCH_DB = Path(
     os.environ.get("EVAL_SCRATCH_DB")
-    or (PROJECT_ROOT / "scripts" / "_eval_output" / "eval_wanas.db")
+    or (PROJECT_ROOT / "scripts" / "_eval_output" / "eval_rehla.db")
 )
 SCRATCH_DB.parent.mkdir(parents=True, exist_ok=True)
 if SCRATCH_DB.exists():

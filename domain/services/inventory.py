@@ -81,7 +81,7 @@ def decrement(
     """Take stock off the shelf -- Shopify's shelf first, then the local row.
 
     Shopify decides. It is the shop the storefront also sells from, so a check
-    against `wanas.db` here would be checking a copy while the original moves.
+    against `rehla.db` here would be checking a copy while the original moves.
     The old `WHERE stock_qty >= :n` guard was the right idea against a race
     between two conversations; the equivalent now is `compareQuantity` on the
     Shopify adjustment, which makes Shopify refuse the write if the number

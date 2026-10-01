@@ -130,7 +130,7 @@ def build(facts: dict) -> list[Scenario]:
     return [
         Scenario(
             "greeting",
-            [Step("السلام عليكم", plan=["أهلاً بيك في وناس جاليري. تحب أساعدك في إيه؟"])],
+            [Step("السلام عليكم", plan=["أهلاً بيك في رحلة. تحب أساعدك في إيه؟"])],
         ),
         Scenario(
             "product_question",

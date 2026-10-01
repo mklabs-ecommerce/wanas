@@ -3,22 +3,22 @@ Shopify at the moment a customer asks.
 
 Why this module is a thin overlay rather than a replacement for `catalog.py`:
 
-Shopify owns the facts that change without anyone telling wanas.db -- `price`
+Shopify owns the facts that change without anyone telling rehla.db -- `price`
 and `stock_qty` above all, and those are the two that hurt when they are
 wrong. Quoting 650 for a hoodie the customer is charged 700 for, or promising
 an XL that the storefront sold four minutes ago, are the failures this exists
 to prevent. A product photo does not go stale the same way, but once staff
 have uploaded one to Shopify Admin it is the current photo, the same way the
 price on the product page is the current price -- so `catalog.get_variants`
-prefers it over whatever file `wanas.db` was seeded with.
+prefers it over whatever file `rehla.db` was seeded with.
 
 Everything else a reply needs -- style facets, department, collection, the
 size chart, which photo belongs to which colourway when Shopify has not been
 given one -- has no home on Shopify and does not drift on its own. Those keep
-coming from wanas.db. Moving the whole taxonomy into Shopify tags is a
+coming from rehla.db. Moving the whole taxonomy into Shopify tags is a
 separate migration and not one the chatbot needs in order to stop overselling.
 
-Variants are matched on **SKU**, which holds the wanas.db `variant_id`. Nothing
+Variants are matched on **SKU**, which holds the rehla.db `variant_id`. Nothing
 here matches on a product title.
 """
 
@@ -95,7 +95,7 @@ query($query: String!) {
 class LiveVariant:
     """What Shopify says about one variant right now."""
 
-    variant_id: str          # the wanas.db id, read from the Shopify SKU
+    variant_id: str          # the rehla.db id, read from the Shopify SKU
     shopify_id: str
     #: What inventory adjustments are addressed to -- not the variant id.
     inventory_item_id: str
@@ -145,7 +145,7 @@ def _price_or_none(raw) -> Decimal | None:
 def _node_to_live(node: dict) -> LiveVariant | None:
     sku = (node.get("sku") or "").strip()
     if not sku:
-        # A variant with no SKU cannot be tied to anything in wanas.db. Guessing
+        # A variant with no SKU cannot be tied to anything in rehla.db. Guessing
         # by title is exactly the fragility the SKU exists to remove, so it is
         # skipped and reported rather than matched approximately.
         return None
@@ -159,7 +159,7 @@ def _node_to_live(node: dict) -> LiveVariant | None:
         # zero here places a real cash-on-delivery order for nothing.
         #
         # "Not on the shelf we can see" is a case both callers already handle
-        # deliberately -- the browse path falls back to wanas.db's own numbers,
+        # deliberately -- the browse path falls back to rehla.db's own numbers,
         # and the order path refuses with `store_unavailable` rather than
         # guessing. Both are better than a free hoodie.
         log.warning("%s has no usable price on Shopify; left out of the live map", sku)
@@ -198,7 +198,7 @@ def _node_to_live(node: dict) -> LiveVariant | None:
 
 
 def fetch_all() -> dict[str, LiveVariant]:
-    """Every variant in the store, keyed by wanas.db variant_id.
+    """Every variant in the store, keyed by rehla.db variant_id.
 
     Raises ShopifyUnavailable / ShopifyConfigError -- callers decide whether to
     fall back or to tell the customer.
@@ -272,17 +272,17 @@ def try_fetch_one(variant_id: str) -> LiveVariant | None:
 def try_fetch_all() -> dict[str, LiveVariant] | None:
     """`fetch_all` that answers None instead of raising.
 
-    For the browse path, where wanas.db's own numbers are a reasonable last
+    For the browse path, where rehla.db's own numbers are a reasonable last
     resort. Not for the order path -- see `services/orders.py`, which must know
     the difference between "in stock" and "could not check".
     """
     try:
         return fetch_all()
     except ShopifyConfigError as exc:
-        log.error("Shopify not configured, serving wanas.db prices: %s", exc)
+        log.error("Shopify not configured, serving rehla.db prices: %s", exc)
         return None
     except ShopifyUnavailable as exc:
-        log.warning("Shopify unreachable, serving wanas.db prices: %s", exc)
+        log.warning("Shopify unreachable, serving rehla.db prices: %s", exc)
         return None
 
 
@@ -372,7 +372,7 @@ def live_map() -> dict[str, LiveVariant] | None:
     """The store's live prices and stock, fetched at most once per turn.
 
     None means Shopify could not be reached and the caller should fall back to
-    wanas.db. A failure is cached for the turn too -- retrying a dead endpoint
+    rehla.db. A failure is cached for the turn too -- retrying a dead endpoint
     three times inside one reply only makes the customer wait longer.
     """
     cached = _turn_cache.get()

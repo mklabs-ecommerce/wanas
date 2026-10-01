@@ -32,7 +32,7 @@ def join(
     `observed_stock` is what Shopify said the level *was* at this moment, and
     it is required rather than optional on purpose: it is the baseline the
     later "back in stock" message is a comparison against. Joining without
-    knowing the real level is what let a stale wanas.db zero turn into an
+    knowing the real level is what let a stale rehla.db zero turn into an
     announcement that an item nobody had restocked was back.
     """
     existing = session.scalar(

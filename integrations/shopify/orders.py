@@ -1,7 +1,7 @@
 """Creating the sale on Shopify itself.
 
 Until now a WhatsApp order only took stock off the shelf; the order lived in
-`wanas.db` and the admin never heard about it. This puts the sale where the
+`rehla.db` and the admin never heard about it. This puts the sale where the
 storefront's sales are, so Orders in the admin is the whole business rather
 than the half that came through the website.
 
@@ -296,7 +296,7 @@ def _address(*, name: str, phone: str, address: str, governorate: str) -> dict:
         "countryCode": "EG",
     }
     # Omitted rather than sent in a form Shopify will reject. The number is
-    # still on the order note and in wanas.db, so nothing is lost -- but a
+    # still on the order note and in rehla.db, so nothing is lost -- but a
     # rejected order loses the whole sale.
     if phone:
         out["phone"] = phone

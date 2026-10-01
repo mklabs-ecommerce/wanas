@@ -28,7 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # without the two locking each other's SQLite file. Set before that module is
 # imported, because it reads this on the way in.
 os.environ.setdefault(
-    "EVAL_SCRATCH_DB", str(PROJECT_ROOT / "scripts" / "_eval_abandonment" / "eval_wanas.db")
+    "EVAL_SCRATCH_DB", str(PROJECT_ROOT / "scripts" / "_eval_abandonment" / "eval_rehla.db")
 )
 
 # Importing this module is what installs the throwaway SQLite database and

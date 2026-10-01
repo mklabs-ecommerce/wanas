@@ -187,7 +187,7 @@ def in_segment(customer: dict, segment: str) -> bool:
     channel per person and being wrong about the other sale.
 
     A bot customer with no orders yet is still a bot customer: they exist in
-    wanas.db because a conversation created them, which nothing on the website
+    rehla.db because a conversation created them, which nothing on the website
     does.
     """
     if segment == "all":

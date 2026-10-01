@@ -62,7 +62,7 @@ TOPICS: dict[str, str] = {
     #: side, so nothing here ever heard the new total. Without this topic the
     #: local row keeps quoting the number it was created with, forever.
     "orders/updated": "ORDERS_UPDATED",
-    #: A product created in Shopify Admin, mirrored into wanas.db as it
+    #: A product created in Shopify Admin, mirrored into rehla.db as it
     #: happens. `product_import` still runs its catalogue-wide reconcile at
     #: boot -- that is the safety net for a delivery Shopify dropped -- but a
     #: boot is the wrong granularity for "staff added a product this

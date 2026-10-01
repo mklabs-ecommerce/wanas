@@ -1,21 +1,21 @@
-"""Backfill wanas.db for Shopify products that were never created through the
+"""Backfill rehla.db for Shopify products that were never created through the
 dashboard.
 
 `shopify_admin_products.create_product`'s own docstring says why this is
 needed: a product added straight from Shopify Admin pushes to Shopify only --
 nothing mirrors it into `Product` / `Variant`, and `catalog.get_products`
-(the bot's search) reads *only* wanas.db, never the live Shopify product
+(the bot's search) reads *only* rehla.db, never the live Shopify product
 list. See that module's docstring, and `catalog.py`'s. The result is exactly
 what it looks like from WhatsApp: a product staff can see in Shopify Admin
 that the bot insists does not exist.
 
 This closes the gap the same direction `create_product` already works in --
-Shopify first, wanas.db mirrored after -- except here Shopify already has the
+Shopify first, rehla.db mirrored after -- except here Shopify already has the
 product, so there is nothing to push; only the mirror and the SKU write-back
 are new.
 
 Scope, deliberately narrow: only a product with **zero** variant SKUs
-recognised by wanas.db is imported. A product already known (any one variant
+recognised by rehla.db is imported. A product already known (any one variant
 SKU matches) is left alone even if it gained a colour or size directly in
 Shopify Admin since -- reconciling a partial variant addition needs matching
 by option values against an existing product, which is a different, fuzzier
@@ -52,7 +52,7 @@ def _adoptable_product_id(detail: dict, prepared: list[dict]) -> str | None:
     reported: somebody set it on purpose and guessing what it should say
     instead is the fragility `shopify_set_skus.py` warns about. But there is
     one family of unknown SKU that is not a guess at all -- our own. A
-    dashboard create pushes to Shopify *first* and mirrors wanas.db after, so
+    dashboard create pushes to Shopify *first* and mirrors rehla.db after, so
     a failure in between leaves a Shopify product wearing SKUs in exactly the
     `_variant_id` shape with no local rows behind them. That product was
     invisible to the bot permanently: the reconcile refused it every boot,
@@ -175,7 +175,7 @@ def _import_one(
         adopted = None
     if foreign and adopted is None:
         return None, (
-            f"{title!r} has no wanas.db SKU but already carries {foreign} on "
+            f"{title!r} has no rehla.db SKU but already carries {foreign} on "
             "Shopify -- needs a human look, not a guess"
         )
 
@@ -190,7 +190,7 @@ def _import_one(
         return entry, None
 
     if adopted is None:
-        # Shopify first, wanas.db mirrored only once that succeeds -- the same
+        # Shopify first, rehla.db mirrored only once that succeeds -- the same
         # order `create_product` uses, and for the same reason: a local row
         # with no SKU written back to match it would look, on the very next
         # run, exactly like a product nobody has imported yet, and get
@@ -237,11 +237,11 @@ def _import_one(
 
 
 def import_missing_products(session: Session, *, apply: bool = False) -> dict:
-    """Every Shopify product whose variants carry no SKU wanas.db recognises.
+    """Every Shopify product whose variants carry no SKU rehla.db recognises.
 
     Dry run (`apply=False`, the default) only reports what it would do -- the
     same contract every `scripts/shopify_*.py` migration makes. `apply=True`
-    creates the local rows and writes wanas.db's own SKU convention back onto
+    creates the local rows and writes rehla.db's own SKU convention back onto
     the Shopify variants, so the very next live read matches them by price
     and stock the same way any other product does.
 

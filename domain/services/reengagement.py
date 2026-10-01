@@ -48,7 +48,7 @@ def check_back_in_stock() -> int:
     only where both ends of that event are on record: `observed_stock` at or
     below zero when the customer was turned away, and above zero now. An
     entry created against a level nobody verified is baselined and left
-    alone. Before that, a wanas.db row whose `stock_qty` had gone stale at
+    alone. Before that, a rehla.db row whose `stock_qty` had gone stale at
     zero was enough to produce a restock announcement for an item that had
     been in stock the whole time.
     """

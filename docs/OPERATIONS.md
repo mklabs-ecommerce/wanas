@@ -659,7 +659,7 @@ data is not durable.
 
 **The test suite drops and recreates the whole schema on every pytest run**,
 so by default it cannot point anywhere but its own throwaway
-`test_wanas.db`: `tests/conftest.py` overwrites `DATABASE_URL`, ignoring any
+`test_rehla.db`: `tests/conftest.py` overwrites `DATABASE_URL`, ignoring any
 exported value, and a guard in front of the drop refuses to run unless the
 engine provably points at that file. To run the suite against PostgreSQL
 deliberately — worth doing before deploying, since
@@ -683,7 +683,7 @@ All of them are dry-run by default, idempotent, and need `--apply`:
 python scripts/shopify_check_live.py    # read-only: do the two sides agree?
 python scripts/shopify_set_skus.py      # link local variant_id -> Shopify SKU
 python scripts/shopify_sync.py          # reconcile the catalog
-python scripts/shopify_reconcile_products.py   # drop wanas.db products Shopify no longer has
+python scripts/shopify_reconcile_products.py   # drop rehla.db products Shopify no longer has
 python scripts/shopify_size_charts.py          # publish the size charts to Shopify
 python scripts/shopify_size_charts_import.py   # and read edited ones back
 python scripts/shopify_untax_products.py       # set every variant taxable:false

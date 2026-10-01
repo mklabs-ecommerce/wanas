@@ -1,6 +1,6 @@
 """Product management for the staff dashboard: list, detail, create, edit.
 
-Shopify owns price, stock and the variant list; wanas.db owns `category`,
+Shopify owns price, stock and the variant list; rehla.db owns `category`,
 `department`, `style`, `collection` and `size_chart` -- fields Shopify has no
 place for (see `domain/services/catalog.py`'s module docstring). A product
 created only on Shopify through this module would be invisible to the bot's
@@ -417,7 +417,7 @@ def get_product(shopify_gid: str) -> dict | None:
     out = _product_summary(node)
     out["description_html"] = node.get("descriptionHtml")
     #: What the collection picker pre-ticks. Shopify is the only record of
-    #: this -- wanas.db keeps one label, and a product can be in several.
+    #: this -- rehla.db keeps one label, and a product can be in several.
     out["collections"] = product_collections(shopify_gid)
     out["variants"] = [
         {
@@ -896,7 +896,7 @@ def create_product(
     size_chart_url: str | None = None,
     collection_gids: list[str] | None = None,
 ) -> dict:
-    """Create on Shopify, then mirror into wanas.db.
+    """Create on Shopify, then mirror into rehla.db.
 
     `variants` is `[{"size", "color"?, "length"?, "price", "original_price"?,
     "stock_qty"}]`. Raises `ProductRejected` for a Shopify-side refusal (a bad
@@ -915,7 +915,7 @@ def create_product(
     file's url, stored locally so the bot can send it without asking Shopify.
 
     `sleeve` is half / long / sleeveless, or None for "not recorded" -- the
-    wanas.db-only field `domain/services/sleeves.py` documents. Shopify has
+    rehla.db-only field `domain/services/sleeves.py` documents. Shopify has
     no home for it, so like `style` it is mirrored and never pushed.
 
     `collection` is the merchandising label the bot's search reads;
@@ -946,7 +946,7 @@ def create_product(
     #: before re-raising, rather than leaving a shell behind. Three such
     #: shells -- a product with nothing but Shopify's own placeholder variant
     #: at 0.00 -- are exactly what `product_import` later mirrored into
-    #: wanas.db as phantom "One Size" products the bot offered and could
+    #: rehla.db as phantom "One Size" products the bot offered and could
     #: never sell. Failing cleanly is worth one extra call.
     with _or_unmake_it(product_gid):
         return _finish_create(
@@ -1298,7 +1298,7 @@ def sold_variant_ids(session: Session, variant_ids: list[str]) -> set[str]:
 
 
 def release_variants(session: Session, variant_ids: list[str], *, gone: bool) -> dict:
-    """Everything else in wanas.db that was still pointing at these variants.
+    """Everything else in rehla.db that was still pointing at these variants.
 
     Deleting a product used to mean deleting its rows and its Shopify product,
     and stopping there. That is not the whole system: three other places hold
@@ -1415,7 +1415,7 @@ def shopify_delete_variants(product_gid: str, variant_gids: list[str]) -> None:
 
 
 def delete_product(session: Session, product_id: str) -> dict:
-    """Remove a product from Shopify and from wanas.db.
+    """Remove a product from Shopify and from rehla.db.
 
     Raises `ProductInUse` when an order references any of its variants -- the
     caller should offer `archive_product` instead, which is the same intent
@@ -1450,7 +1450,7 @@ def delete_product(session: Session, product_id: str) -> dict:
 
 
 def delete_variant(session: Session, variant_id: str) -> dict:
-    """Remove one size/colourway, from Shopify and from wanas.db.
+    """Remove one size/colourway, from Shopify and from rehla.db.
 
     Refused for the last variant of a product: Shopify has no such thing as a
     product with no variants, and a local row with none is a product the bot
@@ -1550,7 +1550,7 @@ def update_product(
     variant_updates: list[dict] | None = None,
     variant_images: list[dict] | None = None,
 ) -> dict:
-    """Edit an existing product's Shopify-owned fields and/or wanas.db-owned
+    """Edit an existing product's Shopify-owned fields and/or rehla.db-owned
     fields. `variant_updates` is `[{"variant_id", "price"?, "original_price"?,
     "stock_qty"?}]` -- existing variants only; see the module docstring for
     why adding or removing one is out of scope here.
@@ -1625,7 +1625,7 @@ def update_product(
     if product_gid and collection_gids is not None:
         warnings += shopify_set_collections(product_gid, collection_gids)
 
-    # wanas.db side: always applied, whether or not Shopify was reachable for
+    # rehla.db side: always applied, whether or not Shopify was reachable for
     # the fields above -- `category`/`department`/`style`/`collection`/
     # `size_chart` have no Shopify home to fail on.
     if title is not None:

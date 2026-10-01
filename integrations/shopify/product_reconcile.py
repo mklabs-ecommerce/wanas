@@ -1,8 +1,8 @@
-"""The other direction from `product_import.py`: a wanas.db product whose
+"""The other direction from `product_import.py`: a rehla.db product whose
 Shopify product is gone.
 
 `product_import` is additive by contract -- it mirrors a Shopify product into
-wanas.db and never deletes on either side. That leaves one gap open. Shopify
+rehla.db and never deletes on either side. That leaves one gap open. Shopify
 is the source of truth for price and stock, and the bot matches the two by
 SKU; a local product whose SKUs Shopify no longer knows gets no live numbers
 at all, falls back to `variants.price`/`variants.stock_qty` (seeded columns
@@ -57,7 +57,7 @@ class ReconcileRefused(RuntimeError):
 def reconcile_vanished_products(
     session: Session, *, apply: bool = False, force: bool = False
 ) -> dict:
-    """Every wanas.db product whose SKUs Shopify no longer knows.
+    """Every rehla.db product whose SKUs Shopify no longer knows.
 
     Dry run by default: reports what it would do and writes nothing. With
     `apply=True` a product nobody ordered is deleted (along with the cart

@@ -40,13 +40,13 @@ whether it works.
 
 ---
 
-### 1. `wanas_order_update` -> `WHATSAPP_TEMPLATE_ORDER_UPDATE`
+### 1. `rehla_order_update` -> `WHATSAPP_TEMPLATE_ORDER_UPDATE`
 
 **Category: Utility.** Covers packed, shipped, delivered and cancelled -- one
 name for all four, which is exactly why it names none of them.
 
 ```
-في تحديث على طلبك من وناس ✅
+في تحديث على طلبك من رحلة ✅
 
 رد على الرسالة دي وهنقولك الطلب وصل لفين وكل التفاصيل على طول.
 ```
@@ -55,19 +55,19 @@ Optional quick-reply button: `طلبي وصل فين؟`
 
 ---
 
-### 2. `wanas_feedback_request` -> `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST`
+### 2. `rehla_feedback_request` -> `WHATSAPP_TEMPLATE_FEEDBACK_REQUEST`
 
 **Category: Utility.** Sent after a parcel is marked delivered.
 
 ```
-طلبك من وناس وصلك ✅
+طلبك من رحلة وصلك ✅
 
 تقيّم تجربتك معانا من 1 لـ 5؟ ولو عندك أي ملاحظة اكتبها في ردك — بتفرق معانا فعلاً.
 ```
 
 ---
 
-### 3. `wanas_order_confirmation` -> `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION`
+### 3. `rehla_order_confirmation` -> `WHATSAPP_TEMPLATE_ORDER_CONFIRMATION`
 
 **Category: Utility.** The safety net, not the normal path: a confirmation
 fires seconds after the customer confirms, so the window is almost always
@@ -82,7 +82,7 @@ that send is ever refused.
 
 ---
 
-### 4. `wanas_back_in_stock` -> `WHATSAPP_TEMPLATE_BACK_IN_STOCK`
+### 4. `rehla_back_in_stock` -> `WHATSAPP_TEMPLATE_BACK_IN_STOCK`
 
 **Category: Marketing.** A waitlisted item is available again. It cannot name
 the product, so it leans on the fact that the customer asked to be told.
@@ -90,7 +90,7 @@ the product, so it leans on the fact that the customer asked to be told.
 ```
 خبر حلو 🖤
 
-القطعة اللي كنت مستنيها رجعت متوفرة تاني في وناس.
+القطعة اللي كنت مستنيها رجعت متوفرة تاني في رحلة.
 
 رد على الرسالة دي وهنظبطلك المقاس واللون قبل ما تخلص تاني.
 ```
@@ -99,7 +99,7 @@ Optional quick-reply button: `عايز أطلبها`
 
 ---
 
-### 5. `wanas_abandoned_cart` -> `WHATSAPP_TEMPLATE_ABANDONED_CART`
+### 5. `rehla_abandoned_cart` -> `WHATSAPP_TEMPLATE_ABANDONED_CART`
 
 **Category: Marketing.** This one is sent *by definition* to somebody who went
 quiet, so it is the template that matters most -- without it the nudge
@@ -118,11 +118,11 @@ Optional quick-reply button: `كمّل طلبي`
 Set the five approved names, then redeploy:
 
 ```
-WHATSAPP_TEMPLATE_ORDER_UPDATE=wanas_order_update
-WHATSAPP_TEMPLATE_FEEDBACK_REQUEST=wanas_feedback_request
-WHATSAPP_TEMPLATE_ORDER_CONFIRMATION=wanas_order_confirmation
-WHATSAPP_TEMPLATE_BACK_IN_STOCK=wanas_back_in_stock
-WHATSAPP_TEMPLATE_ABANDONED_CART=wanas_abandoned_cart
+WHATSAPP_TEMPLATE_ORDER_UPDATE=rehla_order_update
+WHATSAPP_TEMPLATE_FEEDBACK_REQUEST=rehla_feedback_request
+WHATSAPP_TEMPLATE_ORDER_CONFIRMATION=rehla_order_confirmation
+WHATSAPP_TEMPLATE_BACK_IN_STOCK=rehla_back_in_stock
+WHATSAPP_TEMPLATE_ABANDONED_CART=rehla_abandoned_cart
 WHATSAPP_TEMPLATE_LANGUAGE=ar
 ```
 
@@ -134,7 +134,7 @@ one only once its template shows **Approved**.
 ## If you want the status in the message itself
 
 The limit is the client, not Meta. Naming the status would need one approved
-template per status (`wanas_order_shipped`, `wanas_order_delivered`, ...) or
+template per status (`rehla_order_shipped`, `rehla_order_delivered`, ...) or
 one template with body variables plus `components` support in
 `WhatsAppClient.send_template` -- the docstring there says as much. Worth
 doing once the templates above are approved and the door is open at all;

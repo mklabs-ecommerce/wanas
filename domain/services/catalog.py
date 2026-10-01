@@ -6,9 +6,9 @@ handed upward as a quotable number.
 
 Since the store moved to Shopify, "live" means live on Shopify. Price, discount
 and stock are read from the store at the moment the customer asks, and the
-matching wanas.db columns are only a fallback for when Shopify cannot be
+matching rehla.db columns are only a fallback for when Shopify cannot be
 reached -- see `_overlay`. Everything else on this page (category, style,
-department, collection, description, images) still comes from wanas.db, which
+department, collection, description, images) still comes from rehla.db, which
 is the only place it exists.
 """
 
@@ -85,7 +85,7 @@ class _Priced:
     A tiny shim rather than mutating the ORM rows: writing Shopify's numbers
     onto a `Variant` would leave them sitting in the session, and something
     downstream would eventually flush a price the shop never set into
-    wanas.db.
+    rehla.db.
     """
 
     __slots__ = ("price", "original_price", "on_sale", "stock_qty", "live", "image_url")
@@ -100,7 +100,7 @@ class _Priced:
 
 
 def _overlay(variant: Variant, live_map) -> _Priced:
-    """Shopify's numbers where we have them, wanas.db's where we do not.
+    """Shopify's numbers where we have them, rehla.db's where we do not.
 
     Three cases, and they are not the same failure:
       - Shopify unreachable (live_map is None): every variant falls back, which
@@ -109,7 +109,7 @@ def _overlay(variant: Variant, live_map) -> _Priced:
         product was deleted from the store. Falls back, but this one is worth
         noticing -- run scripts/shopify_set_skus.py.
       - Product archived or draft on Shopify: it is not for sale, whatever
-        wanas.db says. Stock reads zero so the bot offers alternatives instead
+        rehla.db says. Stock reads zero so the bot offers alternatives instead
         of taking an order the storefront would refuse.
 
     `image_url` rides along the same lookup: None whenever Shopify was not
@@ -154,14 +154,14 @@ def live_stock(variant: Variant) -> tuple[int, bool]:
 
     The same overlay `get_variants` quotes from, exposed for the one caller
     that has a `Variant` in hand and a decision to make about it rather than a
-    payload to build. `variant.stock_qty` on its own is a wanas.db column that
+    payload to build. `variant.stock_qty` on its own is a rehla.db column that
     nothing keeps current -- reading it directly is how `add_to_cart` came to
     refuse an item the storefront was happily selling, and (because a refusal
     is what joins the stock waitlist) how a customer was then told it had come
     "back in stock" without a single unit having moved.
 
     The second element is `False` when Shopify could not be reached and the
-    number is wanas.db's own guess. Refusing on it is safe -- an over-cautious
+    number is rehla.db's own guess. Refusing on it is safe -- an over-cautious
     "sold out" never oversells -- but *acting* on it as though it were
     observed fact is not.
     """
@@ -362,7 +362,7 @@ def get_products(
         products = [p for p in products if _matches_query(p, category)]
     if style:
         # The facet, *or* what the product says about itself. `style` is
-        # wanas.db-only metadata, and a product created in Shopify Admin is
+        # rehla.db-only metadata, and a product created in Shopify Admin is
         # imported with none (`product_import`), so an exact match on it made
         # every such product invisible to any style search: production asked
         # `get_products(category='T-shirts', style='oversized')` and was told
@@ -491,7 +491,7 @@ def _overlay_images(
     rest of the product's gallery for everyone else. A product with no local
     split at all overlays onto the shared `images` list on the same logic.
 
-    Shopify unreachable is the same as no coverage: wanas.db's own photos,
+    Shopify unreachable is the same as no coverage: rehla.db's own photos,
     unchanged.
     """
     color_images = {color: list(paths) for color, paths in (product.color_images or {}).items()}

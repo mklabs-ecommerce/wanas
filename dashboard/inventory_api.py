@@ -9,7 +9,7 @@ location id and the `correction` semantics -- this router never talks to
 Shopify itself.
 
 Stock is Shopify's number, live, every time. Nothing here is cached into
-Postgres: a second stock number in wanas.db is exactly the duplicate the
+Postgres: a second stock number in rehla.db is exactly the duplicate the
 architecture forbids.
 """
 

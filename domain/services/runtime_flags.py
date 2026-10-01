@@ -5,7 +5,7 @@ boundary is deliberate and does not move here. This is a small, separate
 overlay on top of it: a `RuntimeSetting` row wins when present, the env
 default (`settings.X`) wins when it is absent. Exactly the shape
 `domain/services/catalog.py::_overlay` already uses for Shopify's price
-over wanas.db's -- nothing structurally new, just a second thing worth
+over rehla.db's -- nothing structurally new, just a second thing worth
 overriding without a redeploy.
 
 Only three keys are ever meaningful; `KNOWN_FLAGS` is the whole vocabulary; a

@@ -4,7 +4,7 @@ A sibling router like every other area of this dashboard (see `web.py`'s
 docstring), on the same staff-cookie guard, calling only
 `integrations/shopify/admin_collections.py` -- no vendor HTTP lives here.
 
-Collections have no wanas.db mirror on purpose: `Product.collection` is a
+Collections have no rehla.db mirror on purpose: `Product.collection` is a
 free-text merchandising label the bot's search reads, not a foreign key into
 Shopify's collection objects. Nothing in this file writes to Postgres, and
 membership edits are refused for smart collections, whose rules would undo

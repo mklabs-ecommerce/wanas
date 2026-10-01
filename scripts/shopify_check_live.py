@@ -3,10 +3,10 @@
 Runs the real read path against the real store and reports three things:
 
   1. Can we reach Shopify at all, with the token in .env.
-  2. Does every wanas.db variant have a SKU on Shopify -- the mapping the whole
+  2. Does every rehla.db variant have a SKU on Shopify -- the mapping the whole
      design rests on. A variant missing here is one the bot will quietly serve
      stale numbers for.
-  3. Where Shopify and wanas.db disagree on price or stock. Disagreement is
+  3. Where Shopify and rehla.db disagree on price or stock. Disagreement is
      expected and is the point; the bot now follows Shopify. This lists it so
      nothing is a surprise.
 
@@ -46,7 +46,7 @@ def check_connection() -> bool:
     head("1. CONNECTION")
     if not settings.shopify_configured:
         print("  ! SHOPIFY_STORE_DOMAIN / SHOPIFY_ADMIN_TOKEN missing from .env")
-        print("    The bot will serve wanas.db prices and stock until they are set.")
+        print("    The bot will serve rehla.db prices and stock until they are set.")
         return False
 
     client = get_client()
@@ -80,20 +80,20 @@ def check_skus(live) -> int:
     missing = sorted(db_ids - set(live))
     extra = sorted(set(live) - db_ids)
 
-    print(f"  wanas.db variants        : {len(db_ids)}")
+    print(f"  rehla.db variants        : {len(db_ids)}")
     print(f"  Shopify variants with SKU: {len(live)}")
     print(f"  matched                  : {len(matched)}")
 
     if missing:
         print(f"\n  ! {len(missing)} variants have no SKU on Shopify -- the bot will serve")
-        print("    wanas.db numbers for these. Run: python scripts/shopify_set_skus.py")
+        print("    rehla.db numbers for these. Run: python scripts/shopify_set_skus.py")
         for vid in missing[:15]:
             print(f"      - {vid}")
         if len(missing) > 15:
             print(f"      ... and {len(missing) - 15} more")
 
     if extra:
-        print(f"\n  ! {len(extra)} SKUs on Shopify have no wanas.db row:")
+        print(f"\n  ! {len(extra)} SKUs on Shopify have no rehla.db row:")
         for sku in extra[:10]:
             print(f"      - {sku}")
 
@@ -101,7 +101,7 @@ def check_skus(live) -> int:
 
 
 def check_values(live, only_product: str | None) -> None:
-    head("3. WHERE SHOPIFY AND wanas.db DISAGREE")
+    head("3. WHERE SHOPIFY AND rehla.db DISAGREE")
     print("  (Shopify wins -- this is what the bot will now say.)\n")
 
     price_diffs, stock_diffs, inactive = [], [], []
@@ -158,7 +158,7 @@ def sample_reply(only_product: str | None) -> None:
         if not product_id:
             first = db.query(Product).order_by(Product.name).first()
             if first is None:
-                print("  no products in wanas.db")
+                print("  no products in rehla.db")
                 return
             product_id = first.product_id
 

@@ -1,4 +1,4 @@
-"""Reconcile the Shopify catalog against wanas.db.
+"""Reconcile the Shopify catalog against rehla.db.
 
 The catalog currently on Shopify is a rough import: every variant carries a
 30 EGP placeholder price with the real per-colour pricing dumped into the
@@ -6,7 +6,7 @@ product description as text, inventory is a flat 10 per variant regardless of
 what is actually on the shelf, three products sit under the wrong type, the
 Worker Jacket lost its Long/Short dimension, and Zipup never made it across.
 
-This script treats `wanas.db` as the truth and rewrites Shopify to match.
+This script treats `rehla.db` as the truth and rewrites Shopify to match.
 
 It prints a full diff and changes nothing unless you pass --apply. Read the
 diff first: it is the only cheap moment to catch a bad product match.
@@ -162,7 +162,7 @@ class Shopify:
 
 
 def read_db() -> tuple[dict, dict]:
-    db = ROOT / "wanas.db"
+    db = ROOT / "rehla.db"
     if not db.exists():
         sys.exit(f"No database at {db}")
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
@@ -300,7 +300,7 @@ def build_plan(shop_products, db_products, db_variants):
             problems.append(f"Shopify product {title!r} is not in PRODUCT_MAP — skipped")
             continue
         if pid not in db_products:
-            problems.append(f"{title!r} maps to {pid!r}, which is not in wanas.db — skipped")
+            problems.append(f"{title!r} maps to {pid!r}, which is not in rehla.db — skipped")
             continue
         seen_db_ids.add(pid)
 
@@ -345,7 +345,7 @@ def build_plan(shop_products, db_products, db_variants):
                     x for x in (opt(sv, "Size"), opt(sv, "Color"), opt(sv, "Length")) if x
                 )
                 problems.append(
-                    f"{title}: variant {shown!r} exists on Shopify but not in wanas.db"
+                    f"{title}: variant {shown!r} exists on Shopify but not in rehla.db"
                 )
                 continue
 
@@ -381,7 +381,7 @@ def build_plan(shop_products, db_products, db_variants):
 
     for pid in sorted(set(db_products) - seen_db_ids):
         plan["note"].append(
-            f"{db_products[pid]['name']} ({pid}) is in wanas.db but has no Shopify product"
+            f"{db_products[pid]['name']} ({pid}) is in rehla.db but has no Shopify product"
         )
 
     return plan, problems
@@ -548,7 +548,7 @@ def main():
     print(f"Connected to {shop['name']} ({shop['currencyCode']})")
 
     db_products, db_variants = read_db()
-    print(f"wanas.db: {len(db_products)} products, {sum(len(v) for v in db_variants.values())} variants")
+    print(f"rehla.db: {len(db_products)} products, {sum(len(v) for v in db_variants.values())} variants")
 
     shop_products = read_shopify(gql)
     print(f"Shopify:  {len(shop_products)} products, "

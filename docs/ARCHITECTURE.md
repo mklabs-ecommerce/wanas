@@ -97,7 +97,7 @@ alert and the customer's confirmation are bookkeeping that is allowed to fail
 loudly without ever being reported as a failed order. Confirming a second time
 finds that order (`already_confirmed`) instead of an empty cart.
 
-**Product photos follow the same rule as price.** `wanas.db`/`data/images/`
+**Product photos follow the same rule as price.** `rehla.db`/`data/images/`
 was this project's starting point — this repo is a sample built to show the
 idea, not a deployment for one specific shop, so it shipped with a scraped
 photo set rather than a live store's own CDN. Once staff attach a photo to a
@@ -545,7 +545,7 @@ transactional, already notifies the customer — rather than calling
 row) talks to Shopify directly from the dashboard route.
 
 Product create/edit (`integrations/shopify/admin_products.py`) pushes to Shopify first,
-then mirrors the wanas.db-only fields onto local `Product`/`Variant` rows —
+then mirrors the rehla.db-only fields onto local `Product`/`Variant` rows —
 the same overlay direction `catalog.py` already uses for price and stock,
 just for the fields that run the other way. A product created only on
 Shopify through this dashboard is invisible to the bot's own search until

@@ -646,7 +646,7 @@ def place_order(
             variant = session.get(Variant, line.variant_id)
             # The price Shopify is charging right now, which is also the price
             # the customer was quoted a moment ago. Reading `variant.price`
-            # here would bill them from wanas.db while the conversation
+            # here would bill them from rehla.db while the conversation
             # promised them Shopify's number -- the exact mismatch the move to
             # live reads was meant to remove.
             priced = live.get(line.variant_id)

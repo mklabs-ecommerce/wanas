@@ -578,7 +578,7 @@ class RuntimeSetting(Base):
 
     `config/settings.py`'s `Settings` stays env-only and frozen -- that
     boundary does not move. This is a separate, deliberately small overlay:
-    the same "Shopify's number over wanas.db's" shape (`catalog._overlay`),
+    the same "Shopify's number over rehla.db's" shape (`catalog._overlay`),
     just for `voice_notes_enabled` / `image_understanding_enabled` /
     `interactive_messages_enabled` instead of price and stock. Absent means
     "use the env default"; a row here is a staff decision made from the

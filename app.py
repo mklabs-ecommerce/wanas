@@ -237,8 +237,8 @@ def _ensure_shipping_fees_set() -> None:
 
 def _import_missing_shopify_products() -> None:
     """A product created straight in Shopify Admin -- not through the
-    dashboard's own create panel -- gets no wanas.db row, and the bot's
-    search only ever reads wanas.db; see
+    dashboard's own create panel -- gets no rehla.db row, and the bot's
+    search only ever reads rehla.db; see
     `integrations/shopify/product_import.py`. Run once per boot, off the
     request path, so a slow or unreachable Shopify never delays startup or a
     customer's reply. Additive-only and idempotent (a product already
@@ -258,7 +258,7 @@ def _import_missing_shopify_products() -> None:
 
     if report["imported"]:
         log.info(
-            "imported %d product(s) from Shopify that had no wanas.db row: %s",
+            "imported %d product(s) from Shopify that had no rehla.db row: %s",
             len(report["imported"]),
             ", ".join(item["title"] for item in report["imported"]),
         )
@@ -267,7 +267,7 @@ def _import_missing_shopify_products() -> None:
 
 
 def _report_vanished_products() -> None:
-    """Say, in the log, which wanas.db products Shopify no longer has.
+    """Say, in the log, which rehla.db products Shopify no longer has.
 
     Reports only -- `apply=False`, nothing is written. The deleting half is
     `scripts/shopify_reconcile_products.py`, run by hand, and it stays that
@@ -317,7 +317,7 @@ def _shopify_boot_reconcile() -> None:
     """Both directions, one thread, off the request path.
 
     In order on purpose: import first, so a product added in Shopify Admin
-    has its wanas.db row before anything looks for local rows Shopify has
+    has its rehla.db row before anything looks for local rows Shopify has
     lost. Chained rather than run in parallel so boot makes one pass at
     Shopify, not two at once.
     """

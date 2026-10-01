@@ -1,4 +1,4 @@
-"""Write each wanas.db variant_id into the matching Shopify variant's SKU.
+"""Write each rehla.db variant_id into the matching Shopify variant's SKU.
 
 This is the one-time write that gives the chatbot a stable handle on Shopify.
 Until it runs, the only way to tie a Shopify variant to a catalog row is to
@@ -133,7 +133,7 @@ class Shopify:
 
 
 def read_db() -> tuple[dict, dict]:
-    db = ROOT / "wanas.db"
+    db = ROOT / "rehla.db"
     if not db.exists():
         sys.exit(f"No database at {db}")
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
@@ -182,7 +182,7 @@ def build_plan(shop_products, db_products, db_variants):
             continue
         dbp = db_products.get(db_id)
         if not dbp:
-            problems.append(f"{title!r} maps to {db_id!r}, which is not in wanas.db")
+            problems.append(f"{title!r} maps to {db_id!r}, which is not in rehla.db")
             continue
         seen_db_ids.add(db_id)
 
@@ -199,7 +199,7 @@ def build_plan(shop_products, db_products, db_variants):
                 shown = " / ".join(
                     x["value"] for x in sv["selectedOptions"] if x.get("value")
                 )
-                problems.append(f"{title}: variant {shown!r} has no row in wanas.db -- no SKU set")
+                problems.append(f"{title}: variant {shown!r} has no row in rehla.db -- no SKU set")
                 continue
 
             want = dbv["variant_id"]
@@ -232,10 +232,10 @@ def build_plan(shop_products, db_products, db_variants):
             plan.append({"product_id": sp["id"], "title": title, "updates": updates})
 
         for key in set(db_by_key) - {shop_variant_key(sv, dbp) for sv in sp["variants"]["nodes"]}:
-            problems.append(f"{title}: {db_by_key[key]['variant_id']} is in wanas.db but not on Shopify")
+            problems.append(f"{title}: {db_by_key[key]['variant_id']} is in rehla.db but not on Shopify")
 
     for pid in sorted(set(db_products) - seen_db_ids):
-        problems.append(f"{db_products[pid]['name']} ({pid}) is in wanas.db but has no Shopify product")
+        problems.append(f"{db_products[pid]['name']} ({pid}) is in rehla.db but has no Shopify product")
 
     return plan, problems, already
 

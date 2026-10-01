@@ -36,4 +36,4 @@ harness:  ## The local chat UI (unauthenticated; never expose it)
 clean:  ## Remove caches and local databases
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 	rm -rf .pytest_cache .ruff_cache
-	rm -f wanas.db wanas.db-shm wanas.db-wal test_wanas.db test_wanas.db-shm test_wanas.db-wal
+	rm -f rehla.db rehla.db-shm rehla.db-wal test_rehla.db test_rehla.db-shm test_rehla.db-wal wanas.db test_wanas.db

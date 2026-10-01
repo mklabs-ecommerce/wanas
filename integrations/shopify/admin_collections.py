@@ -6,7 +6,7 @@ GraphQL query per operation, dicts out, `ShopifyUnavailable` /
 `ShopifyConfigError` the only failure vocabulary the layer above has to know.
 
 Scope is deliberately the same line `admin_products.py` draws. A collection
-is a *Shopify* object with no wanas.db mirror -- the local `collection`
+is a *Shopify* object with no rehla.db mirror -- the local `collection`
 column on `Product` is a free-text merchandising label the bot searches on
 (`domain/services/search_terms.py`), not a foreign key -- so nothing here
 writes to Postgres. Only manual collections can have products added or

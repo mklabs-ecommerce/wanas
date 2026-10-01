@@ -9,7 +9,7 @@ degrades to a documented value -- `ShopifyUnavailable` -- which the calling
 service turns into "I can't check stock right now, one moment" rather than a
 traceback delivered to WhatsApp.
 
-Variants are addressed by **SKU**, which carries the wanas.db `variant_id`.
+Variants are addressed by **SKU**, which carries the rehla.db `variant_id`.
 Titles are not used for matching anywhere in this module: an admin correcting a
 typo in a product name must not make the bot tell a customer the product does
 not exist.
