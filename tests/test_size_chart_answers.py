@@ -93,6 +93,9 @@ def test_a_product_with_no_chart_still_hands_off(seeded):
 
 
 def test_the_prompt_starts_every_sizing_question_with_the_chart():
-    assert "أي سؤال عن المقاس يبدأ بـ get_size_chart" in SYSTEM_PROMPT
+    assert "سؤال عن القياسات أو أنهي مقاس يناسب يبدأ بـ get_size_chart" in SYSTEM_PROMPT
+    # ...but «which sizes do you have» is stock, not fit: read as a chart
+    # question it found no chart and handed a browsing customer to a person.
+    assert "«متاح مقاسات إيه؟» بعد ما عرضت منتج = المتوفر، من get_variants" in SYSTEM_PROMPT
     assert "مفيش جدول مقاسات منشور" not in SYSTEM_PROMPT
     assert "recommended_weight_kg" in SYSTEM_PROMPT

@@ -559,7 +559,8 @@ customer.
 | `IMAGE_UNDERSTANDING_ENABLED` | `1` | Off sends every photo to a person. |
 | `IMAGE_MATCH_CONFIDENCE` | `0.6` | The dial between "the bot guesses" and "the bot asks". Raise it if customers are being shown the wrong product; lower it if it keeps asking about photos it clearly recognised. |
 | `INTERACTIVE_MESSAGES_ENABLED` | `1` | Off asks for the governorate in prose instead of sending a tappable list. |
-| `LLM_MEDIA_MODEL` | blank | A separate model for reading photos, honoured only by `LLM_PROVIDER=gemini` (blank lets Gemini pick its own). Under the default OpenRouter provider it does nothing: chat, voice notes and photos all run on the one conversation model (`LLM_MODEL`, else the pinned default). |
+| `LLM_MEDIA_MODEL` | blank | The model that reads photos (and voice notes, unless `LLM_AUDIO_MODEL` is set). Under OpenRouter blank means `google/gemini-3.1-flash-lite`, not the chat model. |
+| `LLM_AUDIO_MODEL` | blank | The model that hears voice notes when the media model has no audio input (the GPT-6 family). Blank = `LLM_MEDIA_MODEL`. |
 
 ## Reading the logs
 

@@ -122,6 +122,10 @@ class Settings:
     #: Optional second model for voice notes and photos. Blank reuses the
     #: conversation model.
     llm_media_model: str
+    #: The model that hears voice notes, when the media model cannot (OpenAI's
+    #: GPT-6 family takes images but no audio). Blank -- every deployment
+    #: before this existed -- means LLM_MEDIA_MODEL hears them too.
+    llm_audio_model: str
     llm_api_key: str
     #: Optional separate model for the Instagram comment classifier. Blank
     #: reuses the conversation model, which is today's behaviour exactly.
@@ -556,6 +560,7 @@ def load_settings() -> Settings:
         # rejects valid credentials.
         llm_model=_first_env("LLM_MODEL", "GEMINI_MODEL", default=""),
         llm_media_model=_first_env("LLM_MEDIA_MODEL", "GEMINI_MEDIA_MODEL", default=""),
+        llm_audio_model=os.getenv("LLM_AUDIO_MODEL", "").strip(),
         llm_api_key=_first_env("LLM_API_KEY", "GEMINI_API_KEY", default=""),
         comment_classifier_model=_first_env("COMMENT_CLASSIFIER_MODEL", default=""),
         llm_debug_payload=_bool("LLM_DEBUG_PAYLOAD", False),

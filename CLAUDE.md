@@ -20,9 +20,10 @@ FastAPI    -> the API, app.py is the composition root (uvicorn app:app)
 Assistant  -> agent/runtime/tools/LLM (assistant/)
 OpenRouter -> default LLM provider, behind a provider abstraction (Gemini and
               a scripted fake are the alternates). One key and one endpoint,
-              but two models: GLM runs the conversation and the tool loop,
-              Gemini reads the voice notes and photos (LLM_MEDIA_MODEL) --
-              the chat model has no audio endpoint at all
+              but two models: GPT Luna 6 (openai/gpt-6-luna) runs the
+              conversation, the tool loop and photos (LLM_MODEL,
+              LLM_MEDIA_MODEL); Gemini hears voice notes (LLM_AUDIO_MODEL) --
+              Luna has no audio input. See docs/model_migration.md
 PostgreSQL -> chat/session history, carts, shipping rates, staff,
               human-handoff queue, plus catalog metadata Shopify can't hold
               (style, department, collection, size charts, per-colour photos)

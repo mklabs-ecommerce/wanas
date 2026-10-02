@@ -169,3 +169,34 @@ def test_the_newest_message_is_the_one_that_counts(seeded):
     ctx = _with(seeded, "عايز اطلب", "طنطا، شارع البحر")
 
     assert call_tool(ctx, "ask_governorate", {})["governorate"] == "Gharbia"
+
+
+def test_a_governorate_typed_instead_of_tapped_wins_over_the_region_argument(seeded):
+    """Shown the regions, the customer typed «القاهرة»; the model still passed
+    the region, and re-sending its list every turn is what lost the order."""
+    ctx = _with(seeded, "القاهرة")
+
+    result = call_tool(ctx, "ask_governorate", {"region": "greater_cairo"})
+
+    assert result["step"] == "done"
+    assert result["governorate"] == "Cairo"
+    assert ctx.interactive is None
+
+
+def test_a_tapped_region_is_still_a_region_not_its_capital(seeded):
+    """«القاهرة الكبرى» names Cairo, but tapping it is choosing a region."""
+    ctx = _with(seeded, "القاهرة الكبرى")
+
+    result = call_tool(ctx, "ask_governorate", {"region": "greater_cairo"})
+
+    assert result["step"] == "governorate"
+
+
+def test_a_governorate_said_on_its_own_outranks_a_district_in_the_address(seeded):
+    """«القاهرة», then an address in الدقي (Giza): she answered the question;
+    the address does not reopen it."""
+    ctx = _with(seeded, "القاهرة", "15 شارع التحرير، الدقي، الدور التالت شقة 5")
+
+    result = call_tool(ctx, "ask_governorate", {})
+
+    assert result == {"step": "done", "governorate": "Cairo", "read_from": "their message"}

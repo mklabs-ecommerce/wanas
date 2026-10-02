@@ -106,6 +106,15 @@ DEFAULT_MODEL = "z-ai/glm-5.3-flash"
 #: never set the variable.
 DEFAULT_MEDIA_MODEL = "google/gemini-3.1-flash-lite"
 
+#: Model-id prefixes that refuse `temperature` (fixed-sampling reasoning
+#: models). Checked against what OpenRouter's /models lists as each one's
+#: `supported_parameters`: `temperature` is absent for all of these.
+_NO_TEMPERATURE_PREFIXES = ("openai/gpt-5", "openai/gpt-6", "openai/o1", "openai/o3", "openai/o4")
+
+
+def accepts_temperature(model: str | None) -> bool:
+    return not (model or "").startswith(_NO_TEMPERATURE_PREFIXES)
+
 #: Mime type -> the short format string the ``input_audio`` content part
 #: wants. Falls back to "ogg" (what WhatsApp voice notes are) for anything
 #: unrecognised rather than refusing outright; a wrong-but-plausible format is
@@ -197,9 +206,19 @@ class OpenRouterProvider(LLMProvider):
             # The neutral property dicts already are plain JSON Schema, which
             # is exactly what this API speaks -- passed through untouched,
             # unlike Gemini's uppercase dialect.
+            # An optional enum gets a blank option. OpenAI-family models fill
+            # in every parameter they are shown -- measured on gpt-6-luna,
+            # which sent `sleeve: "sleeveless"`, then "half", then "long" for
+            # a customer who named no sleeve at all, and so never found the
+            # product she asked for. Blank is "not given"; `_parse` drops it.
+            properties = {}
+            for name, prop in spec.properties.items():
+                if name not in spec.required and isinstance(prop, dict) and prop.get("enum"):
+                    prop = {**prop, "enum": [*prop["enum"], ""]}
+                properties[name] = prop
             declaration["function"]["parameters"] = {
                 "type": "object",
-                "properties": spec.properties,
+                "properties": properties,
                 "required": list(spec.required),
             }
         # A function with no arguments omits `parameters` entirely, matching
@@ -466,6 +485,26 @@ class OpenRouterProvider(LLMProvider):
     def _post(self, payload: dict, *, timeout: float | None = None) -> httpx.Response:
         url = f"{BASE_URL}/chat/completions"
 
+        # A reasoning model that does not take `temperature` (OpenAI's GPT-5/6
+        # families) is filtered out by `require_parameters` when sent one, and
+        # answers 400 without it. Dropped here for the same reason routing is
+        # attached here: five call sites, and one of them would forget.
+        if not accepts_temperature(payload.get("model")):
+            payload.pop("temperature", None)
+
+        # One key per conversation: OpenAI caches a prompt prefix per key, and
+        # OpenRouter pins the conversation to the upstream holding that cache
+        # (`session_id`, which it would otherwise derive by hashing the first
+        # two messages -- and the first two messages change once history is
+        # compacted). The system prompt and the tool list never vary between
+        # turns, so every hop of every turn of one conversation shares them.
+        # The key is the telemetry hash, never the phone number itself.
+        turn = telemetry.current()
+        if turn is not None and turn.customer != "anon":
+            key = f"rehla-{turn.channel}-{turn.customer}"
+            payload.setdefault("prompt_cache_key", key)
+            payload.setdefault("session_id", key)
+
         # Routing is attached here rather than at each call site, because
         # there are five of them and the one that forgets is the one that
         # silently loses its `temperature`. Every request that leaves this
@@ -519,11 +558,14 @@ class OpenRouterProvider(LLMProvider):
                 raise ProviderError(
                     f"tool call {call.get('id') or index} had unparseable arguments: {raw_arguments!r}"
                 ) from exc
+            # A blank or null argument is one the model was not asked for and
+            # filled in anyway (see `_schema`): absent, not an empty filter.
+            arguments = {k: v for k, v in (arguments or {}).items() if v not in ("", None)}
             tool_calls.append(
                 {
                     "id": call.get("id") or f"call_{index}",
                     "name": function.get("name", ""),
-                    "arguments": arguments or {},
+                    "arguments": arguments,
                 }
             )
 
@@ -558,6 +600,13 @@ class OpenRouterProvider(LLMProvider):
         error mapping are the ones chat already uses.
         """
         return (settings.llm_media_model or "").strip() or DEFAULT_MEDIA_MODEL
+
+    def _audio_model(self) -> str:
+        """Which model hears a voice note: `LLM_AUDIO_MODEL`, else the media
+        model. Separate because a model can read photos and still have no
+        audio input at all -- `openai/gpt-6-luna` is one -- and sending it an
+        `input_audio` part is a 400, which `transcribe` turns into a handoff."""
+        return (settings.llm_audio_model or "").strip() or self._media_model()
 
     # -- media: voice notes (media model, input_audio part) -----------------
 
@@ -599,7 +648,7 @@ class OpenRouterProvider(LLMProvider):
             # spelling nudge), never an instruction to act on.
             instruction = f"{instruction}\n- سياق المحادثة: {hint}"
 
-        model = self._media_model()
+        model = self._audio_model()
         payload = {
             "model": model,
             # Deterministic: a transcript is not a place for creativity.

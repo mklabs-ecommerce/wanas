@@ -1242,3 +1242,60 @@ def test_the_effort_env_var_reaches_settings(monkeypatch):
     assert load_settings().openrouter_reasoning_effort == "minimal"
     monkeypatch.setenv("OPENROUTER_REASONING_EFFORT", "")
     assert load_settings().openrouter_reasoning_effort == ""
+
+
+# --------------------------------------------------------------------------
+# GPT-6 family: no temperature, blank optional enums, prompt-cache key
+# --------------------------------------------------------------------------
+
+
+def test_a_model_that_refuses_temperature_is_never_sent_one(captured):
+    OpenRouterProvider(api_key=KEY, model="openai/gpt-6-luna").generate("p", [msg.user("hi")], [])
+    assert "temperature" not in captured["sent"][0]["body"]
+
+
+def test_other_models_keep_their_temperature(captured, provider):
+    provider.generate("p", [msg.user("hi")], [])
+    assert captured["sent"][0]["body"]["temperature"] == 0.3
+
+
+def test_an_optional_enum_may_be_left_blank_and_blank_arguments_are_dropped(captured, provider):
+    get_products = next(s for s in tool_specs() if s.name == "get_products")
+    provider.generate("p", [msg.user("hi")], [get_products])
+    sleeve = captured["sent"][0]["body"]["tools"][0]["function"]["parameters"]["properties"]["sleeve"]
+    assert sleeve["enum"][-1] == ""
+    # The spec itself is untouched: only the wire copy grows the blank option.
+    assert "" not in get_products.properties["sleeve"]["enum"]
+
+    captured["queue"].append(tool_call_reply(("c1", "get_products", {"query": "توب", "sleeve": "", "style": None})))
+    reply = provider.generate("p", [msg.user("hi")], [get_products])
+    assert reply.tool_calls[0]["arguments"] == {"query": "توب"}
+
+
+def test_a_turn_sends_one_cache_key_per_conversation_never_the_number(captured, provider):
+    from common import telemetry
+
+    with telemetry.turn("whatsapp", WHO):
+        provider.generate("p", [msg.user("hi")], [])
+        provider.generate("p", [msg.user("hi")], [])
+    first, second = (c["body"] for c in captured["sent"])
+    assert first["prompt_cache_key"] == second["prompt_cache_key"] == first["session_id"]
+    assert WHO not in first["prompt_cache_key"]
+
+    provider.generate("p", [msg.user("hi")], [])  # outside a turn: no key
+    assert "prompt_cache_key" not in captured["sent"][-1]["body"]
+
+
+def test_voice_notes_use_the_audio_model_when_one_is_set(captured, provider, monkeypatch):
+    monkeypatch.setattr(openrouter_module, "settings", dataclasses.replace(
+        settings, llm_media_model="openai/gpt-6-luna", llm_audio_model="google/gemini-3.1-flash-lite"))
+    captured["queue"].append(text_reply("عايزة توب"))
+    provider.transcribe(b"OggS", "audio/ogg")
+    assert captured["sent"][0]["body"]["model"] == "google/gemini-3.1-flash-lite"
+    assert captured["sent"][0]["body"]["temperature"] == 0.0
+
+    monkeypatch.setattr(openrouter_module, "settings", dataclasses.replace(
+        settings, llm_media_model="openai/gpt-6-luna", llm_audio_model=""))
+    captured["queue"].append(text_reply("عايزة توب"))
+    provider.transcribe(b"OggS", "audio/ogg")
+    assert captured["sent"][1]["body"]["model"] == "openai/gpt-6-luna"

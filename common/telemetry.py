@@ -134,6 +134,12 @@ class Turn:
         if self.llm:
             payload["llm"] = self.llm
             payload["hops"] = len(self.llm)
+            # Whether prompt caching is hitting, at a glance: the per-hop
+            # numbers are above, this is the turn's share served from cache.
+            prompt = sum(hop.get("prompt_tokens") or 0 for hop in self.llm)
+            if prompt:
+                payload["prompt_tokens"] = prompt
+                payload["cached_tokens"] = sum(hop.get("cached_tokens") or 0 for hop in self.llm)
         if self.tools:
             payload["tools"] = self.tools
         if self.shopify:

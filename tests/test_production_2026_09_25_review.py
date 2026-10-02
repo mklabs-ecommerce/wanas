@@ -647,3 +647,13 @@ def test_offering_to_hold_stock_the_shop_cannot_hold_is_corrected():
 
     fixed, fixes = reply_rules.fix_arabic("أيوه موجود. تحب أحجزلك لون ولا مقاس معين؟")
     assert "أحجزلك" not in fixed and "أضيفلك" in fixed and fixes
+
+
+@pytest.mark.parametrize("word", ["أكدي", "اكدي", "أكدها", "أيوه أكدي"])
+def test_the_feminine_confirm_is_a_yes(word):
+    """«أكدي» alone was refused as not_confirmed_by_customer: the pattern knew
+    «أكد» and «أكديه» and nothing in between, so a customer who said exactly
+    «confirm it» lost her order (benchmark drift_then_return, 2026-10-02)."""
+    from assistant.tools.order_tools import _YES
+
+    assert _YES.search(word)

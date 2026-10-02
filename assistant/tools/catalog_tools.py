@@ -594,6 +594,15 @@ def _recent_customer_text(ctx: ToolContext) -> list[str]:
     return customer_words.recent(ctx.history, ADDRESS_SCAN_MESSAGES)
 
 
+def _is_region_pick(ctx: ToolContext) -> bool:
+    """The customer's newest message is a region from the picker, verbatim."""
+    recent = _recent_customer_text(ctx)
+    if not recent:
+        return False
+    newest = recent[0].strip()
+    return any(newest in (item["label_ar"], item["region_id"]) for item in shipping.regions())
+
+
 def _governorate_already_given(ctx: ToolContext) -> dict | None:
     """The picker this call does not need to send, or None.
 
@@ -605,7 +614,16 @@ def _governorate_already_given(ctx: ToolContext) -> dict | None:
     that says both is genuinely ambiguous, and the customer is handed those
     two to choose between rather than a list of twenty-seven.
     """
-    for text in _recent_customer_text(ctx):
+    recent = _recent_customer_text(ctx)
+    # A message that is nothing but a governorate is the customer answering
+    # the question; a district in a later address (الدقي is Giza) does not
+    # reopen it. Seen live: «القاهرة», then «15 شارع التحرير، الدقي», then
+    # a Cairo-or-Giza question asked until the order was abandoned.
+    for text in recent:
+        stated = shipping.resolve(ctx.session, text.strip()) if len(text.split()) <= 2 else None
+        if stated is not None:
+            return {"step": "done", "governorate": stated, "read_from": "their message"}
+    for text in recent:
         found = shipping.detect(ctx.session, text)
         if not found:
             continue
@@ -644,10 +662,18 @@ def _governorate_already_given(ctx: ToolContext) -> dict | None:
     },
 )
 def ask_governorate(ctx: ToolContext, region: str | None = None) -> dict:
+    # What the customer typed wins over which picker step the model thinks it
+    # is on. A customer shown the region list who types «القاهرة» instead of
+    # tapping has answered; gpt-6-luna answered that with
+    # `region="greater_cairo"` and so sent the Cairo-area list again, every
+    # turn, until the order died. Only an outright pick (step=done) cuts in:
+    # an ambiguous address must not override the region the customer tapped.
+    # A tapped region arrives as its label, and «القاهرة الكبرى» reads as
+    # Cairo -- that tap is a region, so it must not skip Cairo/Giza/Qalyubia.
+    already = None if _is_region_pick(ctx) else _governorate_already_given(ctx)
+    if already is not None and (not region or already.get("step") == "done"):
+        return already
     if not region:
-        already = _governorate_already_given(ctx)
-        if already is not None:
-            return already
         regions = shipping.regions()
         payload = {
             "step": "region",

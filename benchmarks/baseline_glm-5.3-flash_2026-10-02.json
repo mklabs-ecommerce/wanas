@@ -1,0 +1,855 @@
+{
+  "model": "z-ai/glm-5.3-flash",
+  "media_model": "google/gemini-3.1-flash-lite",
+  "date": "2026-10-02",
+  "passed": 12,
+  "scenarios": 14,
+  "usage": {
+    "calls": 107,
+    "errors": 0,
+    "prompt_tokens": 1813372,
+    "completion_tokens": 6420,
+    "cached_tokens": 1650048,
+    "cost_usd": 0.077557,
+    "models": [
+      "google/gemini-3.1-flash-lite",
+      "z-ai/glm-5.3-flash"
+    ]
+  },
+  "results": [
+    {
+      "name": "greeting_browse",
+      "passed": true,
+      "problems": [],
+      "seconds": 14.02,
+      "turn_seconds_max": 9.37,
+      "usage": {
+        "calls": 3,
+        "errors": 0,
+        "prompt_tokens": 46388,
+        "completion_tokens": 216,
+        "cached_tokens": 43968,
+        "cost_usd": 0.00179,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "مساء الخير",
+          "reply": "مساء النور 🌷 أقدر أساعد حضرتك في إيه؟ وممكن أعرف اسم حضرتك؟",
+          "proactive": [],
+          "seconds": 4.65,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "عايزة أتفرج على التوبات اللي عندكم",
+          "reply": "أهلاً بحضرتك تاني! دي أشهر التوبات اللي عندنا:\n\n• توب Rehla Tops — السعر 445 جنيه بدل 500، متوفر بألوان كتير زي White و Lavender و Navy Blue\n• توب Rehla Square Neck Long Sleeve Top — السعر 445 جنيه، كوم طويل برقبة مربعة\n• توب Rehla V-Halter Neck Backless Top — السعر 450 جنيه بدل 699، ضهره مفتوح\n• توب Rehla Flared Long Sleeve Top — السعر 445 جنيه، أكمام فلاير\n\nعايزة تشوفي صور وأنهي واحد فيهم يعجبك؟",
+          "proactive": [],
+          "seconds": 9.37,
+          "tools": [
+            "get_products"
+          ],
+          "attachments": 4,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "arabic_search",
+      "passed": true,
+      "problems": [],
+      "seconds": 11.28,
+      "turn_seconds_max": 11.28,
+      "usage": {
+        "calls": 2,
+        "errors": 0,
+        "prompt_tokens": 30359,
+        "completion_tokens": 179,
+        "cached_tokens": 29312,
+        "cost_usd": 0.001126,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "عندكم توب كم طويل لونه بني مقاس L؟ بكام؟",
+          "reply": "أيوه عندنا توبات كم طويل لون Brown متوفرة مقاس L، وكلهم بـ 445 جنيه:\n\n• توب Rehla Long Sleeve Top — بسيط ومشدود، أساسي لكل يوم\n• توب Rehla Flared Long Sleeve Top — كم فلير وذيل واسع\n• توب Rehla Square Neck Long Sleeve Top — رقبة مربعة\n\nتحبي أنهي واحد فيهم؟",
+          "proactive": [],
+          "seconds": 11.28,
+          "tools": [
+            "get_products"
+          ],
+          "attachments": 3,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "image_match",
+      "passed": true,
+      "problems": [],
+      "seconds": 17.49,
+      "turn_seconds_max": 17.49,
+      "usage": {
+        "calls": 4,
+        "errors": 0,
+        "prompt_tokens": 47164,
+        "completion_tokens": 253,
+        "cached_tokens": 44224,
+        "cost_usd": 0.002152,
+        "models": [
+          "google/gemini-3.1-flash-lite",
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "عايزة ده",
+          "reply": "التشييرت الأسود اللي ظهر في الصورة (Rehla Black T-Shirt 2) خلصان حاليًا للأسف.\n\nالأقرب ليه واللي متوفر عندنا: Rehla Black T-Shirt — لون Black، المقاسات S و M و L، والسعر 600 جنيه بدل 750، وهو pre-order بيتشحن خلال 7–10 أيام عمل.\n\nده اللي حضرتك قاصداه؟ لو أيوه، قوليلي المقاس وأضيفه للشنطة.",
+          "proactive": [],
+          "seconds": 17.49,
+          "tools": [
+            "get_variants",
+            "get_products"
+          ],
+          "attachments": 1,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "voice_note",
+      "passed": true,
+      "problems": [],
+      "seconds": 12.25,
+      "turn_seconds_max": 12.25,
+      "usage": {
+        "calls": 3,
+        "errors": 0,
+        "prompt_tokens": 30464,
+        "completion_tokens": 171,
+        "cached_tokens": 29440,
+        "cost_usd": 0.001211,
+        "models": [
+          "google/gemini-3.1-flash-lite",
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "",
+          "reply": "التيشيرت الأسود متوفر ومقاس M موجود\n\nتوب Rehla Black T-Shirt — السعر 600 جنيه بدل 750، والدفع كاش عند الاستلام. بس لطفي معلومة: دي قطعة pre-order، بتتشحن خلال 7 لـ 10 أيام عمل من تأكيد الأوردر.\n\nنضيفه مقاس M؟",
+          "proactive": [],
+          "seconds": 12.25,
+          "tools": [
+            "get_products"
+          ],
+          "attachments": 1,
+          "transcript": "أكيد سأقرأها لك. السلام عليكم، عايزة التيشيرت الأسود مقاس medium بكام؟"
+        }
+      ]
+    },
+    {
+      "name": "order_cairo_70",
+      "passed": true,
+      "problems": [],
+      "seconds": 48.16,
+      "turn_seconds_max": 14.45,
+      "usage": {
+        "calls": 13,
+        "errors": 0,
+        "prompt_tokens": 211307,
+        "completion_tokens": 527,
+        "cached_tokens": 207040,
+        "cost_usd": 0.007115,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": {
+        "total": "515.00",
+        "shipping": "70.00",
+        "name": "منة أحمد"
+      },
+      "turns": [
+        {
+          "customer": "عايزة Rehla Original Tops لون Black مقاس M واحدة",
+          "reply": "تمام، ضفت توب Rehla Original Tops — مقاس M، لون Black، السعر 445 جنيه بدل 500 جنيه (عليه خصم دلوقتي).\n\nمحتاجة حاجة تانية؟ ولا نمشي في بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 14.45,
+          "tools": [
+            "get_products",
+            "get_variants",
+            "add_to_cart"
+          ],
+          "attachments": 3,
+          "transcript": null
+        },
+        {
+          "customer": "بس كده، عايزة أأكد الأوردر",
+          "reply": "تمام يا فندم 🙂 محتاجة منك بيانات التوصيل عشان نكمل الأوردر.\n\nاسمك إيه؟",
+          "proactive": [],
+          "seconds": 7.8,
+          "tools": [
+            "get_my_profile"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "اسمي منة أحمد",
+          "reply": "تمام يا منة، والعنوان؟ اكتبي الشارع والعمارة والشقة وأي علامة مميزة.",
+          "proactive": [],
+          "seconds": 6.83,
+          "tools": [
+            "save_customer_name"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "القاهرة",
+          "reply": "تمام، والشارع والعمارة والشقة؟ اكتبيهم بالتفصيل عشان المندوب يوصلك.",
+          "proactive": [],
+          "seconds": 2.84,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "15 شارع التحرير، الدقي، الدور التالت شقة 5",
+          "reply": "تمام، فاضل التليفون بس — اكتبيلي رقم موبايل تقدر المندوب يتواصل عليه.",
+          "proactive": [],
+          "seconds": 8.27,
+          "tools": [
+            "get_shipping_fee"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "01012345678",
+          "reply": "تمام، ده ملخص الأوردر:\n• توب Rehla Original Tops — مقاس M، لون Black — 445 جنيه\n• الشحن للقاهرة — 70 جنيه\n• الإجمالي — 515 جنيه كاش عند الاستلام\n\nعلى 15 شارع التحرير، الدقي، الدور التالت شقة 5. أأكد الأوردر؟",
+          "proactive": [],
+          "seconds": 5.48,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "أيوه أكدي",
+          "reply": "",
+          "proactive": [
+            "تم تأكيد طلبك ✅\nرقم الطلب: RHL-1001\n1× Rehla Original Tops — Black, M\nالشحن: 70 جنيه\nالإجمالي: 515 جنيه (الدفع عند الاستلام)\nوفرت: 55 جنيه\nهنبعتلك تحديث أول ما الطلب يتجهز."
+          ],
+          "seconds": 2.47,
+          "tools": [
+            "confirm_order"
+          ],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "order_alex_85",
+      "passed": true,
+      "problems": [],
+      "seconds": 37.72,
+      "turn_seconds_max": 13.81,
+      "usage": {
+        "calls": 10,
+        "errors": 0,
+        "prompt_tokens": 157212,
+        "completion_tokens": 398,
+        "cached_tokens": 153536,
+        "cost_usd": 0.005356,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": {
+        "total": "1085.00",
+        "shipping": "85.00",
+        "name": "سارة محمود"
+      },
+      "turns": [
+        {
+          "customer": "عايزة Rehla Jacket الأسود مقاس M",
+          "reply": "تمام، ضفتلك Rehla Jacket الأسود مقاس M للشنطة — السعر 1000 جنيه بدل 1200 (عليها خصم).\n\nمحتاجة حاجة تانية؟",
+          "proactive": [],
+          "seconds": 13.81,
+          "tools": [
+            "get_products",
+            "get_variants",
+            "add_to_cart"
+          ],
+          "attachments": 1,
+          "transcript": null
+        },
+        {
+          "customer": "تمام ضيفيه وأكدي الأوردر",
+          "reply": "الجاكيت في الشنطة وجاهز. عشان نكمل الأوردر محتاجين شوية بيانات توصيل.\n\nاسم حضرتك إيه؟",
+          "proactive": [],
+          "seconds": 7.42,
+          "tools": [
+            "get_my_profile"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "الاسم سارة محمود، إسكندرية، 20 شارع فؤاد محطة الرمل، 01123456789",
+          "reply": "شكراً سارة الملخص قبل التأكيد:\n• Rehla Jacket — مقاس M، لون Black — 1000 جنيه\n• الشحن للإسكندرية — 85 جنيه\n• الإجمالي — 1085 جنيه كاش عند الاستلام\n• العنوان: 20 شارع فؤاد، محطة الرمل، الإسكندرية — 01123456789\n\nأأكد الأوردر؟",
+          "proactive": [],
+          "seconds": 13.67,
+          "tools": [
+            "save_customer_name",
+            "ask_governorate",
+            "get_shipping_fee"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "أيوه أكدي",
+          "reply": "",
+          "proactive": [
+            "تم تأكيد طلبك ✅\nرقم الطلب: RHL-1002\n1× Rehla Jacket — Black, M\nالشحن: 85 جنيه\nالإجمالي: 1085 جنيه (الدفع عند الاستلام)\nوفرت: 200 جنيه\nهنبعتلك تحديث أول ما الطلب يتجهز."
+          ],
+          "seconds": 2.81,
+          "tools": [
+            "confirm_order"
+          ],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "exchange_return",
+      "passed": true,
+      "problems": [],
+      "seconds": 3.6,
+      "turn_seconds_max": 3.6,
+      "usage": {
+        "calls": 1,
+        "errors": 0,
+        "prompt_tokens": 14720,
+        "completion_tokens": 100,
+        "cached_tokens": 14656,
+        "cost_usd": 0.000499,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "لو المقاس طلع مش مظبوط أقدر أبدل أو أرجع؟",
+          "reply": "ممكن طبعاً:\n• الاستبدال بسب المقاس — خلال 14 يوم من الاستلام\n• المرتجع — خلال 7 يوم من الاستلام، ومصاريف الشحن بتتخصم من المبلغ\n\nبشرط إن القطعة مش ملبوسة وبحالتها الأصلية ومعاها التيكت والباكدج. لو حابب تفاصيل عن قطعة معينة قولي عليها 🙂",
+          "proactive": [],
+          "seconds": 3.6,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "size_help",
+      "passed": true,
+      "problems": [],
+      "seconds": 22.86,
+      "turn_seconds_max": 13.92,
+      "usage": {
+        "calls": 5,
+        "errors": 0,
+        "prompt_tokens": 77656,
+        "completion_tokens": 186,
+        "cached_tokens": 76096,
+        "cost_usd": 0.00261,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "البنطلون الواسع البني متاح مقاس M؟",
+          "reply": "أيوه متاح بنطلون Rehla Yoga Pants لون Brown مقاس M متوفر، والسعر 650 جنيه بدل 850 (عليه خصم).\n\nأضيفه للشنطة؟",
+          "proactive": [],
+          "seconds": 13.92,
+          "tools": [
+            "get_products",
+            "get_variants"
+          ],
+          "attachments": 2,
+          "transcript": null
+        },
+        {
+          "customer": "مش عارفة مقاسي، ممكن جدول المقاسات؟",
+          "reply": "حوّلنا سؤال المقاس لحد من الفريق، وهيساعد حضرتك في اختيار المقاس المناسب هنا في أقرب وقت.",
+          "proactive": [],
+          "seconds": 8.93,
+          "tools": [
+            "get_size_chart",
+            "request_human"
+          ],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "unsold_garment",
+      "passed": true,
+      "problems": [],
+      "seconds": 11.31,
+      "turn_seconds_max": 11.31,
+      "usage": {
+        "calls": 2,
+        "errors": 0,
+        "prompt_tokens": 30160,
+        "completion_tokens": 124,
+        "cached_tokens": 29312,
+        "cost_usd": 0.001069,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "عندكم فساتين سواريه؟",
+          "reply": "للأسف مفيش فساتين عندنا خالص. بس لو ده للمناسبة، عندنا بدائل تانية نقدر نعرضها لحضرتك:\n\n• توب Rehla Flared Long Sleeve Top — السعر 445 جنيه\n• توب Rehla Lace Off Shoulder Top — كان 699 جنيه، دلوقتي 450 جنيه (عليه خصم)\n\nتحبي أوري حضرتك واحد منهم؟",
+          "proactive": [],
+          "seconds": 11.31,
+          "tools": [
+            "get_products"
+          ],
+          "attachments": 2,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "drift_then_return",
+      "passed": false,
+      "problems": [
+        "no order created"
+      ],
+      "seconds": 61.99,
+      "turn_seconds_max": 19.53,
+      "usage": {
+        "calls": 13,
+        "errors": 0,
+        "prompt_tokens": 212355,
+        "completion_tokens": 886,
+        "cached_tokens": 201792,
+        "cost_usd": 0.008081,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "عايزة Rehla Original Tops لون Pink مقاس S",
+          "reply": "تمام، ضفت لك توب Rehla Original Tops لون Pink مقاس S — سعره 445 جنيه بدل 500 (عليه خصم دلوقتي).\n\nمحتاجة حاجة تانية نضيفها معاه؟",
+          "proactive": [],
+          "seconds": 17.36,
+          "tools": [
+            "get_products",
+            "get_variants",
+            "add_to_cart"
+          ],
+          "attachments": 3,
+          "transcript": null
+        },
+        {
+          "customer": "ضيفيه",
+          "reply": "القطعة دي متضافة للسلة فعلاً من قبل كده — توب Rehla Original Tops لون Pink مقاس S، سعره 445 جنيه، والإجمالي 445 جنيه.\n\nعايزة نكمّل الأوردر ونحجز موعد التوصيل؟",
+          "proactive": [],
+          "seconds": 12.32,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "بالمناسبة التوصيل بياخد كام يوم؟ وبتدفعوا إزاي؟",
+          "reply": "التوصيل بياخد من 3 لـ 5 أيام، والدفع كاش عند الاستلام.\n\nتحبي نكمل بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 4.78,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "طب تمام، كملي الأوردر. اسمي هند علي، الجيزة، 3 شارع الهرم، 01234567890",
+          "reply": "تمام يا هند، ده ملخص الأوردر:\n\n• توب Rehla Original Tops — مقاس S، لون Pink — 445 جنيه\n• الشحن للجيزة — 70 جنيه\n• الإجمالي — 515 جنيه كاش عند الاستلام\n\nالعنوان: 3 شارع الهرم، الجيزة — والتليفون 01234567890.\n\nأأكد الأوردر؟",
+          "proactive": [],
+          "seconds": 8.0,
+          "tools": [
+            "save_customer_name",
+            "get_shipping_fee"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "أكدي",
+          "reply": "معلش، بالنسبة لـ Rehla Original Tops Pink — ممكن المقاس؟ وأقول لحضرتك المتاح منه فورًا.",
+          "proactive": [],
+          "seconds": 19.53,
+          "tools": [
+            "confirm_order"
+          ],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "multi_item_cart_edit",
+      "passed": true,
+      "problems": [],
+      "seconds": 70.6,
+      "turn_seconds_max": 21.78,
+      "usage": {
+        "calls": 15,
+        "errors": 0,
+        "prompt_tokens": 286739,
+        "completion_tokens": 762,
+        "cached_tokens": 267136,
+        "cost_usd": 0.011336,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "عايزة Rehla Jacket الأسود مقاس M وRehla White T-Shirt مقاس M",
+          "reply": "تمام، ضفت الاتنين للشنطة\n• جاكيت Rehla Jacket — مقاس M، لون Black، السعر 1000 جنيه (بدل 1200)\n• تيشيرت Rehla White T-Shirt — مقاس M، لون White، السعر 600 جنيه (بدل 750)\n\nملحوظة صغيرة: التيشيرت ده pre-order، بيتشحن خلال 7–10 أيام عمل من تاريخ الأوردر.\n\nمحتاجة حاجة تانية، ولا نكمّل بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 21.78,
+          "tools": [
+            "get_products",
+            "get_products",
+            "get_variants",
+            "get_variants",
+            "add_to_cart",
+            "add_to_cart"
+          ],
+          "attachments": 2,
+          "transcript": null
+        },
+        {
+          "customer": "وكمان Rehla Tops لون White مقاس S",
+          "reply": "تمام، ضفتلك توب Rehla Tops — مقاس S، لون White، السعر 445 جنيه (بدل 500).\n\nالشنطة دلوقتي فيها 3 قطع بإجمالي 2045 جنيه. نكمّل بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 15.15,
+          "tools": [
+            "get_products",
+            "get_variants",
+            "add_to_cart"
+          ],
+          "attachments": 3,
+          "transcript": null
+        },
+        {
+          "customer": "لا شيلي التيشيرت الأبيض",
+          "reply": "اتشال التيشيرت الأبيض. الشنطة فيها دلوقتي:\n• جاكيت Rehla Jacket — مقاس M، لون Black، السعر 1000 جنيه\n• توب Rehla Tops — مقاس S، لون White، السعر 445 جنيه\n\nالإجمالي 1445 جنيه. نكمّل بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 10.24,
+          "tools": [
+            "remove_from_cart"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "وخلي التوب الأبيض قطعتين",
+          "reply": "تمام، بقى التوب الأبيض قطعتين. الشنطة دلوقتي:\n• جاكيت Rehla Jacket — مقاس M، لون Black، قطعة واحدة، 1000 جنيه\n• توب Rehla Tops — مقاس S، لون White، قطعتين، 890 جنيه\n\nالإجمالي 1890 جنيه. نكمّل بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 12.61,
+          "tools": [
+            "modify_order_quantity",
+            "add_to_cart"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "إيه اللي في الشنطة دلوقتي وبكام؟",
+          "reply": "الشنطة فيها:\n• جاكيت Rehla Jacket — مقاس M، لون Black، قطعة واحدة، السعر 1000 جنيه (بدل 1200)\n• توب Rehla Tops — مقاس S، لون White، قطعتين، السعر 890 جنيه (بدل 1000)\n\nالإجمالي 1890 جنيه من غير الشحن. تحبي نكمّل بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 10.81,
+          "tools": [
+            "view_cart"
+          ],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "angry_customer",
+      "passed": true,
+      "problems": [],
+      "seconds": 6.29,
+      "turn_seconds_max": 6.29,
+      "usage": {
+        "calls": 1,
+        "errors": 0,
+        "prompt_tokens": 14734,
+        "completion_tokens": 65,
+        "cached_tokens": 14720,
+        "cost_usd": 0.000476,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "إيه القرف ده!! الأوردر اتأخر أسبوع ومحدش بيرد عليا، أنا مش هتعامل معاكم تاني",
+          "reply": "آسفين جدًا على اللي حصل. حوّلنا الكلام لحد من الفريق، وهيرد على حضرتك هنا في أقرب وقت.",
+          "proactive": [],
+          "seconds": 6.29,
+          "tools": [
+            "request_human"
+          ],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "ambiguous_short",
+      "passed": true,
+      "problems": [],
+      "seconds": 8.5,
+      "turn_seconds_max": 4.75,
+      "usage": {
+        "calls": 2,
+        "errors": 0,
+        "prompt_tokens": 29463,
+        "completion_tokens": 86,
+        "cached_tokens": 29312,
+        "cost_usd": 0.000945,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "بكام؟",
+          "reply": "حضرتك بتسأل على سعر قطعة معينة؟ قوليلي اسمها أو وصفها وأقولك السعر 🙂",
+          "proactive": [],
+          "seconds": 3.74,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "متاح؟",
+          "reply": "حضرتك بتقصد أنهي قطعة؟ ابعتلي اسمها أو وصفيها وأتأكدلك إنها متاحة ولا لا.",
+          "proactive": [],
+          "seconds": 4.75,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    },
+    {
+      "name": "long_memory",
+      "passed": false,
+      "problems": [
+        "tool confirm_order not called",
+        "no order created"
+      ],
+      "seconds": 156.25,
+      "turn_seconds_max": 23.98,
+      "usage": {
+        "calls": 33,
+        "errors": 0,
+        "prompt_tokens": 624651,
+        "completion_tokens": 2467,
+        "cached_tokens": 509504,
+        "cost_usd": 0.033791,
+        "models": [
+          "z-ai/glm-5.3-flash"
+        ]
+      },
+      "order": null,
+      "turns": [
+        {
+          "customer": "السلام عليكم، أنا ريم",
+          "reply": "وعليكم السلام أهلاً بحضرتك يا ريم 🙂\n\nت فضلت أخدمك؟",
+          "proactive": [],
+          "seconds": 4.86,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "أنا ساكنة في المنصورة",
+          "reply": "تمام يا ريم، المنصورة ❤️\n\nأقدر أساعد حضرتك في إيه؟",
+          "proactive": [],
+          "seconds": 3.83,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "عندكم جواكت؟",
+          "reply": "أيوه عندنا جاكيت واحد: Rehla Jacket، لون Black، كم طويل، من قطن 100% بجودة عالية وسحاب من الداخل مبطن.\n\nالسعر 1000 جنيه بدل 1200 — عليه خصم حاليًا.\n\nالمقاسات المتاحة: S و M و L (مقاس XS خلصانة)\n\nدي صورته. المقاس المناسب لحضرتك إيه؟",
+          "proactive": [],
+          "seconds": 18.66,
+          "tools": [
+            "get_products",
+            "get_variants"
+          ],
+          "attachments": 1,
+          "transcript": null
+        },
+        {
+          "customer": "الجاكيت بكام؟",
+          "reply": "جاكيت Rehla Jacket بـ 1000 جنيه بدل 1200 — السعر ده ثابت على كل المقاسات (S و M و L).\n\nتحبي أضيفه للشنطة؟",
+          "proactive": [],
+          "seconds": 5.29,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "وعندكم تيشيرتات بيضا؟",
+          "reply": "أيوه عندنا تيشيرت أبيض: Rehla White T-Shirt، السعر 600 جنيه.\n\nالمقاسات المتاحة: S و M و L\n\nبس خدي بالك، القطعة دي pre-order، يعني بتتشحن بعد 7 لـ 10 أيام عمل من تاريخ الأوردر. أضيفهولك؟",
+          "proactive": [],
+          "seconds": 15.46,
+          "tools": [
+            "get_products"
+          ],
+          "attachments": 1,
+          "transcript": null
+        },
+        {
+          "customer": "طب عندكم كابات؟",
+          "reply": "عندنا كابات بس الشغالة منهما خلصانة حاليًا: Rehla Black Cap و Rehla Pink Cap، الاتنين مش متاحين دلوقتي.\n\nممكن أساعدك في حاجة تانية من اللي عندنا؟",
+          "proactive": [],
+          "seconds": 10.04,
+          "tools": [
+            "get_products"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "الكاب الأسود بكام؟",
+          "reply": "الكاب الأسود سعره 350 جنيه، بس للأسف خلصانة حاليًا ومش متاح للشراء.\n\nتحبي أوريلك حاجة تانية من اللي متوفر؟",
+          "proactive": [],
+          "seconds": 6.25,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "وتوبات الكم الطويل؟",
+          "reply": "عندنا 4 توبات كم طويل كلهم متاحين:\n\n• توب Rehla Long Sleeve Top — السعر 445 جنيه، أساسي ضيق\n• توب Rehla Square Neck Long Sleeve Top — السعر 445 جنيه، رقبة مربعة\n• توب Rehla Flared Long Sleeve Top — السعر 445 جنيه، كم فلار\n• توب Rehla Long Sleeve Off Shoulder Top — السعر 599 جنيه، من بره الكتف ومناسب للمحجبات\n\nتحبي تشوفي ألوان وتفاصيل واحد منهم؟",
+          "proactive": [],
+          "seconds": 7.25,
+          "tools": [
+            "get_products"
+          ],
+          "attachments": 4,
+          "transcript": null
+        },
+        {
+          "customer": "الـ Flared ألوانه إيه؟",
+          "reply": "توب Rehla Flared Long Sleeve Top متوفر بالألوان دي:\n\n• Navy Blue — مقاسات S و M و L\n• Olive — مقاسات S و M و L\n• Pink — مقاسات S و M و L\n• Baby Blue — مقاسات M و L\n• Burgundy — مقاسات M و L\n• Black — مقاسات S و M\n• Brown — مقاسات S و M\n\nالسعر 445 جنيه على كل الألوان. وفيه لونين خلصانة: Gray و Silver.\n\nعايزة تشوفي صورة لون معين؟",
+          "proactive": [],
+          "seconds": 8.25,
+          "tools": [
+            "get_variants"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "مقاسات إيه؟",
+          "reply": "المقاسات المتاحة: S و M و L — بس حسب اللون:\n\n• Navy Blue و Olive و Pink: التلات مقاسات موجودين\n• Baby Blue و Burgundy: مقاس M و L بس\n• Black و Brown: مقاس S و M بس\n\nاللون اللي في بالك إيه؟",
+          "proactive": [],
+          "seconds": 4.03,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "التوصيل للمنصورة بكام؟",
+          "reply": "معلش، الصورة مااتبعتتش المرة دي. أقول لحضرتك مقاسات وسعر Rehla Flared Long Sleeve Top؟",
+          "proactive": [],
+          "seconds": 18.22,
+          "tools": [
+            "get_shipping_fee"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "تمام، عايزة الجاكيت مقاس M",
+          "reply": "تمام، ضفت لك جاكيت Rehla Jacket — مقاس M، لون Black، بـ 1000 جنيه في الشنطة.\n\nمحتاجة حاجة تانية، ولا نكمل بيانات التوصيل؟",
+          "proactive": [],
+          "seconds": 10.04,
+          "tools": [
+            "get_variants",
+            "add_to_cart"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "ضيفيه وأكدي الأوردر",
+          "reply": "تمام يا ريم، الجاكيت جاهز في الشنطة. ناقص بس بيانات التوصيل:\n\nاكتبيلي العنوان بالتفصيل (الشارع والعمارة والشقة وأي علامة مميزة)، ورقم تليفون موبايل للتوصيل.",
+          "proactive": [],
+          "seconds": 7.13,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "العنوان 12 شارع الجمهورية المنصورة، والرقم 01098765432، والاسم زي ما قلتلك",
+          "reply": "معلش، بالنسبة لـ Rehla Jacket — ممكن اللون والمقاس؟ وأقول لحضرتك المتاح منه فورًا.",
+          "proactive": [],
+          "seconds": 23.98,
+          "tools": [
+            "get_shipping_fee",
+            "save_customer_name"
+          ],
+          "attachments": 0,
+          "transcript": null
+        },
+        {
+          "customer": "أيوه أكدي",
+          "reply": "معلش، بالنسبة لـ Rehla Jacket — ممكن اللون والمقاس؟ وأقول لحضرتك المتاح منه فورًا.",
+          "proactive": [],
+          "seconds": 12.97,
+          "tools": [],
+          "attachments": 0,
+          "transcript": null
+        }
+      ]
+    }
+  ]
+}
