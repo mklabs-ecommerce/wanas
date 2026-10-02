@@ -4,23 +4,40 @@
 
 - Git tag **`pre-luna-checkpoint`** (annotated, pushed) on `aaea470`, the
   `main` this migration started from.
-- Railway deployment id: **not recorded**. The `RAILWAY_TOKEN` supplied for
-  this migration was rejected by the Railway CLI ("Invalid RAILWAY_TOKEN"), so
-  neither the live deployment id nor the live variable values could be read.
-  Read them from the Railway dashboard (Deployments tab) before switching.
-- Model variables before the switch, as the local `.env` and `.env.example`
-  set them (production is expected to match; confirm in Railway):
+- Railway (project `imaginative-sparkle`, service `wanas`, environment
+  `production`), read 2026-10-02 before the variables were switched:
+  - deployment **`7411f2c8-7fbc-4e78-bae8-e183a92503df`** (22:10 +03:00) was
+    running `9bd1562`, the migration code, still on GLM;
+  - deployment **`e237712f-da81-4050-812e-0310532e12d6`** (18:48 +03:00) was
+    the last one before this migration's code.
+- Model variables on `wanas` before the switch:
 
   | variable | value before |
   |---|---|
   | `LLM_PROVIDER` | `openrouter` |
   | `LLM_MODEL` | `z-ai/glm-5.3-flash` |
   | `LLM_MEDIA_MODEL` | `google/gemini-3.1-flash-lite` |
-  | `LLM_AUDIO_MODEL` | *(did not exist)* |
+  | `GEMINI_MODEL` | `gemini-3.1-flash-lite` (alias, unused while `LLM_MODEL` is set) |
+  | `LLM_AUDIO_MODEL` | *(unset)* |
   | `OPENROUTER_PROVIDERS` | `z-ai,deepinfra,novita` |
   | `OPENROUTER_QUANTIZATIONS` | `fp8,bf16,fp16` |
-  | `OPENROUTER_REASONING_EFFORT` | `medium` |
-  | `COMMENT_CLASSIFIER_MODEL` | blank (reuses `LLM_MODEL`) |
+  | `OPENROUTER_REASONING_EFFORT` | *(unset, code default `medium`)* |
+  | `COMMENT_CLASSIFIER_MODEL` | *(unset, reuses `LLM_MODEL`)* |
+
+  `OPENROUTER_API_KEY` was set and verified valid (HTTP 200 from OpenRouter's
+  `/key`). Its value is not recorded here.
+
+## Production switch
+
+- Variables set on `wanas` 2026-10-02 (table below). Railway redeployed as
+  **`1e4dd41a-4f53-4cd6-b84c-d463dfcdabcb`** (22:16 +03:00, commit `9bd1562`):
+  SUCCESS, `/health` ok, schema matches, no startup errors beyond the
+  existing Resend-sender warning.
+- `OPENROUTER_PROVIDERS` / `OPENROUTER_QUANTIZATIONS` are set to an **empty
+  string**, not deleted: unset falls back to the GLM pins in code.
+- Confirm in logs after the first real conversation: the per-turn telemetry
+  line has `"model": "openai/gpt-6-luna"` on each `llm` hop, plus
+  `prompt_tokens` and `cached_tokens` totals.
 
 ## Variables after the switch
 
@@ -53,7 +70,7 @@ Why each one:
 Model-only rollback (seconds, no deploy of code):
 
 ```
-railway variables --set LLM_MODEL=z-ai/glm-5.3-flash \
+railway variables -s wanas --set LLM_MODEL=z-ai/glm-5.3-flash \
   --set LLM_MEDIA_MODEL=google/gemini-3.1-flash-lite \
   --set LLM_AUDIO_MODEL= \
   --set OPENROUTER_PROVIDERS=z-ai,deepinfra,novita \
