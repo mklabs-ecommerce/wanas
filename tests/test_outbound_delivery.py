@@ -315,3 +315,27 @@ def test_an_order_confirmation_keeps_the_ids_a_read_receipt_needs(seeded, cairo_
             if "تم تأكيد طلبك" in m.get("content", "")
         )
     assert seen["receipt"]["status"] == "read"
+
+
+def test_a_staff_cancellation_reaches_the_customer_exactly_once(cairo_rate):
+    """Production 2026-10-02: the cancel path recorded the push, then re-ran
+    record-and-send from the after-commit hook on a committed session -- it
+    raised, and the customer was never told."""
+    sender = notifications.LogSender()
+    notifications.register_sender(sender)
+    _recording()
+    try:
+        with session_scope() as session:
+            order_id = _place(session)["order_id"]
+            _seen(session, hours_ago=1)
+        sender.clear()
+        with session_scope() as session:
+            orders.cancel(session, session.get(Order, order_id), by="staff", notify_customer=True)
+    finally:
+        _stop_recording()
+        notifications.register_sender(notifications.LogSender())
+
+    assert len(sender.sent) == 1, [m.text for m in sender.sent]
+    with SessionLocal() as session:
+        lines = [t for t in _texts(session) if t == sender.sent[0].text]
+    assert len(lines) == 1, "recorded once, inside the cancelling transaction"

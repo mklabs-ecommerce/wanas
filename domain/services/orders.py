@@ -1127,8 +1127,11 @@ def cancel(
     if notify_customer:
         # The dashboard's copy of the message now, the message itself once
         # this commits -- see `notifications.record_status_push`.
-        notifications.record_status_push(session, order)
-        after_commit(session, lambda: notifications.order_status_changed(session, order))
+        # Record inside the transaction, send after it -- never record again
+        # from the hook: the session has committed by then, so the second
+        # write raised and the cancellation message was never sent.
+        plan = notifications.record_status_push(session, order)
+        after_commit(session, lambda: notifications.deliver_status_push(plan, unit=session))
     return {"order_id": order.order_id, "status": order.status}
 
 
