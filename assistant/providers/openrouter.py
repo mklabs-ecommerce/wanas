@@ -72,6 +72,7 @@ import httpx
 
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
 from assistant.providers.base import (
+    IMAGE_COLOR_RULES,
     CommentClassification,
     ImageReading,
     LLMProvider,
@@ -80,6 +81,7 @@ from assistant.providers.base import (
     SizeChartReading,
     classification_from,
     normalise_chart_reading,
+    parse_image_color,
 )
 from assistant.providers.gemini import mask_key
 from common import telemetry
@@ -750,9 +752,11 @@ class OpenRouterProvider(LLMProvider):
         "- متخترعش منتج مش في اللستة ومتقولش سعر ولا مقاس ولا إنه متوفر.\n"
         "- confidence رقم من 0 لـ 1 يعبر عن مدى تأكدك من المطابقة.\n"
         "- description: وصف قصير جداً للقطعة اللي في الصورة (نوعها ولونها) بالعامية المصرية.\n"
-        "- is_garment: false لو الصورة مش قطعة هدوم أصلاً (إيصال، سكرين شوت، شخص، طرد، حاجة تانية).\n\n"
+        "- is_garment: false لو الصورة مش قطعة هدوم أصلاً (إيصال، سكرين شوت، شخص، طرد، حاجة تانية).\n"
+        f"{IMAGE_COLOR_RULES}\n"
         'رد بـ JSON بس، بالشكل ده بالظبط: '
-        '{{"product_id": "...", "confidence": 0.0, "description": "...", "is_garment": true}}'
+        '{{"product_id": "...", "confidence": 0.0, "description": "...", "is_garment": true, '
+        '"color": "...", "color_confidence": 0.0}}'
     )
 
     def inspect_image(self, image: bytes, mime_type: str, *, catalog: list[dict]) -> ImageReading:
@@ -827,6 +831,8 @@ class OpenRouterProvider(LLMProvider):
             confidence=max(0.0, min(1.0, confidence)),
             description=str(parsed.get("description") or "").strip(),
             is_garment=bool(parsed.get("is_garment", True)),
+            color=parse_image_color(parsed)[0],
+            color_confidence=parse_image_color(parsed)[1],
         )
 
     # -- media: a size-chart picture, read as data --------------------------

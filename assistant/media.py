@@ -205,6 +205,80 @@ def matched_product(session: Session, reading: ImageReading) -> Product | None:
     return None if product is None or product.archived else product
 
 
+#: A colour the vision model may say, onto the family it belongs to. Only
+#: families, never neighbours: pink is not "close to" gray or lavender, and
+#: snapping one onto the other is the production bug this exists for (a pink
+#: tee answered as Gray, with Gray's stock).
+_COLOR_FAMILIES: dict[str, tuple[str, ...]] = {
+    "pink": ("pink", "rose", "baby pink", "light pink", "hot pink", "fuchsia", "blush",
+             "وردي", "بينك", "روز", "بمبي"),
+    "gray": ("gray", "grey", "light gray", "light grey", "heather gray", "heather grey",
+             "رمادي", "رصاصي", "سكني", "جراي"),
+    "charcoal": ("charcoal", "dark gray", "dark grey", "فحمي"),
+    "black": ("black", "اسود", "أسود", "بلاك"),
+    "white": ("white", "ابيض", "أبيض", "وايت"),
+    "off white": ("off white", "off-white", "cream", "ivory", "beige", "اوف وايت", "أوف وايت", "كريمي"),
+    "navy blue": ("navy", "navy blue", "dark blue", "كحلي", "نيفي"),
+    "royal blue": ("royal blue", "blue", "ازرق", "أزرق", "رويال"),
+    "baby blue": ("baby blue", "light blue", "sky blue", "لبني", "بيبي بلو"),
+    "lavender": ("lavender", "lilac", "light purple", "لافندر", "ليلكي"),
+    "violet": ("violet", "purple", "موف", "بنفسجي"),
+    "burgundy": ("burgundy", "maroon", "wine", "نبيتي", "عنابي", "بورجندي"),
+    "brown": ("brown", "chocolate", "بني"),
+    "olive": ("olive", "khaki", "زيتي", "اوليف"),
+    "mint green": ("mint", "mint green", "منت", "نعناعي"),
+    "silver": ("silver", "فضي", "سيلفر"),
+}
+
+
+def _family(color: str) -> str | None:
+    text = " ".join("".join(ch for ch in color.lower() if ch.isalpha() or ch in " -").split())
+    if not text:
+        return None
+    for family, words in _COLOR_FAMILIES.items():
+        if text in words:
+            return family
+    return None
+
+
+def photo_color(reading: ImageReading, product: Product) -> str | None:
+    """The catalogue colour of `product` the photo shows, or None.
+
+    None covers both "not sure" and "a colour this product does not come in";
+    `_color_note` tells the agent which. Matching is by family, on the colour
+    name with any emoji stripped ("Pink🌸" is Pink), never by nearness.
+    """
+    family = _family(reading.color or "")
+    if family is None:
+        return None
+    for color in product.colors or []:
+        if _family(color) == family:
+            return color
+    return None
+
+
+def _color_note(reading: ImageReading, product: Product) -> str:
+    seen = (reading.color or "").strip()
+    sure = bool(seen) and reading.color_confidence >= settings.image_match_confidence
+    match = photo_color(reading, product)
+    if sure and match:
+        return (
+            f"اللون اللي في الصورة: {match}. لو هتدور على التوفر استخدم get_variants "
+            f'باللون ده بالظبط (color="{match}")، ومتقولش إن الصورة لون تاني.'
+        )
+    if sure and _family(seen) is not None:
+        return (
+            f"اللون اللي في الصورة ({seen}) مش من ألوان {product.name}. "
+            "متقولش إن اللون ده متوفر ومتسميهوش لون تاني؛ قول للزبون إن اللون ده مش عندنا "
+            "واعرض الألوان الموجودة فعلاً بعد ما تتأكد بالأدوات."
+        )
+    return (
+        "لون الصورة مش واضح بشكل مؤكد"
+        + (f" (شكله {seen})" if seen else "")
+        + ". متأكدش لون معين ومتقولش إنه متوفر؛ اسأل الزبون الأول هو عايز أنهي لون."
+    )
+
+
 def photo_context(reading: ImageReading, product: Product | None, caption: str = "") -> str:
     """The note the agent reads instead of the photo it cannot see.
 
@@ -225,6 +299,7 @@ def photo_context(reading: ImageReading, product: Product | None, caption: str =
             "اتأكد بنفسك بالأدوات قبل ما تقول أي حاجة عن السعر أو المقاسات أو التوفر، "
             "واسأل الزبون لو ده اللي هو قاصده."
         )
+        parts.append(_color_note(reading, product))
     elif not reading.is_garment:
         parts.append("قراءة آلية للصورة: الصورة دي مش قطعة هدوم.")
     else:

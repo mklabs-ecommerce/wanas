@@ -523,3 +523,70 @@ def test_place_order_raises_nothing_when_shopify_agrees(cairo_rate, seeded):
         for item in queues.open_items(seeded, QueueKind.ALERT.value)
         if item.reason == "order_total_mismatch"
     ]
+
+
+# --------------------------------------------------------------------------
+# #1046: the taxed total was not just collected, it was *told*. An add put
+# GST 14% (62.30) on one 445.00 line; `_apply_remote_totals` adopted Shopify's
+# 1037.30 as the order total and the customer read a number that was not
+# 890 + 85. The itemized total must stand.
+# --------------------------------------------------------------------------
+
+
+def test_a_taxed_shopify_total_is_never_adopted_as_the_order_total(order, seeded, monkeypatch):
+    from decimal import Decimal
+
+    from domain.models import QueueKind
+    from domain.services import queues
+
+    real_add = shopify_orders.add_line
+
+    def taxed_add(*args, **kwargs):
+        totals = real_add(*args, **kwargs)
+        return {**totals, "total": totals["total"] + Decimal("62.30")}
+
+    monkeypatch.setattr(shopify_orders, "add_line", taxed_add)
+    monkeypatch.setattr(
+        shopify_orders,
+        "current_total",
+        lambda _id: (_itemized(order) + Decimal("62.30"), Decimal("62.30")),
+    )
+    result = orders.apply_add(seeded, order, VARIANT_B, 1)
+    assert "error" not in result, result
+
+    assert order.total == _itemized(order)
+    assert any(
+        i.reason == "order_total_mismatch"
+        for i in queues.open_items(seeded, QueueKind.ALERT.value)
+    ), "the tax Shopify added was not raised to staff"
+
+
+def _itemized(order):
+    return order.subtotal - order.discount_amount + order.shipping_fee
+
+
+@pytest.mark.no_shopify
+def test_an_added_variant_is_untaxed_before_the_edit(monkeypatch):
+    from integrations.shopify import local_shelf
+
+    monkeypatch.setattr(local_shelf, "active", lambda: False)
+    calls = []
+
+    def client(query, variables):
+        calls.append(query)
+        if "productVariant(id" in query:
+            return {"productVariant": {"id": "v1", "taxable": True, "product": {"id": "p1"}}}
+        if "productVariantsBulkUpdate" in query:
+            assert variables["variants"] == [{"id": "v1", "taxable": False}]
+            return {"productVariantsBulkUpdate": {"userErrors": []}}
+        if "orderEditBegin" in query:
+            return {"orderEditBegin": {"calculatedOrder": {"id": "c1"}, "userErrors": []}}
+        if "orderEditAddVariant" in query:
+            return {"orderEditAddVariant": {"calculatedOrder": {"id": "c1"}, "userErrors": []}}
+        return {"orderEditCommit": {"order": None, "userErrors": []}}
+
+    monkeypatch.setattr(shopify_orders, "get_client", lambda: client)
+    shopify_orders.add_line("o1", "v1", 1)
+    untax = next(i for i, q in enumerate(calls) if "productVariantsBulkUpdate" in q)
+    add = next(i for i, q in enumerate(calls) if "orderEditAddVariant" in q)
+    assert untax < add

@@ -196,8 +196,31 @@ def _apply_remote_totals(order: Order, totals: dict | None) -> None:
         order.subtotal = totals["subtotal"]
     if "shipping" in totals:
         order.shipping_fee = totals["shipping"]
-    if "total" in totals:
-        order.total = totals["total"]
+    if "total" not in totals:
+        return
+    # The total the customer is told must be its own parts added up. A Shopify
+    # total that is not -- a GST line `orderEditAddVariant` put on a variant
+    # still marked taxable, which is how #1046 read 1037.30 for 890 + 85 -- is
+    # never adopted as an unexplained number: the itemized total stands, and
+    # `check_total_against_shopify` raises the mismatch for staff.
+    itemized = (
+        to_decimal(order.subtotal)
+        - to_decimal(order.discount_amount)
+        + to_decimal(order.shipping_fee)
+    )
+    if abs(to_decimal(totals["total"]) - itemized) > _TOTAL_TOLERANCE:
+        log.warning(
+            "order %s: Shopify's total %s is not subtotal %s + shipping %s; "
+            "keeping the itemized %s",
+            order.order_id,
+            totals["total"],
+            order.subtotal,
+            order.shipping_fee,
+            itemized,
+        )
+        order.total = itemized
+        return
+    order.total = totals["total"]
 
 
 def edit_refusal(exc: Exception, order: Order, what: str) -> Refusal:

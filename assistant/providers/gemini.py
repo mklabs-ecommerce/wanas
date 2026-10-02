@@ -42,12 +42,14 @@ import httpx
 from assistant.messages import ASSISTANT, TOOL_RESULTS, USER
 from assistant.providers.base import (
     COMMENT_CATEGORIES,
+    IMAGE_COLOR_RULES,
     CommentClassification,
     ImageReading,
     LLMProvider,
     ModelReply,
     ProviderError,
     classification_from,
+    parse_image_color,
 )
 from config.settings import settings
 
@@ -563,8 +565,12 @@ class GeminiProvider(LLMProvider):
             "confidence": {"type": "number"},
             "description": {"type": "string"},
             "is_garment": {"type": "boolean"},
+            "color": {"type": "string"},
+            "color_confidence": {"type": "number"},
         },
-        "required": ["product_id", "confidence", "description", "is_garment"],
+        "required": [
+            "product_id", "confidence", "description", "is_garment", "color", "color_confidence",
+        ],
     }
 
     def inspect_image(self, image: bytes, mime_type: str, *, catalog: list[dict]) -> ImageReading:
@@ -581,7 +587,8 @@ class GeminiProvider(LLMProvider):
             "- متخترعش منتج مش في اللستة ومتقولش سعر ولا مقاس ولا إنه متوفر.\n"
             "- confidence رقم من 0 لـ 1 يعبر عن مدى تأكدك من المطابقة.\n"
             "- description: وصف قصير جداً للقطعة اللي في الصورة (نوعها ولونها) بالعامية المصرية.\n"
-            "- is_garment: false لو الصورة مش قطعة هدوم أصلاً (إيصال، سكرين شوت، شخص، طرد، حاجة تانية)."
+            "- is_garment: false لو الصورة مش قطعة هدوم أصلاً (إيصال، سكرين شوت، شخص، طرد، حاجة تانية).\n"
+            + IMAGE_COLOR_RULES
         )
         payload = {
             "contents": [
@@ -629,6 +636,8 @@ class GeminiProvider(LLMProvider):
             confidence=max(0.0, min(1.0, confidence)),
             description=str(parsed.get("description") or "").strip(),
             is_garment=bool(parsed.get("is_garment", True)),
+            color=parse_image_color(parsed)[0],
+            color_confidence=parse_image_color(parsed)[1],
         )
 
     # -- comments: classification (cheap, no tools, no history) -----------

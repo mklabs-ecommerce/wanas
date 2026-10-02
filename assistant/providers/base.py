@@ -74,6 +74,35 @@ class ImageReading:
     #: True when the photo is not a garment at all (a receipt, a screenshot, a
     #: person, a parcel). Those are support, not shopping.
     is_garment: bool = True
+    #: The colour actually seen, in plain English ("pink"), never snapped to
+    #: the nearest catalogue colour -- snapping is how a pink tee was told it
+    #: was Gray. `assistant/media.py::photo_color` maps it onto a catalogue
+    #: colour, or onto nothing.
+    color: str = ""
+    #: 0.0-1.0, how sure the model is of `color` (lighting, filters, a dim
+    #: screenshot). Below the threshold the bot asks rather than asserts.
+    color_confidence: float = 0.0
+
+
+#: The colour half of the vision instruction, shared by every provider. The
+#: old prompt asked only for a product match and folded colour into a free
+#: description, so a pink tee came back as "the Original Tops" and the colour
+#: was whatever the next step guessed -- Gray, in production.
+IMAGE_COLOR_RULES = (
+    "- color: اللون اللي شايفه فعلاً في الصورة، كلمة إنجليزي بسيطة (pink, gray, black...). "
+    "اكتب اللون الحقيقي حتى لو مش من ألوان المنتج — متقربهوش لأقرب لون في اللستة أبداً.\n"
+    "- color_confidence: رقم من 0 لـ 1 لمدى تأكدك من اللون (إضاءة، فلتر، صورة باهتة).\n"
+)
+
+
+def parse_image_color(parsed: dict) -> tuple[str, float]:
+    """The colour fields of a vision reply, defensively."""
+    color = str(parsed.get("color") or "").strip()
+    try:
+        confidence = float(parsed.get("color_confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return color, max(0.0, min(1.0, confidence))
 
 
 @dataclass

@@ -726,6 +726,49 @@ def current_total(shopify_order_id: str) -> tuple[Decimal, Decimal] | None:
     return total, tax
 
 
+UNTAX_VARIANT_READ = """
+query($id: ID!) {
+  productVariant(id: $id) { id taxable product { id } }
+}
+"""
+
+UNTAX_VARIANT = """
+mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+    userErrors { field message }
+  }
+}
+"""
+
+
+def _ensure_untaxed(variant_gid: str) -> None:
+    """Mark a variant `taxable: false` before an edit adds it to an order.
+
+    `orderEditAddVariant` taxes a line by the *variant's* own flag, and a
+    product created in Shopify Admin defaults to taxable -- which put GST on
+    #1039, #1040 and #1046. scripts/shopify_untax_products.py fixes the
+    catalogue in bulk; this closes the gap for anything added since. Best
+    effort: a failure here is logged, and the total check after the edit is
+    what still catches the tax.
+    """
+    client = get_client()
+    try:
+        node = (client(UNTAX_VARIANT_READ, {"id": variant_gid}) or {}).get("productVariant") or {}
+        if not node or node.get("taxable") is False:
+            return
+        product_id = (node.get("product") or {}).get("id")
+        if not product_id:
+            return
+        result = client(
+            UNTAX_VARIANT,
+            {"productId": product_id, "variants": [{"id": variant_gid, "taxable": False}]},
+        ).get("productVariantsBulkUpdate") or {}
+        if result.get("userErrors"):
+            log.warning("could not untax %s: %s", variant_gid, result["userErrors"])
+    except Exception:
+        log.warning("could not untax %s before an order edit", variant_gid, exc_info=True)
+
+
 def add_line(
     shopify_order_id: str,
     to_variant_id: str,
@@ -750,6 +793,7 @@ def add_line(
     if not calculated_id:
         raise ShopifyUnavailable("Shopify opened no edit session")
 
+    _ensure_untaxed(to_variant_id)
     added = client(
         EDIT_ADD_VARIANT,
         {"id": calculated_id, "variantId": to_variant_id, "quantity": int(quantity)},
@@ -795,6 +839,7 @@ def swap_line(
     if line_id is None:
         raise OrderRejected(f"{from_sku} is not a line on that Shopify order")
 
+    _ensure_untaxed(to_variant_id)
     added = client(
         EDIT_ADD_VARIANT,
         {"id": calculated_id, "variantId": to_variant_id, "quantity": int(quantity)},
