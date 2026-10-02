@@ -1007,3 +1007,12 @@ the product does not sell and leaves an unreadable cell **blank rather than
 0**. A chart nobody filled in is still only a picture: `custom.size_chart`
 plus `Product.size_chart_image`, which `get_size_chart` answers as
 `image_only`.
+
+## Git Push
+
+Always push through the configured Git Credential Manager account
+(`abdelhamidhazem97`, pinned via `credential.https://github.com.username`;
+`credential.interactive=false`, `GCM_INTERACTIVE=never`, `GIT_TERMINAL_PROMPT=0`
+so an unattended push never opens a popup). Never put a token in the remote
+URL or use an `x-access-token` username -- that is what left a second stored
+account and the "Select an account" prompt.
