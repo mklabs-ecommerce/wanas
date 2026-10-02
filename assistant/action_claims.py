@@ -2,8 +2,8 @@
 
 The third of the same family: `photo_claims` checks the words against the
 pictures, `order_change_claims` against the staff-queue item, and this one
-against the two actions a shop conversation turns on -- putting something in
-the cart and placing the order. The words are the model's; whether
+against the actions a shop conversation turns on -- putting something in the
+cart, placing the order, and handing the customer to a person. The words are the model's; whether
 `add_to_cart` accepted the variant and whether `confirm_order` returned an
 order are the tool layer's; and nothing joined the two before the reply left.
 So «ضفتهولك في السلة» could go out beside an `out_of_stock` refusal, or beside
@@ -38,7 +38,25 @@ _PLACED = re.compile(
     re.I,
 )
 
-#: The honest versions of both: not done, could not, not yet.
+#: The customer was handed to a person, or is about to be. «هحوّل حضرتك لحد من
+#: الفريق» with no `request_human` behind it is a promise nobody keeps: the
+#: conversation is not paused, nobody is told, and the customer waits for a
+#: call that never comes (a size question with no chart, Oct 2026). Future
+#: «هحوّل/هنحوّل» and past «حوّلت/حوّلنا» only -- an offer («نحوّل حضرتك؟»)
+#: promises nothing, and «حد من الفريق هيأكدلك» is what a filed swap or add
+#: correctly says, so the team being *about to confirm* is not on the list.
+_HANDED_OFF = re.compile(
+    r"(?<!\w)[وف]?هن?حوّ?ل|حوّ?ل(?:ت|نا)"
+    r"|حد من الفريق (?:هيتواصل|هيكلم|هيرد|هيساعد|هيكمل)"
+    r"|(?<![a-z])(?:i'?ll|i will|we'?ll|we will) (?:transfer|connect|hand) you"
+    r"|(?<![a-z])team (?:member )?will (?:contact|reach|reply)",
+    re.I,
+)
+
+#: What may back a promise that the team will take over.
+_HANDOFF_TOOLS = ("request_human", "request_item_swap", "request_item_add")
+
+#: The honest versions of all three: not done, could not, not yet.
 _NEGATED = re.compile(r"مش|مقدرتش|ماقدرتش|لسه|للأسف|مااتضاف|ماتضاف|مش هقدر|not |n't|couldn't")
 
 #: A turn that looked up the customer's existing orders is talking about
@@ -67,13 +85,15 @@ def unbacked(
     cart_has_items: Callable[[], bool],
     has_orders: Callable[[], bool],
 ) -> str:
-    """"cart" or "order" when the reply claims that action and nothing this
+    """"handoff", "cart" or "order" when the reply claims that action and nothing this
     turn did it; "" when the claim is backed or there is none.
 
     `results` are this turn's `(tool name, result)` pairs, in order. The two
     questions about the database are asked only when a claim needs them.
     """
     called = {name for name, _content in results}
+    if _claims(_HANDED_OFF, text) and not _succeeded(results, *_HANDOFF_TOOLS):
+        return "handoff"
     if _claims(_ADDED, text) and not _succeeded(
         results, "add_to_cart", "add_item_to_order", "request_item_add"
     ):
@@ -93,6 +113,7 @@ def unbacked(
 #: Said instead, when the model will not stop claiming it. Each is true of the
 #: turn it replaces, and asks for the one thing that lets the next one do it.
 FALLBACKS = {
-    "cart": "معلش، القطعة لسه مااتضافتش للسلة. قولي المقاس واللون اللي عايزهم وأضيفها على طول.",
-    "order": "الأوردر لسه ماتسجلش. أول ما تأكدلي البيانات هسجله على طول.",
+    "cart": "معلش، القطعة لسه مااتضافتش للسلة. ممكن المقاس واللون؟ وأضيفها على طول.",
+    "order": "الأوردر لسه ماتسجلش. أول ما البيانات تتأكد هسجله على طول.",
+    "handoff": "نحوّل حضرتك لحد من الفريق يكمل معاك هنا؟",
 }

@@ -138,7 +138,7 @@ _ARABIC_NOTE = """
 _ENGLISH_NOTE = """
 
 # Reply language (set by the system for this message)
-The customer wrote in English. Write this whole reply in clear, polite, natural English -- not Arabic, not Franco. Every rule above still holds: the same facts from the tools, the same tone (professional and warm, no pet names, never assume the customer's gender), cash on delivery only, no Markdown. Prices in EGP. Product names, sizes and colours exactly as the catalog writes them."""
+The customer wrote in English. Write this whole reply in clear, polite, natural English -- not Arabic, not Franco. Every rule above still holds: the same facts from the tools, the same tone (professional and warm, no pet names, gender-neutral wording until the customer's own words or name show who they are), cash on delivery only, no Markdown. Prices in EGP. Product names, sizes and colours exactly as the catalog writes them."""
 
 
 def turn_note(language: str) -> str:

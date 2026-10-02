@@ -36,14 +36,10 @@ _OTHER_PAYMENT = (
 #: "Online" is deliberately not in that list, and this is the one entry worth
 #: explaining. It used to be, and it made the gate fail the shop's own correct
 #: answer twice over: this *is* an online shop and says so (the prompt's first
-#: line calls it «محل هدوم أونلاين»), and paying online through the website is
-#: a real option here. The prompt requires that sentence verbatim --
-#: «بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع» -- since 43eb403, which
-#: settled it after the prompt and `assistant/comment_faq.py` had been telling
-#: customers different things depending on whether they asked in a DM or in a
-#: comment. A gate that fails the answer the prompt mandates is testing the
-#: wrong thing, so the list above is now only the methods the shop genuinely
-#: cannot take.
+#: line calls it «براند ملابس بنات أونلاين»). The Wanas-era wording that also
+#: offered «أونلاين من الموقع» is gone: Rehla's bot takes cash on delivery only
+#: (`shop_facts.PAYMENT_LINE`), and the payment nudge in `assistant/agent.py`
+#: says so. The list above is only the methods the shop genuinely cannot take.
 
 #: ...but talking about cash on delivery is exactly right, and some of the
 #: words above appear inside perfectly correct sentences ("مش بنقبل فيزا").
@@ -682,12 +678,53 @@ def violation(
         if dodge:
             return f"sleeve: said {dodge!r} beside a sleeve word"
 
+    asked_again = offer_asked_again(customer, previous, text, results)
+    if asked_again:
+        return f"accepted: {asked_again}"
+
     if (
         len(" ".join((text or "").split())) >= _REPEAT_MIN_CHARS
+        and SCOPE_REDIRECT not in (text or "")
         and repeats_the_previous_reply(text, previous) >= _REPEAT_RATIO
     ):
         return "repeat: the previous reply, sent again"
     return ""
+
+
+#: A bare yes, and nothing else in the message.
+_BARE_YES = re.compile(
+    r"^\s*(?:اه|آه|ااه|أه|ايوه|أيوه|ايوة|أيوة|ايوا|أيوا|تمام|ماشي|اوكي|أوكي|اكيد|أكيد|يب|"
+    r"ok|okay|yes|yep|ah|aywa)\s*[!.؟?]*\s*$",
+    re.IGNORECASE,
+)
+
+#: An offer to put something in the cart, asked as a question.
+_ADD_OFFER = re.compile(r"(?:أ|ا|ن)ضيف\S*[^؟?\n]*[؟?]|(?:أ|ا|ن)حط\S*[^؟?\n]*(?:شنطة|سلة)[^؟?\n]*[؟?]")
+
+
+def offer_asked_again(customer: str, previous: str, text: str, results) -> str:
+    """The add-to-cart offer the customer just said yes to, asked again.
+
+    Production, Oct 1-2, and the demo of 2026-10-02: «أضيفه للشنطة؟», then
+    «اه» the next morning, then the same «أضيفه للشنطة؟» back -- a yes the
+    shop did not hear. A bare yes to that offer is the decision; the reply
+    that asks it again without `add_to_cart` having run is the one to send
+    back. Anything more than a bare yes («اه بس مقاس L») is left to the model.
+    """
+    if not _BARE_YES.match(customer or "") or not _ADD_OFFER.search(previous or ""):
+        return ""
+    if any(name in ("add_to_cart", "add_item_to_order") for name, _content in results or []):
+        return ""
+    found = _ADD_OFFER.search(text or "")
+    return found.group(0).strip() if found else ""
+
+
+#: The one sentence the prompt asks to be said *the same way every time*: the
+#: redirect for an off-topic question or an attempt to change the bot's role.
+#: Two in a row is the rule followed, not a reply sent again -- and treating it
+#: as a repeat sent the product-question fallback («ممكن اسم المنتج...») to a
+#: customer who had asked for the capital of France (demo, 2026-10-02).
+SCOPE_REDIRECT = "لخدمة عملاء رحلة بس"
 
 
 # --------------------------------------------------------------------------

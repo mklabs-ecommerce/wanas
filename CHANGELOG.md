@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — System prompt audit (docs/prompt_review.md)
+
+- **Prompt rewritten at the source** (`assistant/prompt.py`): 24,473 → 21,197
+  characters; "from the tools only" now first; no category menu (every hoodie
+  and cap is sold out live); real product names and prices in the layout
+  examples; gender neutral-first and adapting to the customer, never masculine
+  by default; safety (injection, other brands, abuse, personal data); one
+  return/exchange route (order number → `request_human`), complaints handed
+  off at once; `request_human` described as what it is (it ends the turn).
+- **Checks behind it:** a handoff promised without `request_human`
+  (`action_claims`), a bare «اه» answered with the same add offer
+  (`reply_rules`), and the scope redirect no longer refused as a repeat.
+- **Masculine-only canned lines made neutral** (fallbacks, feedback request,
+  handoff-closed, governorate picker); the payment nudge no longer offers
+  «أونلاين من الموقع»; the `get_products` sleeve description no longer
+  contradicts `sleeves.recorded`.
+- **Rehla Jacket seeded at 1000** (live price; the scrape caught 100).
+- `scripts/rehla/dump_system_prompt.py` regenerates the dump against a
+  boot-seeded DB; `demo_conversations.py` has 12 scenarios;
+  `tests/test_prompt_audit.py`.
+
 ## Unreleased — «اه» the next morning still answers last night's offer
 
 - **Session expiry 6h → 72h, floored at 48h.** `session.load` archived the

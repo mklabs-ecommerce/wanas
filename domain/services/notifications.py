@@ -330,8 +330,8 @@ def status_change_text(order: Order, status: str | None = None) -> str | None:
 
 
 FEEDBACK_REQUEST_TEXT = (
-    "عاملين إيه؟ طلبك {order_id} وصلك. تقيّم تجربتك من 1 لـ 5؟ "
-    "وأي ملاحظة تحب تضيفها هتفرق معانا."
+    "عاملين إيه؟ طلبك {order_id} وصلك. ممكن تقييم لتجربتك من 1 لـ 5؟ "
+    "وأي ملاحظة هتفرق معانا."
 )
 
 
@@ -890,7 +890,7 @@ _RESOLUTION_TEXT = {
     ),
     (QueueKind.ITEM_ADD.value, "rejected"): (
         "معلش، مقدرناش نضيف {item} على أوردرك {order}. "
-        "تحب تطلبها في أوردر جديد؟"
+        "نطلبها لحضرتك في أوردر جديد؟"
     ),
     (QueueKind.ITEM_SWAP.value, "approved"): (
         "تمام ✅ بدّلنا القطعة في أوردرك {order} بـ{item}. "
@@ -898,7 +898,7 @@ _RESOLUTION_TEXT = {
     ),
     (QueueKind.ITEM_SWAP.value, "rejected"): (
         "معلش، مقدرناش نعمل التبديل في أوردرك {order}. "
-        "أوردرك زي ما هو، وتحب تطلب القطعة الجديدة لوحدها؟"
+        "أوردرك زي ما هو. نطلب القطعة الجديدة لحضرتك في أوردر لوحدها؟"
     ),
 }
 
@@ -1016,7 +1016,7 @@ def record_request_resolution(
 #: resumed and the customer never learned that anything had happened. Short on
 #: purpose: staff decided no answer was needed, so this says the conversation
 #: is open again, not that a question was answered.
-HANDOFF_CLOSED_TEXT = "رجعنا معاك ✅ لو لسه محتاج أي حاجة قوللي وأنا تحت أمرك."
+HANDOFF_CLOSED_TEXT = "رجعنا لحضرتك ✅ لو فيه أي حاجة تانية، إحنا تحت أمرك."
 
 
 def record_handoff_closed(session: Session, channel: str, external_id: str) -> ResolutionPlan | None:

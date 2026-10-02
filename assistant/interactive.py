@@ -84,9 +84,9 @@ def buttons_message(body: str, buttons: list[dict]) -> dict:
 # the governorate picker
 # --------------------------------------------------------------------------
 
-REGION_PROMPT = "اختار المنطقة اللي هنشحنلك فيها 👇"
-GOVERNORATE_PROMPT = "تمام، اختار المحافظة 👇"
-PICK_BUTTON = "اختار"
+REGION_PROMPT = "هنشحن لأنهي منطقة؟ 👇"
+GOVERNORATE_PROMPT = "تمام، أنهي محافظة؟ 👇"
+PICK_BUTTON = "القايمة"
 
 
 def region_picker(regions: list[dict]) -> dict:

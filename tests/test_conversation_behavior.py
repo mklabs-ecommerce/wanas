@@ -801,7 +801,11 @@ def test_the_prompt_did_not_become_a_wall_of_text():
     #
     # 24100 -> 24500: a late «اه» answers the pending offer instead of a fresh
     # greeting, and a return/exchange request is the order number then the team.
-    assert 3000 < len(SYSTEM_PROMPT) < 24500
+    #
+    # 24500 -> 22000 (2026-10-02 audit, docs/prompt_review.md): duplicates
+    # merged and rules the tool descriptions already carry cut, from 24473 to
+    # ~21200. Lowered so the room that freed is not quietly spent again.
+    assert 3000 < len(SYSTEM_PROMPT) < 22000
 
 
 # --------------------------------------------------------------------------
@@ -907,7 +911,7 @@ def test_sent_images_are_recorded_on_the_assistant_message(seeded):
 
 def test_a_tool_call_written_as_text_is_stripped(seeded):
     provider = ScriptedProvider(
-        [ModelReply(text="تمام، هحول لحد من الفريق. request_human(reason='unclear', summary='عايز حجم')")]
+        [ModelReply(text="معلش، ممكن توضيح أكتر؟ request_human(reason='unclear', summary='عايز حجم')")]
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "مش فاهم", provider=provider)
     assert "request_human" not in reply.text

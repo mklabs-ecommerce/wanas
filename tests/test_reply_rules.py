@@ -113,12 +113,14 @@ def test_the_turn_is_sent_back_for_a_payment_method_it_cannot_take(seeded):
     provider = ScriptedProvider(
         [
             ModelReply(text="تقدر تدفع بفودافون كاش أو انستاباي."),
-            ModelReply(text="بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع."),
+            ModelReply(text="الدفع كاش عند الاستلام."),
         ]
     )
     reply = agent.run_turn(seeded, CHANNEL, WHO, "الدفع إزاي؟", provider=provider)
-    assert reply.text == "بتقدر تدفع كاش عند الاستلام، أو أونلاين من الموقع."
-    assert "طريقة دفع" in provider.calls[-1][0].split("تنبيه داخلي")[-1]
+    assert reply.text == "الدفع كاش عند الاستلام."
+    nudge = provider.calls[-1][0].split("تنبيه داخلي")[-1]
+    assert "طريقة دفع" in nudge
+    assert "أونلاين" not in nudge, "the nudge must not offer a payment method the bot cannot take"
 
 
 def test_the_turn_is_sent_back_for_saying_the_same_thing_again(seeded):

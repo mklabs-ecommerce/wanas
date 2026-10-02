@@ -9,8 +9,9 @@ what ships in `data/images/<handle>/`. Re-running is idempotent.
 
 What is decided here rather than taken from the scrape, all in `CURATED`:
 category / style / sleeve (the scrape has no product_type on 20 of 21), a
-cleaned display name where the store title carries a typo, and the colour of
-single-colour products the store never gave a Color option.
+cleaned display name where the store title carries a typo, the colour of
+single-colour products the store never gave a Color option, and a price the
+scrape caught wrong (the jacket).
 
 SKU (= `variant_id`, the key everything else joins on): the store's own SKU
 when it has one and it is unique; otherwise a stable slug built from
@@ -116,6 +117,9 @@ CURATED: dict[str, dict] = {
     ),
     "rehlaa-jacket": dict(
         name="Rehla Jacket", category=OUTER, style=["jacket"], sleeve="long", color="Black",
+        # The scrape caught 100 (compare-at 1200); the live store sells it at
+        # 1000. The seed is what the bot quotes when Shopify is unreachable.
+        price=1000.0,
     ),
     "rehla-black-t-shirt": dict(
         name="Rehla Black T-Shirt", category=TEES, style=["tee"], sleeve="half", color="Black",
@@ -188,7 +192,7 @@ def build(images_root: Path, *, write_images: bool = True) -> list[dict]:
         for v in p["variants"]:
             color = clean_color(v.get(f"option{color_idx}")) if color_idx else cur.get("color")
             size = (v.get(f"option{size_idx}") or "").strip().upper() if size_idx else "One Size"
-            price = float(v["price"])
+            price = float(cur.get("price", v["price"]))
             compare = float(v["compare_at_price"]) if v.get("compare_at_price") else price
             original = max(compare, price)
             sku = (v.get("sku") or "").strip()

@@ -38,8 +38,10 @@ not `0`), `integrations/shopify/local_shelf.py` makes the database the shelf:
   `handle-colour-size` (4 products had none, and one SKU was shared by two variants).
 - Colour typos fixed for display (Burghandy→Burgundy, Lavendar→Lavender,
   Violent→Violet, emoji dropped). Titles with typos got clean names (see `CURATED`).
-- **Rehla Jacket is priced 100 EGP (compare-at 1200) in the store data.**
-  That looks like a data error. Fix it in the dashboard before customers see it.
+- **Rehla Jacket**: the scrape caught 100 EGP (compare-at 1200); the live store sells it
+  at 1000. The seed now says 1000 (`price` in `CURATED`). A database seeded before
+  this still holds 100 -- harmless while Shopify answers (its price wins), but it is
+  the number quoted if Shopify is unreachable, so correct it in the dashboard.
 - No size charts were published. The bot hands off with `size_help` ("we'll send you the chart, and a team member will help").
 - Images were re-encoded to JPEG ≤1280px (219 MB → 19 MB) so every one is under WhatsApp's 5 MB limit.
 

@@ -502,7 +502,7 @@ def test_the_order_confirmation_and_status_pushes_reach_the_transcript(cairo_rat
     texts = [m["content"] for m in history]
     assert "تم تأكيد طلبك" in texts[0]
     assert "اتجهز" in texts[1] and "الطريق" in texts[2] and "اتسلم" in texts[3]
-    assert "تقيّم تجربتك" in texts[4]
+    assert "تقييم لتجربتك" in texts[4]
 
 
 def test_status_transitions_are_forward_only(cairo_rate):

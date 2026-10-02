@@ -134,7 +134,7 @@ def test_the_whatsapp_client_translates_a_list_into_meta_s_shape():
         interactive.region_picker(shipping.regions())
     )
     assert built["type"] == "list"
-    assert built["action"]["button"] == "اختار"
+    assert built["action"]["button"] == interactive.PICK_BUTTON
     assert built["action"]["sections"][0]["rows"][0]["id"] == "greater_cairo"
 
 

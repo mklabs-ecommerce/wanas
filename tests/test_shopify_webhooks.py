@@ -237,7 +237,7 @@ def test_a_delivered_fulfilment_completes_the_order(post, placed, seeded, outbox
     # Cash on delivery settles when the courier hands it over.
     assert order.payment_status == "paid"
     # And the feedback request that was written months ago finally goes out.
-    assert any("تقيّم" in message.text for message in outbox)
+    assert any("تقييم" in message.text for message in outbox)
 
 
 def test_an_in_transit_update_says_nothing(post, placed, seeded, outbox):

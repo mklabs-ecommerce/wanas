@@ -57,8 +57,8 @@ load_all()
 
 # Customer-facing failure text. The customer never sees a stack trace and
 # staff always see the real error.
-RATE_LIMITED = "الضغط عالي شوية، ابعتلي تاني بعد دقيقة."
-GENERIC_FAILURE = "حصلت مشكلة عندنا دلوقتي. جرب تبعت تاني بعد شوية وأنا موجود."
+RATE_LIMITED = "الضغط عالي شوية، ممكن حضرتك تبعت تاني بعد دقيقة؟"
+GENERIC_FAILURE = "حصلت مشكلة عندنا دلوقتي. ممكن حضرتك تبعت تاني بعد شوية؟ إحنا موجودين."
 LOOP_EXHAUSTED = "معلش خدت وقت في ده. ممكن توضحلي طلبك في جملة واحدة؟"
 
 #: How long to wait before retrying one failed model call. Same figure as
@@ -217,7 +217,7 @@ _TRUNCATION_NUDGE = (
 #: answer, so it needs nothing following it to make sense. The same standard
 #: `PROMISE_FALLBACK` is held to.
 TRUNCATED_FALLBACK = (
-    "معلش، الرسالة اتقطعت مني. ممكن تقوللي تاني عايز إيه بالظبط وأنا أرد عليك فورًا؟"
+    "معلش، الرسالة اتقطعت مني. ممكن حضرتك تكتب الطلب تاني وأرد فورًا؟"
 )
 
 
@@ -243,7 +243,7 @@ _PROMISE_RETRY_LIMIT = 2
 #: real, and -- unlike the promise -- it needs no follow-up from us to make
 #: sense. Dead air is the failure; a question is not.
 PROMISE_FALLBACK = (
-    "معلش، قولي اسم المنتج واللون والمقاس اللي عايزه بالظبط وأقولك المتاح منه فورًا."
+    "معلش، ممكن اسم المنتج واللون والمقاس بالظبط؟ وأقول لحضرتك المتاح منه فورًا."
 )
 
 #: The same last resort for a conversation that already established what it is
@@ -252,10 +252,10 @@ PROMISE_FALLBACK = (
 #: doing it, not the model, because a constant carries no context by
 #: construction. These ask only for what is genuinely still missing.
 PROMISE_FALLBACK_WITH_PRODUCT = (
-    "معلش، بالنسبة لـ {product} — قوللي اللون والمقاس اللي عايزهم وأقولك المتاح منه فورًا."
+    "معلش، بالنسبة لـ {product} — ممكن اللون والمقاس؟ وأقول لحضرتك المتاح منه فورًا."
 )
 PROMISE_FALLBACK_WITH_COLOR = (
-    "معلش، بالنسبة لـ {product} {color} — قوللي المقاس اللي عايزه وأقولك المتاح منه فورًا."
+    "معلش، بالنسبة لـ {product} {color} — ممكن المقاس؟ وأقول لحضرتك المتاح منه فورًا."
 )
 
 
@@ -357,14 +357,14 @@ _IMAGE_NUDGE = (
 #: one thing that lets the next turn send a real photo and, unlike the
 #: promise, makes sense with nothing following it.
 IMAGE_PROMISE_FALLBACK = (
-    "معلش، قولي اسم المنتج واللون اللي عايز تشوفه وأبعتلك صورته على طول."
+    "معلش، ممكن اسم المنتج واللون؟ وأبعت لحضرتك صورته على طول."
 )
 
 #: The same, once the conversation has settled on a product: asking a
 #: customer who has been talking about the black tee for three messages which
 #: product they mean is the question they already answered.
 IMAGE_PROMISE_FALLBACK_WITH_PRODUCT = (
-    "معلش، الصورة مااتبعتتش المرة دي. تحب أقولك مقاسات وسعر {product}؟"
+    "معلش، الصورة مااتبعتتش المرة دي. أقول لحضرتك مقاسات وسعر {product}؟"
 )
 
 
@@ -431,7 +431,7 @@ def with_chart(text: str, turn_results: list[tuple[str, dict]]) -> str:
 #: everything it claimed. Discarding a real photograph to ask "which product?"
 #: would be answering a question the customer has already answered.
 PARTIAL_IMAGE_FALLBACK = (
-    "دي الصورة اللي قدرت أبعتها 👆 قولي المنتج التاني اللي عايز تشوفه وأبعتلك صورته على طول."
+    "دي الصورة اللي قدرت أبعتها 👆 ممكن اسم المنتج التاني؟ وأبعت لحضرتك صورته على طول."
 )
 
 #: Told to the model when a photograph this conversation sent was refused by
@@ -510,6 +510,12 @@ _ACTION_NUDGE = {
         "مانجحش في الدور ده. الأوردر مابيتسجلش غير لما confirm_order يرجّع رقم "
         "أوردر -- كمّل البيانات الناقصة أو نادي الأداة، ولو رفضت قول السبب."
     ),
+    "handoff": (
+        "\n\nتنبيه داخلي: ردك اللي فات قال إن الزبون اتحوّل (أو هيتحوّل) لحد من الفريق، "
+        "بس request_human متنادهش في الدور ده، فمحدش هيعرف ولا هيرد. لو التحويل صح "
+        "(شكوى، طلب مرتجع أو استبدال، الزبون طلب حد، أو get_size_chart رجّع has_chart=false) "
+        "نادي request_human دلوقتي. غير كده اكتب الرد من غير أي وعد بالتحويل."
+    ),
 }
 
 #: Appended when a reply broke one of the rules in `assistant/reply_rules.py`
@@ -518,7 +524,7 @@ _ACTION_NUDGE = {
 _RULE_NUDGE = {
     "payment": (
         "\n\nتنبيه داخلي: ردك اللي فات عرض طريقة دفع إحنا مش بنقبلها ({why}). "
-        "الدفع كاش عند الاستلام، أو أونلاين من الموقع، وبس. اكتب الرد تاني من غير أي "
+        "الدفع كاش عند الاستلام بس. اكتب الرد تاني من غير أي "
         "طريقة دفع تانية."
     ),
     "section": (
@@ -538,6 +544,11 @@ _RULE_NUDGE = {
     "dialect": (
         "\n\nتنبيه داخلي: ردك اللي فات فيه كلمة مش مصري ({why}). اكتب الرد تاني بعامية "
         "مصرية محترمة، زي موظف في محل كويس في القاهرة -- مش شامي ولا خليجي ولا فصحى."
+    ),
+    "accepted": (
+        "\n\nتنبيه داخلي: الزبون قال «اه» على عرضك إنك تضيف القطعة للشنطة، وردك سأله "
+        "نفس السؤال تاني ({why}). «اه» هي الموافقة: نادي add_to_cart دلوقتي (ولو محتاج "
+        "variant_id نادي get_variants الأول)، وقول إنها اتضافت بعد ما الأداة ترجع."
     ),
     "repeat": (
         "\n\nتنبيه داخلي: ردك اللي فات هو نفس ردك اللي قبله تقريبًا. الزبون رد عليه، "
@@ -569,8 +580,8 @@ def _previous_reply(history: list[dict]) -> str:
 #: person, which is the only thing left that can actually get the picture to
 #: them.
 BLAME_FALLBACK = (
-    "معلش، الصورة مش راضية توصل من ناحيتنا إحنا، مش من عندك. "
-    "تحب أوصّلك بحد من الفريق يبعتهالك حالًا؟"
+    "معلش، الصورة مش راضية توصل من ناحيتنا إحنا، مش من عند حضرتك. "
+    "نحوّل حضرتك لحد من الفريق يبعتهالك حالًا؟"
 )
 
 #: What the model is told when its reply describes one post-order request and
@@ -597,7 +608,7 @@ _CHANGE_WORDS = {
 #: an action the reply has already shown the model cannot name correctly.
 CHANGE_FALLBACK = (
     "طلبك وصل للفريق وحد هيراجعه ويأكدلك، ولسه مافيش حاجة اتغيرت في الأوردر. "
-    "تحب أقولك بالظبط اللي اتبعت؟"
+    "أقول لحضرتك بالظبط اللي اتبعت؟"
 )
 
 

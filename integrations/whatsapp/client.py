@@ -332,7 +332,7 @@ class WhatsAppClient:
                 "type": "list",
                 "body": body,
                 "action": {
-                    "button": payload.get("button") or "اختار",
+                    "button": payload.get("button") or "القايمة",
                     "sections": [
                         {
                             **({"title": section["title"]} if section.get("title") else {}),

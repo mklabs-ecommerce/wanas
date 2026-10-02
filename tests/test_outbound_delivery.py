@@ -231,7 +231,7 @@ def test_the_feedback_request_obeys_the_window_too(cairo_rate, monkeypatch):
         bubbles = display_history(session_store.transcript(session, CHANNEL, WHO))
         alerts = queues.open_items(session, QueueKind.ALERT.value)
 
-    rating = [b for b in bubbles if "تقيّم" in b["text"]]
+    rating = [b for b in bubbles if "تقييم" in b["text"]]
     assert len(rating) == 1 and rating[0]["delivery"] == "failed"
     assert sum(1 for a in alerts if a.reason == "status_push_undelivered") == 1
 
