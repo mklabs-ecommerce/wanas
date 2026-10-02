@@ -183,7 +183,7 @@ failure in either path falls back to the human handoff, which is what happened
 to all of them before. See `docs/MEDIA.md`.
 
 **Numbers that are decided, so nobody has to guess:** history cap 150
-messages, model context 24 verbatim + 60 recalled, session expiry 6 hours,
+messages, model context 24 verbatim + 60 recalled, session expiry 72 hours idle (floored at 48; the last 8 messages carry over),
 tool-loop cap 8 turns, max 10 units per cart line, inbound debounce 6
 seconds, image-match confidence 0.6.
 

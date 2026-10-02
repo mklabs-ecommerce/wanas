@@ -517,7 +517,7 @@ tests/                   pytest suite (flat, one test_<module>.py per
 - Chat/session history is persisted (`sessions` table / `assistant/session.py`)
   — this is a required production feature. **Never** remove it or replace it
   with an in-memory store. It is also append-only: a conversation *ending*
-  (six hours idle, a staff reset, `HISTORY_CAP`) moves `sessions.context_start`
+  (`SESSION_EXPIRY_HOURS` idle -- 72 by default, never under 48 -- a staff reset, `HISTORY_CAP`) moves `sessions.context_start`
   forward and deletes nothing. Read the live slice with `session.load()` and
   the whole transcript with `session.transcript()` — the dashboard must use
   the latter, since a read must never be what ends a conversation. Only
@@ -584,7 +584,7 @@ tests/                   pytest suite (flat, one test_<module>.py per
   provider ever sees them, because every translation layer rebuilds its
   request from `role`/`content`/`tool_calls`. Receipts deliberately do **not**
   touch `SessionRow.updated_at` -- that column is the inbox sort key and the
-  six-hour expiry clock, and a customer reading a message is not a new one.
+  idle-expiry clock, and a customer reading a message is not a new one.
   Messages stored before this shipped have no `at` and no `receipt`; they show
   no time and no tick rather than a guessed one. WhatsApp only: Instagram's
   read event is a watermark on an unsubscribed field, so

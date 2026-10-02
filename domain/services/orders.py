@@ -994,6 +994,8 @@ def return_terms(order: Order | None = None) -> dict:
         "defective_or_wrong_item": "shop_pays_shipping",
         "changed_mind": "customer_pays_shipping",
         "returns_accepted": "within_return_window_days_shipping_fee_deducted_from_refund",
+        "defect_shipping": "rehla_pays_all_shipping",
+        "request_flow": "ask_order_number_then_request_human",
     }
     if order is None:
         return terms
@@ -1041,6 +1043,7 @@ def return_terms(order: Order | None = None) -> dict:
         # staff pressed the button, and this shop's couriers often do
         # neither. Unknown, and the caller has to ask rather than assume.
         terms["exchange_window"] = "unknown"
+        terms["return_window"] = "unknown"
         terms["exchange_window_reason"] = (
             "delivery_not_reported" if order.status == OrderStatus.SHIPPED.value
             else "no_delivery_timestamp"
@@ -1050,6 +1053,7 @@ def return_terms(order: Order | None = None) -> dict:
     hours = (utcnow() - delivered_at).total_seconds() / 3600
     terms["hours_since_delivery"] = round(hours, 1)
     terms["exchange_window"] = "open" if hours <= EXCHANGE_WINDOW_HOURS else "closed"
+    terms["return_window"] = "open" if hours <= shop_facts.RETURN_DAYS * 24 else "closed"
     return terms
 
 

@@ -8,7 +8,10 @@ enough to destroy it. Expiry is now a bookmark (`context_start`), not an erase.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
+
+import pytest
 
 from assistant import messages as msg, session as session_store
 from config.settings import settings
@@ -16,6 +19,13 @@ from domain.models import SessionRow, utcnow
 
 CHANNEL = "whatsapp"
 WHO = "201555000111"
+
+
+@pytest.fixture(autouse=True)
+def no_carry(monkeypatch):
+    """These tests are about what expiry archives; carrying the last exchange
+    forward is `tests/test_conversation_gap.py`'s subject."""
+    monkeypatch.setattr(session_store, "settings", replace(settings, session_expiry_carry=0))
 
 
 def _age(session, hours: float) -> None:
@@ -71,9 +81,9 @@ def test_messages_past_the_history_cap_move_to_the_archive(seeded):
 
 
 def test_the_archive_is_bounded_so_a_row_cannot_grow_forever(seeded, monkeypatch):
-    from dataclasses import replace
-
-    monkeypatch.setattr(session_store, "settings", replace(settings, session_archive_cap=10))
+    monkeypatch.setattr(
+        session_store, "settings", replace(settings, session_archive_cap=10, session_expiry_carry=0)
+    )
     for n in range(30):
         session_store.append(seeded, CHANNEL, WHO, msg.user(f"m{n}"))
 

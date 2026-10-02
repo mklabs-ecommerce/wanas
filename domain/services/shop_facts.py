@@ -42,9 +42,14 @@ DELIVERY_DAYS = 5
 #: Cash on delivery only.
 PAYMENT_LINE = "الدفع كاش عند الاستلام."
 
-#: Rehla's refund policy (data/rehla_source/pages/policies_refund-policy.txt):
-#: exchange within 14 days of delivery (size issue or defect, unused, tags on),
-#: return within 7 days with shipping deducted; a defect is on the shop.
+#: Rehla's return & exchange policy:
+#: * exchange within 14 days of delivery -- unused, original condition, tags
+#:   and packaging -- for a size issue or a manufacturing defect;
+#: * return within 7 days of delivery, shipping deducted from the refund; for
+#:   a manufacturing defect Rehla covers all shipping;
+#: * never: used or washed, no tags or packaging, sale/discounted items
+#:   (except a manufacturing defect);
+#: * a request is handed to the team with the order number (`request_human`).
 EXCHANGE_DAYS = 14
 RETURN_DAYS = 7
 # ---------------------------------------------------------------------------
@@ -123,3 +128,36 @@ def example_fee(session: Session | None = None) -> str:
 
 def delivery_line() -> str:
     return f"من {DELIVERY_DAYS_MIN} لـ {DELIVERY_DAYS} أيام"
+
+
+def return_eligibility(
+    days_since_delivery: float | None,
+    *,
+    defect: bool = False,
+    discounted: bool = False,
+    used_or_washed: bool = False,
+    tags_and_packaging: bool = True,
+) -> dict:
+    """What the policy above allows for one item, decided in code.
+
+    `None` days means delivery was never recorded: the windows are "unknown",
+    never rounded down to closed. A defect overrides the discount exclusion
+    and moves every shipping cost onto Rehla; it does not make a used or
+    washed item returnable, since that is the condition the defect is judged in.
+    """
+    blocked = used_or_washed or not tags_and_packaging or (discounted and not defect)
+
+    def window(days: int) -> bool | str:
+        if blocked:
+            return False
+        if days_since_delivery is None:
+            return "unknown"
+        return days_since_delivery <= days
+
+    return {
+        "exchange": window(EXCHANGE_DAYS),
+        "return": window(RETURN_DAYS),
+        "shipping_paid_by": "rehla" if defect else "customer",
+        "refund_deducts_shipping": not defect,
+        "next_step": "ask_order_number_then_request_human",
+    }

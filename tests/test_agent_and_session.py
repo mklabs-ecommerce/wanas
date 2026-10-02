@@ -79,9 +79,11 @@ def test_history_is_capped_on_save(seeded):
     assert len(stored) <= settings.history_cap
 
 
-def test_session_expires_after_six_hours(seeded):
+def test_session_expires_after_the_idle_window(seeded, monkeypatch):
+    from dataclasses import replace
     from datetime import timedelta
 
+    monkeypatch.setattr(session_store, "settings", replace(settings, session_expiry_carry=0))
     session_store.save(seeded, CHANNEL, WHO, [msg.user("hello")])
     row = seeded.get(SessionRow, (CHANNEL, WHO))
     row.updated_at = utcnow() - timedelta(hours=settings.session_expiry_hours + 1)

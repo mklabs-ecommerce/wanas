@@ -8,7 +8,7 @@ Losing a session loses nothing real *to the bot* -- the cart is stored
 separately and survives. It loses something real to the shop, though: this
 table is also the only record of what a customer and the bot actually said to
 each other, and it is what the dashboard reads. So nothing here deletes a
-message. Ending a conversation -- six hours of silence, a staff reset, or
+message. Ending a conversation -- `SESSION_EXPIRY_HOURS` of silence, a staff reset, or
 history scrolling past `HISTORY_CAP` -- moves `SessionRow.context_start`
 forward instead: the model sees a fresh conversation, the transcript keeps
 everything. `transcript()` is what reads the whole thing back.
@@ -111,7 +111,8 @@ def archive_boundary(session: Session, channel: str, external_id: str) -> int:
 
 
 def load(session: Session, channel: str, external_id: str) -> list[dict]:
-    """The live history for this identity, or a fresh one after 6 hours.
+    """The live history for this identity; after `SESSION_EXPIRY_HOURS` idle,
+    a new context that still opens with the last exchange (`carry_over`).
 
     Expiry archives, it does not erase: `context_start` jumps to the end of
     the stored transcript and the same rows stay in the column. Before this,
@@ -131,20 +132,36 @@ def load(session: Session, channel: str, external_id: str) -> list[dict]:
     stored = _stored(row)
     if _expired(row):
         start = _start(row, stored)
+        carried = carry_over(stored[start:])
         if start < len(stored):
             log.info(
-                "session %s/%s went idle for over %sh; archiving %d message(s) and "
-                "starting a fresh context (nothing deleted)",
+                "session %s/%s went idle for over %sh; archiving %d message(s), "
+                "carrying the last %d into the new context (nothing deleted)",
                 channel,
                 external_id,
                 settings.session_expiry_hours,
-                len(stored) - start,
+                len(stored) - start - len(carried),
+                len(carried),
             )
-        row.context_start = len(stored)
+        row.context_start = len(stored) - len(carried)
         row.updated_at = utcnow()
         session.flush()
-        return []
+        return list(carried)
     return list(stored[_start(row, stored) :])
+
+
+def carry_over(live: list[dict]) -> list[dict]:
+    """The tail of an expiring context that the next one starts from.
+
+    Expiry used to hand the model an empty history, so an offer the customer
+    went to sleep on («أضيفلك التوب الأسود M؟») was gone by morning and «اه»
+    got a fresh greeting. The last exchange is kept -- cut at a user message,
+    like `trim`, so a tool call is never separated from its result.
+    """
+    keep = settings.session_expiry_carry
+    if keep <= 0 or not live:
+        return []
+    return trim(live, keep)
 
 
 def stored_length(session: Session, channel: str, external_id: str) -> int:

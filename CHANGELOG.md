@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — «اه» the next morning still answers last night's offer
+
+- **Session expiry 6h → 72h, floored at 48h.** `session.load` archived the
+  whole live context after `SESSION_EXPIRY_HOURS` idle, so a customer who
+  slept on «أضيفلك التوب الأسود M؟» got a fresh greeting for «اه». An env
+  value below 48 is now raised to 48.
+- **Expiry carries the last exchange.** `session.carry_over` keeps the last
+  `SESSION_EXPIRY_CARRY` (8) messages, cut at a user message, as the new
+  context's opening; the rest is archived (still nothing deleted). The prompt
+  says a late «اه» answers the pending offer, greeting optional.
+- **Return & exchange policy** decided in code: `shop_facts.return_eligibility`
+  (14-day exchange, 7-day return with shipping deducted, defect = Rehla pays
+  shipping, used/washed/untagged/discounted excluded except defects);
+  `return_terms` adds `return_window` and `request_flow`. The prompt asks for
+  the order number, then hands off to the team.
+- Tests: `test_conversation_gap.py`, `test_concurrent_conversations.py`
+  (20 customers through the real webhook + dispatcher, and a 6-message burst),
+  `test_return_policy.py`. `docs/system_prompt_full.md` is a review dump.
+
 ## Unreleased — "Customer went silent" nudges replace the abandoned-cart nudge
 
 The only follow-up was one message two hours after a cart line was added,

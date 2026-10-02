@@ -37,6 +37,11 @@ def _datetime(name: str) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
+#: A customer who goes to sleep on an offer must find it there in the morning;
+#: an env value below this (production had 6) is raised to it.
+SESSION_EXPIRY_FLOOR_HOURS = 48
+
+
 def _int(name: str, default: int) -> int:
     raw = os.getenv(name, "").strip()
     try:
@@ -219,7 +224,13 @@ class Settings:
     #: How many messages one conversation's stored transcript keeps. The live
     #: context is `history_cap`; this bounds the archive behind it.
     session_archive_cap: int
+    #: Idle hours before a conversation's live context is archived. Floored at
+    #: `SESSION_EXPIRY_FLOOR_HOURS`: six hours used to archive an open offer
+    #: overnight, so «اه» the next morning got a fresh greeting.
     session_expiry_hours: int
+    #: Messages carried into the new context when one does expire, so a
+    #: short «اه» still answers the last question asked.
+    session_expiry_carry: int
     tool_loop_cap: int
     max_quantity_per_line: int
 
@@ -579,7 +590,10 @@ def load_settings() -> Settings:
         model_context_messages=_int("MODEL_CONTEXT_MESSAGES", 24),
         model_context_recall=_int("MODEL_CONTEXT_RECALL", 60),
         session_archive_cap=_int("SESSION_ARCHIVE_CAP", 2000),
-        session_expiry_hours=_int("SESSION_EXPIRY_HOURS", 6),
+        session_expiry_hours=max(
+            _int("SESSION_EXPIRY_HOURS", 72), SESSION_EXPIRY_FLOOR_HOURS
+        ),
+        session_expiry_carry=_int("SESSION_EXPIRY_CARRY", 8),
         tool_loop_cap=_int("TOOL_LOOP_CAP", 8),
         max_quantity_per_line=_int("MAX_QUANTITY_PER_LINE", 10),
         message_debounce_seconds=_float("MESSAGE_DEBOUNCE_SECONDS", 6.0),

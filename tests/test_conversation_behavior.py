@@ -798,7 +798,10 @@ def test_the_prompt_did_not_become_a_wall_of_text():
         # prompt can say is which dialect, how to answer a courtesy instead of
         # being forbidden to, who to address as «حضرتك», and that the bot has
         # no name of its own.
-    assert 3000 < len(SYSTEM_PROMPT) < 24100
+    #
+    # 24100 -> 24500: a late «اه» answers the pending offer instead of a fresh
+    # greeting, and a return/exchange request is the order number then the team.
+    assert 3000 < len(SYSTEM_PROMPT) < 24500
 
 
 # --------------------------------------------------------------------------
