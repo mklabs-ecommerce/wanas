@@ -189,6 +189,16 @@ def _chart_available(ctx: ToolContext) -> dict | None:
     product = ctx.session.get(Product, current["product_id"])
     if product is None:
         return None
+    from assistant.tools.catalog_tools import is_one_size
+
+    if is_one_size(ctx.session, product.product_id):
+        return {
+            "error": "one_size_product",
+            "product_id": product.product_id,
+            "name": product.name,
+            "detail": "No handoff: this product comes in one free size that fits everyone. "
+            "Tell the customer «فري سايز يناسب الكل».",
+        }
     chart = get_chart(product.size_chart, ctx.session)
     if chart is None and not product.size_chart_image:
         return None

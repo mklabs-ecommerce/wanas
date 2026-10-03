@@ -811,7 +811,7 @@ def run_turn(
     # Which language the reply is written in -- Arabic or Franco in, Egyptian
     # Arabic out; English in, English out. Decided here, not left to the
     # model. See `assistant/reply_language.py`.
-    language = reply_language.decide(text, history)
+    language = reply_language.decide(text, history, reply_language.catalog_words(db))
     log.info("reply language for %s/%s: %s", channel, external_id, language)
     system_prompt = f"{system_prompt}{reply_language.turn_note(language)}"
 

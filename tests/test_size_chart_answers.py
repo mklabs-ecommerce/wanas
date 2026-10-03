@@ -83,13 +83,35 @@ def test_the_chart_carries_the_published_weight_ranges(charted):
 
 
 def test_a_product_with_no_chart_still_hands_off(seeded):
+    seeded.get(Product, "rehlaa-jacket").size_chart = None
+    seeded.commit()
+    _turn(
+        seeded,
+        {"id": "a", "name": "get_size_chart", "arguments": {"product_id": "rehlaa-jacket"}},
+        {"id": "b", "name": "request_human", "arguments": {"reason": "size_help", "summary": "jacket size"}},
+        "",
+    )
+    assert identities.is_paused(seeded, "whatsapp", WHO)
+
+
+def test_a_one_size_cap_is_answered_not_handed_off(seeded):
+    """Stress test, 2026-10-03: «الكاب ليه مقاسات؟» -> get_size_chart said
+    has_chart false -> request_human(size_help), and the customer was parked
+    waiting for a person over a question the catalog answers: one free size.
+    """
+    from assistant.tools.base import ToolContext, call_tool
+
+    ctx = ToolContext(session=seeded, channel="whatsapp", external_id=WHO)
+    chart = call_tool(ctx, "get_size_chart", {"product_id": "rehla-black-cap"})
+    assert chart["one_size"] is True and chart["has_chart"] is False
+
     _turn(
         seeded,
         {"id": "a", "name": "get_size_chart", "arguments": {"product_id": "rehla-black-cap"}},
         {"id": "b", "name": "request_human", "arguments": {"reason": "size_help", "summary": "cap size"}},
-        "",
+        "الكاب فري سايز يناسب الكل.",
     )
-    assert identities.is_paused(seeded, "whatsapp", WHO)
+    assert not identities.is_paused(seeded, "whatsapp", WHO), "a one-size product never pauses"
 
 
 def test_the_prompt_starts_every_sizing_question_with_the_chart():

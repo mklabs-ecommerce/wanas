@@ -60,3 +60,4 @@ scripts/_eval_abandonment/
 # Scraped catalogue sources and crawl scratch (local working data, not shipped)
 crawl/
 scraped/
+reports/

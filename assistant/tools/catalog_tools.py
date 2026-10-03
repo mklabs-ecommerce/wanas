@@ -407,6 +407,18 @@ def get_variants(
     return payload
 
 
+def is_one_size(session, product_id: str) -> bool:
+    """True when every size the product comes in is «One Size»."""
+    from domain.models import Variant
+
+    sizes = {
+        (size or "").strip().lower()
+        for (size,) in session.query(Variant.size).filter(Variant.product_id == product_id).all()
+    }
+    return bool(sizes) and sizes <= {"one size", "onesize", "free size"}
+
+
+
 @tool(
     "get_size_chart",
     "The published measurements for one product (garment laid flat, in cm), plus the chart image "
@@ -416,8 +428,10 @@ def get_variants(
     "'arrived' without it answers nothing -- then help them choose: if they give their "
     "weight, match it to `recommended_weight_kg` when present; if they name the size they usually "
     "wear or a garment's measurements, compare with `sizes`; then suggest one size and say why. Only "
-    "if it returns has_chart false (no chart for that product, e.g. a cap) call request_human with "
-    "reason size_help. If it returns image_only the picture is the whole chart -- send it and let the "
+    "if it returns has_chart false (no chart for that product) call request_human with "
+    "reason size_help -- unless it says one_size: then the product comes in one free size that fits "
+    "everyone, so say exactly that and never hand off. "
+    "If it returns image_only the picture is the whole chart -- send it and let the "
     "customer read it; there are no measurements to quote. Never estimate a measurement and never quote "
     "another product's chart. This is the tool for a customer who does not know their size: call it "
     "instead of asking them to work it out or promising to come back to them. `product_id` may be "
@@ -446,6 +460,19 @@ def get_size_chart(ctx: ToolContext, product_id: str | None = None) -> dict:
     product = ctx.session.get(Product, product_id)
     if product is None:
         return _not_found(ctx, product_id)
+
+    if is_one_size(ctx.session, product.product_id):
+        # A cap has no chart because it has no sizes: "الكاب ليه مقاسات؟" has
+        # a complete answer. Reported as has_chart false, it was handed to a
+        # person as size_help and the conversation paused over a question the
+        # catalog answers in one word.
+        return {
+            "has_chart": False,
+            "one_size": True,
+            "product_id": product.product_id,
+            "name": product.name,
+            "detail": "One free size that fits everyone (فري سايز يناسب الكل). Say so; no handoff.",
+        }
 
     chart = get_chart(product.size_chart, ctx.session)
     if chart is None:
