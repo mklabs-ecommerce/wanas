@@ -279,6 +279,27 @@ _RAW_SYNONYMS: dict[str, tuple[str, ...]] = {
     "رحله": ("rehla",),
     "rehlaa": ("rehla",),
     "صيفي": ("tee", "top", "half sleeve"),
+    # occasion / fit / fabric -- the labels build_seed.py adds to `style`
+    "كاجوال": ("casual",),
+    "كچوال": ("casual",),
+    "خروج": ("going-out",),
+    "خروجه": ("going-out",),
+    "للخروج": ("going-out",),
+    "سهره": ("evening",),
+    "يومي": ("everyday",),
+    "كل يوم": ("everyday",),
+    "قطن": ("cotton",),
+    "قطني": ("cotton",),
+    "مطاط": ("stretch", "elastic"),
+    "محتشم": ("modest",),
+    "بيبي تي": ("baby-tee",),
+    "بيبي تيشيرت": ("baby-tee",),
+    "اوفر سايز": ("oversized",),
+    "اوفرسايز": ("oversized",),
+    "سوسته": ("zip-up",),
+    "بسوسته": ("zip-up",),
+    "تقيل": ("heavy", "winter"),
+    "دافي": ("warm", "winter"),
 }
 
 #: Padding. Every one of these appears in a real request and none of them is

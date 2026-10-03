@@ -874,8 +874,8 @@ def test_the_scope_rule_reaches_the_instagram_surface_too():
 
 
 def test_an_image_already_sent_this_conversation_is_not_sent_again(seeded):
-    """"وريني الهودي" twice in the same conversation should not cost a second
-    photo -- the customer already has it."""
+    """A photo already sent is not sent again on a follow-up that did not ask
+    to see it. (An explicit «وريني» does re-send it: tests/test_photo_show_me.py.)"""
     provider = ScriptedProvider(
         [
             ModelReply(tool_calls=[{"id": "a", "name": "get_variants", "arguments": {"product_id": "rehla-hoodie"}}]),
@@ -887,7 +887,7 @@ def test_an_image_already_sent_this_conversation_is_not_sent_again(seeded):
     first = agent.run_turn(seeded, CHANNEL, WHO, "وريني الهودي", provider=provider)
     assert first.attachments
 
-    second = agent.run_turn(seeded, CHANNEL, WHO, "وريني تاني", provider=provider)
+    second = agent.run_turn(seeded, CHANNEL, WHO, "طب بكام؟", provider=provider)
     assert second.attachments == []
 
 

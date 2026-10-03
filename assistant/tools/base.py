@@ -876,6 +876,18 @@ def _collect_images(
         # The default request is "show me the product", already answered --
         # substituting a different colour nobody asked for is still fetching
         # another image, which is exactly what a plain request must not do.
+        #
+        # Unless the customer asked, in their own words, to see it: «وريهوني»,
+        # «عايز الصورة بتاعته», «عايز اشوفه الاول». Answering that with nothing
+        # because the photo counted as shown once is what made the bot ask
+        # three times and then explain the silence as a failed send. The same
+        # picture again is the answer to "show me" -- one of it, not a gallery.
+        from assistant.showcase import asked_for_photos
+
+        if not asked_for_photos(ctx):
+            return
+        for path in answered[:MAX_PRODUCT_IMAGES]:
+            ctx.attach(path, force=True, label=labels.get(path), product=product_key)
         return
 
     for path in candidates[:MAX_PRODUCT_IMAGES]:

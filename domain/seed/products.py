@@ -225,5 +225,36 @@ def correct_retired_size_charts(session: Session, path: Path | None = None) -> d
         if product.size_chart in retired:
             product.size_chart = wanted
             updated.append(product_id)
+    # A product with *no* chart is the same mistake: the Rehla seed shipped
+    # every product with `size_chart: null`, so "أنا ٦٠ كيلو، آخد إيه؟" was
+    # handed to a person for a garment whose chart the shop publishes. NULL
+    # is nobody's choice -- a chart staff picked is never NULL -- so it is
+    # filled; any other value is left alone.
+    for product_id, wanted in current.items():
+        product = session.get(Product, product_id)
+        if product is None or not wanted or product.size_chart is not None:
+            continue
+        product.size_chart = wanted
+        updated.append(product_id)
+    session.flush()
+    return {"updated": updated}
+
+
+def backfill_style_labels(session: Session, path: Path | None = None) -> dict:
+    """Add the seed's search labels a seeded product does not carry yet.
+
+    Additive only: a label is appended, never removed or reordered, so a label
+    staff added (or removed from the seed later) is never undone by a deploy.
+    """
+    updated: list[str] = []
+    for raw in load_seed(path):
+        product = session.get(Product, raw["product_id"])
+        if product is None:
+            continue
+        have = list(product.style or [])
+        missing = [label for label in raw.get("style") or [] if label not in have]
+        if missing:
+            product.style = have + missing
+            updated.append(product.product_id)
     session.flush()
     return {"updated": updated}

@@ -473,6 +473,18 @@ _BLAME_NUDGE = (
     "تتبعت اعرض عليه تحويله لحد من الفريق."
 )
 
+#: Appended when a reply said a photo failed to send and nothing was refused
+#: (`photo_claims.claims_failed_send`).
+_FALSE_FAILURE_NUDGE = (
+    "\n\nتنبيه داخلي: ردك اللي فات قال إن الصورة ماتبعتتش، ومفيش أي إرسال فشل. "
+    "متقولش أبداً إن صورة ماتبعتتش. لو الزبون عايز يشوف المنتج نادي get_variants "
+    "(ولو عايز صور تانية more_images: true) والصورة هتروح مع ردك؛ قول «دي صورته» وكمّل."
+)
+
+#: What is left when a reply's only content was a false failure claim.
+_PHOTO_FALLBACK = "دي صورته 🙂"
+_NO_PHOTO_FALLBACK = "تحب أوريك أنهي لون؟"
+
 #: Appended when a reply offered to show photos it was already carrying
 #: (`photo_claims.offers_what_it_sends`).
 _OFFER_NUDGE = (
@@ -1040,6 +1052,9 @@ def run_turn(
             # and because a reply can be both: «الصور اتبعتت، جرب اقفل
             # الواتس» claims a delivery *and* hands the customer the debugging.
             blamed = photo_claims.blames_the_customer(text_out)
+            # Saying a photo failed to send when nothing was ever refused --
+            # the excuse for an empty reply, not a report of a failure.
+            false_failure = photo_claims.claims_failed_send(text_out, history)
 
             # Saying a photo is on its way while attaching fewer -- none at
             # all, or one where the sentence claimed two -- is the same failure
@@ -1101,6 +1116,23 @@ def run_turn(
                     error="order_change_mismatch",
                 )
 
+            if false_failure:
+                if promise_retries < _PROMISE_RETRY_LIMIT:
+                    log.warning(
+                        "reply to %s/%s claimed a photo failed to send (%r) with no "
+                        "refused send on record, retry %d/%d",
+                        channel,
+                        external_id,
+                        false_failure,
+                        promise_retries + 1,
+                        _PROMISE_RETRY_LIMIT,
+                    )
+                    promise_retries += 1
+                    system_prompt = f"{system_prompt}{_FALSE_FAILURE_NUDGE}"
+                    ctx.restore(before_showcase)
+                    continue
+                trimmed = photo_claims.without_failure_claim(text_out)
+                text_out = trimmed or (_PHOTO_FALLBACK if ctx.attachments else _NO_PHOTO_FALLBACK)
             if blamed:
                 if promise_retries < _PROMISE_RETRY_LIMIT:
                     log.warning(

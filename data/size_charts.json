@@ -1,1 +1,180 @@
-{}
+{
+ "rehla-top": {
+  "chart_id": "rehla-top",
+  "title": "Top Size Chart",
+  "image": null,
+  "unit": "cm",
+  "measurements": [
+   {
+    "key": "width",
+    "label_en": "Width",
+    "label_ar": "العرض",
+    "marker": "A"
+   },
+   {
+    "key": "length",
+    "label_en": "Length",
+    "label_ar": "الطول",
+    "marker": "B"
+   }
+  ],
+  "sizes": {
+   "S": {
+    "width": 32,
+    "length": 50
+   },
+   "M": {
+    "width": 34,
+    "length": 52
+   },
+   "L": {
+    "width": 36,
+    "length": 54
+   }
+  },
+  "fit": {
+   "recommended_weight_kg": {
+    "S": [
+     45,
+     55
+    ],
+    "M": [
+     55,
+     65
+    ],
+    "L": [
+     65,
+     75
+    ]
+   }
+  }
+ },
+ "rehla-tshirt": {
+  "chart_id": "rehla-tshirt",
+  "title": "T-shirt Size Chart",
+  "image": null,
+  "unit": "cm",
+  "measurements": [
+   {
+    "key": "width",
+    "label_en": "Width",
+    "label_ar": "العرض",
+    "marker": "A"
+   },
+   {
+    "key": "length",
+    "label_en": "Length",
+    "label_ar": "الطول",
+    "marker": "B"
+   }
+  ],
+  "sizes": {
+   "S": {
+    "width": 62,
+    "length": 70
+   },
+   "M": {
+    "width": 64,
+    "length": 73
+   },
+   "L": {
+    "width": 66,
+    "length": 76
+   }
+  },
+  "fit": {
+   "recommended_weight_kg": {
+    "S": [
+     45,
+     55
+    ],
+    "M": [
+     55,
+     65
+    ],
+    "L": [
+     65,
+     75
+    ]
+   }
+  }
+ },
+ "rehla-jacket": {
+  "chart_id": "rehla-jacket",
+  "title": "Jacket Size Chart",
+  "image": null,
+  "unit": "cm",
+  "measurements": [
+   {
+    "key": "width",
+    "label_en": "Width",
+    "label_ar": "العرض",
+    "marker": "A"
+   },
+   {
+    "key": "length",
+    "label_en": "Length",
+    "label_ar": "الطول",
+    "marker": "B"
+   }
+  ],
+  "sizes": {
+   "S": {
+    "width": 62,
+    "length": 64
+   },
+   "M": {
+    "width": 64,
+    "length": 66
+   },
+   "L": {
+    "width": 66,
+    "length": 68
+   }
+  },
+  "fit": {
+   "recommended_weight_kg": {
+    "S": [
+     45,
+     55
+    ],
+    "M": [
+     55,
+     65
+    ],
+    "L": [
+     65,
+     75
+    ]
+   }
+  }
+ },
+ "rehla-weight-guide": {
+  "chart_id": "rehla-weight-guide",
+  "title": "Size guide by weight",
+  "image": null,
+  "unit": "cm",
+  "measurements": [],
+  "sizes": {
+   "S": {},
+   "M": {},
+   "L": {}
+  },
+  "fit": {
+   "recommended_weight_kg": {
+    "S": [
+     45,
+     55
+    ],
+    "M": [
+     55,
+     65
+    ],
+    "L": [
+     65,
+     75
+    ]
+   }
+  }
+ }
+}

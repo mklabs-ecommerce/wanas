@@ -190,11 +190,14 @@ def _correct_retired_size_charts() -> None:
     (`domain/seed/products.py::RETIRED_SIZE_CHARTS`); a chart staff chose is
     never touched.
     """
-    from domain.seed.products import correct_retired_size_charts
+    from domain.seed.products import backfill_style_labels, correct_retired_size_charts
 
     try:
         with session_scope() as db:
             result = correct_retired_size_charts(db)
+            labels = backfill_style_labels(db)
+        if labels["updated"]:
+            log.info("search labels added to %d seeded product(s)", len(labels["updated"]))
     except Exception:
         log.exception("could not correct retired size-chart links")
         return

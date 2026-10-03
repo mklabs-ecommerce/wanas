@@ -299,6 +299,7 @@ def show(ctx: ToolContext, text: str, history: list[dict], called: list[str]) ->
         return []
 
     added: list[str] = []
+    wants_to_see = asked_for_photos(ctx)
     payloads: dict[str, dict] = {}
     leads: dict[str, str | None] = {}
 
@@ -327,16 +328,19 @@ def show(ctx: ToolContext, text: str, history: list[dict], called: list[str]) ->
         if _garment_photos(ctx) >= MAX_SHOWCASE_PHOTOS:
             break
         candidates = _photos(payload, leads[product_id], stocked)
+        resend = False
         if _every_photo(payload) & ctx.sent_images:
             # Shown before in this conversation. The same rule the tool layer
             # keeps: a product already seen is not shown again in another
-            # colour nobody asked for -- only the colour this reply names.
-            candidates = candidates[:1] if leads[product_id] else []
+            # colour nobody asked for -- only the colour this reply names, or
+            # the one photo again when the customer asked to see it.
+            resend = wants_to_see
+            candidates = candidates[:1] if (leads[product_id] or resend) else []
         labels = _image_labels(payload, product_id)
         for path in candidates:
-            if path in ctx.sent_images:
+            if path in ctx.sent_images and not resend:
                 continue
-            if ctx.attach(path, label=labels.get(path), product=product_id):
+            if ctx.attach(path, force=resend, label=labels.get(path), product=product_id):
                 added.append(path)
                 break
 
@@ -383,7 +387,7 @@ def show(ctx: ToolContext, text: str, history: list[dict], called: list[str]) ->
 #: sizing at all.
 _PHOTO_NOUN = re.compile(r"صور\w*|\b(?:photos?|pics?|pictures?|images?)\b", re.IGNORECASE)
 _SEE_VERB = re.compile(
-    r"وريني\w*|وريهولي|فرجني\w*|شكله|شكلها|شكلهم|أشوف|اشوف|نشوف|\b(?:see|show)\b",
+    r"\bور+ّ?ي(?:ني|نا|ه|ها|هم)\w*|فرجني\w*|شكله|شكلها|شكلهم|أشوف|اشوف|نشوف|\b(?:see|show)\b",
     re.IGNORECASE,
 )
 #: What the chart is called, in every spelling the customers use.

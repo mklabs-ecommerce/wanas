@@ -125,7 +125,40 @@ SCENARIOS: list[tuple[str, list[str], dict]] = [
         ["الأوردر وصل والتوب مقطوع من الجنب، بجد زعلانة"],
         {"tools": {"request_human"}, "paused": True},
     ),
+    (
+        "13. صورة تيشيرت بينك → وريهوني → ضيف M على آخر أوردر",
+        [
+            "[الزبون بعت صورة] " + "{photo_note}",
+            "وريهوني كدا",
+            "تمام ضيفي مقاس M على آخر أوردر",
+        ],
+        {
+            "setup": "delivered_order_pink_photo",
+            "attachments": True,
+            "lacks": [r"مش مطابق", r"مش مسجل", r"ماتبعتت", r"مش متأكد"],
+        },
+    ),
+    (
+        "14. وزن ٦٠ كيلو على Rehla Yoga Pants",
+        ["عايزة Rehla Yoga Pants", "لو وزني ٦٠ كيلو انهي مقاس مناسب معايا؟"],
+        {"tools": {"get_size_chart"}, "not_tools": {"request_human"}, "reply_has": ["M"]},
+    ),
 ]
+
+
+def _pink_photo_note() -> str:
+    """The note the runtime writes for a photo of a pink short-sleeve tee."""
+    from assistant.media import ImageReading, photo_context
+    from domain.db import session_scope
+    from domain.models import Product
+
+    with session_scope() as db:
+        product = db.get(Product, "rehla-orignal-tops")
+        reading = ImageReading(
+            is_garment=True, description="تيشيرت بينك نص كم", color="Pink", color_confidence=0.9
+        )
+        note = photo_context(reading, product)
+    return note.replace("[الزبون بعت صورة] ", "")
 
 
 def main() -> int:
@@ -177,6 +210,12 @@ def main() -> int:
         fill = {}
         if expect.get("setup") == "pending_offer":
             _pending_offer(external_id)
+        if expect.get("setup") == "delivered_order_pink_photo":
+            fill["reference"] = _open_order(external_id)
+            fill["photo_note"] = _pink_photo_note()
+            sender = notifications.get_sender()
+            if hasattr(sender, "clear"):
+                sender.clear()
         if expect.get("setup") == "delivered_order":
             fill["reference"] = _delivered_order(external_id)
             sender = notifications.get_sender()
@@ -317,6 +356,27 @@ def _delivered_order(external_id: str) -> str:
         order = db.get(Order, placed["order_id"])
         orders.advance_to(db, order, OrderStatus.DELIVERED.value)
         order.delivered_at = utcnow() - timedelta(days=1)
+        return order.shopify_order_name or order.order_id
+
+
+def _open_order(external_id: str) -> str:
+    """A placed, not yet shipped order -- what «ضيف على آخر أوردر» edits."""
+    from domain.db import session_scope
+    from domain.models import Order, Variant
+    from domain.services import carts, orders
+
+    with session_scope() as db:
+        variant = (
+            db.query(Variant)
+            .filter(Variant.stock_qty > 0, Variant.product_id == "rehla-tops")
+            .first()
+        )
+        carts.add(db, "whatsapp", external_id, variant.variant_id, 1)
+        placed = orders.place_order(
+            db, channel="whatsapp", external_id=external_id, customer_name="منة أحمد",
+            governorate="Cairo", address="15 شارع التحرير، الدقي", contact_phone="01012345678",
+        )
+        order = db.get(Order, placed["order_id"])
         return order.shopify_order_name or order.order_id
 
 

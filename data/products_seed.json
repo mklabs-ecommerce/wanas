@@ -8,11 +8,19 @@
    "off-shoulder",
    "hijabi",
    "basic",
-   "fitted"
+   "fitted",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "modest",
+   "long-sleeve"
   ],
   "collection": null,
   "sleeve": "long",
-  "size_chart": null,
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -82,7 +90,7 @@
   ],
   "variants": [
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-s-burghandy",
+    "variant_id": "rehla-hijabi-off-shoulder-top-burgundy-s",
     "size": "S",
     "color": "Burgundy",
     "length": null,
@@ -93,7 +101,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-s-black",
+    "variant_id": "rehla-hijabi-off-shoulder-top-black-s",
     "size": "S",
     "color": "Black",
     "length": null,
@@ -104,7 +112,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-s-navy-blue",
+    "variant_id": "rehla-hijabi-off-shoulder-top-navy-blue-s",
     "size": "S",
     "color": "Navy Blue",
     "length": null,
@@ -115,7 +123,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-s-white",
+    "variant_id": "rehla-hijabi-off-shoulder-top-white-s",
     "size": "S",
     "color": "White",
     "length": null,
@@ -126,7 +134,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-s-pink",
+    "variant_id": "rehla-hijabi-off-shoulder-top-pink-s",
     "size": "S",
     "color": "Pink",
     "length": null,
@@ -137,7 +145,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-m-burghandy",
+    "variant_id": "rehla-hijabi-off-shoulder-top-burgundy-m",
     "size": "M",
     "color": "Burgundy",
     "length": null,
@@ -148,7 +156,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-l-burghandy",
+    "variant_id": "rehla-hijabi-off-shoulder-top-burgundy-l",
     "size": "L",
     "color": "Burgundy",
     "length": null,
@@ -159,7 +167,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-m-black",
+    "variant_id": "rehla-hijabi-off-shoulder-top-black-m",
     "size": "M",
     "color": "Black",
     "length": null,
@@ -170,7 +178,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-l-black",
+    "variant_id": "rehla-hijabi-off-shoulder-top-black-l",
     "size": "L",
     "color": "Black",
     "length": null,
@@ -181,7 +189,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-m-navy-blue",
+    "variant_id": "rehla-hijabi-off-shoulder-top-navy-blue-m",
     "size": "M",
     "color": "Navy Blue",
     "length": null,
@@ -192,7 +200,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-l-navy-blue",
+    "variant_id": "rehla-hijabi-off-shoulder-top-navy-blue-l",
     "size": "L",
     "color": "Navy Blue",
     "length": null,
@@ -203,7 +211,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-m-white",
+    "variant_id": "rehla-hijabi-off-shoulder-top-white-m",
     "size": "M",
     "color": "White",
     "length": null,
@@ -214,7 +222,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-l-white",
+    "variant_id": "rehla-hijabi-off-shoulder-top-white-l",
     "size": "L",
     "color": "White",
     "length": null,
@@ -225,7 +233,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-m-pink",
+    "variant_id": "rehla-hijabi-off-shoulder-top-pink-m",
     "size": "M",
     "color": "Pink",
     "length": null,
@@ -236,7 +244,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-long-sleeve-off-shoulder-top-l-pink",
+    "variant_id": "rehla-hijabi-off-shoulder-top-pink-l",
     "size": "L",
     "color": "Pink",
     "length": null,
@@ -255,11 +263,19 @@
   "department": "women",
   "style": [
    "off-shoulder",
-   "lace"
+   "lace",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "short-sleeve",
+   "evening"
   ],
   "collection": null,
-  "sleeve": null,
-  "size_chart": null,
+  "sleeve": "half",
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -331,7 +347,7 @@
   ],
   "variants": [
    {
-    "variant_id": "rehla-lace-off-shoulder-top-s-burghandy",
+    "variant_id": "rehla-off-shoulder-top-burgundy-s",
     "size": "S",
     "color": "Burgundy",
     "length": null,
@@ -342,7 +358,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-s-navy-blue",
+    "variant_id": "rehla-off-shoulder-top-navy-blue-s",
     "size": "S",
     "color": "Navy Blue",
     "length": null,
@@ -353,7 +369,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-s-white",
+    "variant_id": "rehla-off-shoulder-top-white-s",
     "size": "S",
     "color": "White",
     "length": null,
@@ -364,7 +380,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-m-burghandy",
+    "variant_id": "rehla-off-shoulder-top-burgundy-m",
     "size": "M",
     "color": "Burgundy",
     "length": null,
@@ -375,7 +391,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-l-burghandy",
+    "variant_id": "rehla-off-shoulder-top-burgundy-l",
     "size": "L",
     "color": "Burgundy",
     "length": null,
@@ -386,7 +402,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-m-navy-blue",
+    "variant_id": "rehla-off-shoulder-top-navy-blue-m",
     "size": "M",
     "color": "Navy Blue",
     "length": null,
@@ -397,7 +413,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-l-navy-blue",
+    "variant_id": "rehla-off-shoulder-top-navy-blue-l",
     "size": "L",
     "color": "Navy Blue",
     "length": null,
@@ -408,7 +424,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-m-white",
+    "variant_id": "rehla-off-shoulder-top-white-m",
     "size": "M",
     "color": "White",
     "length": null,
@@ -419,7 +435,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-l-white",
+    "variant_id": "rehla-off-shoulder-top-white-l",
     "size": "L",
     "color": "White",
     "length": null,
@@ -430,7 +446,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-s-pink",
+    "variant_id": "rehla-off-shoulder-top-pink-s",
     "size": "S",
     "color": "Pink",
     "length": null,
@@ -441,7 +457,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-m-pink",
+    "variant_id": "rehla-off-shoulder-top-pink-m",
     "size": "M",
     "color": "Pink",
     "length": null,
@@ -452,7 +468,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-l-pink",
+    "variant_id": "rehla-off-shoulder-top-pink-l",
     "size": "L",
     "color": "Pink",
     "length": null,
@@ -463,7 +479,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-s-black",
+    "variant_id": "rehla-off-shoulder-top-black-s",
     "size": "S",
     "color": "Black",
     "length": null,
@@ -474,7 +490,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-m-black",
+    "variant_id": "rehla-off-shoulder-top-black-m",
     "size": "M",
     "color": "Black",
     "length": null,
@@ -485,7 +501,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-lace-off-shoulder-top-l-black",
+    "variant_id": "rehla-off-shoulder-top-black-l",
     "size": "L",
     "color": "Black",
     "length": null,
@@ -505,11 +521,20 @@
   "style": [
    "backless",
    "halter",
-   "v-neck"
+   "v-neck",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "evening",
+   "summer",
+   "sleeveless"
   ],
   "collection": null,
   "sleeve": "sleeveless",
-  "size_chart": null,
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -578,7 +603,7 @@
   ],
   "variants": [
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-s-burghandy",
+    "variant_id": "rehla-backless-top-burgundy-s",
     "size": "S",
     "color": "Burgundy",
     "length": null,
@@ -589,7 +614,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-m-burghandy",
+    "variant_id": "rehla-backless-top-burgundy-m",
     "size": "M",
     "color": "Burgundy",
     "length": null,
@@ -600,7 +625,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-l-burghandy",
+    "variant_id": "rehla-backless-top-burgundy-l",
     "size": "L",
     "color": "Burgundy",
     "length": null,
@@ -611,7 +636,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-s-black",
+    "variant_id": "rehla-backless-top-black-s",
     "size": "S",
     "color": "Black",
     "length": null,
@@ -622,7 +647,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-s-navy-blue",
+    "variant_id": "rehla-backless-top-navy-blue-s",
     "size": "S",
     "color": "Navy Blue",
     "length": null,
@@ -633,7 +658,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-s-white",
+    "variant_id": "rehla-backless-top-white-s",
     "size": "S",
     "color": "White",
     "length": null,
@@ -644,7 +669,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-m-black",
+    "variant_id": "rehla-backless-top-black-m",
     "size": "M",
     "color": "Black",
     "length": null,
@@ -655,7 +680,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-m-navy-blue",
+    "variant_id": "rehla-backless-top-navy-blue-m",
     "size": "M",
     "color": "Navy Blue",
     "length": null,
@@ -666,7 +691,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-m-white",
+    "variant_id": "rehla-backless-top-white-m",
     "size": "M",
     "color": "White",
     "length": null,
@@ -677,7 +702,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-l-black",
+    "variant_id": "rehla-backless-top-black-l",
     "size": "L",
     "color": "Black",
     "length": null,
@@ -688,7 +713,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-l-navy-blue",
+    "variant_id": "rehla-backless-top-navy-blue-l",
     "size": "L",
     "color": "Navy Blue",
     "length": null,
@@ -699,7 +724,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-l-white",
+    "variant_id": "rehla-backless-top-white-l",
     "size": "L",
     "color": "White",
     "length": null,
@@ -710,7 +735,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-s-pink",
+    "variant_id": "rehla-backless-top-pink-s",
     "size": "S",
     "color": "Pink",
     "length": null,
@@ -721,7 +746,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-m-pink",
+    "variant_id": "rehla-backless-top-pink-m",
     "size": "M",
     "color": "Pink",
     "length": null,
@@ -732,7 +757,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "rehla-v-halter-neck-backless-top-l-pink",
+    "variant_id": "rehla-backless-top-pink-l",
     "size": "L",
     "color": "Pink",
     "length": null,
@@ -752,11 +777,19 @@
   "style": [
    "wide-leg",
    "flare",
-   "yoga"
+   "yoga",
+   "pants",
+   "trousers",
+   "women",
+   "high-rise",
+   "full-length",
+   "going-out",
+   "casual",
+   "mid-weight"
   ],
   "collection": null,
   "sleeve": "sleeveless",
-  "size_chart": null,
+  "size_chart": "rehla-weight-guide",
   "sizes": [
    "S",
    "M",
@@ -807,7 +840,7 @@
   ],
   "variants": [
    {
-    "variant_id": "yoga-pants-s-black",
+    "variant_id": "wide-leg-flare-trousers-black-s",
     "size": "S",
     "color": "Black",
     "length": null,
@@ -818,7 +851,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "yoga-pants-s-brown",
+    "variant_id": "wide-leg-flare-trousers-brown-s",
     "size": "S",
     "color": "Brown",
     "length": null,
@@ -829,7 +862,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "yoga-pants-m-black",
+    "variant_id": "wide-leg-flare-trousers-black-m",
     "size": "M",
     "color": "Black",
     "length": null,
@@ -840,7 +873,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "yoga-pants-l-black",
+    "variant_id": "wide-leg-flare-trousers-black-l",
     "size": "L",
     "color": "Black",
     "length": null,
@@ -851,7 +884,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "yoga-pants-m-brown",
+    "variant_id": "wide-leg-flare-trousers-brown-m",
     "size": "M",
     "color": "Brown",
     "length": null,
@@ -862,7 +895,7 @@
     "low_stock_threshold": 2
    },
    {
-    "variant_id": "yoga-pants-l-brown",
+    "variant_id": "wide-leg-flare-trousers-brown-l",
     "size": "L",
     "color": "Brown",
     "length": null,
@@ -881,11 +914,24 @@
   "department": "women",
   "style": [
    "basic",
-   "fitted"
+   "fitted",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "short-sleeve",
+   "baby-tee",
+   "crop",
+   "printed",
+   "logo",
+   "summer",
+   "soft"
   ],
   "collection": null,
-  "sleeve": null,
-  "size_chart": null,
+  "sleeve": "half",
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -1375,11 +1421,25 @@
   "department": "women",
   "style": [
    "basic",
-   "fitted"
+   "fitted",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "short-sleeve",
+   "baby-tee",
+   "crop",
+   "printed",
+   "logo",
+   "summer",
+   "breathable",
+   "soft"
   ],
   "collection": null,
-  "sleeve": null,
-  "size_chart": null,
+  "sleeve": "half",
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -1538,11 +1598,16 @@
   "department": "women",
   "style": [
    "hoodie",
-   "pullover"
+   "pullover",
+   "women",
+   "winter",
+   "casual",
+   "warm",
+   "oversized"
   ],
   "collection": null,
   "sleeve": "long",
-  "size_chart": null,
+  "size_chart": "rehla-weight-guide",
   "sizes": [
    "S",
    "M",
@@ -1630,11 +1695,19 @@
   "style": [
    "basic",
    "fitted",
-   "long-sleeve"
+   "long-sleeve",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "modest",
+   "elastic"
   ],
   "collection": null,
   "sleeve": "long",
-  "size_chart": null,
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -2049,11 +2122,20 @@
   "style": [
    "flared-sleeve",
    "fitted",
-   "long-sleeve"
+   "long-sleeve",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "modest",
+   "elastic",
+   "flared-hem"
   ],
   "collection": null,
   "sleeve": "long",
-  "size_chart": null,
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -2465,11 +2547,20 @@
   "style": [
    "square-neck",
    "fitted",
-   "long-sleeve"
+   "long-sleeve",
+   "top",
+   "women",
+   "everyday",
+   "going-out",
+   "casual",
+   "stretch",
+   "modest",
+   "elastic",
+   "flared-hem"
   ],
   "collection": null,
   "sleeve": "long",
-  "size_chart": null,
+  "size_chart": "rehla-top",
   "sizes": [
    "S",
    "M",
@@ -2837,7 +2928,10 @@
   "category": "Caps",
   "department": "women",
   "style": [
-   "cap"
+   "cap",
+   "accessory",
+   "one-size",
+   "casual"
   ],
   "collection": null,
   "sleeve": "sleeveless",
@@ -2889,7 +2983,10 @@
   "category": "Caps",
   "department": "women",
   "style": [
-   "cap"
+   "cap",
+   "accessory",
+   "one-size",
+   "casual"
   ],
   "collection": null,
   "sleeve": "sleeveless",
@@ -2941,11 +3038,19 @@
   "category": "T-Shirts",
   "department": "women",
   "style": [
-   "tee"
+   "tee",
+   "t-shirt",
+   "women",
+   "everyday",
+   "casual",
+   "cotton",
+   "relaxed",
+   "short-sleeve",
+   "regular-length"
   ],
   "collection": null,
   "sleeve": "half",
-  "size_chart": null,
+  "size_chart": "rehla-tshirt",
   "sizes": [
    "S",
    "M",
@@ -3020,11 +3125,19 @@
   "department": "women",
   "style": [
    "tee",
-   "graphic"
+   "graphic",
+   "t-shirt",
+   "women",
+   "everyday",
+   "casual",
+   "cotton",
+   "relaxed",
+   "short-sleeve",
+   "regular-length"
   ],
   "collection": null,
   "sleeve": "half",
-  "size_chart": null,
+  "size_chart": "rehla-tshirt",
   "sizes": [
    "S",
    "M",
@@ -3098,11 +3211,19 @@
   "category": "T-Shirts",
   "department": "women",
   "style": [
-   "tee"
+   "tee",
+   "t-shirt",
+   "women",
+   "everyday",
+   "casual",
+   "cotton",
+   "relaxed",
+   "short-sleeve",
+   "regular-length"
   ],
   "collection": null,
   "sleeve": "half",
-  "size_chart": null,
+  "size_chart": "rehla-tshirt",
   "sizes": [
    "S",
    "M",
@@ -3176,11 +3297,19 @@
   "category": "T-Shirts",
   "department": "women",
   "style": [
-   "tee"
+   "tee",
+   "t-shirt",
+   "women",
+   "everyday",
+   "casual",
+   "cotton",
+   "relaxed",
+   "short-sleeve",
+   "regular-length"
   ],
   "collection": null,
   "sleeve": "half",
-  "size_chart": null,
+  "size_chart": "rehla-tshirt",
   "sizes": [
    "S",
    "M",
@@ -3255,11 +3384,19 @@
   "department": "women",
   "style": [
    "tee",
-   "graphic"
+   "graphic",
+   "t-shirt",
+   "women",
+   "everyday",
+   "casual",
+   "cotton",
+   "relaxed",
+   "short-sleeve",
+   "regular-length"
   ],
   "collection": null,
   "sleeve": "half",
-  "size_chart": null,
+  "size_chart": "rehla-tshirt",
   "sizes": [
    "S",
    "M",
@@ -3331,11 +3468,19 @@
   "category": "T-Shirts",
   "department": "women",
   "style": [
-   "tee"
+   "tee",
+   "t-shirt",
+   "women",
+   "everyday",
+   "casual",
+   "cotton",
+   "relaxed",
+   "short-sleeve",
+   "regular-length"
   ],
   "collection": null,
   "sleeve": "half",
-  "size_chart": null,
+  "size_chart": "rehla-tshirt",
   "sizes": [
    "S",
    "M",
@@ -3412,11 +3557,16 @@
   "department": "women",
   "style": [
    "hoodie",
-   "pullover"
+   "pullover",
+   "women",
+   "winter",
+   "casual",
+   "warm",
+   "oversized"
   ],
   "collection": null,
   "sleeve": "long",
-  "size_chart": null,
+  "size_chart": "rehla-weight-guide",
   "sizes": [
    "S",
    "M",
@@ -3504,11 +3654,18 @@
   "category": "Hoodies & Jackets",
   "department": "women",
   "style": [
-   "jacket"
+   "jacket",
+   "women",
+   "winter",
+   "casual",
+   "warm",
+   "zip-up",
+   "cotton",
+   "heavy"
   ],
   "collection": null,
   "sleeve": "long",
-  "size_chart": null,
+  "size_chart": "rehla-jacket",
   "sizes": [
    "XS",
    "S",
@@ -3602,11 +3759,19 @@
   "category": "T-Shirts",
   "department": "women",
   "style": [
-   "tee"
+   "tee",
+   "t-shirt",
+   "women",
+   "everyday",
+   "casual",
+   "cotton",
+   "relaxed",
+   "short-sleeve",
+   "regular-length"
   ],
   "collection": null,
   "sleeve": "half",
-  "size_chart": null,
+  "size_chart": "rehla-tshirt",
   "sizes": [
    "S",
    "M",

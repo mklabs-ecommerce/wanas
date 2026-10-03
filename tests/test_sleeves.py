@@ -111,8 +111,12 @@ def test_rehlas_tees_are_half_sleeve_and_nothing_else_is():
     """The closed set: half-sleeve is what a T-Shirts product is, and a top,
     a hoodie or a jacket is never recorded as half -- a closed list is only
     closed if nothing can fall into it."""
+    # Checked against the product photos (2026-10): both "Tops" products are
+    # short-sleeve baby tees and the lace off-shoulder top has short sleeves.
+    short_sleeved_tops = {"rehla-tops", "rehla-orignal-tops", "rehla-off-shoulder-top"}
     for raw in _real_seed():
-        assert (raw["sleeve"] == "half") is (raw["category"] == "T-Shirts"), raw["product_id"]
+        expected = raw["category"] == "T-Shirts" or raw["product_id"] in short_sleeved_tops
+        assert (raw["sleeve"] == "half") is expected, raw["product_id"]
 
 
 def test_the_ones_that_are_not_clothes_for_the_arms_say_sleeveless():

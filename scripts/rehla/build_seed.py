@@ -63,7 +63,7 @@ CURATED: dict[str, dict] = {
         description="Long-sleeve off-shoulder top, hijab-friendly. Soft stretchy fabric.",
     ),
     "rehla-off-shoulder-top": dict(
-        category=TOPS, style=["off-shoulder", "lace"], sleeve=None,
+        category=TOPS, style=["off-shoulder", "lace"], sleeve="half",
         description="Off-shoulder top with lace detail.",
     ),
     "rehla-backless-top": dict(
@@ -74,8 +74,8 @@ CURATED: dict[str, dict] = {
         name="Rehla Yoga Pants", category=PANTS, style=["wide-leg", "flare", "yoga"],
         sleeve="sleeveless",
     ),
-    "rehla-tops": dict(name="Rehla Tops", category=TOPS, style=["basic", "fitted"], sleeve=None),
-    "rehla-orignal-tops": dict(name="Rehla Original Tops", category=TOPS, style=["basic", "fitted"], sleeve=None),
+    "rehla-tops": dict(name="Rehla Tops", category=TOPS, style=["basic", "fitted"], sleeve="half"),
+    "rehla-orignal-tops": dict(name="Rehla Original Tops", category=TOPS, style=["basic", "fitted"], sleeve="half"),
     "rehlaa-pink-hoodie": dict(
         name="Rehla Pink Hoodie", category=OUTER, style=["hoodie", "pullover"], sleeve="long",
         color="Pink",
@@ -125,6 +125,47 @@ CURATED: dict[str, dict] = {
         name="Rehla Black T-Shirt", category=TEES, style=["tee"], sleeve="half", color="Black",
     ),
 }
+
+#: The size chart each product is answered with -- the numbers live in
+#: `data/size_charts.json` and match the store's own `custom.size_chart_data`
+#: metafields. The pants and hoodies have no published measurements, only the
+#: weight guide every product carries; the caps are one size and have none.
+SIZE_CHART_BY_CATEGORY = {TOPS: "rehla-top", TEES: "rehla-tshirt", PANTS: "rehla-weight-guide"}
+SIZE_CHART_BY_HANDLE = {
+    "rehlaa-jacket": "rehla-jacket",
+    "rehlaa-pink-hoodie": "rehla-weight-guide",
+    "rehlaa-of-white-hoodie": "rehla-weight-guide",
+}
+
+#: Search labels on top of `style`: fit, fabric, length, occasion. They go into
+#: `style` (what the catalog search reads) and onto the Shopify product as
+#: tags. Arabic synonyms for each live in `domain/services/search_terms.py`.
+TAGS_BY_CATEGORY = {
+    TOPS: ["top", "women", "everyday", "going-out", "casual", "stretch"],
+    TEES: ["tee", "t-shirt", "women", "everyday", "casual", "cotton", "relaxed", "short-sleeve", "regular-length"],
+    PANTS: ["pants", "trousers", "women", "high-rise", "full-length", "going-out", "casual"],
+    OUTER: ["women", "winter", "casual", "warm"],
+    CAPS: ["accessory", "one-size", "casual"],
+}
+TAGS_BY_HANDLE = {
+    "rehla-hijabi-off-shoulder-top": ["modest", "long-sleeve"],
+    "rehla-off-shoulder-top": ["short-sleeve", "going-out", "evening"],
+    "rehla-backless-top": ["evening", "summer", "sleeveless"],
+    "wide-leg-flare-trousers": ["wide-leg", "flare", "mid-weight"],
+    "rehla-tops": ["short-sleeve", "baby-tee", "crop", "printed", "logo", "summer", "soft"],
+    "rehla-orignal-tops": ["short-sleeve", "baby-tee", "crop", "printed", "logo", "summer", "breathable", "soft"],
+    "rehla-long-sleve-black-top": ["long-sleeve", "modest", "elastic"],
+    "rehla-flares-long-sleeves-top": ["long-sleeve", "modest", "elastic", "flared-hem"],
+    "rehla-squared-long-sleeves-top": ["long-sleeve", "modest", "elastic", "flared-hem"],
+    "rehlaa-pink-hoodie": ["hoodie", "pullover", "oversized"],
+    "rehlaa-of-white-hoodie": ["hoodie", "pullover", "oversized"],
+    "rehlaa-jacket": ["jacket", "zip-up", "cotton", "heavy"],
+}
+
+
+def tags_for(handle: str, category: str, style: list[str]) -> list[str]:
+    return list(dict.fromkeys([*style, *TAGS_BY_CATEGORY[category], *TAGS_BY_HANDLE.get(handle, [])]))
+
 
 SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "One Size"]
 
@@ -230,10 +271,10 @@ def build(images_root: Path, *, write_images: bool = True) -> list[dict]:
                 "name": cur.get("name") or " ".join(p["title"].split()),
                 "category": cur["category"],
                 "department": "women",
-                "style": cur["style"],
+                "style": tags_for(p["handle"], cur["category"], cur["style"]),
                 "collection": None,
                 "sleeve": cur["sleeve"],
-                "size_chart": None,
+                "size_chart": SIZE_CHART_BY_HANDLE.get(p["handle"], SIZE_CHART_BY_CATEGORY.get(cur["category"])),
                 "sizes": sizes,
                 "colors": colors,
                 "lengths": [],

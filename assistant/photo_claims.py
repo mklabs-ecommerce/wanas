@@ -421,3 +421,43 @@ def without_the_offer(text: str) -> str:
 
 
 _BLANK_RUN = re.compile(r"\n{3,}")
+
+
+#: A reply saying a photograph *failed to go*. Production, 2026-10: asked
+#: three times to see a top, the bot attached nothing -- the photo counted as
+#: already shown -- and explained the empty reply as «معلش، الصورة ماتبعتتش
+#: المرة دي». Nothing had failed; nothing had been tried. A failure is the
+#: channel adapter's to report (`undelivered`), never the model's to invent.
+_FAILED_SEND = re.compile(
+    r"ماتبعتت|متبعتت|مابعتتش|مبعتتش|ماتبعتش|متبعتش|ماوصلتش|موصلتش|ماراحتش|"
+    r"مقدرناش نبعت|مقدرتش ابعت|مقدرتش أبعت|مش راضي[هة]? تتبعت|مش بتتبعت|"
+    r"مشكل[ةه] في الإرسال|مشكل[ةه] في الارسال|"
+    r"\b(?:couldn'?t|could not|failed to|didn'?t) (?:send|go through|upload)",
+    re.IGNORECASE,
+)
+
+
+def claims_failed_send(text: str, history: list[dict]) -> str:
+    """The phrase in which a reply says a photo did not send, when no send was
+    ever refused in this conversation; "" otherwise.
+
+    Only beside a photo word, so «الأوردر ماتبعتش لسه» is not caught. When the
+    platform did refuse a picture (`undelivered`), saying so is the truth and
+    is left alone.
+    """
+    lowered = (text or "").lower()
+    if not mentions_photo(lowered) or undelivered(history):
+        return ""
+    match = _FAILED_SEND.search(lowered)
+    return match.group(0) if match else ""
+
+
+def without_failure_claim(text: str) -> str:
+    """`text` with every sentence that claims a failed send taken out."""
+    lines = []
+    for line in (text or "").splitlines():
+        sentences = [
+            part for part in _SENTENCE_END.split(line) if not _FAILED_SEND.search(part.lower())
+        ]
+        lines.append(" ".join(sentences).rstrip())
+    return _BLANK_RUN.sub("\n\n", "\n".join(lines)).strip()
